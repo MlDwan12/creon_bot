@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderCategory, OrderStatus } from '@prisma/client';
+import { OrderCategory, OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -99,11 +99,14 @@ export class OrdersService {
     if (!order) throw new NotFoundException('Заказ не найден');
     if (order.advertiserId !== advertiserId)
       throw new ForbiddenException('Это не ваш заказ');
-    if (order.status !== OrderStatus.OPEN)
-      throw new ForbiddenException('Закрыть можно только открытый заказ');
-    return this.prisma.order.update({
+    await this.transitionStatus(
+      orderId,
+      [OrderStatus.OPEN],
+      { status: OrderStatus.CLOSED, closedAt: new Date() },
+      'Закрыть можно только открытый заказ',
+    );
+    return this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
-      data: { status: OrderStatus.CLOSED, closedAt: new Date() },
       include: { submissions: { include: { creator: true } } },
     });
   }
@@ -122,15 +125,13 @@ export class OrdersService {
   }
 
   async moderatorApprove(orderId: number, moderatorTelegramId: bigint) {
-    const order = await this.mustFind(orderId);
-    this.assertPending(order);
-    return this.prisma.order.update({
+    await this.transitionStatus(orderId, [OrderStatus.PENDING_MODERATION], {
+      status: OrderStatus.OPEN,
+      moderatorId: moderatorTelegramId,
+      decidedAt: new Date(),
+    });
+    return this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
-      data: {
-        status: OrderStatus.OPEN,
-        moderatorId: moderatorTelegramId,
-        decidedAt: new Date(),
-      },
       include: { advertiser: true },
     });
   }
@@ -140,16 +141,14 @@ export class OrdersService {
     moderatorTelegramId: bigint,
     comment: string,
   ) {
-    const order = await this.mustFind(orderId);
-    this.assertPending(order);
-    return this.prisma.order.update({
+    await this.transitionStatus(orderId, [OrderStatus.PENDING_MODERATION], {
+      status: OrderStatus.REJECTED,
+      moderatorId: moderatorTelegramId,
+      moderatorComment: comment,
+      decidedAt: new Date(),
+    });
+    return this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
-      data: {
-        status: OrderStatus.REJECTED,
-        moderatorId: moderatorTelegramId,
-        moderatorComment: comment,
-        decidedAt: new Date(),
-      },
       include: { advertiser: true },
     });
   }
@@ -173,9 +172,25 @@ export class OrdersService {
     return order;
   }
 
-  private assertPending(order: { status: OrderStatus }) {
-    if (order.status !== OrderStatus.PENDING_MODERATION) {
-      throw new ForbiddenException('Этот заказ уже обработан');
+  /**
+   * Атомарно применяет переход статуса, обусловленный текущим статусом — поэтому два
+   * одновременных действия над одним заказом (двойной тап, или гонка двух модераторов
+   * над одним пунктом очереди) не могут оба пройти: первый `updateMany` находит строку,
+   * второй видит `count === 0` и сообщает о конфликте вместо перезаписи.
+   */
+  private async transitionStatus(
+    orderId: number,
+    fromStatuses: OrderStatus[],
+    data: Prisma.OrderUpdateManyMutationInput,
+    conflictMessage = 'Этот заказ уже обработан',
+  ) {
+    const result = await this.prisma.order.updateMany({
+      where: { id: orderId, status: { in: fromStatuses } },
+      data,
+    });
+    if (result.count === 0) {
+      await this.mustFind(orderId);
+      throw new ForbiddenException(conflictMessage);
     }
   }
 }

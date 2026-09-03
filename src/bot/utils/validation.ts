@@ -6,3 +6,11 @@ export const MAX_PRICE_LENGTH = 50;
 export const MAX_COMMENT_LENGTH = 500;
 export const MAX_URL_LENGTH = 500;
 export const MAX_DEADLINE_DAYS = 365;
+
+// Отсекает заглушки вроде "-", "..." или одних пробелов — формально непустая строка,
+// но не осмысленный текст. Требует хотя бы одну букву или цифру (любой алфавит).
+const MEANINGFUL_TEXT_RE = /[\p{L}\p{N}]/u;
+
+export function isMeaningfulText(value: string): boolean {
+  return MEANINGFUL_TEXT_RE.test(value);
+}

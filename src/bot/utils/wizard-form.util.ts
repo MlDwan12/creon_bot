@@ -53,6 +53,15 @@ export async function sendForm(
   return message.message_id;
 }
 
+/**
+ * Telegram кидает 400, когда новый текст полностью совпадает с уже показанным (например,
+ * дважды подряд один и тот же текст ошибки валидации, или двойной тап по кнопке отправил
+ * два одинаковых edit) — для пользователя это не ошибка, а no-op.
+ */
+function isNotModifiedError(err: unknown): boolean {
+  return err instanceof Error && /message is not modified/i.test(err.message);
+}
+
 /** Edits the wizard's anchor message in place instead of sending a new one. */
 export async function editForm(
   ctx: BotContext,
@@ -60,11 +69,15 @@ export async function editForm(
   text: string,
   extra?: ExtraEditMessageText,
 ): Promise<void> {
-  await ctx.telegram.editMessageText(
-    ctx.chat!.id,
-    messageId,
-    undefined,
-    text,
-    extra,
-  );
+  try {
+    await ctx.telegram.editMessageText(
+      ctx.chat!.id,
+      messageId,
+      undefined,
+      text,
+      extra,
+    );
+  } catch (err) {
+    if (!isNotModifiedError(err)) throw err;
+  }
 }

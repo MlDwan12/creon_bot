@@ -5,6 +5,7 @@ import { Markup } from 'telegraf';
 import type { BotContext } from '../interfaces/bot-context.interface';
 import { getCurrentUser } from '../interfaces/bot-context.interface';
 import { styled } from '../utils/button.util';
+import { errorMessage } from '../utils/error.util';
 import { creatorLabel, escapeHtml, html } from '../utils/format';
 import { parseModeratorIds } from '../utils/moderator.util';
 import { MAX_URL_LENGTH } from '../utils/validation';
@@ -87,11 +88,20 @@ export class SubmitVideoScene {
       return;
     }
 
-    const submission = await this.submissionsService.attachVideo(
-      state.submissionId,
-      getCurrentUser(ctx).id,
-      url,
-    );
+    let submission: Awaited<
+      ReturnType<typeof this.submissionsService.attachVideo>
+    >;
+    try {
+      submission = await this.submissionsService.attachVideo(
+        state.submissionId,
+        getCurrentUser(ctx).id,
+        url,
+      );
+    } catch (err) {
+      await editForm(ctx, state.formMessageId!, `⚠️ ${errorMessage(err)}`);
+      await ctx.scene.leave();
+      return;
+    }
     await editForm(
       ctx,
       state.formMessageId!,

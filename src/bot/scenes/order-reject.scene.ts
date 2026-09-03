@@ -1,11 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { Command, Ctx, Wizard, WizardStep } from 'nestjs-telegraf';
 import type { BotContext } from '../interfaces/bot-context.interface';
-import { moderatorMenuKeyboard } from '../keyboards/menu.keyboard';
-import { MAX_COMMENT_LENGTH } from '../utils/validation';
+import { errorMessage } from '../utils/error.util';
+import { isMeaningfulText, MAX_COMMENT_LENGTH } from '../utils/validation';
+import { deleteIncoming, editForm, sendForm } from '../utils/wizard-form.util';
 import { OrdersService } from '../../orders/orders.service';
 
 export const ORDER_REJECT_SCENE_ID = 'order-reject';
+
+const PROMPT = 'Причина отклонения заказа (текстом, или /cancel для отмены):';
+
+interface OrderRejectState {
+  orderId: number;
+  formMessageId?: number;
+}
 
 @Injectable()
 @Wizard(ORDER_REJECT_SCENE_ID)
@@ -14,38 +22,58 @@ export class OrderRejectWizard {
 
   @WizardStep(0)
   async askReason(@Ctx() ctx: BotContext) {
-    await ctx.reply(
-      'Причина отклонения заказа (текстом, или /cancel для отмены):',
-    );
+    const state = ctx.scene.state as OrderRejectState;
+    const cardMessageId = ctx.callbackQuery?.message?.message_id;
+    if (cardMessageId) {
+      state.formMessageId = cardMessageId;
+      await editForm(ctx, cardMessageId, PROMPT);
+    } else {
+      state.formMessageId = await sendForm(ctx, PROMPT);
+    }
     ctx.wizard.next();
   }
 
   @WizardStep(1)
   async finish(@Ctx() ctx: BotContext) {
+    const state = ctx.scene.state as OrderRejectState;
+    await deleteIncoming(ctx);
     if (!ctx.message || !('text' in ctx.message)) {
-      await ctx.reply('Введите причину текстом.');
+      await editForm(ctx, state.formMessageId!, 'Введите причину текстом.');
       return;
     }
-    const { orderId } = ctx.scene.state as { orderId: number };
     const comment = ctx.message.text.trim();
-    if (!comment) {
-      await ctx.reply('Причина не может быть пустой. Введите текст:');
+    if (!comment || !isMeaningfulText(comment)) {
+      await editForm(
+        ctx,
+        state.formMessageId!,
+        'Причина не может быть пустой. Введите текст:',
+      );
       return;
     }
     if (comment.length > MAX_COMMENT_LENGTH) {
-      await ctx.reply(
+      await editForm(
+        ctx,
+        state.formMessageId!,
         `Слишком длинный текст (максимум ${MAX_COMMENT_LENGTH} символов). Сократите и отправьте ещё раз:`,
       );
       return;
     }
-    const order = await this.ordersService.moderatorReject(
-      orderId,
-      BigInt(ctx.from!.id),
-      comment,
-    );
-    await ctx.reply(
+    let order: Awaited<ReturnType<typeof this.ordersService.moderatorReject>>;
+    try {
+      order = await this.ordersService.moderatorReject(
+        state.orderId,
+        BigInt(ctx.from!.id),
+        comment,
+      );
+    } catch (err) {
+      await editForm(ctx, state.formMessageId!, `⚠️ ${errorMessage(err)}`);
+      await ctx.scene.leave();
+      return;
+    }
+    await editForm(
+      ctx,
+      state.formMessageId!,
       'Заказ отклонён, рекламодателю отправлено уведомление.',
-      moderatorMenuKeyboard(),
     );
     try {
       await ctx.telegram.sendMessage(
@@ -60,7 +88,15 @@ export class OrderRejectWizard {
 
   @Command('cancel')
   async onCancel(@Ctx() ctx: BotContext) {
-    await ctx.reply('Отменено.', moderatorMenuKeyboard());
+    const state = ctx.scene.state as OrderRejectState;
+    await deleteIncoming(ctx);
+    if (state.formMessageId) {
+      try {
+        await editForm(ctx, state.formMessageId, '✖️ Отменено.');
+      } catch {
+        // сообщение формы уже могло исчезнуть
+      }
+    }
     await ctx.scene.leave();
   }
 }

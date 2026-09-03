@@ -4,6 +4,7 @@ import { TelegrafModule } from 'nestjs-telegraf';
 import { session } from 'telegraf';
 import { BotUpdate } from './bot.update';
 import { currentUserMiddleware } from './middlewares/current-user.middleware';
+import { ignoreNotModifiedMiddleware } from './middlewares/ignore-not-modified.middleware';
 import { AdvertiserRejectWizard } from './scenes/advertiser-reject.scene';
 import { CreateOrderScene } from './scenes/create-order.scene';
 import { ModeratorRejectWizard } from './scenes/moderator-reject.scene';
@@ -24,7 +25,11 @@ import { UsersService } from '../users/users.service';
       inject: [ConfigService, UsersService],
       useFactory: (config: ConfigService, usersService: UsersService) => ({
         token: config.get<string>('BOT_TOKEN')!,
-        middlewares: [session(), currentUserMiddleware(usersService)],
+        middlewares: [
+          session(),
+          ignoreNotModifiedMiddleware(),
+          currentUserMiddleware(usersService),
+        ],
       }),
     }),
   ],

@@ -1,4 +1,3 @@
-import { ForbiddenException, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { OrderCategory } from '@prisma/client';
 import { Action, Ctx, Hears, Start, Update } from 'nestjs-telegraf';
@@ -19,6 +18,7 @@ import { MODERATOR_REJECT_SCENE_ID } from './scenes/moderator-reject.scene';
 import { ADVERTISER_REJECT_SCENE_ID } from './scenes/advertiser-reject.scene';
 import { ORDER_REJECT_SCENE_ID } from './scenes/order-reject.scene';
 import { styled } from './utils/button.util';
+import { errorMessage } from './utils/error.util';
 import {
   escapeHtml,
   formatOrderCard,
@@ -33,19 +33,6 @@ import {
 import { isModerator, parseModeratorIds } from './utils/moderator.util';
 
 const PAGE_SIZE = 5;
-
-/**
- * Only our own deliberate ForbiddenException/NotFoundException messages are safe to show a user —
- * anything else (a raw Prisma/network error, a bug) could leak internal details, so fall back to a
- * generic message and let it surface through the app-wide logger instead.
- */
-function errorMessage(err: unknown): string {
-  if (err instanceof ForbiddenException || err instanceof NotFoundException) {
-    return err.message;
-  }
-  Logger.error(err, undefined, 'BotUpdate');
-  return 'Не удалось выполнить действие';
-}
 
 function shortIntroText(): string {
   return [
@@ -221,8 +208,16 @@ export class BotUpdate {
     category: string,
     edit = false,
   ) {
-    const filter = category === 'all' ? undefined : (category as OrderCategory);
-    const { order, total } = await this.ordersService.getOpenAt(index, filter);
+    const filter =
+      category === 'all' || !ORDER_CATEGORIES.some((c) => c.code === category)
+        ? undefined
+        : (category as OrderCategory);
+    let { order, total } = await this.ordersService.getOpenAt(index, filter);
+    if (!order && total > 0) {
+      // Список схлопнулся (другой заказ закрыли/удалили), пока мы сидели на странице за пределами — откатываемся назад.
+      index = total - 1;
+      ({ order, total } = await this.ordersService.getOpenAt(index, filter));
+    }
     const categoryButton = styled(
       Markup.button.callback(
         `🏷 ${filter ? orderCategoryLabel(filter) : 'Все категории'}`,
@@ -1259,8 +1254,8 @@ export class BotUpdate {
     const text = [
       '🎬 Новое видео на проверку',
       '',
-      `Заказ: ${submission.order.title}`,
-      `Видео: ${submission.videoUrl}`,
+      `Заказ: ${escapeHtml(submission.order.title)}`,
+      `Видео: ${escapeHtml(submission.videoUrl ?? '')}`,
     ].join('\n');
     try {
       await ctx.telegram.sendMessage(

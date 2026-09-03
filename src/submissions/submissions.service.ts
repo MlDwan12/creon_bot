@@ -3,8 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderStatus, SubmissionStatus } from '@prisma/client';
+import { Prisma, OrderStatus, SubmissionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+
+const ALREADY_CLAIMED_MESSAGE =
+  'Вы уже откликнулись на этот заказ — загляните в «Мои отклики»';
 
 const ACTIVE_STATUSES: SubmissionStatus[] = [
   SubmissionStatus.IN_PROGRESS,
@@ -25,41 +28,50 @@ export class SubmissionsService {
   }
 
   async claim(orderId: number, creatorId: number) {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-    });
-    if (!order) throw new NotFoundException('Заказ не найден');
-    if (order.status !== OrderStatus.OPEN)
-      throw new ForbiddenException('Заказ сейчас недоступен');
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const order = await tx.order.findUnique({ where: { id: orderId } });
+          if (!order) throw new NotFoundException('Заказ не найден');
+          if (order.status !== OrderStatus.OPEN)
+            throw new ForbiddenException('Заказ сейчас недоступен');
 
-    const existing = await this.prisma.submission.findFirst({
-      where: { orderId, creatorId, status: { in: ACTIVE_STATUSES } },
-    });
-    if (existing)
-      throw new ForbiddenException(
-        'Вы уже откликнулись на этот заказ — загляните в «Мои отклики»',
+          const existing = await tx.submission.findFirst({
+            where: { orderId, creatorId, status: { in: ACTIVE_STATUSES } },
+          });
+          if (existing) throw new ForbiddenException(ALREADY_CLAIMED_MESSAGE);
+
+          return tx.submission.create({
+            data: { orderId, creatorId },
+            include: { order: true, creator: true },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
-
-    return this.prisma.submission.create({
-      data: { orderId, creatorId },
-      include: { order: true, creator: true },
-    });
+    } catch (err) {
+      // Два одновременных отклика (например, двойной тап по кнопке) оба проходят
+      // проверку выше и гонятся за вставкой — Postgres прерывает проигравшего с ошибкой
+      // сериализации (код Prisma P2034), не давая создать дублирующий активный отклик.
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2034'
+      ) {
+        throw new ForbiddenException(ALREADY_CLAIMED_MESSAGE);
+      }
+      throw err;
+    }
   }
 
   async attachVideo(submissionId: number, creatorId: number, videoUrl: string) {
     const submission = await this.mustFind(submissionId);
     if (submission.creatorId !== creatorId)
       throw new ForbiddenException('Это не ваш отклик');
-    this.assertStatus(submission, SubmissionStatus.IN_PROGRESS);
-    return this.prisma.submission.update({
-      where: { id: submissionId },
-      data: {
-        videoUrl,
-        status: SubmissionStatus.SUBMITTED,
-        submittedAt: new Date(),
-      },
-      include: { order: true, creator: true },
+    await this.transitionStatus(submissionId, [SubmissionStatus.IN_PROGRESS], {
+      videoUrl,
+      status: SubmissionStatus.SUBMITTED,
+      submittedAt: new Date(),
     });
+    return this.mustFind(submissionId);
   }
 
   findById(id: number) {
@@ -94,15 +106,13 @@ export class SubmissionsService {
   }
 
   async moderatorApprove(submissionId: number, moderatorTelegramId: bigint) {
-    const submission = await this.mustFind(submissionId);
-    this.assertStatus(submission, SubmissionStatus.SUBMITTED);
-    return this.prisma.submission.update({
+    await this.transitionStatus(submissionId, [SubmissionStatus.SUBMITTED], {
+      status: SubmissionStatus.MODERATOR_APPROVED,
+      moderatorId: moderatorTelegramId,
+      decidedAt: new Date(),
+    });
+    return this.prisma.submission.findUniqueOrThrow({
       where: { id: submissionId },
-      data: {
-        status: SubmissionStatus.MODERATOR_APPROVED,
-        moderatorId: moderatorTelegramId,
-        decidedAt: new Date(),
-      },
       include: { order: { include: { advertiser: true } }, creator: true },
     });
   }
@@ -112,34 +122,26 @@ export class SubmissionsService {
     moderatorTelegramId: bigint,
     comment: string,
   ) {
-    const submission = await this.mustFind(submissionId);
-    this.assertStatus(submission, SubmissionStatus.SUBMITTED);
-    return this.prisma.submission.update({
-      where: { id: submissionId },
-      data: {
-        status: SubmissionStatus.MODERATOR_REJECTED,
-        moderatorId: moderatorTelegramId,
-        moderatorComment: comment,
-        decidedAt: new Date(),
-      },
-      include: { order: true, creator: true },
+    await this.transitionStatus(submissionId, [SubmissionStatus.SUBMITTED], {
+      status: SubmissionStatus.MODERATOR_REJECTED,
+      moderatorId: moderatorTelegramId,
+      moderatorComment: comment,
+      decidedAt: new Date(),
     });
+    return this.mustFind(submissionId);
   }
 
   async advertiserApprove(submissionId: number, advertiserId: number) {
     const submission = await this.mustFind(submissionId);
-    this.assertStatus(submission, SubmissionStatus.MODERATOR_APPROVED);
     if (submission.order.advertiserId !== advertiserId) {
       throw new ForbiddenException('Это не ваш заказ');
     }
-    return this.prisma.submission.update({
-      where: { id: submissionId },
-      data: {
-        status: SubmissionStatus.ADVERTISER_APPROVED,
-        decidedAt: new Date(),
-      },
-      include: { order: true, creator: true },
-    });
+    await this.transitionStatus(
+      submissionId,
+      [SubmissionStatus.MODERATOR_APPROVED],
+      { status: SubmissionStatus.ADVERTISER_APPROVED, decidedAt: new Date() },
+    );
+    return this.mustFind(submissionId);
   }
 
   async advertiserReject(
@@ -148,19 +150,19 @@ export class SubmissionsService {
     comment: string,
   ) {
     const submission = await this.mustFind(submissionId);
-    this.assertStatus(submission, SubmissionStatus.MODERATOR_APPROVED);
     if (submission.order.advertiserId !== advertiserId) {
       throw new ForbiddenException('Это не ваш заказ');
     }
-    return this.prisma.submission.update({
-      where: { id: submissionId },
-      data: {
+    await this.transitionStatus(
+      submissionId,
+      [SubmissionStatus.MODERATOR_APPROVED],
+      {
         status: SubmissionStatus.ADVERTISER_REJECTED,
         advertiserComment: comment,
         decidedAt: new Date(),
       },
-      include: { order: true, creator: true },
-    });
+    );
+    return this.mustFind(submissionId);
   }
 
   async stats() {
@@ -194,11 +196,23 @@ export class SubmissionsService {
     return submission;
   }
 
-  private assertStatus(
-    submission: { status: SubmissionStatus },
-    expected: SubmissionStatus,
+  /**
+   * Атомарно применяет переход статуса, обусловленный текущим статусом — поэтому два
+   * одновременных действия над одним откликом (двойной тап, или гонка двух модераторов
+   * над одним пунктом очереди) не могут оба пройти: первый `updateMany` находит строку,
+   * второй видит `count === 0` и сообщает «уже обработано» вместо перезаписи.
+   */
+  private async transitionStatus(
+    submissionId: number,
+    fromStatuses: SubmissionStatus[],
+    data: Prisma.SubmissionUpdateManyMutationInput,
   ) {
-    if (submission.status !== expected) {
+    const result = await this.prisma.submission.updateMany({
+      where: { id: submissionId, status: { in: fromStatuses } },
+      data,
+    });
+    if (result.count === 0) {
+      await this.mustFind(submissionId);
       throw new ForbiddenException('Этот отклик уже обработан');
     }
   }

@@ -18,6 +18,7 @@ import {
 } from '../utils/format';
 import { parseModeratorIds } from '../utils/moderator.util';
 import {
+  isMeaningfulText,
   MAX_DEADLINE_DAYS,
   MAX_DESCRIPTION_LENGTH,
   MAX_PRICE_LENGTH,
@@ -212,10 +213,13 @@ export class CreateOrderScene {
 
   @Action(/^category:(.+)$/)
   async onCategoryPicked(@Ctx() ctx: BotContext) {
-    const code = (ctx as unknown as { match: RegExpMatchArray })
-      .match[1] as OrderCategory;
+    const code = (ctx as unknown as { match: RegExpMatchArray }).match[1];
+    if (!ORDER_CATEGORIES.some((c) => c.code === code)) {
+      await ctx.answerCbQuery('Неизвестная категория');
+      return;
+    }
     const state = ctx.scene.state as CreateOrderState;
-    state.category = code;
+    state.category = code as OrderCategory;
     await ctx.answerCbQuery();
     await editForm(
       ctx,
@@ -284,14 +288,16 @@ export class CreateOrderScene {
       );
 
     if (state.editingField === 'title') {
-      if (!value) return retry('Название не может быть пустым.');
+      if (!value || !isMeaningfulText(value))
+        return retry('Название не может быть пустым.');
       if (value.length > MAX_TITLE_LENGTH)
         return retry(
           `Название длиннее ${MAX_TITLE_LENGTH} символов — сократите его.`,
         );
       state.title = value;
     } else if (state.editingField === 'description') {
-      if (!value) return retry('Описание не может быть пустым.');
+      if (!value || !isMeaningfulText(value))
+        return retry('Описание не может быть пустым.');
       if (value.length > MAX_DESCRIPTION_LENGTH)
         return retry(
           `Описание длиннее ${MAX_DESCRIPTION_LENGTH} символов — сократите его.`,
