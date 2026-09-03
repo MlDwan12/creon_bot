@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: creon
+      POSTGRES_PASSWORD: creon
+      POSTGRES_DB: creon_bot
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U creon -d creon_bot']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  bot:
+    image: ghcr.io/${GITHUB_REPOSITORY:-owner/creon_bot}:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://creon:creon@db:5432/creon_bot
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:

@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id         Int      @id @default(autoincrement())
+  telegramId BigInt   @unique
+  username   String?
+  firstName  String?
+  createdAt  DateTime @default(now())
+
+  orders      Order[]
+  submissions Submission[]
+}
+
+enum OrderStatus {
+  PENDING_MODERATION
+  OPEN
+  REJECTED
+  CLOSED
+}
+
+enum OrderCategory {
+  PRODUCT_REVIEW
+  BEAUTY
+  FOOD
+  FASHION
+  GAMING
+  FITNESS
+  ENTERTAINMENT
+  TECH
+  OTHER
+}
+
+model Order {
+  id               Int           @id @default(autoincrement())
+  advertiser       User          @relation(fields: [advertiserId], references: [id])
+  advertiserId     Int
+  title            String
+  description      String
+  price            String?
+  category         OrderCategory @default(OTHER)
+  deadline         DateTime?
+  status           OrderStatus   @default(PENDING_MODERATION)
+  moderatorId      BigInt?
+  moderatorComment String?
+  createdAt        DateTime      @default(now())
+  decidedAt        DateTime?
+  closedAt         DateTime?
+
+  submissions Submission[]
+}
+
+enum SubmissionStatus {
+  IN_PROGRESS
+  SUBMITTED
+  MODERATOR_APPROVED
+  MODERATOR_REJECTED
+  ADVERTISER_APPROVED
+  ADVERTISER_REJECTED
+}
+
+model Submission {
+  id                Int              @id @default(autoincrement())
+  order             Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId           Int
+  creator           User             @relation(fields: [creatorId], references: [id])
+  creatorId         Int
+  videoUrl          String?
+  status            SubmissionStatus @default(IN_PROGRESS)
+  moderatorId       BigInt?
+  moderatorComment  String?
+  advertiserComment String?
+  createdAt         DateTime         @default(now())
+  submittedAt       DateTime?
+  decidedAt         DateTime?
+}
