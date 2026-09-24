@@ -15,6 +15,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ReportTarget } from '@prisma/client';
+import { findContacts } from '../common/contacts';
 import { kopecksToRubles } from '../common/money';
 import { NotificationsService } from '../bot/notifications.service';
 import { creatorLabel } from '../bot/utils/format';
@@ -64,6 +65,8 @@ export class ModerationController {
         price: kopecksToRubles(o.priceKopecks),
         advertiser: creatorLabel(o.advertiser),
         createdAt: o.createdAt,
+        // похоже на контакты в обход площадки — модератору пометка в списке
+        hasContacts: findContacts(o.title, o.description).length > 0,
       })),
       videos: videos.map((s) => ({
         id: s.id,
@@ -133,6 +136,7 @@ export class ModerationController {
       moderatorComment: o.moderatorComment,
       advertiser: creatorLabel(o.advertiser),
       createdAt: o.createdAt,
+      contacts: findContacts(o.title, o.description),
     };
   }
 

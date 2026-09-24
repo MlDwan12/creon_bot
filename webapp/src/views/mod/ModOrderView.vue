@@ -88,6 +88,11 @@ watch(() => props.id, load, { immediate: true });
 
       <div class="text">{{ order.description }}</div>
 
+      <div v-if="order.contacts.length" class="contacts" role="alert">
+        <strong>⚠ Похоже на контакты для связи в обход площадки</strong>
+        <span>{{ order.contacts.join(' · ') }}</span>
+      </div>
+
       <p v-if="order.moderatorComment" class="hint">Комментарий модератора: «{{ order.moderatorComment }}»</p>
 
       <template v-if="order.status === 'PENDING_MODERATION'">
@@ -161,6 +166,17 @@ h1 {
   font-size: 16px;
   line-height: 1.45;
   white-space: pre-line;
+}
+.contacts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: color-mix(in srgb, #9a5200 14%, transparent);
+  color: #9a5200;
+  font-size: 15px;
+  overflow-wrap: anywhere;
 }
 .hint {
   margin: 0;

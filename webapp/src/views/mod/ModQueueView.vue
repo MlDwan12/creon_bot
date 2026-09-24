@@ -184,7 +184,9 @@ void load();
         <p v-if="queue.orders.length === 0" class="empty">Заказов на проверку нет.</p>
         <RouterLink v-for="o in queue.orders" :key="o.id" :to="`/mod/orders/${o.id}`" class="row">
           <span class="main">
-            <span class="title">{{ o.title }}</span>
+            <span class="title">
+              <span v-if="o.hasContacts" class="flag" title="Похоже на контакты в обход площадки">⚠ </span>{{ o.title }}
+            </span>
             <span class="sub">{{ o.advertiser }} · {{ formatPrice(o.price) }}</span>
           </span>
           <span :class="['wait', { long: isWaitingLong(o.createdAt) }]">{{ waitingFor(o.createdAt) }}</span>
@@ -366,6 +368,9 @@ a.subject {
   margin: 0;
   font-size: 14px;
   color: var(--danger);
+}
+.flag {
+  color: #9a5200;
 }
 .list {
   border-radius: 14px;
