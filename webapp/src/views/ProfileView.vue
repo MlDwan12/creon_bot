@@ -182,17 +182,17 @@ void load();
 
       <section v-if="profile.portfolio.length" class="block">
         <h2 class="section-title">Портфолио</h2>
-        <a
-          v-for="p in profile.portfolio"
-          :key="p.submissionId"
-          :href="safeUrl(p.videoUrl)"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="item"
-        >
-          <span class="play" aria-hidden="true">▶</span>
-          <span>{{ p.orderTitle }}</span>
-        </a>
+        <!-- рекламодателю ссылки не приходят (ведут на аккаунт креатора) — только названия работ -->
+        <template v-for="p in profile.portfolio" :key="p.submissionId">
+          <a v-if="safeUrl(p.videoUrl)" :href="safeUrl(p.videoUrl)" target="_blank" rel="noopener noreferrer" class="item">
+            <span class="play" aria-hidden="true">▶</span>
+            <span>{{ p.orderTitle }}</span>
+          </a>
+          <div v-else class="item">
+            <span class="play done" aria-hidden="true">✓</span>
+            <span>{{ p.orderTitle }}</span>
+          </div>
+        </template>
       </section>
 
       <section class="block">
@@ -377,6 +377,10 @@ h1 {
   align-items: center;
   justify-content: center;
   font-size: 13px;
+}
+.play.done {
+  background: var(--success-soft);
+  color: #1e7b34;
 }
 .review {
   display: flex;
