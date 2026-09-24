@@ -75,7 +75,7 @@ void load();
         <div>
           <div class="name">{{ current.creator }}</div>
           <div class="hint">
-            попытка {{ current.attempt }}<template v-if="current.submittedAt"> · прислано {{ timeAgo(current.submittedAt) }}</template>
+            видео {{ current.attempt }}<template v-if="current.submittedAt"> · прислано {{ timeAgo(current.submittedAt) }}</template>
           </div>
         </div>
       </div>

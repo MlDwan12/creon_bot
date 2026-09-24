@@ -21,7 +21,7 @@ import {
   InitDataGuard,
   requireUsername,
 } from './init-data.guard';
-import { parseOrderInput } from './order-input';
+import { parseDeadlineDays, parseOrderInput } from './order-input';
 
 /** Заказы текущего пользователя как рекламодателя. Права проверяют сервисы. */
 @Controller('api/my-orders')
@@ -75,6 +75,17 @@ export class MyOrdersController {
   async close(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {
     const order = await this.ordersService.close(id, req.user.id);
     await this.notifications.orderClosed(order);
+    return { ok: true };
+  }
+
+  /** Продлить срок на `days` дней; заказ с истёкшим сроком снова открывается. */
+  @Post(':id/extend')
+  async extend(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('days') days: unknown,
+    @Req() req: ApiRequest,
+  ) {
+    await this.ordersService.extend(id, req.user.id, parseDeadlineDays(days));
     return { ok: true };
   }
 

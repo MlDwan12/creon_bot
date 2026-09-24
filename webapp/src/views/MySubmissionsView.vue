@@ -12,11 +12,12 @@ const tab = ref<'active' | 'done'>('active');
 const ACTIVE = ['IN_PROGRESS', 'SUBMITTED', 'MODERATOR_APPROVED'];
 
 const active = computed(() => items.value.filter((s) => ACTIVE.includes(s.status)));
-/** Отклонённые, по которым ещё можно прислать новую работу. */
+/** Отклонённые, по которым ещё можно прислать новую работу (только последнее видео по заказу). */
 const attention = computed(() =>
   items.value.filter(
     (s) =>
       (s.status === 'MODERATOR_REJECTED' || s.status === 'ADVERTISER_REJECTED') &&
+      s.latest &&
       s.order.status === 'OPEN',
   ),
 );
