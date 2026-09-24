@@ -4,6 +4,7 @@ import { TelegrafModule } from 'nestjs-telegraf';
 import { session } from 'telegraf';
 import { currentUserMiddleware } from './middlewares/current-user.middleware';
 import { ignoreNotModifiedMiddleware } from './middlewares/ignore-not-modified.middleware';
+import { prismaSessionStore } from './middlewares/prisma-session.store';
 import { AdvertiserRejectWizard } from './scenes/advertiser-reject.scene';
 import { CreateOrderScene } from './scenes/create-order.scene';
 import { ModeratorRejectWizard } from './scenes/moderator-reject.scene';
@@ -18,6 +19,7 @@ import { OrdersModule } from '../orders/orders.module';
 import { SubmissionsModule } from '../submissions/submissions.module';
 import { UsersModule } from '../users/users.module';
 import { UsersService } from '../users/users.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Module({
   imports: [
@@ -26,11 +28,15 @@ import { UsersService } from '../users/users.service';
     SubmissionsModule,
     TelegrafModule.forRootAsync({
       imports: [ConfigModule, UsersModule],
-      inject: [ConfigService, UsersService],
-      useFactory: (config: ConfigService, usersService: UsersService) => ({
+      inject: [ConfigService, UsersService, PrismaService],
+      useFactory: (
+        config: ConfigService,
+        usersService: UsersService,
+        prisma: PrismaService,
+      ) => ({
         token: config.get<string>('BOT_TOKEN')!,
         middlewares: [
-          session(),
+          session({ store: prismaSessionStore(prisma) }),
           ignoreNotModifiedMiddleware(),
           currentUserMiddleware(usersService),
         ],
