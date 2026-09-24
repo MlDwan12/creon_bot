@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   DefaultValuePipe,
@@ -15,7 +16,9 @@ import { kopecksToRubles } from '../common/money';
 import { NotificationsService } from '../bot/notifications.service';
 import { creatorLabel } from '../bot/utils/format';
 import { OrdersService } from '../orders/orders.service';
+import { DAY_MS } from '../orders/deadline';
 import { SubmissionsService } from '../submissions/submissions.service';
+import { AnalyticsService } from './analytics.service';
 import { attemptNumbers } from './attempts';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { UserThrottlerGuard } from './user-throttler.guard';
@@ -34,6 +37,7 @@ export class ModerationController {
     private readonly ordersService: OrdersService,
     private readonly submissionsService: SubmissionsService,
     private readonly notifications: NotificationsService,
+    private readonly analytics: AnalyticsService,
   ) {}
 
   /** Обе очереди сразу: заказы и видео на проверке, старые первыми. */
@@ -67,6 +71,16 @@ export class ModerationController {
       this.submissionsService.stats(),
     ]);
     return { orders, submissions };
+  }
+
+  /** Воронка за последние `days` дней (1–365); без параметра — за всё время. */
+  @Get('funnel')
+  funnel(@Query('days', new ParseIntPipe({ optional: true })) days?: number) {
+    if (days !== undefined && (days < 1 || days > 365))
+      throw new BadRequestException('Период — от 1 до 365 дней');
+    return this.analytics.funnel(
+      days === undefined ? undefined : new Date(Date.now() - days * DAY_MS),
+    );
   }
 
   /** Все заказы любого статуса — страница, новые первыми. */

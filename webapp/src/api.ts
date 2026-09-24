@@ -128,6 +128,29 @@ export interface ModStats {
   submissions: { pending: number; approved: number; rejected: number };
 }
 
+export interface ModFunnel {
+  orders: {
+    created: number;
+    published: number;
+    rejected: number;
+    withClaims: number;
+    withVideos: number;
+    withAccepted: number;
+    /** Медиана от создания до решения модератора, часы; null — решений не было. */
+    moderationHours: number | null;
+  };
+  videos: {
+    submitted: number;
+    pending: number;
+    moderatorRejected: number;
+    accepted: number;
+    advertiserRejected: number;
+  };
+  users: { new: number; activeAdvertisers: number; activeCreators: number };
+  /** Сумма цен принятых видео, ₽ (договорные не считаются) и сколько таких видео. */
+  turnover: { rubles: number; acceptedPriced: number };
+}
+
 export interface ModOrderRow {
   id: number;
   title: string;
@@ -279,6 +302,11 @@ export function fetchModQueue() {
 
 export function fetchModStats() {
   return request<ModStats>('GET', '/api/mod/stats');
+}
+
+/** Воронка за последние `days` дней; без аргумента — за всё время. См. src/api/analytics.service.ts. */
+export function fetchModFunnel(days?: number) {
+  return request<ModFunnel>('GET', `/api/mod/funnel${days ? `?days=${days}` : ''}`);
 }
 
 export function fetchAllOrders(page: number) {
