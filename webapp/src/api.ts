@@ -34,7 +34,7 @@ export interface OrderSummary {
   id: number;
   title: string;
   description: string;
-  price: string | null;
+  price: number | null;
   category: OrderCategory;
   deadline: string | null;
   createdAt: string;
@@ -72,7 +72,7 @@ export interface MySubmission {
   order: {
     id: number;
     title: string;
-    price: string | null;
+    price: number | null;
     deadline: string | null;
     status: OrderStatus;
   };
@@ -83,7 +83,7 @@ export interface MyOrder {
   id: number;
   title: string;
   description: string;
-  price: string | null;
+  price: number | null;
   category: OrderCategory;
   deadline: string | null;
   status: OrderStatus;
@@ -98,7 +98,8 @@ export interface MyOrder {
 export interface NewOrderInput {
   title: string;
   description: string;
-  price: string;
+  /** Цена за видео, ₽; null — договорная. */
+  price: number | null;
   category: OrderCategory;
   deadlineDays: number | null;
 }
@@ -118,7 +119,7 @@ export interface PendingVideos {
 
 /** Ответы `/api/mod/*` — см. src/api/moderation.controller.ts. */
 export interface ModQueue {
-  orders: { id: number; title: string; price: string | null; advertiser: string; createdAt: string }[];
+  orders: { id: number; title: string; price: number | null; advertiser: string; createdAt: string }[];
   videos: { id: number; orderTitle: string; creator: string; submittedAt: string | null }[];
 }
 
@@ -130,7 +131,7 @@ export interface ModStats {
 export interface ModOrderRow {
   id: number;
   title: string;
-  price: string | null;
+  price: number | null;
   status: OrderStatus;
   advertiser: string;
   submissionsCount: number;
@@ -141,7 +142,7 @@ export interface ModOrder {
   id: number;
   title: string;
   description: string;
-  price: string | null;
+  price: number | null;
   category: OrderCategory;
   deadline: string | null;
   status: OrderStatus;

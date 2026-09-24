@@ -45,7 +45,8 @@ model Order {
   advertiserId     Int
   title            String
   description      String
-  price            String?
+  /// Цена за одно принятое видео, целые рубли; null — договорная.
+  price            Int?
   category         OrderCategory @default(OTHER)
   deadline         DateTime?
   status           OrderStatus   @default(PENDING_MODERATION)

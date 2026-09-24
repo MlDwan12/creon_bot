@@ -3,10 +3,10 @@ import { reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError, createOrder, fetchMe, fetchMyOrders, ORDER_CATEGORIES, type NewOrderInput } from '../api';
 
-// Лимиты — те же, что проверяет бэкенд (src/common/validation.ts); здесь только чтобы не дать ввести больше.
+// Лимиты — те же, что проверяет бэкенд (src/common/validation.ts); здесь только подсказка браузеру.
 const MAX_TITLE = 100;
 const MAX_DESCRIPTION = 1000;
-const MAX_PRICE = 50;
+const MAX_PRICE = 1_000_000;
 const DEADLINES: { days: number | null; label: string }[] = [
   { days: 3, label: '3 дн' },
   { days: 7, label: '7 дн' },
@@ -19,7 +19,8 @@ const route = useRoute();
 const router = useRouter();
 
 // reactive() — как ref(), но для объекта целиком: form.title и т.д. без `.value`.
-const form = reactive<NewOrderInput>({
+// price: '' — поле пустое (цена договорная); v-model.number отдаёт '' для пустого ввода.
+const form = reactive<Omit<NewOrderInput, 'price'> & { price: number | '' }>({
   title: '',
   description: '',
   price: '',
@@ -50,7 +51,7 @@ async function submit() {
   sending.value = true;
   error.value = '';
   try {
-    await createOrder({ ...form });
+    await createOrder({ ...form, price: form.price === '' ? null : form.price });
     await router.replace('/my-orders');
   } catch (err) {
     // Тексты ошибок проверки пишет бэкенд.
@@ -110,8 +111,16 @@ void prefill();
 
       <div class="group">
         <label class="row">
-          Бюджет
-          <input v-model="form.price" :maxlength="MAX_PRICE" placeholder="по договорённости" />
+          Цена за видео, ₽
+          <input
+            v-model.number="form.price"
+            type="number"
+            inputmode="numeric"
+            min="1"
+            :max="MAX_PRICE"
+            step="1"
+            placeholder="договорная"
+          />
         </label>
         <div class="row column">
           <span id="deadline-label">Срок сдачи</span>

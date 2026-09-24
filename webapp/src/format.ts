@@ -26,8 +26,9 @@ export function timeAgo(iso: string): string {
 }
 
 /** Цена в заказе — свободный текст рекламодателя; пустая — договорная. */
-export function formatPrice(price: string | null): string {
-  return price ?? 'цена договорная';
+/** «3 000 ₽ за видео» или «цена договорная». */
+export function formatPrice(price: number | null): string {
+  return price === null ? 'цена договорная' : `${price.toLocaleString('ru-RU')} ₽ за видео`;
 }
 
 /** Сколько ждёт в очереди: «40 мин», «6 ч», «2 дн». */

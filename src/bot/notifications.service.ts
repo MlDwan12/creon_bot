@@ -7,6 +7,7 @@ import {
   creatorLabel,
   escapeHtml,
   formatDeadline,
+  formatPrice,
   html,
   orderCategoryLabel,
 } from './utils/format';
@@ -41,7 +42,7 @@ export class NotificationsService {
       `#${order.id}: <b>${escapeHtml(order.title)}</b>`,
       escapeHtml(order.description),
       orderCategoryLabel(order.category),
-      order.price ? `💰 ${escapeHtml(order.price)}` : '💰 цена не указана',
+      `💰 ${formatPrice(order.price)}`,
       order.deadline ? `⏰ Дедлайн: ${formatDeadline(order.deadline)}` : '',
       `Рекламодатель: ${escapeHtml(creatorLabel(order.advertiser))}`,
     ]

@@ -80,7 +80,7 @@ watch(() => props.id, load, { immediate: true });
       <section class="rows">
         <div class="row"><span>Рекламодатель</span><span>{{ order.advertiser }}</span></div>
         <div class="row">
-          <span>Бюджет · срок</span>
+          <span>Цена · срок</span>
           <span>{{ formatPrice(order.price) }}<template v-if="order.deadline"> · до {{ formatDate(order.deadline) }}</template></span>
         </div>
         <div class="row"><span>Категория</span><span>{{ categoryLabel(order.category) }}</span></div>
