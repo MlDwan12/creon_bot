@@ -329,7 +329,7 @@ describe('профиль креатора', () => {
     await acceptedVideo(advertiser.id, creator.id, 5, true);
     await acceptedVideo(advertiser.id, creator.id, 4);
 
-    const profile = await profiles.profile(creator.id);
+    const profile = await profiles.profile(creator.id, true);
 
     expect(profile).toMatchObject({
       rating: 4.5,
@@ -360,13 +360,37 @@ describe('профиль креатора', () => {
     expect(await profiles.canView(stranger, creator.id, false)).toBe(false);
   });
 
+  it('рекламодателю — только имя, без @username и соцсетей', async () => {
+    const creator = await prisma.user.create({
+      data: {
+        telegramId: nextTelegramId++,
+        username: 'secret_creator',
+        firstName: 'Аня',
+        tiktokUrl: 'https://www.tiktok.com/@secret_creator',
+      },
+    });
+
+    const forAdvertiser = await profiles.profile(creator.id, false);
+    expect(forAdvertiser.name).toBe('Аня');
+    expect(forAdvertiser.links).toEqual({
+      tiktokUrl: null,
+      youtubeUrl: null,
+      vkUrl: null,
+    });
+    expect(JSON.stringify(forAdvertiser)).not.toContain('secret_creator');
+
+    const full = await profiles.profile(creator.id, true);
+    expect(full.name).toBe('@secret_creator');
+    expect(full.links.tiktokUrl).toContain('secret_creator');
+  });
+
   it('модератор удаляет отзыв — приёмка и счётчик выполненных остаются', async () => {
     const [advertiser, creator] = [await user(), await user()];
     const s = await acceptedVideo(advertiser.id, creator.id, 1);
 
     await submissions.removeReview(s.id);
 
-    const profile = await profiles.profile(creator.id);
+    const profile = await profiles.profile(creator.id, true);
     expect(profile).toMatchObject({
       rating: null,
       reviewsCount: 0,
@@ -489,7 +513,7 @@ describe('жалобы', () => {
     await reports.create(creator, report('REVIEW', s.id, 'INSULT'));
     await reports.resolve({ target: 'REVIEW', targetId: s.id }, true, 1n);
 
-    expect(await profiles.profile(creator.id)).toMatchObject({
+    expect(await profiles.profile(creator.id, true)).toMatchObject({
       rating: null,
       completed: 1,
     });

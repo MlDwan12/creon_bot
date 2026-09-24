@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import {
-  fetchMe,
   fetchOpenOrders,
   ORDER_CATEGORIES,
   type OrderCategory,
@@ -9,7 +8,7 @@ import {
 } from '../api';
 import { RouterLink } from 'vue-router';
 import OrderCard from '../components/OrderCard.vue';
-import { openTelegramLink } from '../telegram';
+import SupportLink from '../components/SupportLink.vue';
 
 // ref() — реактивное значение: поменяли `.value` в коде, и шаблон ниже перерисовался сам.
 const category = ref<OrderCategory>();
@@ -41,11 +40,6 @@ async function load(reset: boolean) {
     if (requestId === lastRequest) loading.value = false;
   }
 }
-
-const supportUrl = ref<string | null>(null);
-fetchMe()
-  .then((me) => (supportUrl.value = me.supportUrl))
-  .catch(() => {});
 
 // Сменилась категория — грузим заново; immediate — и сразу при открытии экрана.
 watch(category, () => load(true), { immediate: true });
@@ -90,9 +84,7 @@ watch(category, () => load(true), { immediate: true });
     </button>
 
     <footer class="footer">
-      <button v-if="supportUrl" type="button" class="quiet-link" @click="openTelegramLink(supportUrl)">
-        Поддержка
-      </button>
+      <SupportLink />
       <RouterLink to="/privacy" class="quiet-link">Политика конфиденциальности</RouterLink>
     </footer>
   </main>

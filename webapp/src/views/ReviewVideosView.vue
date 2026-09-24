@@ -2,6 +2,7 @@
 import { computed, reactive, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { acceptVideo, ApiError, type Feedback, fetchPendingVideos, type PendingVideos, rejectVideo } from '../api';
+import SupportLink from '../components/SupportLink.vue';
 import UserAvatar from '../components/UserAvatar.vue';
 import { timeAgo } from '../format';
 import { safeUrl } from '../telegram';
@@ -103,6 +104,7 @@ void load();
       >
         Пожаловаться на видео
       </RouterLink>
+      <SupportLink :label="`Вопрос по заказу #${data.order.id} — написать менеджеру`" />
 
       <fieldset v-if="accepting" class="feedback">
         <legend class="section-title">Оцените работу креатора</legend>

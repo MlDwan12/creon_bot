@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { SubmissionStatus, type User } from '@prisma/client';
-import { creatorLabel } from '../bot/utils/format';
+import { creatorLabel, publicName } from '../bot/utils/format';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Сколько последних отзывов и видео портфолио показывать в профиле. */
@@ -34,7 +34,11 @@ export class ProfilesService {
     return shared !== null;
   }
 
-  async profile(creatorId: number) {
+  /**
+   * `full` — для самого креатора и модератора: @username и соцсети. Остальным (рекламодателю) —
+   * только имя: контакты сторон друг другу не показываем, всё общение — через площадку.
+   */
+  async profile(creatorId: number, full: boolean) {
     const creator = await this.prisma.user.findUnique({
       where: { id: creatorId },
     });
@@ -68,7 +72,7 @@ export class ProfilesService {
     const avg = ratings._avg.rating;
     return {
       id: creator.id,
-      name: creatorLabel(creator),
+      name: full ? creatorLabel(creator) : publicName(creator),
       rating: avg === null ? null : Math.round(avg * 10) / 10,
       reviewsCount: ratings._count.rating,
       completed,
@@ -76,11 +80,13 @@ export class ProfilesService {
       ban: creator.bannedAt
         ? { at: creator.bannedAt, reason: creator.banReason }
         : null,
-      links: {
-        tiktokUrl: creator.tiktokUrl,
-        youtubeUrl: creator.youtubeUrl,
-        vkUrl: creator.vkUrl,
-      },
+      links: full
+        ? {
+            tiktokUrl: creator.tiktokUrl,
+            youtubeUrl: creator.youtubeUrl,
+            vkUrl: creator.vkUrl,
+          }
+        : { tiktokUrl: null, youtubeUrl: null, vkUrl: null },
       reviews: reviews.map((s) => ({
         submissionId: s.id,
         rating: s.rating!,
