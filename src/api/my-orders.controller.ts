@@ -13,7 +13,7 @@ import {
 import { OrderStatus, SubmissionStatus } from '@prisma/client';
 import { kopecksToRubles } from '../common/money';
 import { NotificationsService } from '../bot/notifications.service';
-import { creatorLabel } from '../bot/utils/format';
+import { publicName } from '../bot/utils/format';
 import { Throttle } from '@nestjs/throttler';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
@@ -120,7 +120,7 @@ export class MyOrdersController {
         .map((s) => ({
           id: s.id,
           videoUrl: s.videoUrl,
-          creator: creatorLabel(s.creator),
+          creator: publicName(s.creator),
           creatorId: s.creatorId,
           attempt: attempts.get(s.id)!,
           submittedAt: s.submittedAt,

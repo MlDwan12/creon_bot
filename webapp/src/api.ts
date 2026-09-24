@@ -424,6 +424,7 @@ export const REPORT_REASONS: Record<ReportTarget, { code: string; label: string 
     { code: 'FAKE_REVIEWS', label: 'Фейковые отзывы, обман покупателей' },
     { code: 'PERSONAL_DATA', label: 'Просят личные данные' },
     { code: 'SPAM', label: 'Спам' },
+    { code: 'OFF_PLATFORM', label: 'Предлагает связь или оплату вне площадки' },
     { code: 'OTHER', label: 'Другое' },
   ],
   VIDEO: [
@@ -431,17 +432,20 @@ export const REPORT_REASONS: Record<ReportTarget, { code: string; label: string 
     { code: 'UNAVAILABLE', label: 'Видео удалено или недоступно' },
     { code: 'BRAND_NEGATIVE', label: 'Негатив о бренде' },
     { code: 'BLACKMAIL', label: 'Шантаж, вымогательство' },
+    { code: 'OFF_PLATFORM', label: 'Предлагает связь или оплату вне площадки' },
     { code: 'OTHER', label: 'Другое' },
   ],
   REVIEW: [
     { code: 'INSULT', label: 'Оскорбления' },
     { code: 'FALSE', label: 'Ложный отзыв' },
     { code: 'PERSONAL_DATA', label: 'Раскрывает личные данные' },
+    { code: 'OFF_PLATFORM', label: 'Предлагает связь или оплату вне площадки' },
     { code: 'OTHER', label: 'Другое' },
   ],
   PROFILE: [
     { code: 'IMPERSONATION', label: 'Выдаёт себя за другого' },
     { code: 'OFFENSIVE', label: 'Оскорбительное имя или фото' },
+    { code: 'OFF_PLATFORM', label: 'Предлагает связь или оплату вне площадки' },
     { code: 'OTHER', label: 'Другое' },
   ],
 };

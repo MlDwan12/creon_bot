@@ -48,6 +48,14 @@ export function formatPrice(price: number | null): string {
     : `${price.toLocaleString('ru-RU')} ₽ за видео`;
 }
 
+/**
+ * Имя для другой стороны сделки — без @username: стороны общаются только через площадку,
+ * чтобы не договаривались в обход неё. creatorLabel (с username) — только модераторам и поддержке.
+ */
+export function publicName(user: User): string {
+  return user.firstName?.trim() || 'Креатор';
+}
+
 export function creatorLabel(user: User): string {
   return user.username
     ? `@${user.username}`

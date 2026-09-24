@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { ApiError, categoryLabel, claimOrder, fetchOrder, type OrderDetail } from '../api';
+import SupportLink from '../components/SupportLink.vue';
 import { formatDeadline, formatPrice } from '../format';
 
 // `id` приходит из адреса /orders/:id (в router.ts у маршрута `props: true`).
@@ -69,8 +70,8 @@ void load();
           </span>
         </div>
         <div class="row">
-          <span>Расчёт</span>
-          <span class="value">напрямую, вне бота</span>
+          <span>Оплата</span>
+          <span class="value">через CreON, после приёмки видео</span>
         </div>
       </section>
 
@@ -96,6 +97,7 @@ void load();
       >
         Пожаловаться на заказ
       </RouterLink>
+      <SupportLink :label="`Вопрос по заказу #${order.id} — написать менеджеру`" />
 
       <p v-if="justClaimed" class="notice success" role="status">
         Заказ взят в работу. Когда видео будет готово, отправьте его в «Мои отклики».

@@ -20,17 +20,26 @@ import { ProfilesService } from './profiles.service';
 
 /** Коды причин по типу объекта; подписи — во фронте (webapp/src/api.ts, REPORT_REASONS). */
 export const REPORT_REASONS: Record<ReportTarget, string[]> = {
+  // OFF_PLATFORM — предлагает связь или оплату в обход площадки
   ORDER: [
     'FRAUD',
     'PROHIBITED',
     'FAKE_REVIEWS',
     'PERSONAL_DATA',
     'SPAM',
+    'OFF_PLATFORM',
     'OTHER',
   ],
-  VIDEO: ['STOLEN', 'UNAVAILABLE', 'BRAND_NEGATIVE', 'BLACKMAIL', 'OTHER'],
-  REVIEW: ['INSULT', 'FALSE', 'PERSONAL_DATA', 'OTHER'],
-  PROFILE: ['IMPERSONATION', 'OFFENSIVE', 'OTHER'],
+  VIDEO: [
+    'STOLEN',
+    'UNAVAILABLE',
+    'BRAND_NEGATIVE',
+    'BLACKMAIL',
+    'OFF_PLATFORM',
+    'OTHER',
+  ],
+  REVIEW: ['INSULT', 'FALSE', 'PERSONAL_DATA', 'OFF_PLATFORM', 'OTHER'],
+  PROFILE: ['IMPERSONATION', 'OFFENSIVE', 'OFF_PLATFORM', 'OTHER'],
 };
 
 /** Видео, которые уже дошли до рекламодателя. */

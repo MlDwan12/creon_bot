@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TelegrafModule } from 'nestjs-telegraf';
 import { NotificationsService } from './notifications.service';
+import { SupportService } from './support.service';
 import { TelegramPhotosService } from './telegram-photos.service';
 import { StartUpdate } from './updates/start.update';
 
@@ -16,7 +17,12 @@ import { StartUpdate } from './updates/start.update';
       }),
     }),
   ],
-  providers: [NotificationsService, TelegramPhotosService, StartUpdate],
-  exports: [NotificationsService, TelegramPhotosService],
+  providers: [
+    NotificationsService,
+    TelegramPhotosService,
+    SupportService,
+    StartUpdate,
+  ],
+  exports: [NotificationsService, TelegramPhotosService, SupportService],
 })
 export class BotModule {}

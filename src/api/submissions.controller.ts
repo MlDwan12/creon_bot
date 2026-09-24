@@ -10,6 +10,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { NotificationsService } from '../bot/notifications.service';
+import { SupportService } from '../bot/support.service';
+import { creatorLabel, escapeHtml, formatPrice } from '../bot/utils/format';
+import { kopecksToRubles } from '../common/money';
 import { MAX_URL_LENGTH, VIDEO_URL_RE } from '../common/validation';
 import { SubmissionsService } from '../submissions/submissions.service';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
@@ -24,6 +27,7 @@ export class SubmissionsController {
   constructor(
     private readonly submissionsService: SubmissionsService,
     private readonly notifications: NotificationsService,
+    private readonly support: SupportService,
   ) {}
 
   /** Отклики текущего пользователя как креатора. */
@@ -75,6 +79,18 @@ export class SubmissionsController {
       parseFeedback(body),
     );
     await this.notifications.videoAccepted(submission);
+    // оплата пока вне бота: менеджеру — кому и сколько перевести
+    const price = submission.order.priceKopecks;
+    await this.support.paymentDue(
+      [
+        '💸 <b>К оплате</b>',
+        `Заказ #${submission.order.id}: ${escapeHtml(submission.order.title)}`,
+        `Креатор: ${escapeHtml(creatorLabel(submission.creator))} (#u${submission.creator.telegramId})`,
+        `Рекламодатель: ${escapeHtml(creatorLabel(req.user))} (#u${req.user.telegramId})`,
+        `Цена: ${formatPrice(price === null ? null : kopecksToRubles(price))}`,
+        `Видео: ${escapeHtml(submission.videoUrl ?? '')}`,
+      ].join('\n'),
+    );
     return { ok: true };
   }
 
