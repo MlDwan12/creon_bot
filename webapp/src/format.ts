@@ -29,3 +29,16 @@ export function timeAgo(iso: string): string {
 export function formatPrice(price: string | null): string {
   return price ?? 'цена договорная';
 }
+
+/** Сколько ждёт в очереди: «40 мин», «6 ч», «2 дн». */
+export function waitingFor(iso: string): string {
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
+  if (minutes < 60) return `${minutes} мин`;
+  if (minutes < 24 * 60) return `${Math.round(minutes / 60)} ч`;
+  return `${Math.round(minutes / (24 * 60))} дн`;
+}
+
+/** Ждёт дольше 4 часов — подсвечиваем в очереди модератора. */
+export function isWaitingLong(iso: string): boolean {
+  return Date.now() - new Date(iso).getTime() > 4 * 60 * 60 * 1000;
+}
