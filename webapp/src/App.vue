@@ -30,7 +30,7 @@ if (inTelegram) {
     ‹ Назад
   </button>
   <RouterView />
-  <TabBar v-if="!route.meta.back" />
+  <TabBar />
 </template>
 
 <style scoped>

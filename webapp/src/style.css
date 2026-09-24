@@ -50,6 +50,12 @@ button {
   padding: 10px 16px var(--safe-bottom);
   background: var(--surface);
   border-top: 1px solid var(--separator);
+  /* Поверх вкладок, даже если :has() ниже не поддерживается. */
+  z-index: 1;
+}
+/* Экран с кнопкой действия — вкладки прячем, без неё — оставляем навигацию. */
+body:has(.bottom-bar) .tabbar {
+  display: none;
 }
 .main-button {
   display: flex;
