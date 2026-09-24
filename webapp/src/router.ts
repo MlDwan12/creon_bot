@@ -72,11 +72,9 @@ export const router = createRouter({
 
 // Модератора — в его окно, остальных — из него. Это только навигация:
 // права на каждый /api/mod/* всё равно проверяет бэкенд (ModeratorGuard).
-let me: Promise<{ isModerator: boolean }> | undefined;
 router.beforeEach(async (to) => {
   if (to.path === '/privacy') return;
-  me ??= fetchMe().catch(() => ({ isModerator: false }));
-  const { isModerator } = await me;
+  const { isModerator } = await fetchMe().catch(() => ({ isModerator: false }));
   const inModeration = to.path.startsWith('/mod');
   if (isModerator && !inModeration) return '/mod';
   if (!isModerator && inModeration) return '/';

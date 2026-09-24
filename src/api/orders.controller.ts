@@ -15,7 +15,11 @@ import {
 import { OrderCategory } from '@prisma/client';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
-import { type ApiRequest, InitDataGuard } from './init-data.guard';
+import {
+  type ApiRequest,
+  InitDataGuard,
+  requireUsername,
+} from './init-data.guard';
 
 const PAGE_SIZE = 20;
 
@@ -62,6 +66,7 @@ export class OrdersController {
   @Post(':id/claim')
   @HttpCode(201)
   async claim(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {
+    requireUsername(req.user);
     const submission = await this.submissionsService.claim(id, req.user.id);
     return { submissionId: submission.id };
   }
