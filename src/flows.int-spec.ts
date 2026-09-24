@@ -1,6 +1,7 @@
 import type { ConfigService } from '@nestjs/config';
 import { AnalyticsService } from './api/analytics.service';
 import { ProfilesService } from './api/profiles.service';
+import { ReportsService } from './api/reports.service';
 import { MAX_ACTIVE_ORDERS, OrdersService } from './orders/orders.service';
 import { PrismaService } from './prisma/prisma.service';
 import { SubmissionsService } from './submissions/submissions.service';
@@ -24,6 +25,7 @@ const orders = new OrdersService(prisma);
 const submissions = new SubmissionsService(prisma);
 const analytics = new AnalyticsService(prisma);
 const profiles = new ProfilesService(prisma);
+const reports = new ReportsService(prisma, orders, profiles);
 
 const DAY = 24 * 60 * 60 * 1000;
 let nextTelegramId = 1n;
@@ -54,7 +56,7 @@ const statusOf = async (orderId: number) =>
 
 beforeEach(() =>
   prisma.$executeRawUnsafe(
-    'TRUNCATE "Submission", "Order", "User" RESTART IDENTITY CASCADE',
+    'TRUNCATE "Report", "Submission", "Order", "User" RESTART IDENTITY CASCADE',
   ),
 );
 afterAll(() => prisma.$disconnect());
@@ -383,6 +385,111 @@ describe('профиль креатора', () => {
     expect(await submissions.advertiserStats(advertiser.id)).toEqual({
       accepted: 1,
       rejected: 1,
+    });
+  });
+});
+
+describe('жалобы', () => {
+  const report = (
+    target: string,
+    targetId: number,
+    reason = 'FRAUD',
+    comment?: string,
+  ) => reports.parse({ target, targetId, reason, comment });
+
+  it('на заказ: чужой опубликованный — можно, свой и на модерации — нельзя, дважды — нельзя', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const open = await openOrder(advertiser.id);
+    const pending = await pendingOrder(advertiser.id);
+
+    await expect(
+      reports.create(creator, report('ORDER', open.id)),
+    ).resolves.toContain('заказ');
+    await expect(
+      reports.create(creator, report('ORDER', open.id)),
+    ).rejects.toThrow('уже пожаловались');
+    await expect(
+      reports.create(advertiser, report('ORDER', open.id)),
+    ).rejects.toThrow('Не найдено');
+    await expect(
+      reports.create(creator, report('ORDER', pending.id)),
+    ).rejects.toThrow('Не найдено');
+  });
+
+  it('причина — из списка своего типа; «Другое» — только с комментарием', () => {
+    expect(() => report('ORDER', 1, 'STOLEN')).toThrow('причину');
+    expect(() => report('ORDER', 1, 'OTHER')).toThrow('Опишите');
+    expect(
+      report('ORDER', 1, 'OTHER', 'просят оплатить доставку').comment,
+    ).toBe('просят оплатить доставку');
+  });
+
+  it('на видео — только рекламодатель заказа и только после модератора', async () => {
+    const [advertiser, creator, stranger] = [
+      await user(),
+      await user(),
+      await user(),
+    ];
+    const order = await openOrder(advertiser.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, 'https://v.example/1');
+
+    await expect(
+      reports.create(advertiser, report('VIDEO', s.id, 'STOLEN')),
+    ).rejects.toThrow('Не найдено');
+    await submissions.moderatorApprove(s.id, 1n);
+    await expect(
+      reports.create(stranger, report('VIDEO', s.id, 'STOLEN')),
+    ).rejects.toThrow('Не найдено');
+    await expect(
+      reports.create(advertiser, report('VIDEO', s.id, 'STOLEN')),
+    ).resolves.toContain('видео');
+  });
+
+  it('мера по заказу закрывает его, повторное решение — отказ', async () => {
+    const [advertiser, c1, c2] = [await user(), await user(), await user()];
+    const order = await openOrder(advertiser.id);
+    await reports.create(c1, report('ORDER', order.id));
+    await reports.create(c2, report('ORDER', order.id, 'SPAM'));
+
+    const [group] = await reports.listOpen();
+    expect(group).toMatchObject({ target: 'ORDER', targetId: order.id });
+    expect(group.reports).toHaveLength(2);
+
+    const { reporters, closedOrder } = await reports.resolve(
+      { target: 'ORDER', targetId: order.id },
+      true,
+      1n,
+    );
+    expect(reporters.sort()).toEqual([c1.telegramId, c2.telegramId].sort());
+    expect(closedOrder?.status).toBe('CLOSED');
+    expect(await reports.listOpen()).toEqual([]);
+    await expect(
+      reports.resolve({ target: 'ORDER', targetId: order.id }, false, 2n),
+    ).rejects.toThrow('уже рассмотрены');
+  });
+
+  it('жалоба на отзыв: пишет только тот, о ком отзыв; мера удаляет отзыв', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const order = await openOrder(advertiser.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, 'https://v.example/1');
+    await submissions.moderatorApprove(s.id, 1n);
+    await submissions.advertiserApprove(s.id, advertiser.id, {
+      rating: 1,
+      review: 'ужас',
+      portfolioAllowed: false,
+    });
+
+    await expect(
+      reports.create(advertiser, report('REVIEW', s.id, 'INSULT')),
+    ).rejects.toThrow('Не найдено');
+    await reports.create(creator, report('REVIEW', s.id, 'INSULT'));
+    await reports.resolve({ target: 'REVIEW', targetId: s.id }, true, 1n);
+
+    expect(await profiles.profile(creator.id)).toMatchObject({
+      rating: null,
+      completed: 1,
     });
   });
 });

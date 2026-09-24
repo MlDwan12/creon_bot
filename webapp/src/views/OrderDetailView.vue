@@ -89,6 +89,14 @@ void load();
         </ol>
       </section>
 
+      <RouterLink
+        v-if="!order.own"
+        :to="{ path: '/report', query: { target: 'ORDER', id: order.id, title: order.title } }"
+        class="quiet-link"
+      >
+        Пожаловаться на заказ
+      </RouterLink>
+
       <p v-if="justClaimed" class="notice success" role="status">
         Заказ взят в работу. Когда видео будет готово, отправьте его в «Мои отклики».
       </p>

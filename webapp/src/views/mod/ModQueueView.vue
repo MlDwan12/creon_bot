@@ -1,15 +1,67 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
-import { fetchModQueue, type ModQueue } from '../../api';
-import { formatPrice, isWaitingLong, waitingFor } from '../../format';
+import {
+  ApiError,
+  fetchModQueue,
+  fetchModReports,
+  type ModQueue,
+  type ModReportGroup,
+  reasonLabel,
+  type ReportTarget,
+  resolveReports,
+} from '../../api';
+import { formatPrice, isWaitingLong, timeAgo, waitingFor } from '../../format';
+import { confirmAction } from '../../telegram';
 
 const route = useRoute();
 const router = useRouter();
 
+type Tab = 'orders' | 'videos' | 'reports';
 // Вкладка — в адресе (?tab=videos), чтобы «Назад» из карточки вернул на ту же вкладку.
-const tab = computed(() => (route.query.tab === 'videos' ? 'videos' : 'orders'));
-const setTab = (t: 'orders' | 'videos') => router.replace({ query: t === 'videos' ? { tab: t } : {} });
+const tab = computed<Tab>(() =>
+  route.query.tab === 'videos' || route.query.tab === 'reports' ? route.query.tab : 'orders',
+);
+const setTab = (t: Tab) => router.replace({ query: t === 'orders' ? {} : { tab: t } });
+
+const reports = ref<ModReportGroup[]>([]);
+const reportError = ref('');
+
+/** Мера по жалобам — своя для каждого типа объекта (см. ReportsService.resolve). */
+const ACTIONS: Record<ReportTarget, { label: string; confirm: string }> = {
+  ORDER: { label: 'Закрыть заказ', confirm: 'Закрыть заказ? Рекламодатель и креаторы получат уведомление.' },
+  VIDEO: { label: 'Убрать из портфолио', confirm: 'Убрать видео из портфолио креатора?' },
+  REVIEW: { label: 'Удалить отзыв', confirm: 'Удалить отзыв? Оценка пропадёт из рейтинга.' },
+  PROFILE: { label: 'Стереть ссылки', confirm: 'Стереть ссылки на соцсети в профиле?' },
+};
+const TARGET_NAMES: Record<ReportTarget, string> = {
+  ORDER: 'Заказ',
+  VIDEO: 'Видео',
+  REVIEW: 'Отзыв',
+  PROFILE: 'Профиль',
+};
+
+async function resolve(group: ModReportGroup, actioned: boolean) {
+  const question = actioned
+    ? ACTIONS[group.target].confirm
+    : 'Нарушений нет? Жалобы закроются, авторам придёт ответ.';
+  if (!(await confirmAction(question))) return;
+  reportError.value = '';
+  try {
+    await resolveReports(group.target, group.targetId, actioned);
+  } catch (err) {
+    reportError.value = err instanceof ApiError ? err.userMessage : 'Не получилось, попробуйте ещё раз';
+  }
+  reports.value = await fetchModReports().catch(() => reports.value);
+}
+
+/** Куда вести модератора, чтобы посмотреть объект жалобы целиком. */
+function subjectLink(g: ModReportGroup): string | null {
+  if (!g.subject) return null;
+  if (g.target === 'VIDEO') return `/mod/videos/${g.targetId}`;
+  if (g.target === 'ORDER') return `/mod/orders/${g.targetId}`;
+  return g.subject.profileId ? `/mod/creators/${g.subject.profileId}` : null;
+}
 
 const queue = ref<ModQueue>();
 const error = ref('');
@@ -25,7 +77,7 @@ const oldest = computed(() => {
 
 async function load() {
   try {
-    queue.value = await fetchModQueue();
+    [queue.value, reports.value] = await Promise.all([fetchModQueue(), fetchModReports()]);
   } catch {
     error.value = 'Не удалось загрузить очередь';
   }
@@ -57,11 +109,50 @@ void load();
         <button type="button" role="tab" :aria-selected="tab === 'videos'" @click="setTab('videos')">
           Видео · {{ queue.videos.length }}
         </button>
+        <button type="button" role="tab" :aria-selected="tab === 'reports'" @click="setTab('reports')">
+          Жалобы · {{ reports.length }}
+        </button>
       </div>
 
       <p class="hint">Сначала самые старые</p>
 
-      <div v-if="tab === 'orders'" class="list">
+      <template v-if="tab === 'reports'">
+        <p v-if="reports.length === 0" class="empty list">Жалоб нет.</p>
+        <p v-if="reportError" class="error" role="alert">{{ reportError }}</p>
+        <article v-for="g in reports" :key="`${g.target}:${g.targetId}`" class="report">
+          <div class="report-top">
+            <span class="badge">{{ TARGET_NAMES[g.target] }}</span>
+            <span class="hint">жалоб: {{ g.reports.length }}</span>
+          </div>
+
+          <template v-if="g.subject">
+            <RouterLink v-if="subjectLink(g)" :to="subjectLink(g)!" class="subject">
+              {{ g.subject.title }} ›
+            </RouterLink>
+            <strong v-else class="subject">{{ g.subject.title }}</strong>
+            <p v-if="g.subject.text" class="quote">{{ g.subject.text }}</p>
+            <span class="hint">Автор: {{ g.subject.author }}</span>
+          </template>
+          <p v-else class="hint">Объект уже удалён.</p>
+
+          <ul class="reasons">
+            <li v-for="r in g.reports" :key="r.id">
+              <strong>{{ reasonLabel(g.target, r.reason) }}</strong>
+              <span v-if="r.comment"> — «{{ r.comment }}»</span>
+              <span class="hint"> · {{ r.reporter }}, {{ timeAgo(r.createdAt) }}</span>
+            </li>
+          </ul>
+
+          <div class="actions">
+            <button type="button" @click="resolve(g, false)">Нарушений нет</button>
+            <button v-if="g.subject" type="button" class="danger" @click="resolve(g, true)">
+              {{ ACTIONS[g.target].label }}
+            </button>
+          </div>
+        </article>
+      </template>
+
+      <div v-else-if="tab === 'orders'" class="list">
         <p v-if="queue.orders.length === 0" class="empty">Заказов на проверку нет.</p>
         <RouterLink v-for="o in queue.orders" :key="o.id" :to="`/mod/orders/${o.id}`" class="row">
           <span class="main">
@@ -133,7 +224,7 @@ h1 {
 }
 .segmented {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   padding: 2px;
   border-radius: 9px;
   background: var(--fill);
@@ -149,6 +240,80 @@ h1 {
 .segmented button[aria-selected='true'] {
   background: var(--surface);
   font-weight: 600;
+}
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.report-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.badge {
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 600;
+}
+.subject {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+a.subject {
+  color: var(--link);
+}
+.quote {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--fill);
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.reasons {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+}
+.actions button {
+  flex: 1;
+  min-height: 44px;
+  border: none;
+  border-radius: 10px;
+  background: var(--fill);
+  color: var(--text);
+  font-size: 15px;
+}
+.actions .danger {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  font-weight: 600;
+}
+.error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--danger);
 }
 .list {
   border-radius: 14px;

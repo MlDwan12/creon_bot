@@ -19,6 +19,7 @@ model User {
 
   orders      Order[]
   submissions Submission[]
+  reports     Report[]
 }
 
 enum OrderStatus {
@@ -93,4 +94,39 @@ model Submission {
   createdAt         DateTime         @default(now())
   submittedAt       DateTime?
   decidedAt         DateTime?
+}
+
+/// На что жалоба. VIDEO и REVIEW — по id отклика (Submission), PROFILE — по id пользователя.
+enum ReportTarget {
+  ORDER
+  VIDEO
+  REVIEW
+  PROFILE
+}
+
+enum ReportStatus {
+  OPEN
+  /// Модератор принял меры (закрыл заказ, удалил отзыв и т.п.).
+  ACTIONED
+  DISMISSED
+}
+
+/// Жалоба пользователя. targetId без внешнего ключа: объект может быть удалён — жалоба остаётся.
+model Report {
+  id          Int          @id @default(autoincrement())
+  reporter    User         @relation(fields: [reporterId], references: [id])
+  reporterId  Int
+  target      ReportTarget
+  targetId    Int
+  /// Код причины — список для каждого target в src/api/reports.service.ts.
+  reason      String
+  comment     String?
+  status      ReportStatus @default(OPEN)
+  moderatorId BigInt?
+  createdAt   DateTime     @default(now())
+  decidedAt   DateTime?
+
+  /// Одна жалоба от человека на один объект.
+  @@unique([reporterId, target, targetId])
+  @@index([status])
 }

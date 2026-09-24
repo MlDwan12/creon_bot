@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import {
+  fetchMe,
   fetchOpenOrders,
   ORDER_CATEGORIES,
   type OrderCategory,
@@ -8,6 +9,7 @@ import {
 } from '../api';
 import { RouterLink } from 'vue-router';
 import OrderCard from '../components/OrderCard.vue';
+import { openTelegramLink } from '../telegram';
 
 // ref() — реактивное значение: поменяли `.value` в коде, и шаблон ниже перерисовался сам.
 const category = ref<OrderCategory>();
@@ -39,6 +41,11 @@ async function load(reset: boolean) {
     if (requestId === lastRequest) loading.value = false;
   }
 }
+
+const supportUrl = ref<string | null>(null);
+fetchMe()
+  .then((me) => (supportUrl.value = me.supportUrl))
+  .catch(() => {});
 
 // Сменилась категория — грузим заново; immediate — и сразу при открытии экрана.
 watch(category, () => load(true), { immediate: true });
@@ -82,7 +89,12 @@ watch(category, () => load(true), { immediate: true });
       {{ loading ? 'Загрузка…' : 'Показать ещё' }}
     </button>
 
-    <RouterLink to="/privacy" class="privacy">Политика конфиденциальности</RouterLink>
+    <footer class="footer">
+      <button v-if="supportUrl" type="button" class="quiet-link" @click="openTelegramLink(supportUrl)">
+        Поддержка
+      </button>
+      <RouterLink to="/privacy" class="quiet-link">Политика конфиденциальности</RouterLink>
+    </footer>
   </main>
 </template>
 
@@ -144,10 +156,10 @@ watch(category, () => load(true), { immediate: true });
   font-size: 16px;
   font-weight: 600;
 }
-.privacy {
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   margin-top: 8px;
-  align-self: center;
-  color: var(--hint);
-  font-size: 13px;
 }
 </style>
