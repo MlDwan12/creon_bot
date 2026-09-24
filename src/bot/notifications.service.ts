@@ -2,10 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Order, Submission, User } from '@prisma/client';
 import { InjectBot } from 'nestjs-telegraf';
-import { Markup, Telegraf } from 'telegraf';
-import type { BotContext } from './interfaces/bot-context.interface';
-import { USER_MENU_BUTTONS } from './keyboards/menu.keyboard';
-import { styled } from './utils/button.util';
+import { Context, Markup, Telegraf } from 'telegraf';
 import {
   creatorLabel,
   escapeHtml,
@@ -18,21 +15,22 @@ import { parseModeratorIds } from './utils/moderator.util';
 type SubmissionWithParties = Submission & { order: Order; creator: User };
 
 /**
- * Все уведомления в чат бота. Отдельный сервис, потому что одни и те же события происходят
- * и из бота, и из Mini App (API) — люди должны получить одинаковое сообщение в обоих случаях.
+ * Все уведомления в чат бота о событиях из Mini App. К каждому — кнопка, открывающая нужный экран.
  * Каждая отправка глушит ошибку: получатель мог заблокировать бота или ещё не запускал его.
  */
 @Injectable()
 export class NotificationsService {
   private readonly moderatorIds: string[];
+  private readonly webAppUrl: string;
 
   constructor(
-    @InjectBot() private readonly bot: Telegraf<BotContext>,
+    @InjectBot() private readonly bot: Telegraf<Context>,
     config: ConfigService,
   ) {
     this.moderatorIds = Array.from(
       parseModeratorIds(config.get<string>('MODERATOR_IDS')),
     );
+    this.webAppUrl = config.get<string>('WEBAPP_URL')!.replace(/\/$/, '');
   }
 
   /** Модераторам: новый заказ ждёт проверки. */
@@ -49,11 +47,7 @@ export class NotificationsService {
     ]
       .filter(Boolean)
       .join('\n');
-    await this.toModerators(
-      text,
-      `order:approve:${order.id}`,
-      `order:reject:${order.id}`,
-    );
+    await this.toModerators(text, `/mod/orders/${order.id}`);
   }
 
   /** Модераторам: креатор прислал видео. */
@@ -65,18 +59,15 @@ export class NotificationsService {
       `Креатор: ${escapeHtml(creatorLabel(submission.creator))}`,
       `Видео: ${escapeHtml(submission.videoUrl ?? '')}`,
     ].join('\n');
-    await this.toModerators(
-      text,
-      `mod:approve:${submission.id}`,
-      `mod:reject:${submission.id}`,
-    );
+    await this.toModerators(text, `/mod/videos/${submission.id}`);
   }
 
   /** Рекламодателю: модератор опубликовал заказ. */
   async orderApproved(order: Order & { advertiser: User }) {
     await this.send(
       order.advertiser.telegramId,
-      `✅ Ваш заказ «${order.title}» прошёл модерацию и опубликован — креаторы уже видят его в «${USER_MENU_BUTTONS.BROWSE_ORDERS}».`,
+      `✅ Ваш заказ «${order.title}» прошёл модерацию и опубликован — креаторы уже видят его в каталоге.`,
+      '/my-orders',
     );
   }
 
@@ -85,10 +76,11 @@ export class NotificationsService {
     await this.send(
       order.advertiser.telegramId,
       `❌ Ваш заказ «${order.title}» отклонён модератором.\nПричина: ${comment}\n\nВы можете разместить заказ заново, учтя замечания.`,
+      `/my-orders/new?from=${order.id}`,
     );
   }
 
-  /** Рекламодателю: модератор одобрил видео — теперь решение за ним (кнопки прямо в сообщении). */
+  /** Рекламодателю: модератор одобрил видео — теперь решение за ним. */
   async videoApprovedByModerator(
     submission: Submission & { order: Order & { advertiser: User } },
   ) {
@@ -98,30 +90,12 @@ export class NotificationsService {
       `Заказ: ${escapeHtml(submission.order.title)}`,
       `Видео: ${escapeHtml(submission.videoUrl ?? '')}`,
     ].join('\n');
-    const kb = html(
-      Markup.inlineKeyboard([
-        styled(
-          Markup.button.callback(
-            '✅ Подтвердить',
-            `adv:approve:${submission.id}`,
-          ),
-          'success',
-        ),
-        styled(
-          Markup.button.callback('❌ Отклонить', `adv:reject:${submission.id}`),
-          'danger',
-        ),
-      ]),
+    await this.send(
+      submission.order.advertiser.telegramId,
+      text,
+      `/my-orders/${submission.order.id}/review`,
+      true,
     );
-    try {
-      await this.bot.telegram.sendMessage(
-        submission.order.advertiser.telegramId.toString(),
-        text,
-        kb,
-      );
-    } catch {
-      // рекламодатель мог заблокировать бота
-    }
   }
 
   /** Креатору: модератор отклонил видео. */
@@ -132,6 +106,7 @@ export class NotificationsService {
     await this.send(
       submission.creator.telegramId,
       `❌ Ваш отклик на заказ «${submission.order.title}» отклонён модератором.\nПричина: ${comment}\n\nВы можете отправить новый отклик на этот заказ.`,
+      '/submissions',
     );
   }
 
@@ -156,6 +131,7 @@ export class NotificationsService {
     await this.send(
       submission.creator.telegramId,
       `🎉 Рекламодатель подтвердил ваше видео по заказу «${submission.order.title}»!`,
+      '/submissions',
     );
   }
 
@@ -167,23 +143,15 @@ export class NotificationsService {
     await this.send(
       submission.creator.telegramId,
       `❌ Рекламодатель отклонил ваше видео по заказу «${submission.order.title}».\nПричина: ${comment}\n\nВы можете отправить новый отклик на этот заказ.`,
+      '/submissions',
     );
   }
 
-  private async toModerators(
-    text: string,
-    approveData: string,
-    rejectData: string,
-  ) {
-    const kb = html(
-      Markup.inlineKeyboard([
-        styled(Markup.button.callback('✅ Одобрить', approveData), 'success'),
-        styled(Markup.button.callback('❌ Отклонить', rejectData), 'danger'),
-      ]),
-    );
+  private async toModerators(text: string, path: string) {
+    const extra = html(this.openButton(path));
     for (const modId of this.moderatorIds) {
       try {
-        await this.bot.telegram.sendMessage(modId, text, kb);
+        await this.bot.telegram.sendMessage(modId, text, extra);
       } catch {
         // модератор ещё не запускал бота — пропускаем
       }
@@ -196,20 +164,33 @@ export class NotificationsService {
     for (const s of order.submissions) {
       if (seen.has(s.creator.telegramId)) continue;
       seen.add(s.creator.telegramId);
-      await this.send(s.creator.telegramId, text, true);
+      await this.send(s.creator.telegramId, text, '/submissions', true);
     }
   }
 
-  private async send(telegramId: bigint, text: string, asHtml = false) {
+  private async send(
+    telegramId: bigint,
+    text: string,
+    path: string,
+    asHtml = false,
+  ) {
+    const kb = this.openButton(path);
     try {
       await this.bot.telegram.sendMessage(
         telegramId.toString(),
         text,
-        asHtml ? html() : undefined,
+        asHtml ? html(kb) : kb,
       );
     } catch {
       // получатель мог заблокировать бота
     }
+  }
+
+  /** Кнопка web_app работает только в личных чатах — все уведомления как раз туда. */
+  private openButton(path: string) {
+    return Markup.inlineKeyboard([
+      Markup.button.webApp('Открыть', this.webAppUrl + path),
+    ]);
   }
 }
 

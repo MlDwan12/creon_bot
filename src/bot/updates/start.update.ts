@@ -1,102 +1,66 @@
+import { Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Action, Ctx, Start, Update } from 'nestjs-telegraf';
-import { Markup } from 'telegraf';
-import type { BotContext } from '../interfaces/bot-context.interface';
-import {
-  moderatorMenuKeyboard,
-  userMenuKeyboard,
-} from '../keyboards/menu.keyboard';
-import { styled } from '../utils/button.util';
-import { html } from '../utils/format';
-import { isModerator, parseModeratorIds } from '../utils/moderator.util';
+import { Action, Ctx, InjectBot, On, Start, Update } from 'nestjs-telegraf';
+import { Context, Markup, Telegraf } from 'telegraf';
 
-function shortIntroText(): string {
-  return [
-    '👋 CreON — биржа заказов на видео.',
-    '',
-    'Рекламодатели публикуют задания, креаторы берутся за них и получают оплату за готовую работу.',
-  ].join('\n');
-}
+const INTRO = [
+  '👋 CreON — биржа заказов на видео.',
+  '',
+  'Рекламодатели публикуют задания, креаторы берутся за них и получают оплату за готовую работу.',
+  '',
+  'Заказы, отклики и модерация — в приложении 👇',
+].join('\n');
 
-function howItWorksText(): string {
-  return [
-    'ℹ️ Как это работает',
-    '',
-    '1️⃣ Рекламодатель размещает заказ — что снять и какие требования',
-    '2️⃣ Модератор проверяет заказ и публикует его',
-    '3️⃣ Креатор откликается, а когда видео готово — присылает ссылку',
-    '4️⃣ Модератор проверяет ролик',
-    '5️⃣ Рекламодатель смотрит и подтверждает — заказ выполнен 🎉',
-    '',
-    'Вы можете быть и заказчиком, и исполнителем — в меню под сообщением есть разделы для обеих ролей.',
-  ].join('\n');
-}
+const MOVED =
+  'Бот обновился — всё теперь в приложении. Откройте его кнопкой «CreON» слева от поля ввода.';
 
-function introKeyboard() {
-  return html(
-    Markup.inlineKeyboard([
-      [
-        styled(
-          Markup.button.callback('ℹ️ Как это работает', 'info:how-it-works'),
-          'primary',
-        ),
-      ],
-    ]),
-  );
-}
-
-/** Приветствие, «Как это работает» и общая заглушка `noop` для неактивных кнопок каруселей. */
+/** Вход в Mini App. Остальные сообщения и старые кнопки (до переезда в мини-апп) — подсказка открыть его. */
 @Update()
-export class StartUpdate {
-  private readonly moderatorIds: Set<string>;
+export class StartUpdate implements OnApplicationBootstrap {
+  private readonly logger = new Logger(StartUpdate.name);
+  private readonly webAppUrl: string;
 
-  constructor(config: ConfigService) {
-    this.moderatorIds = parseModeratorIds(config.get<string>('MODERATOR_IDS'));
+  constructor(
+    @InjectBot() private readonly bot: Telegraf<Context>,
+    config: ConfigService,
+  ) {
+    this.webAppUrl = config.get<string>('WEBAPP_URL')!;
+  }
+
+  /** Кнопка меню слева от поля ввода — для всех чатов с ботом. */
+  async onApplicationBootstrap() {
+    try {
+      await this.bot.telegram.setChatMenuButton({
+        menuButton: {
+          type: 'web_app',
+          text: 'CreON',
+          web_app: { url: this.webAppUrl },
+        },
+      });
+    } catch (err) {
+      this.logger.error(err);
+    }
   }
 
   @Start()
-  async onStart(@Ctx() ctx: BotContext) {
-    if (isModerator(ctx.from!.id, this.moderatorIds)) {
-      await ctx.reply(
-        [
-          '🛡 CreON Moderation',
-          '',
-          'Вы — модератор площадки: проверяете новые заказы перед публикацией и готовые видео перед тем, как они попадут к рекламодателю.',
-          '',
-          '🆕 Заказы на проверку — новые заказы, ждущие публикации',
-          '🎬 Видео на проверку — готовые работы креаторов',
-          '📋 Все заказы — полный список заказов на площадке',
-          '📊 Статистика — сводка по заказам и откликам',
-        ].join('\n'),
-        moderatorMenuKeyboard(),
-      );
-      return;
-    }
-    await ctx.reply(shortIntroText(), introKeyboard());
-    await ctx.reply('Выберите действие в меню 👇', userMenuKeyboard());
-  }
-
-  @Action('info:how-it-works')
-  async onHowItWorks(@Ctx() ctx: BotContext) {
-    await ctx.answerCbQuery();
-    await ctx.editMessageText(
-      howItWorksText(),
-      html(
-        Markup.inlineKeyboard([
-          [styled(Markup.button.callback('◀️ Назад', 'info:back'), 'primary')],
-        ]),
-      ),
+  async onStart(@Ctx() ctx: Context) {
+    await ctx.reply(
+      INTRO,
+      Markup.inlineKeyboard([
+        Markup.button.webApp('Открыть CreON', this.webAppUrl),
+      ]),
     );
   }
 
-  @Action('info:back')
-  async onInfoBack(@Ctx() ctx: BotContext) {
-    await ctx.answerCbQuery();
-    await ctx.editMessageText(shortIntroText(), introKeyboard());
+  /** Кнопки в старых сообщениях — их обработчиков больше нет. */
+  @Action(/.*/)
+  async onOldButton(@Ctx() ctx: Context) {
+    await ctx.answerCbQuery(MOVED, { show_alert: true });
   }
 
-  @Action('noop')
-  async onNoop(@Ctx() ctx: BotContext) {
-    await ctx.answerCbQuery();
+  /** Заодно убирает старую нижнюю клавиатуру с разделами. */
+  @On('message')
+  async onMessage(@Ctx() ctx: Context) {
+    await ctx.reply(MOVED, Markup.removeKeyboard());
   }
 }

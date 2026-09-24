@@ -15,7 +15,7 @@ import SubmitVideoView from './views/SubmitVideoView.vue';
 
 declare module 'vue-router' {
   interface RouteMeta {
-    /** Экран второго уровня: показываем «Назад» вместо нижних вкладок. */
+    /** Экран второго уровня: показываем «Назад». */
     back?: boolean;
   }
 }
