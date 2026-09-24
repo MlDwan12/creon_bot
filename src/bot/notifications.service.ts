@@ -120,6 +120,38 @@ export class NotificationsService {
     );
   }
 
+  /** Модератор закрыл заказ по жалобе: рекламодателю и креаторам с откликами. */
+  async orderClosedByModerator(
+    order: Order & { advertiser: User } & OrderWithCreators,
+  ) {
+    await this.send(
+      order.advertiser.telegramId,
+      `🚫 Ваш заказ «${escapeHtml(order.title)}» закрыт модератором: он нарушает правила площадки. Если это ошибка — напишите в поддержку.`,
+      '/my-orders',
+      true,
+    );
+    await this.toCreators(
+      order,
+      `🔒 Заказ «${escapeHtml(order.title)}» закрыт модератором за нарушение правил площадки — не продолжайте работу по нему.`,
+    );
+  }
+
+  /** Модераторам: новая жалоба. */
+  async reportCreated(what: string) {
+    await this.toModerators(
+      `🚩 Новая жалоба: ${escapeHtml(what)}`,
+      '/mod?tab=reports',
+    );
+  }
+
+  /** Тем, кто жаловался: модератор рассмотрел жалобу. */
+  async reportResolved(telegramIds: bigint[], actioned: boolean) {
+    const text = actioned
+      ? '✅ Мы рассмотрели вашу жалобу и приняли меры. Спасибо, что помогаете площадке.'
+      : '👌 Мы рассмотрели вашу жалобу — нарушений не нашли. Спасибо, что сообщили.';
+    for (const id of telegramIds) await this.send(id, text, '/');
+  }
+
   /** Креаторам с откликами на заказ: рекламодатель его удалил. */
   async orderRemoved(order: OrderWithCreators) {
     await this.toCreators(

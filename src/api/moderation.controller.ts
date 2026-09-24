@@ -13,6 +13,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { ReportTarget } from '@prisma/client';
 import { kopecksToRubles } from '../common/money';
 import { NotificationsService } from '../bot/notifications.service';
 import { creatorLabel } from '../bot/utils/format';
@@ -20,6 +21,7 @@ import { OrdersService } from '../orders/orders.service';
 import { DAY_MS } from '../orders/deadline';
 import { SubmissionsService } from '../submissions/submissions.service';
 import { AnalyticsService } from './analytics.service';
+import { ReportsService } from './reports.service';
 import { attemptNumbers } from './attempts';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { UserThrottlerGuard } from './user-throttler.guard';
@@ -39,6 +41,7 @@ export class ModerationController {
     private readonly submissionsService: SubmissionsService,
     private readonly notifications: NotificationsService,
     private readonly analytics: AnalyticsService,
+    private readonly reports: ReportsService,
   ) {}
 
   /** Обе очереди сразу: заказы и видео на проверке, старые первыми. */
@@ -177,6 +180,34 @@ export class ModerationController {
         description: s.order.description,
       },
     };
+  }
+
+  /** Открытые жалобы, сгруппированные по объекту. */
+  @Get('reports')
+  reportsList() {
+    return this.reports.listOpen();
+  }
+
+  /** Решение по всем жалобам на объект: `actioned` — применить меру, иначе «нарушений нет». */
+  @Post('reports/resolve')
+  async resolveReports(@Body() body: unknown, @Req() req: ApiRequest) {
+    const b = (body ?? {}) as Record<string, unknown>;
+    const target = b.target as ReportTarget;
+    if (
+      !Object.values(ReportTarget).includes(target) ||
+      !Number.isInteger(b.targetId) ||
+      typeof b.actioned !== 'boolean'
+    )
+      throw new BadRequestException('Некорректное решение');
+    const { reporters, closedOrder } = await this.reports.resolve(
+      { target, targetId: b.targetId as number },
+      b.actioned,
+      req.user.telegramId,
+    );
+    if (closedOrder)
+      await this.notifications.orderClosedByModerator(closedOrder);
+    await this.notifications.reportResolved(reporters, b.actioned);
+    return { ok: true };
   }
 
   /** Удалить отзыв креатору (оскорбления и т.п.); приёмка видео остаётся. */

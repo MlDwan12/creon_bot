@@ -159,6 +159,25 @@ export class OrdersService {
   }
 
   /**
+   * Модератор закрывает открытый заказ (по жалобе). `null` — заказ уже не открыт: закрывать нечего.
+   * Возвращает заказ с рекламодателем и откликами — для уведомлений.
+   */
+  async moderatorClose(orderId: number) {
+    const { count } = await this.prisma.order.updateMany({
+      where: { id: orderId, status: OrderStatus.OPEN },
+      data: { status: OrderStatus.CLOSED, closedAt: new Date() },
+    });
+    if (count === 0) return null;
+    return this.prisma.order.findUniqueOrThrow({
+      where: { id: orderId },
+      include: {
+        advertiser: true,
+        submissions: { include: { creator: true } },
+      },
+    });
+  }
+
+  /**
    * Продление срока: открытый заказ — сдвигаем срок, истёкший — сдвигаем и открываем снова.
    * Закрытый вручную не трогаем: его рекламодатель закрыл сам.
    */

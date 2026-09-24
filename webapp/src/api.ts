@@ -362,7 +362,7 @@ export function rejectVideo(submissionId: number, comment: string) {
   });
 }
 
-let me: Promise<{ isModerator: boolean; hasUsername: boolean }> | undefined;
+let me: Promise<{ isModerator: boolean; hasUsername: boolean; supportUrl: string | null }> | undefined;
 
 /** Один запрос на запуск: initData, а с ним и ответ, до перезапуска Mini App не меняется. */
 export function fetchMe() {
@@ -400,4 +400,77 @@ export function fetchModVideo(id: number) {
 
 export function moderateVideo(id: number, decision: 'approve' | 'reject', comment?: string) {
   return request<{ ok: true }>('POST', `/api/mod/videos/${id}/${decision}`, comment === undefined ? undefined : { comment });
+}
+
+/** На что жалоба: VIDEO и REVIEW — по id отклика, PROFILE — по id пользователя. */
+export type ReportTarget = 'ORDER' | 'VIDEO' | 'REVIEW' | 'PROFILE';
+
+/** Причины жалоб по типу объекта; коды проверяет бэкенд (src/api/reports.service.ts). */
+export const REPORT_REASONS: Record<ReportTarget, { code: string; label: string }[]> = {
+  ORDER: [
+    { code: 'FRAUD', label: 'Мошенничество' },
+    { code: 'PROHIBITED', label: 'Запрещённая тематика' },
+    { code: 'FAKE_REVIEWS', label: 'Фейковые отзывы, обман покупателей' },
+    { code: 'PERSONAL_DATA', label: 'Просят личные данные' },
+    { code: 'SPAM', label: 'Спам' },
+    { code: 'OTHER', label: 'Другое' },
+  ],
+  VIDEO: [
+    { code: 'STOLEN', label: 'Чужое или краденое видео' },
+    { code: 'UNAVAILABLE', label: 'Видео удалено или недоступно' },
+    { code: 'BRAND_NEGATIVE', label: 'Негатив о бренде' },
+    { code: 'BLACKMAIL', label: 'Шантаж, вымогательство' },
+    { code: 'OTHER', label: 'Другое' },
+  ],
+  REVIEW: [
+    { code: 'INSULT', label: 'Оскорбления' },
+    { code: 'FALSE', label: 'Ложный отзыв' },
+    { code: 'PERSONAL_DATA', label: 'Раскрывает личные данные' },
+    { code: 'OTHER', label: 'Другое' },
+  ],
+  PROFILE: [
+    { code: 'IMPERSONATION', label: 'Выдаёт себя за другого' },
+    { code: 'OFFENSIVE', label: 'Оскорбительное имя или фото' },
+    { code: 'OTHER', label: 'Другое' },
+  ],
+};
+
+export function reasonLabel(target: ReportTarget, code: string): string {
+  return REPORT_REASONS[target].find((r) => r.code === code)?.label ?? code;
+}
+
+export function createReport(report: {
+  target: ReportTarget;
+  targetId: number;
+  reason: string;
+  comment: string;
+}) {
+  return request<{ ok: true }>('POST', '/api/reports', report);
+}
+
+/** Открытые жалобы на один объект — см. ReportsService.listOpen. */
+export interface ModReportGroup {
+  target: ReportTarget;
+  targetId: number;
+  /** null — объект уже удалён. */
+  subject: {
+    title: string;
+    text: string | null;
+    /** Кто отвечает за объект: автор заказа, видео, отзыва или владелец профиля. */
+    author: string;
+    authorId: number;
+    /** Какой профиль креатора открыть (для заказа — нет). */
+    profileId: number | null;
+    orderId: number | null;
+  } | null;
+  reports: { id: number; reason: string; comment: string | null; reporter: string; createdAt: string }[];
+}
+
+export function fetchModReports() {
+  return request<ModReportGroup[]>('GET', '/api/mod/reports');
+}
+
+/** actioned — применить меру (закрыть заказ, убрать видео из портфолио, удалить отзыв, стереть ссылки). */
+export function resolveReports(target: ReportTarget, targetId: number, actioned: boolean) {
+  return request<{ ok: true }>('POST', '/api/mod/reports/resolve', { target, targetId, actioned });
 }

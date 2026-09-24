@@ -2,7 +2,8 @@
 import { watch } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import TabBar from './components/TabBar.vue';
-import { inTelegram, webApp } from './telegram';
+import { fetchMe } from './api';
+import { inTelegram, openTelegramLink, webApp } from './telegram';
 
 const route = useRoute();
 const router = useRouter();
@@ -16,6 +17,14 @@ function goBack() {
 // Внутри Telegram «Назад» — его собственная кнопка в шапке (BackButton), а не наша.
 if (inTelegram) {
   webApp!.BackButton.onClick(goBack);
+  // «⋯ → Настройки» в шапке Telegram ведёт в поддержку — на любом экране, не занимая места.
+  void fetchMe()
+    .then(({ supportUrl }) => {
+      if (!supportUrl) return;
+      webApp!.SettingsButton.onClick(() => openTelegramLink(supportUrl));
+      webApp!.SettingsButton.show();
+    })
+    .catch(() => {});
   watch(
     () => route.meta.back,
     (back) => (back ? webApp!.BackButton.show() : webApp!.BackButton.hide()),

@@ -4,6 +4,12 @@ interface TelegramWebApp {
   ready(): void;
   expand(): void;
   showConfirm(message: string, callback: (ok: boolean) => void): void;
+  openTelegramLink(url: string): void;
+  /** Пункт «Настройки» в меню «⋯» в шапке Mini App. */
+  SettingsButton: {
+    show(): void;
+    onClick(cb: () => void): void;
+  };
   BackButton: {
     show(): void;
     hide(): void;
@@ -26,6 +32,12 @@ export const inTelegram = Boolean(webApp?.initData);
 export function confirmAction(message: string): Promise<boolean> {
   if (!inTelegram) return Promise.resolve(window.confirm(message));
   return new Promise((resolve) => webApp!.showConfirm(message, resolve));
+}
+
+/** Ссылка t.me внутри Telegram открывается без выхода из приложения, в браузере — новой вкладкой. */
+export function openTelegramLink(url: string) {
+  if (inTelegram) webApp!.openTelegramLink(url);
+  else window.open(url, '_blank', 'noopener');
 }
 
 /** Ссылку от пользователя делаем кликабельной только если это http(s) — не `javascript:` и прочее. */

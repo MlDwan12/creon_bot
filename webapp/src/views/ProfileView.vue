@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { RouterLink, useRoute } from 'vue-router';
 import {
   ApiError,
   type CreatorProfile,
@@ -161,9 +161,24 @@ void load();
           <button v-if="moderator" type="button" class="remove" @click="remove(r.submissionId)">
             Удалить отзыв
           </button>
+          <RouterLink
+            v-else-if="own"
+            :to="{ path: '/report', query: { target: 'REVIEW', id: r.submissionId, title: r.orderTitle } }"
+            class="quiet-link start"
+          >
+            Пожаловаться на отзыв
+          </RouterLink>
         </article>
         <p v-if="error && !editing" class="error" role="alert">{{ error }}</p>
       </section>
+
+      <RouterLink
+        v-if="!own && !moderator"
+        :to="{ path: '/report', query: { target: 'PROFILE', id: profile.id, title: profile.name } }"
+        class="quiet-link"
+      >
+        Пожаловаться на профиль
+      </RouterLink>
     </template>
   </main>
 </template>
@@ -340,6 +355,10 @@ h1 {
   font-size: 15px;
   line-height: 1.4;
   overflow-wrap: anywhere;
+}
+.quiet-link.start {
+  align-self: flex-start;
+  padding: 0;
 }
 .remove {
   align-self: flex-start;

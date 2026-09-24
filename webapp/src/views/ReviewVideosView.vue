@@ -97,6 +97,12 @@ void load();
       <p v-else class="hint">Ссылка на видео некорректна: {{ current.videoUrl }}</p>
 
       <p class="checked">Модератор проверил ролик на соответствие заданию</p>
+      <RouterLink
+        :to="{ path: '/report', query: { target: 'VIDEO', id: current.id, title: `Видео от ${current.creator}` } }"
+        class="quiet-link"
+      >
+        Пожаловаться на видео
+      </RouterLink>
 
       <fieldset v-if="accepting" class="feedback">
         <legend class="section-title">Оцените работу креатора</legend>
