@@ -16,7 +16,11 @@ import { creatorLabel } from '../bot/utils/format';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
 import { attemptNumbers } from './attempts';
-import { type ApiRequest, InitDataGuard } from './init-data.guard';
+import {
+  type ApiRequest,
+  InitDataGuard,
+  requireUsername,
+} from './init-data.guard';
 import { parseOrderInput } from './order-input';
 
 /** Заказы текущего пользователя как рекламодателя. Права проверяют сервисы. */
@@ -58,6 +62,7 @@ export class MyOrdersController {
   /** Новый заказ → на модерацию, модераторам уведомление. */
   @Post()
   async create(@Body() body: unknown, @Req() req: ApiRequest) {
+    requireUsername(req.user);
     const order = await this.ordersService.create(
       req.user.id,
       parseOrderInput(body),

@@ -1,5 +1,6 @@
 import {
   CanActivate,
+  ForbiddenException,
   ExecutionContext,
   Injectable,
   UnauthorizedException,
@@ -15,6 +16,17 @@ import { validateInitData } from './init-data.util';
 const INIT_DATA_MAX_AGE_SECONDS = 24 * 60 * 60;
 
 export type ApiRequest = Request & { user: User };
+
+/**
+ * Заказ и отклик — только с @username: иначе второй стороне не с кем связаться.
+ * initData фиксируется при запуске Mini App, поэтому после настройки username его надо перезапустить.
+ */
+export function requireUsername(user: User) {
+  if (!user.username)
+    throw new ForbiddenException(
+      'Чтобы с вами могли связаться, укажите имя пользователя (username) в настройках Telegram и откройте приложение заново',
+    );
+}
 
 /**
  * Авторизация Mini App: заголовок `Authorization: tma <initData>`.

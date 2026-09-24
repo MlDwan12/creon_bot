@@ -255,8 +255,11 @@ export function rejectVideo(submissionId: number, comment: string) {
   });
 }
 
+let me: Promise<{ isModerator: boolean; hasUsername: boolean }> | undefined;
+
+/** Один запрос на запуск: initData, а с ним и ответ, до перезапуска Mini App не меняется. */
 export function fetchMe() {
-  return request<{ isModerator: boolean }>('GET', '/api/me');
+  return (me ??= request('GET', '/api/me'));
 }
 
 export function fetchModQueue() {
