@@ -54,6 +54,8 @@ model Order {
   createdAt        DateTime      @default(now())
   decidedAt        DateTime?
   closedAt         DateTime?
+  /// Креаторам напомнили, что срок истекает меньше чем через сутки. Сбрасывается при продлении.
+  deadlineReminderSentAt DateTime?
 
   submissions Submission[]
 }

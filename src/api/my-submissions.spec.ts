@@ -15,6 +15,7 @@ const order = (id: number): Order => ({
   createdAt: new Date(0),
   decidedAt: null,
   closedAt: null,
+  deadlineReminderSentAt: null,
 });
 
 const submission = (

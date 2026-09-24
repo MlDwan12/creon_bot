@@ -140,6 +140,26 @@ export class NotificationsService {
     );
   }
 
+  /** Креаторам с откликом «в работе»: срок заказа истекает меньше чем через сутки. */
+  async deadlineSoon(order: OrderWithCreators & Order) {
+    await this.toCreators(
+      order,
+      `⏳ Меньше чем через сутки истекает срок заказа «${escapeHtml(order.title)}» — успейте отправить видео. После срока его не примут.`,
+    );
+  }
+
+  /** Модераторам: в очереди есть то, что ждёт дольше положенного. */
+  async moderationQueueStale(orders: number, videos: number, hours: number) {
+    const parts = [
+      orders ? `заказов: ${orders}` : '',
+      videos ? `видео: ${videos}` : '',
+    ].filter(Boolean);
+    await this.toModerators(
+      `🕓 Дольше ${hours} ч ждут проверки — ${parts.join(', ')}.`,
+      '/mod',
+    );
+  }
+
   /** Креатору: рекламодатель принял видео. */
   async videoAccepted(submission: SubmissionWithParties) {
     await this.send(
