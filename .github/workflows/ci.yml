@@ -19,6 +19,9 @@ jobs:
         with:
           node-version: 22
           cache: yarn
+          cache-dependency-path: |
+            yarn.lock
+            webapp/yarn.lock
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
@@ -37,3 +40,9 @@ jobs:
 
       - name: Build
         run: yarn build
+
+      - name: Webapp — install
+        run: yarn --cwd webapp install --frozen-lockfile
+
+      - name: Webapp — typecheck & build
+        run: yarn --cwd webapp build

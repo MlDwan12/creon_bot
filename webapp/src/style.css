@@ -1,0 +1,13 @@
+/* Цвета берём из темы Telegram (он сам задаёт --tg-theme-* внутри клиента),
+   после запятой — запасной цвет для обычного браузера. */
+body {
+  margin: 0;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--tg-theme-secondary-bg-color, #f1f1f4);
+  color: var(--tg-theme-text-color, #000);
+}
+button {
+  font: inherit;
+  cursor: pointer;
+}
