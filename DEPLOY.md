@@ -1,6 +1,6 @@
 # Деплой
 
-Пуш в `main` гоняет `CI` (typecheck/lint/test/build), затем `Deploy`: собирает
+Пуш в `main` гоняет `CI` (typecheck/lint/test/build), и только если он зелёный — `Deploy`: собирает
 Docker-образ, пушит в `ghcr.io/<owner>/<repo>`, по SSH заходит на VPS,
 подтягивает свежий образ и перезапускает контейнеры (`docker-compose.prod.yml`).
 Миграции (`prisma migrate deploy`) применяются автоматически при старте
@@ -38,7 +38,7 @@ Docker-образ, пушит в `ghcr.io/<owner>/<repo>`, по SSH заходи
    GITHUB_REPOSITORY=<owner>/<repo> docker compose -f docker-compose.prod.yml pull
    GITHUB_REPOSITORY=<owner>/<repo> docker compose -f docker-compose.prod.yml up -d
    ```
-   Дальше это делает воркфлоу `Deploy` при каждом пуше в `main`.
+   Дальше это делает воркфлоу `Deploy` после каждого успешного CI на `main`.
 
 ## Пакет ghcr.io
 
