@@ -20,10 +20,10 @@ if (inTelegram) {
   // «⋯ → Настройки» в шапке Telegram ведёт в поддержку — на любом экране, не занимая места.
   void fetchMe()
     .then(({ supportUrl, isModerator }) => {
-      // у модератора своё окно, /support ему недоступен (router.ts)
-      if (!supportUrl || isModerator) return;
+      if (!supportUrl) return;
       // форма в мини-аппе, а не переход в чат: так приложение не сворачивается
-      webApp!.SettingsButton.onClick(() => void router.push('/support'));
+      const path = isModerator ? '/mod/support' : '/support';
+      webApp!.SettingsButton.onClick(() => void router.push(path));
       webApp!.SettingsButton.show();
     })
     .catch(() => {});

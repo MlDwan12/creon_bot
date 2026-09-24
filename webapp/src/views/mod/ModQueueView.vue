@@ -12,6 +12,7 @@ import {
   resolveReports,
 } from '../../api';
 import { formatPrice, isWaitingLong, timeAgo, waitingFor } from '../../format';
+import SupportLink from '../../components/SupportLink.vue';
 import { confirmAction } from '../../telegram';
 
 const route = useRoute();
@@ -205,6 +206,8 @@ void load();
         </RouterLink>
       </div>
     </template>
+
+    <SupportLink label="Написать в поддержку" />
   </main>
 </template>
 
