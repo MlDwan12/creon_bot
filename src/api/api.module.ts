@@ -4,6 +4,7 @@ import { BotModule } from '../bot/bot.module';
 import { OrdersModule } from '../orders/orders.module';
 import { SubmissionsModule } from '../submissions/submissions.module';
 import { UsersModule } from '../users/users.module';
+import { AnalyticsService } from './analytics.service';
 import { InitDataGuard } from './init-data.guard';
 import { MeController } from './me.controller';
 import { ModerationController } from './moderation.controller';
@@ -36,6 +37,12 @@ import { SubmissionsController } from './submissions.controller';
     MeController,
     ModerationController,
   ],
-  providers: [InitDataGuard, ModeratorGuard, UserThrottlerGuard, ScheduledJob],
+  providers: [
+    AnalyticsService,
+    InitDataGuard,
+    ModeratorGuard,
+    UserThrottlerGuard,
+    ScheduledJob,
+  ],
 })
 export class ApiModule {}

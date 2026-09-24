@@ -1,4 +1,5 @@
 import type { ConfigService } from '@nestjs/config';
+import { AnalyticsService } from './api/analytics.service';
 import { MAX_ACTIVE_ORDERS, OrdersService } from './orders/orders.service';
 import { PrismaService } from './prisma/prisma.service';
 import { SubmissionsService } from './submissions/submissions.service';
@@ -20,6 +21,7 @@ const prisma = new PrismaService({
 } as unknown as ConfigService);
 const orders = new OrdersService(prisma);
 const submissions = new SubmissionsService(prisma);
+const analytics = new AnalyticsService(prisma);
 
 const DAY = 24 * 60 * 60 * 1000;
 let nextTelegramId = 1n;
@@ -247,5 +249,47 @@ describe('модерация', () => {
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect(['OPEN', 'REJECTED']).toContain(await statusOf(order.id));
+  });
+});
+
+describe('воронка', () => {
+  it('считает заказы, видео, пользователей и оборот за период', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const accepted = await orders.create(advertiser.id, {
+      title: 'Заказ',
+      description: 'Описание',
+      category: 'OTHER',
+      priceKopecks: 300_000,
+    });
+    await orders.moderatorApprove(accepted.id, 1n);
+    const s = await submissions.claim(accepted.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, 'https://v.example/1');
+    await submissions.moderatorApprove(s.id, 1n);
+    await submissions.advertiserApprove(s.id, advertiser.id);
+
+    const rejected = await pendingOrder(advertiser.id);
+    await orders.moderatorReject(rejected.id, 1n, 'причина');
+    await pendingOrder(advertiser.id);
+
+    expect(await analytics.funnel()).toMatchObject({
+      orders: {
+        created: 3,
+        published: 1,
+        rejected: 1,
+        withClaims: 1,
+        withVideos: 1,
+        withAccepted: 1,
+      },
+      videos: { submitted: 1, accepted: 1, pending: 0 },
+      users: { new: 2, activeAdvertisers: 1, activeCreators: 1 },
+      turnover: { rubles: 3000, acceptedPriced: 1 },
+    });
+    expect((await analytics.funnel()).orders.moderationHours).toBe(0);
+
+    // период, в который ничего не попало
+    const future = await analytics.funnel(new Date(Date.now() + DAY));
+    expect(future.orders.created).toBe(0);
+    expect(future.turnover.rubles).toBe(0);
+    expect(future.orders.moderationHours).toBeNull();
   });
 });
