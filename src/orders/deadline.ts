@@ -1,4 +1,4 @@
-const DAY_MS = 24 * 60 * 60 * 1000;
+export const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Срок через `days` дней от `from`. */
 export function deadlineIn(days: number, from = new Date()): Date {

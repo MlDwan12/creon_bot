@@ -8,11 +8,11 @@ import { MeController } from './me.controller';
 import { ModerationController } from './moderation.controller';
 import { ModeratorGuard } from './moderator.guard';
 import { MyOrdersController } from './my-orders.controller';
-import { OrderExpiryJob } from './order-expiry.job';
+import { ScheduledJob } from './scheduled.job';
 import { OrdersController } from './orders.controller';
 import { SubmissionsController } from './submissions.controller';
 
-/** HTTP API для Telegram Mini App — тонкий слой над сервисами; плюс автозакрытие заказов по сроку. */
+/** HTTP API для Telegram Mini App — тонкий слой над сервисами; плюс фоновые задачи по срокам и очереди модерации. */
 @Module({
   imports: [UsersModule, OrdersModule, SubmissionsModule, BotModule],
   controllers: [
@@ -22,6 +22,6 @@ import { SubmissionsController } from './submissions.controller';
     MeController,
     ModerationController,
   ],
-  providers: [InitDataGuard, ModeratorGuard, OrderExpiryJob],
+  providers: [InitDataGuard, ModeratorGuard, ScheduledJob],
 })
 export class ApiModule {}

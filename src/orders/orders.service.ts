@@ -10,7 +10,7 @@ import {
   SubmissionStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { extendedDeadline } from './deadline';
+import { DAY_MS, extendedDeadline } from './deadline';
 
 /** Поля заказа, которые видит любой пользователь Mini App: без модераторских данных и без BigInt. */
 const PUBLIC_ORDER_FIELDS = {
@@ -158,9 +158,48 @@ export class OrdersService {
         status: OrderStatus.OPEN,
         deadline: extendedDeadline(order.deadline, days),
         closedAt: null,
+        deadlineReminderSentAt: null,
       },
       'Продлить можно только открытый заказ или заказ с истёкшим сроком',
     );
+  }
+
+  /** Открытые заказы, у которых срок истекает меньше чем через сутки, а напоминания ещё не было. */
+  listDeadlineSoon() {
+    const now = Date.now();
+    return this.prisma.order.findMany({
+      where: {
+        status: OrderStatus.OPEN,
+        deadline: { gt: new Date(now), lt: new Date(now + DAY_MS) },
+        deadlineReminderSentAt: null,
+      },
+      select: { id: true },
+    });
+  }
+
+  /**
+   * Отмечает, что напоминание о сроке отправлено, и возвращает заказ с креаторами «в работе».
+   * `null` — уже отмечено (или заказ продлили/закрыли): второй раз не напоминаем.
+   */
+  async markDeadlineReminded(orderId: number) {
+    const { count } = await this.prisma.order.updateMany({
+      where: {
+        id: orderId,
+        status: OrderStatus.OPEN,
+        deadlineReminderSentAt: null,
+      },
+      data: { deadlineReminderSentAt: new Date() },
+    });
+    if (count === 0) return null;
+    return this.prisma.order.findUniqueOrThrow({
+      where: { id: orderId },
+      include: {
+        submissions: {
+          where: { status: SubmissionStatus.IN_PROGRESS },
+          include: { creator: true },
+        },
+      },
+    });
   }
 
   /** Открытые заказы с прошедшим сроком — кандидаты на автозакрытие. */
@@ -225,11 +264,23 @@ export class OrdersService {
     return order;
   }
 
+  /**
+   * Публикация. Срок в форме — «N дней», а считался от создания: сдвигаем его на время модерации,
+   * чтобы у креаторов было ровно N дней с момента публикации.
+   */
   async moderatorApprove(orderId: number, moderatorTelegramId: bigint) {
+    const order = await this.mustFind(orderId);
+    const now = new Date();
     await this.transitionStatus(orderId, [OrderStatus.PENDING_MODERATION], {
       status: OrderStatus.OPEN,
       moderatorId: moderatorTelegramId,
-      decidedAt: new Date(),
+      decidedAt: now,
+      deadline: order.deadline
+        ? new Date(
+            order.deadline.getTime() +
+              (now.getTime() - order.createdAt.getTime()),
+          )
+        : null,
     });
     return this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },

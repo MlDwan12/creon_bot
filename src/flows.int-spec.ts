@@ -150,6 +150,50 @@ describe('срок заказа', () => {
   });
 });
 
+describe('срок от публикации и напоминания', () => {
+  it('срок сдвигается на время модерации', async () => {
+    const advertiser = await user();
+    const order = await pendingOrder(advertiser.id, new Date(Date.now() + DAY));
+    // заказ провисел на модерации двое суток
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { createdAt: new Date(Date.now() - 2 * DAY) },
+    });
+
+    const published = await orders.moderatorApprove(order.id, 1n);
+
+    const shiftedBy = published.deadline!.getTime() - order.deadline!.getTime();
+    expect(shiftedBy).toBeGreaterThanOrEqual(2 * DAY);
+    expect(shiftedBy).toBeLessThan(2 * DAY + 60_000);
+  });
+
+  it('о близком сроке напоминаем один раз, после продления — снова', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const order = await openOrder(
+      advertiser.id,
+      new Date(Date.now() + DAY / 2),
+    );
+    await submissions.claim(order.id, creator.id);
+
+    expect(await orders.listDeadlineSoon()).toEqual([{ id: order.id }]);
+    const reminded = await orders.markDeadlineReminded(order.id);
+    expect(reminded?.submissions.map((s) => s.creator.id)).toEqual([
+      creator.id,
+    ]);
+    expect(await orders.markDeadlineReminded(order.id)).toBeNull();
+    expect(await orders.listDeadlineSoon()).toEqual([]);
+
+    // +1 день к оставшимся 12 ч — снова меньше суток до срока, и напоминание сброшено
+    await orders.extend(order.id, advertiser.id, 1);
+    expect(await orders.listDeadlineSoon()).toEqual([]);
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { deadline: new Date(Date.now() + DAY / 2) },
+    });
+    expect(await orders.listDeadlineSoon()).toEqual([{ id: order.id }]);
+  });
+});
+
 describe('удаление заказа', () => {
   it('можно, пока никто не сдал видео — отклики «в работе» удаляются вместе с ним', async () => {
     const [advertiser, creator] = [await user(), await user()];
