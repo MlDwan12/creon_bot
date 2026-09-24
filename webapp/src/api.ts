@@ -105,6 +105,52 @@ export interface PendingVideos {
   }[];
 }
 
+export type OrderStatus = MyOrder['status'];
+
+/** Ответы `/api/mod/*` — см. src/api/moderation.controller.ts. */
+export interface ModQueue {
+  orders: { id: number; title: string; price: string | null; advertiser: string; createdAt: string }[];
+  videos: { id: number; orderTitle: string; creator: string; submittedAt: string | null }[];
+}
+
+export interface ModStats {
+  orders: { pending: number; open: number; rejected: number; closed: number; total: number };
+  submissions: { pending: number; approved: number; rejected: number };
+}
+
+export interface ModOrderRow {
+  id: number;
+  title: string;
+  price: string | null;
+  status: OrderStatus;
+  advertiser: string;
+  submissionsCount: number;
+  createdAt: string;
+}
+
+export interface ModOrder {
+  id: number;
+  title: string;
+  description: string;
+  price: string | null;
+  category: OrderCategory;
+  deadline: string | null;
+  status: OrderStatus;
+  moderatorComment: string | null;
+  advertiser: string;
+  createdAt: string;
+}
+
+export interface ModVideo {
+  id: number;
+  status: SubmissionStatus;
+  videoUrl: string | null;
+  submittedAt: string | null;
+  creator: string;
+  attempt: number;
+  order: { id: number; title: string; description: string };
+}
+
 export interface Page<T> {
   items: T[];
   total: number;
@@ -203,4 +249,36 @@ export function rejectVideo(submissionId: number, comment: string) {
   return request<{ ok: true }>('POST', `/api/submissions/${submissionId}/reject`, {
     comment,
   });
+}
+
+export function fetchMe() {
+  return request<{ isModerator: boolean }>('GET', '/api/me');
+}
+
+export function fetchModQueue() {
+  return request<ModQueue>('GET', '/api/mod/queue');
+}
+
+export function fetchModStats() {
+  return request<ModStats>('GET', '/api/mod/stats');
+}
+
+export function fetchAllOrders(page: number) {
+  return request<Page<ModOrderRow>>('GET', `/api/mod/orders?page=${page}`);
+}
+
+export function fetchModOrder(id: number) {
+  return request<ModOrder>('GET', `/api/mod/orders/${id}`);
+}
+
+export function moderateOrder(id: number, decision: 'approve' | 'reject', comment?: string) {
+  return request<{ ok: true }>('POST', `/api/mod/orders/${id}/${decision}`, comment === undefined ? undefined : { comment });
+}
+
+export function fetchModVideo(id: number) {
+  return request<ModVideo>('GET', `/api/mod/videos/${id}`);
+}
+
+export function moderateVideo(id: number, decision: 'approve' | 'reject', comment?: string) {
+  return request<{ ok: true }>('POST', `/api/mod/videos/${id}/${decision}`, comment === undefined ? undefined : { comment });
 }

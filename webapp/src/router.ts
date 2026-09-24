@@ -1,7 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { fetchMe } from './api';
 import CatalogView from './views/CatalogView.vue';
 import OrderDetailView from './views/OrderDetailView.vue';
 import CreateOrderView from './views/CreateOrderView.vue';
+import ModAllOrdersView from './views/mod/ModAllOrdersView.vue';
+import ModOrderView from './views/mod/ModOrderView.vue';
+import ModQueueView from './views/mod/ModQueueView.vue';
+import ModStatsView from './views/mod/ModStatsView.vue';
+import ModVideoView from './views/mod/ModVideoView.vue';
 import MyOrdersView from './views/MyOrdersView.vue';
 import MySubmissionsView from './views/MySubmissionsView.vue';
 import ReviewVideosView from './views/ReviewVideosView.vue';
@@ -41,6 +47,33 @@ export const router = createRouter({
       props: true,
       meta: { back: true },
     },
+    // Отдельное окно модератора.
+    { path: '/mod', component: ModQueueView },
+    { path: '/mod/orders', component: ModAllOrdersView },
+    { path: '/mod/stats', component: ModStatsView },
+    {
+      path: '/mod/orders/:id',
+      component: ModOrderView,
+      props: true,
+      meta: { back: true },
+    },
+    {
+      path: '/mod/videos/:id',
+      component: ModVideoView,
+      props: true,
+      meta: { back: true },
+    },
     { path: '/:rest(.*)', redirect: '/' },
   ],
+});
+
+// Модератора — в его окно, остальных — из него. Это только навигация:
+// права на каждый /api/mod/* всё равно проверяет бэкенд (ModeratorGuard).
+let me: Promise<{ isModerator: boolean }> | undefined;
+router.beforeEach(async (to) => {
+  me ??= fetchMe().catch(() => ({ isModerator: false }));
+  const { isModerator } = await me;
+  const inModeration = to.path.startsWith('/mod');
+  if (isModerator && !inModeration) return '/mod';
+  if (!isModerator && inModeration) return '/';
 });

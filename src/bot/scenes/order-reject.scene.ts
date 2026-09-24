@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Command, Ctx, Wizard, WizardStep } from 'nestjs-telegraf';
 import type { BotContext } from '../interfaces/bot-context.interface';
+import { NotificationsService } from '../notifications.service';
 import { errorMessage } from '../utils/error.util';
 import { isMeaningfulText, MAX_COMMENT_LENGTH } from '../utils/validation';
 import { deleteIncoming, editForm, sendForm } from '../utils/wizard-form.util';
@@ -18,7 +19,10 @@ interface OrderRejectState {
 @Injectable()
 @Wizard(ORDER_REJECT_SCENE_ID)
 export class OrderRejectWizard {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   @WizardStep(0)
   async askReason(@Ctx() ctx: BotContext) {
@@ -75,14 +79,7 @@ export class OrderRejectWizard {
       state.formMessageId!,
       'Заказ отклонён, рекламодателю отправлено уведомление.',
     );
-    try {
-      await ctx.telegram.sendMessage(
-        order.advertiser.telegramId.toString(),
-        `❌ Ваш заказ «${order.title}» отклонён модератором.\nПричина: ${comment}\n\nВы можете разместить заказ заново, учтя замечания.`,
-      );
-    } catch {
-      // рекламодатель мог заблокировать бота
-    }
+    await this.notifications.orderRejected(order, comment);
     await ctx.scene.leave();
   }
 

@@ -93,6 +93,39 @@ export class OrdersService {
     });
   }
 
+  /** Очередь модератора в Mini App: все заказы на проверке, старые первыми. */
+  listPending() {
+    return this.prisma.order.findMany({
+      where: { status: OrderStatus.PENDING_MODERATION },
+      orderBy: { createdAt: 'asc' },
+      include: { advertiser: true },
+    });
+  }
+
+  /** Все заказы любого статуса для модератора — страница, новые первыми. */
+  async listAll(skip: number, take: number) {
+    const [items, total] = await Promise.all([
+      this.prisma.order.findMany({
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+        include: {
+          advertiser: true,
+          _count: { select: { submissions: true } },
+        },
+      }),
+      this.prisma.order.count(),
+    ]);
+    return { items, total };
+  }
+
+  findWithAdvertiser(id: number) {
+    return this.prisma.order.findUnique({
+      where: { id },
+      include: { advertiser: true },
+    });
+  }
+
   /** Fetches a single order (any status) by its position, for the moderator's "all orders" carousel. */
   async getAllAt(index: number) {
     const [items, total] = await Promise.all([

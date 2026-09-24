@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Command, Ctx, Wizard, WizardStep } from 'nestjs-telegraf';
 import type { BotContext } from '../interfaces/bot-context.interface';
+import { NotificationsService } from '../notifications.service';
 import { errorMessage } from '../utils/error.util';
 import { isMeaningfulText, MAX_COMMENT_LENGTH } from '../utils/validation';
 import { deleteIncoming, editForm, sendForm } from '../utils/wizard-form.util';
@@ -18,7 +19,10 @@ interface ModeratorRejectState {
 @Injectable()
 @Wizard(MODERATOR_REJECT_SCENE_ID)
 export class ModeratorRejectWizard {
-  constructor(private readonly submissionsService: SubmissionsService) {}
+  constructor(
+    private readonly submissionsService: SubmissionsService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   @WizardStep(0)
   async askReason(@Ctx() ctx: BotContext) {
@@ -77,14 +81,7 @@ export class ModeratorRejectWizard {
       state.formMessageId!,
       'Отклик отклонён, автору отправлено уведомление.',
     );
-    try {
-      await ctx.telegram.sendMessage(
-        submission.creator.telegramId.toString(),
-        `❌ Ваш отклик на заказ «${submission.order.title}» отклонён модератором.\nПричина: ${comment}\n\nВы можете отправить новый отклик на этот заказ.`,
-      );
-    } catch {
-      // креатор мог заблокировать бота
-    }
+    await this.notifications.videoRejectedByModerator(submission, comment);
     await ctx.scene.leave();
   }
 

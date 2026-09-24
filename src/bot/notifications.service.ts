@@ -4,6 +4,7 @@ import type { Order, Submission, User } from '@prisma/client';
 import { InjectBot } from 'nestjs-telegraf';
 import { Markup, Telegraf } from 'telegraf';
 import type { BotContext } from './interfaces/bot-context.interface';
+import { USER_MENU_BUTTONS } from './keyboards/menu.keyboard';
 import { styled } from './utils/button.util';
 import {
   creatorLabel,
@@ -68,6 +69,69 @@ export class NotificationsService {
       text,
       `mod:approve:${submission.id}`,
       `mod:reject:${submission.id}`,
+    );
+  }
+
+  /** Рекламодателю: модератор опубликовал заказ. */
+  async orderApproved(order: Order & { advertiser: User }) {
+    await this.send(
+      order.advertiser.telegramId,
+      `✅ Ваш заказ «${order.title}» прошёл модерацию и опубликован — креаторы уже видят его в «${USER_MENU_BUTTONS.BROWSE_ORDERS}».`,
+    );
+  }
+
+  /** Рекламодателю: модератор отклонил заказ. */
+  async orderRejected(order: Order & { advertiser: User }, comment: string) {
+    await this.send(
+      order.advertiser.telegramId,
+      `❌ Ваш заказ «${order.title}» отклонён модератором.\nПричина: ${comment}\n\nВы можете разместить заказ заново, учтя замечания.`,
+    );
+  }
+
+  /** Рекламодателю: модератор одобрил видео — теперь решение за ним (кнопки прямо в сообщении). */
+  async videoApprovedByModerator(
+    submission: Submission & { order: Order & { advertiser: User } },
+  ) {
+    const text = [
+      '🎬 Новое видео на проверку',
+      '',
+      `Заказ: ${escapeHtml(submission.order.title)}`,
+      `Видео: ${escapeHtml(submission.videoUrl ?? '')}`,
+    ].join('\n');
+    const kb = html(
+      Markup.inlineKeyboard([
+        styled(
+          Markup.button.callback(
+            '✅ Подтвердить',
+            `adv:approve:${submission.id}`,
+          ),
+          'success',
+        ),
+        styled(
+          Markup.button.callback('❌ Отклонить', `adv:reject:${submission.id}`),
+          'danger',
+        ),
+      ]),
+    );
+    try {
+      await this.bot.telegram.sendMessage(
+        submission.order.advertiser.telegramId.toString(),
+        text,
+        kb,
+      );
+    } catch {
+      // рекламодатель мог заблокировать бота
+    }
+  }
+
+  /** Креатору: модератор отклонил видео. */
+  async videoRejectedByModerator(
+    submission: SubmissionWithParties,
+    comment: string,
+  ) {
+    await this.send(
+      submission.creator.telegramId,
+      `❌ Ваш отклик на заказ «${submission.order.title}» отклонён модератором.\nПричина: ${comment}\n\nВы можете отправить новый отклик на этот заказ.`,
     );
   }
 

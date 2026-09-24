@@ -15,6 +15,7 @@ import { NotificationsService } from '../bot/notifications.service';
 import { creatorLabel } from '../bot/utils/format';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
+import { attemptNumbers } from './attempts';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { parseOrderInput } from './order-input';
 
@@ -86,14 +87,7 @@ export class MyOrdersController {
       throw new NotFoundException('Заказ не найден');
     }
     const all = await this.submissionsService.listByOrder(id);
-    // Номер попытки креатора по этому заказу: listByOrder — от новых к старым, считаем со старых.
-    const perCreator = new Map<number, number>();
-    const attemptOf = new Map<number, number>();
-    for (const s of [...all].reverse()) {
-      const n = (perCreator.get(s.creatorId) ?? 0) + 1;
-      perCreator.set(s.creatorId, n);
-      attemptOf.set(s.id, n);
-    }
+    const attempts = attemptNumbers(all);
     return {
       order: { id: order.id, title: order.title },
       items: all
@@ -103,7 +97,7 @@ export class MyOrdersController {
           id: s.id,
           videoUrl: s.videoUrl,
           creator: creatorLabel(s.creator),
-          attempt: attemptOf.get(s.id)!,
+          attempt: attempts.get(s.id)!,
           submittedAt: s.submittedAt,
         })),
     };

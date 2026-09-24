@@ -4,10 +4,8 @@ import { Markup } from 'telegraf';
 import { OrdersService } from '../../orders/orders.service';
 import { SubmissionsService } from '../../submissions/submissions.service';
 import type { BotContext } from '../interfaces/bot-context.interface';
-import {
-  MODERATOR_MENU_BUTTONS,
-  USER_MENU_BUTTONS,
-} from '../keyboards/menu.keyboard';
+import { NotificationsService } from '../notifications.service';
+import { MODERATOR_MENU_BUTTONS } from '../keyboards/menu.keyboard';
 import { MODERATOR_REJECT_SCENE_ID } from '../scenes/moderator-reject.scene';
 import { ORDER_REJECT_SCENE_ID } from '../scenes/order-reject.scene';
 import { styled } from '../utils/button.util';
@@ -39,6 +37,7 @@ export class ModerationUpdate {
   constructor(
     private readonly ordersService: OrdersService,
     private readonly submissionsService: SubmissionsService,
+    private readonly notifications: NotificationsService,
     config: ConfigService,
   ) {
     this.moderatorIds = parseModeratorIds(config.get<string>('MODERATOR_IDS'));
@@ -119,14 +118,7 @@ export class ModerationUpdate {
     }
     await ctx.answerCbQuery('Заказ опубликован');
     await ctx.editMessageText(`✅ Заказ #${order.id} одобрен и опубликован.`);
-    try {
-      await ctx.telegram.sendMessage(
-        order.advertiser.telegramId.toString(),
-        `✅ Ваш заказ «${order.title}» прошёл модерацию и опубликован — креаторы уже видят его в «${USER_MENU_BUTTONS.BROWSE_ORDERS}».`,
-      );
-    } catch {
-      // рекламодатель мог заблокировать бота
-    }
+    await this.notifications.orderApproved(order);
   }
 
   @Action(/^order:reject:(\d+)$/)
@@ -359,36 +351,7 @@ export class ModerationUpdate {
     await ctx.answerCbQuery('Одобрено');
     await ctx.editMessageText('✅ Одобрено. Ждём подтверждения рекламодателя.');
 
-    const kb = html(
-      Markup.inlineKeyboard([
-        styled(
-          Markup.button.callback(
-            '✅ Подтвердить',
-            `adv:approve:${submission.id}`,
-          ),
-          'success',
-        ),
-        styled(
-          Markup.button.callback('❌ Отклонить', `adv:reject:${submission.id}`),
-          'danger',
-        ),
-      ]),
-    );
-    const text = [
-      '🎬 Новое видео на проверку',
-      '',
-      `Заказ: ${escapeHtml(submission.order.title)}`,
-      `Видео: ${escapeHtml(submission.videoUrl ?? '')}`,
-    ].join('\n');
-    try {
-      await ctx.telegram.sendMessage(
-        submission.order.advertiser.telegramId.toString(),
-        text,
-        kb,
-      );
-    } catch {
-      // рекламодатель мог заблокировать бота
-    }
+    await this.notifications.videoApprovedByModerator(submission);
   }
 
   @Action(/^mod:reject:(\d+)$/)
