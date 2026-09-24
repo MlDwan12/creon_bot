@@ -19,6 +19,8 @@ model User {
   /// Заблокирован модератором: мини-апп показывает только экран блокировки, бот не пишет.
   bannedAt   DateTime?
   banReason  String?
+  /// Тема этого пользователя в группе поддержки (message_thread_id), создаётся при первом обращении.
+  supportTopicId Int?
 
   orders      Order[]
   submissions Submission[]
