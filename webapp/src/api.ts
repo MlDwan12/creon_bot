@@ -55,11 +55,17 @@ export type SubmissionStatus =
   | 'ADVERTISER_APPROVED'
   | 'ADVERTISER_REJECTED';
 
-/** Ответ `GET /api/submissions`: по одной карточке на заказ (последняя попытка). См. src/api/my-submissions.ts. */
+/** EXPIRED — закрыт по сроку (рекламодатель может продлить), CLOSED — закрыт им вручную. */
+export type OrderStatus = 'PENDING_MODERATION' | 'OPEN' | 'REJECTED' | 'CLOSED' | 'EXPIRED';
+
+/** Ответ `GET /api/submissions`: каждое видео — своя карточка. См. src/api/my-submissions.ts. */
 export interface MySubmission {
   id: number;
   status: SubmissionStatus;
+  /** Номер видео по этому заказу. */
   attempt: number;
+  /** Самое новое видео по заказу — только по нему предлагаем прислать новое после отказа. */
+  latest: boolean;
   videoUrl: string | null;
   comment: string | null;
   createdAt: string;
@@ -68,7 +74,7 @@ export interface MySubmission {
     title: string;
     price: string | null;
     deadline: string | null;
-    status: 'PENDING_MODERATION' | 'OPEN' | 'REJECTED' | 'CLOSED';
+    status: OrderStatus;
   };
 }
 
@@ -80,7 +86,7 @@ export interface MyOrder {
   price: string | null;
   category: OrderCategory;
   deadline: string | null;
-  status: 'PENDING_MODERATION' | 'OPEN' | 'REJECTED' | 'CLOSED';
+  status: OrderStatus;
   rejectReason: string | null;
   submissionsCount: number;
   pendingDecision: number;
@@ -109,7 +115,6 @@ export interface PendingVideos {
   }[];
 }
 
-export type OrderStatus = MyOrder['status'];
 
 /** Ответы `/api/mod/*` — см. src/api/moderation.controller.ts. */
 export interface ModQueue {
@@ -164,7 +169,7 @@ export interface Page<T> {
 
 /**
  * Ошибка API. `userMessage` — текст, который можно показать пользователю: только наши
- * 400/403/404 (их тексты пишет бэкенд сам, как в боте). Остальное — общий текст, чтобы не светить внутренности.
+ * 400/403/404 (их тексты пишет бэкенд сам). Остальное — общий текст, чтобы не светить внутренности.
  */
 export class ApiError extends Error {
   constructor(
@@ -235,6 +240,11 @@ export function createOrder(input: NewOrderInput) {
 
 export function closeOrder(id: number) {
   return request<{ ok: true }>('POST', `/api/my-orders/${id}/close`);
+}
+
+/** Продлить срок на `days` дней; истёкший заказ снова откроется. */
+export function extendOrder(id: number, days: number) {
+  return request<{ ok: true }>('POST', `/api/my-orders/${id}/extend`, { days });
 }
 
 export function deleteOrder(id: number) {

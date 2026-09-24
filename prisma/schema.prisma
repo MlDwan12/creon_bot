@@ -21,7 +21,10 @@ enum OrderStatus {
   PENDING_MODERATION
   OPEN
   REJECTED
+  /// Закрыт рекламодателем вручную.
   CLOSED
+  /// Истёк срок (deadline) — закрыт автоматически; рекламодатель может продлить и открыть снова.
+  EXPIRED
 }
 
 enum OrderCategory {

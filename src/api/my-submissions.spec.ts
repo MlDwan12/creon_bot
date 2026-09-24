@@ -49,16 +49,18 @@ describe('toMySubmissions', () => {
   ];
   const result = toMySubmissions(rows);
 
-  it('одна карточка на заказ — последняя попытка и номер попытки', () => {
-    expect(result.map((r) => [r.id, r.order.id, r.attempt])).toEqual([
-      [3, 10, 2],
-      [2, 20, 1],
+  it('каждое видео — своя карточка: номер по заказу и самое новое', () => {
+    expect(result.map((r) => [r.id, r.order.id, r.attempt, r.latest])).toEqual([
+      [3, 10, 2, true],
+      [2, 20, 1, true],
+      [1, 10, 1, false],
     ]);
   });
 
   it('комментарий берётся от того, кто отклонил', () => {
     expect(result[0].comment).toBeNull();
     expect(result[1].comment).toBe('не то');
+    expect(result[2].comment).toBe('битая ссылка');
   });
 
   it('наружу не уходят модераторские поля и BigInt', () => {

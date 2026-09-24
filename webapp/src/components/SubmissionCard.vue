@@ -31,13 +31,14 @@ const steps = computed(() => STEPS[props.submission.status]);
 const status = computed(() => STATUS[props.submission.status]);
 const rejected = computed(() => steps.value === 0);
 const canResubmit = computed(
-  () => rejected.value && props.submission.order.status === 'OPEN',
+  () => rejected.value && props.submission.latest && props.submission.order.status === 'OPEN',
 );
+const expired = computed(() => props.submission.order.status === 'EXPIRED');
 
 const resubmitting = ref(false);
 const error = ref('');
 
-/** Новая попытка: откликаемся на тот же заказ заново и сразу идём отправлять видео — как в боте. */
+/** Новое видео: откликаемся на тот же заказ заново и сразу идём его отправлять. */
 async function resubmit() {
   resubmitting.value = true;
   error.value = '';
@@ -68,13 +69,13 @@ async function resubmit() {
       <span v-if="submission.status === 'IN_PROGRESS' && submission.order.deadline" class="hint">
         сдать до {{ formatDate(submission.order.deadline) }}
       </span>
-      <span v-else-if="submission.attempt > 1" class="hint">попытка {{ submission.attempt }}</span>
+      <span v-else-if="submission.attempt > 1" class="hint">видео {{ submission.attempt }}</span>
     </div>
 
     <p v-if="submission.comment" class="comment">«{{ submission.comment }}»</p>
 
     <RouterLink
-      v-if="submission.status === 'IN_PROGRESS'"
+      v-if="submission.status === 'IN_PROGRESS' && !expired"
       :to="`/submissions/${submission.id}/video`"
       class="action"
     >
@@ -83,7 +84,9 @@ async function resubmit() {
     <button v-else-if="canResubmit" type="button" class="action" :disabled="resubmitting" @click="resubmit">
       {{ resubmitting ? 'Секунду…' : 'Отправить новую работу' }}
     </button>
-    <p v-else-if="rejected" class="hint">Заказ закрыт — новые работы по нему не принимаются.</p>
+    <p v-else-if="submission.status === 'IN_PROGRESS' || (rejected && submission.latest)" class="hint">
+      {{ expired ? 'Срок заказа истёк' : 'Заказ закрыт' }} — новые видео по нему не принимаются.
+    </p>
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
   </article>

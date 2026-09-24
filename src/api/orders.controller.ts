@@ -46,7 +46,7 @@ export class OrdersController {
     return { items, total, page, pageSize: PAGE_SIZE };
   }
 
-  /** Карточка открытого заказа; `claimed` — есть ли у текущего пользователя активный отклик, `own` — заказ его. */
+  /** Карточка открытого заказа; `claimed` — есть ли у текущего пользователя отклик «в работе», `own` — заказ его. */
   @Get(':id')
   async findOpen(
     @Param('id', ParseIntPipe) id: number,
@@ -54,7 +54,7 @@ export class OrdersController {
   ) {
     const order = await this.ordersService.findOpenById(id);
     if (!order) throw new NotFoundException('Заказ не найден или уже закрыт');
-    const claimed = await this.submissionsService.hasActiveClaim(
+    const claimed = await this.submissionsService.hasInProgress(
       id,
       req.user.id,
     );

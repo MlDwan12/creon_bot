@@ -9,6 +9,7 @@ const STATUS: Record<ModOrderRow['status'], { label: string; tone: string }> = {
   OPEN: { label: 'Открыт', tone: 'success' },
   REJECTED: { label: 'Отклонён', tone: 'danger' },
   CLOSED: { label: 'Закрыт', tone: 'muted' },
+  EXPIRED: { label: 'Срок вышел', tone: 'muted' },
 };
 
 const orders = ref<ModOrderRow[]>([]);

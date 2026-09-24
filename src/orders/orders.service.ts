@@ -10,6 +10,7 @@ import {
   SubmissionStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { extendedDeadline } from './deadline';
 
 /** Поля заказа, которые видит любой пользователь Mini App: без модераторских данных и без BigInt. */
 const PUBLIC_ORDER_FIELDS = {
@@ -143,6 +144,60 @@ export class OrdersService {
   }
 
   /**
+   * Продление срока: открытый заказ — сдвигаем срок, истёкший — сдвигаем и открываем снова.
+   * Закрытый вручную не трогаем: его рекламодатель закрыл сам.
+   */
+  async extend(orderId: number, advertiserId: number, days: number) {
+    const order = await this.mustFind(orderId);
+    if (order.advertiserId !== advertiserId)
+      throw new ForbiddenException('Это не ваш заказ');
+    await this.transitionStatus(
+      orderId,
+      [OrderStatus.OPEN, OrderStatus.EXPIRED],
+      {
+        status: OrderStatus.OPEN,
+        deadline: extendedDeadline(order.deadline, days),
+        closedAt: null,
+      },
+      'Продлить можно только открытый заказ или заказ с истёкшим сроком',
+    );
+  }
+
+  /** Открытые заказы с прошедшим сроком — кандидаты на автозакрытие. */
+  listOverdue() {
+    return this.prisma.order.findMany({
+      where: { status: OrderStatus.OPEN, deadline: { lt: new Date() } },
+      select: { id: true },
+    });
+  }
+
+  /**
+   * Закрывает заказ по сроку. Условие повторено в `updateMany`: если рекламодатель успел продлить,
+   * заказ не закроется. `null` — закрывать уже не нужно.
+   */
+  async expire(orderId: number) {
+    const { count } = await this.prisma.order.updateMany({
+      where: {
+        id: orderId,
+        status: OrderStatus.OPEN,
+        deadline: { lt: new Date() },
+      },
+      data: { status: OrderStatus.EXPIRED, closedAt: new Date() },
+    });
+    if (count === 0) return null;
+    return this.prisma.order.findUniqueOrThrow({
+      where: { id: orderId },
+      include: {
+        advertiser: true,
+        submissions: {
+          where: { status: SubmissionStatus.IN_PROGRESS },
+          include: { creator: true },
+        },
+      },
+    });
+  }
+
+  /**
    * Удаляет заказ вместе с откликами — только пока по нему никто не сдал видео: сданные работы
    * нужны для разбора споров. Условие в самом `deleteMany`, поэтому видео, сданное между
    * проверкой и удалением, удаление остановит.
@@ -206,7 +261,10 @@ export class OrdersService {
       }),
       this.prisma.order.count({ where: { status: OrderStatus.OPEN } }),
       this.prisma.order.count({ where: { status: OrderStatus.REJECTED } }),
-      this.prisma.order.count({ where: { status: OrderStatus.CLOSED } }),
+      // «закрыто» — и вручную, и по сроку
+      this.prisma.order.count({
+        where: { status: { in: [OrderStatus.CLOSED, OrderStatus.EXPIRED] } },
+      }),
       this.prisma.order.count(),
     ]);
     return { pending, open, rejected, closed, total };

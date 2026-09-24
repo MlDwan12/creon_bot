@@ -1,22 +1,26 @@
 import { type Order, type Submission, SubmissionStatus } from '@prisma/client';
 
 /**
- * «Мои отклики» для Mini App: по одной карточке на заказ — последняя попытка и её номер.
+ * «Мои отклики» для Mini App: каждый отклик (одно видео) — своя карточка; `attempt` — номер видео
+ * по этому заказу, `latest` — самый новый отклик по заказу (отклонённый старый уже не требует внимания).
  * Поля перечислены явно: наружу не уходят модераторские данные и BigInt (не сериализуется в JSON).
  * `rows` — как отдаёт SubmissionsService.listByCreator: от новых к старым.
  */
 export function toMySubmissions(rows: (Submission & { order: Order })[]) {
-  const attempts = new Map<number, number>();
+  const total = new Map<number, number>();
   for (const row of rows) {
-    attempts.set(row.orderId, (attempts.get(row.orderId) ?? 0) + 1);
+    total.set(row.orderId, (total.get(row.orderId) ?? 0) + 1);
   }
-  const seen = new Set<number>();
-  return rows
-    .filter((row) => !seen.has(row.orderId) && seen.add(row.orderId))
-    .map((row) => ({
+  // Идём от новых к старым: номер видео по заказу убывает от total до 1.
+  const next = new Map(total);
+  return rows.map((row) => {
+    const attempt = next.get(row.orderId)!;
+    next.set(row.orderId, attempt - 1);
+    return {
       id: row.id,
       status: row.status,
-      attempt: attempts.get(row.orderId)!,
+      attempt,
+      latest: attempt === total.get(row.orderId),
       videoUrl: row.videoUrl,
       comment:
         row.status === SubmissionStatus.MODERATOR_REJECTED
@@ -32,5 +36,6 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
         deadline: row.order.deadline,
         status: row.order.status,
       },
-    }));
+    };
+  });
 }

@@ -8,8 +8,7 @@ import {
   MAX_PRICE_LENGTH,
   MAX_TITLE_LENGTH,
 } from '../common/validation';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { deadlineIn } from '../orders/deadline';
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -52,22 +51,26 @@ export function parseOrderInput(body: unknown) {
     throw new BadRequestException('Выберите категорию');
   }
 
-  let deadline: Date | undefined;
-  if (b.deadlineDays !== undefined && b.deadlineDays !== null) {
-    const days = b.deadlineDays;
-    if (
-      !Number.isInteger(days) ||
-      (days as number) < 1 ||
-      (days as number) > MAX_DEADLINE_DAYS
-    ) {
-      throw new BadRequestException(
-        `Срок — целое число дней от 1 до ${MAX_DEADLINE_DAYS}`,
-      );
-    }
-    deadline = new Date(Date.now() + (days as number) * DAY_MS);
-  }
+  const deadline =
+    b.deadlineDays === undefined || b.deadlineDays === null
+      ? undefined
+      : deadlineIn(parseDeadlineDays(b.deadlineDays));
 
   return { title, description, price, category, deadline };
+}
+
+/** Срок в днях — при создании заказа и при продлении. */
+export function parseDeadlineDays(days: unknown): number {
+  if (
+    !Number.isInteger(days) ||
+    (days as number) < 1 ||
+    (days as number) > MAX_DEADLINE_DAYS
+  ) {
+    throw new BadRequestException(
+      `Срок — целое число дней от 1 до ${MAX_DEADLINE_DAYS}`,
+    );
+  }
+  return days as number;
 }
 
 /** Причина отклонения заказа или видео. */

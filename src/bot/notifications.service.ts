@@ -126,6 +126,20 @@ export class NotificationsService {
     );
   }
 
+  /** Срок заказа истёк: рекламодателю — что можно продлить, креаторам с откликом «в работе» — что видео уже не примут. */
+  async orderExpired(order: Order & { advertiser: User } & OrderWithCreators) {
+    await this.send(
+      order.advertiser.telegramId,
+      `⏰ Срок заказа «${escapeHtml(order.title)}» истёк — заказ закрыт, новые видео не принимаются.\n\nУже присланные видео можно принять или отклонить. Чтобы собрать ещё, продлите срок в «Мои заказы».`,
+      '/my-orders',
+      true,
+    );
+    await this.toCreators(
+      order,
+      `⏰ Срок заказа «${escapeHtml(order.title)}» истёк — видео по нему больше не принимаются.`,
+    );
+  }
+
   /** Креатору: рекламодатель принял видео. */
   async videoAccepted(submission: SubmissionWithParties) {
     await this.send(
