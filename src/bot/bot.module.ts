@@ -4,6 +4,7 @@ import { TelegrafModule } from 'nestjs-telegraf';
 import { session } from 'telegraf';
 import { currentUserMiddleware } from './middlewares/current-user.middleware';
 import { ignoreNotModifiedMiddleware } from './middlewares/ignore-not-modified.middleware';
+import { leaveSceneOnMenuMiddleware } from './middlewares/leave-scene-on-menu.middleware';
 import { prismaSessionStore } from './middlewares/prisma-session.store';
 import { AdvertiserRejectWizard } from './scenes/advertiser-reject.scene';
 import { CreateOrderScene } from './scenes/create-order.scene';
@@ -39,6 +40,8 @@ import { PrismaService } from '../prisma/prisma.service';
           session({ store: prismaSessionStore(prisma) }),
           ignoreNotModifiedMiddleware(),
           currentUserMiddleware(usersService),
+          // до сцен: nestjs-telegraf ставит Stage после этих middleware, а @Update-обработчики — после Stage
+          leaveSceneOnMenuMiddleware(),
         ],
       }),
     }),
