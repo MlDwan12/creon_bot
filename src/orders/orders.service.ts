@@ -37,7 +37,7 @@ export class OrdersService {
     data: {
       title: string;
       description: string;
-      price?: string;
+      price?: number;
       category: OrderCategory;
       deadline?: Date;
     },
