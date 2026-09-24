@@ -43,6 +43,8 @@ export interface OrderSummary {
 /** Ответ `GET /api/orders/:id`. */
 export interface OrderDetail extends OrderSummary {
   claimed: boolean;
+  /** Заказ текущего пользователя — откликнуться нельзя. */
+  own: boolean;
 }
 
 export type SubmissionStatus =
@@ -82,6 +84,8 @@ export interface MyOrder {
   rejectReason: string | null;
   submissionsCount: number;
   pendingDecision: number;
+  /** Никто ещё не сдал видео — заказ можно удалить. */
+  deletable: boolean;
   createdAt: string;
 }
 

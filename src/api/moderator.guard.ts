@@ -10,7 +10,7 @@ import { parseModeratorIds } from '../bot/utils/moderator.util';
 import type { ApiRequest } from './init-data.guard';
 
 /**
- * Доступ только модераторам из MODERATOR_IDS — как проверка `denied()` в меню модератора бота.
+ * Доступ только модераторам из MODERATOR_IDS.
  * Ставится после InitDataGuard: пользователь к этому моменту уже проверен и лежит в req.user.
  */
 @Injectable()

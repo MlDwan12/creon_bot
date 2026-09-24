@@ -19,7 +19,7 @@ import { attemptNumbers } from './attempts';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { parseOrderInput } from './order-input';
 
-/** Заказы текущего пользователя как рекламодателя. Права проверяют сервисы — как в боте. */
+/** Заказы текущего пользователя как рекламодателя. Права проверяют сервисы. */
 @Controller('api/my-orders')
 @UseGuards(InitDataGuard)
 export class MyOrdersController {
@@ -44,6 +44,10 @@ export class MyOrdersController {
       rejectReason:
         o.status === OrderStatus.REJECTED ? o.moderatorComment : null,
       submissionsCount: o.submissions.length,
+      // Та же проверка, что в OrdersService.remove.
+      deletable: o.submissions.every(
+        (s) => s.status === SubmissionStatus.IN_PROGRESS,
+      ),
       pendingDecision: o.submissions.filter(
         (s) => s.status === SubmissionStatus.MODERATOR_APPROVED,
       ).length,
@@ -51,7 +55,7 @@ export class MyOrdersController {
     }));
   }
 
-  /** Новый заказ → на модерацию, модераторам уведомление — как после формы в боте. */
+  /** Новый заказ → на модерацию, модераторам уведомление. */
   @Post()
   async create(@Body() body: unknown, @Req() req: ApiRequest) {
     const order = await this.ordersService.create(

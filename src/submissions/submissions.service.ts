@@ -35,6 +35,8 @@ export class SubmissionsService {
           if (!order) throw new NotFoundException('Заказ не найден');
           if (order.status !== OrderStatus.OPEN)
             throw new ForbiddenException('Заказ сейчас недоступен');
+          if (order.advertiserId === creatorId)
+            throw new ForbiddenException('Нельзя откликнуться на свой заказ');
 
           const existing = await tx.submission.findFirst({
             where: { orderId, creatorId, status: { in: ACTIVE_STATUSES } },

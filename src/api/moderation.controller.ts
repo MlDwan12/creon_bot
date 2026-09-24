@@ -23,8 +23,7 @@ import { parseRejectComment } from './order-input';
 const PAGE_SIZE = 20;
 
 /**
- * Окно модератора в Mini App. Решения идут через те же методы сервисов, что и кнопки бота —
- * гонки двух модераторов над одним пунктом отсекает transitionStatus, уведомления — общие.
+ * Окно модератора в Mini App. Гонки двух модераторов над одним пунктом отсекает transitionStatus.
  */
 @Controller('api/mod')
 @UseGuards(InitDataGuard, ModeratorGuard)
