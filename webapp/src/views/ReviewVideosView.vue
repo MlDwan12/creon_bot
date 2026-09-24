@@ -2,6 +2,7 @@
 import { computed, reactive, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { acceptVideo, ApiError, type Feedback, fetchPendingVideos, type PendingVideos, rejectVideo } from '../api';
+import UserAvatar from '../components/UserAvatar.vue';
 import { timeAgo } from '../format';
 import { safeUrl } from '../telegram';
 
@@ -76,7 +77,7 @@ void load();
       </header>
 
       <RouterLink :to="`/creators/${current.creatorId}`" class="creator">
-        <div class="avatar" aria-hidden="true">{{ current.creator.replace('@', '').slice(0, 2).toUpperCase() }}</div>
+        <UserAvatar :user-id="current.creatorId" :name="current.creator" />
         <div class="who">
           <div class="name">{{ current.creator }}</div>
           <div class="hint">
@@ -184,18 +185,6 @@ h1 {
   padding: 12px 14px;
   border-radius: 14px;
   background: var(--surface);
-}
-.avatar {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  border-radius: 22px;
-  background: var(--accent-soft);
-  color: var(--link);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
 }
 .creator {
   color: var(--text);
