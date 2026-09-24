@@ -13,15 +13,21 @@ import {
 import { OrderStatus, SubmissionStatus } from '@prisma/client';
 import { NotificationsService } from '../bot/notifications.service';
 import { creatorLabel } from '../bot/utils/format';
+import { Throttle } from '@nestjs/throttler';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
 import { attemptNumbers } from './attempts';
-import { type ApiRequest, InitDataGuard } from './init-data.guard';
-import { parseOrderInput } from './order-input';
+import {
+  type ApiRequest,
+  InitDataGuard,
+  requireUsername,
+} from './init-data.guard';
+import { UserThrottlerGuard } from './user-throttler.guard';
+import { parseDeadlineDays, parseOrderInput } from './order-input';
 
 /** Заказы текущего пользователя как рекламодателя. Права проверяют сервисы. */
 @Controller('api/my-orders')
-@UseGuards(InitDataGuard)
+@UseGuards(InitDataGuard, UserThrottlerGuard)
 export class MyOrdersController {
   constructor(
     private readonly ordersService: OrdersService,
@@ -57,7 +63,9 @@ export class MyOrdersController {
 
   /** Новый заказ → на модерацию, модераторам уведомление. */
   @Post()
+  @Throttle({ default: { limit: 10, ttl: 60 * 60_000 } })
   async create(@Body() body: unknown, @Req() req: ApiRequest) {
+    requireUsername(req.user);
     const order = await this.ordersService.create(
       req.user.id,
       parseOrderInput(body),
@@ -70,6 +78,17 @@ export class MyOrdersController {
   async close(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {
     const order = await this.ordersService.close(id, req.user.id);
     await this.notifications.orderClosed(order);
+    return { ok: true };
+  }
+
+  /** Продлить срок на `days` дней; заказ с истёкшим сроком снова открывается. */
+  @Post(':id/extend')
+  async extend(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('days') days: unknown,
+    @Req() req: ApiRequest,
+  ) {
+    await this.ordersService.extend(id, req.user.id, parseDeadlineDays(days));
     return { ok: true };
   }
 

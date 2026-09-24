@@ -19,6 +19,7 @@ const STATUS_LABELS: Record<ModOrder['status'], string> = {
   OPEN: 'Опубликован',
   REJECTED: 'Отклонён',
   CLOSED: 'Закрыт',
+  EXPIRED: 'Срок вышел',
 };
 
 const order = ref<ModOrder>();

@@ -13,14 +13,20 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { OrderCategory } from '@prisma/client';
+import { Throttle } from '@nestjs/throttler';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
-import { type ApiRequest, InitDataGuard } from './init-data.guard';
+import {
+  type ApiRequest,
+  InitDataGuard,
+  requireUsername,
+} from './init-data.guard';
+import { UserThrottlerGuard } from './user-throttler.guard';
 
 const PAGE_SIZE = 20;
 
 @Controller('api/orders')
-@UseGuards(InitDataGuard)
+@UseGuards(InitDataGuard, UserThrottlerGuard)
 export class OrdersController {
   constructor(
     private readonly ordersService: OrdersService,
@@ -42,7 +48,7 @@ export class OrdersController {
     return { items, total, page, pageSize: PAGE_SIZE };
   }
 
-  /** Карточка открытого заказа; `claimed` — есть ли у текущего пользователя активный отклик, `own` — заказ его. */
+  /** Карточка открытого заказа; `claimed` — есть ли у текущего пользователя отклик «в работе», `own` — заказ его. */
   @Get(':id')
   async findOpen(
     @Param('id', ParseIntPipe) id: number,
@@ -50,7 +56,7 @@ export class OrdersController {
   ) {
     const order = await this.ordersService.findOpenById(id);
     if (!order) throw new NotFoundException('Заказ не найден или уже закрыт');
-    const claimed = await this.submissionsService.hasActiveClaim(
+    const claimed = await this.submissionsService.hasInProgress(
       id,
       req.user.id,
     );
@@ -60,8 +66,10 @@ export class OrdersController {
 
   /** Отклик на заказ (дубли, гонки и отклик на свой заказ отсекает сервис). */
   @Post(':id/claim')
+  @Throttle({ default: { limit: 30, ttl: 60 * 60_000 } })
   @HttpCode(201)
   async claim(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {
+    requireUsername(req.user);
     const submission = await this.submissionsService.claim(id, req.user.id);
     return { submissionId: submission.id };
   }

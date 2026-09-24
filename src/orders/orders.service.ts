@@ -10,6 +10,7 @@ import {
   SubmissionStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { DAY_MS, extendedDeadline } from './deadline';
 
 /** Поля заказа, которые видит любой пользователь Mini App: без модераторских данных и без BigInt. */
 const PUBLIC_ORDER_FIELDS = {
@@ -22,11 +23,16 @@ const PUBLIC_ORDER_FIELDS = {
   createdAt: true,
 } satisfies Prisma.OrderSelect;
 
+/** Сколько заказов у рекламодателя может быть одновременно на модерации и открытыми. */
+export const MAX_ACTIVE_ORDERS = 10;
+
 @Injectable()
 export class OrdersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(
+  // ponytail: count и create не атомарны — два одновременных запроса могут дать 11-й заказ.
+  // Спам этим не сделать: создание ещё и ограничено по частоте (@Throttle в контроллере).
+  async create(
     advertiserId: number,
     data: {
       title: string;
@@ -36,6 +42,16 @@ export class OrdersService {
       deadline?: Date;
     },
   ) {
+    const active = await this.prisma.order.count({
+      where: {
+        advertiserId,
+        status: { in: [OrderStatus.PENDING_MODERATION, OrderStatus.OPEN] },
+      },
+    });
+    if (active >= MAX_ACTIVE_ORDERS)
+      throw new ForbiddenException(
+        `У вас уже ${MAX_ACTIVE_ORDERS} активных заказов — закройте ненужные, чтобы разместить новый`,
+      );
     return this.prisma.order.create({
       data: {
         advertiserId,
@@ -143,6 +159,99 @@ export class OrdersService {
   }
 
   /**
+   * Продление срока: открытый заказ — сдвигаем срок, истёкший — сдвигаем и открываем снова.
+   * Закрытый вручную не трогаем: его рекламодатель закрыл сам.
+   */
+  async extend(orderId: number, advertiserId: number, days: number) {
+    const order = await this.mustFind(orderId);
+    if (order.advertiserId !== advertiserId)
+      throw new ForbiddenException('Это не ваш заказ');
+    await this.transitionStatus(
+      orderId,
+      [OrderStatus.OPEN, OrderStatus.EXPIRED],
+      {
+        status: OrderStatus.OPEN,
+        deadline: extendedDeadline(order.deadline, days),
+        closedAt: null,
+        deadlineReminderSentAt: null,
+      },
+      'Продлить можно только открытый заказ или заказ с истёкшим сроком',
+    );
+  }
+
+  /** Открытые заказы, у которых срок истекает меньше чем через сутки, а напоминания ещё не было. */
+  listDeadlineSoon() {
+    const now = Date.now();
+    return this.prisma.order.findMany({
+      where: {
+        status: OrderStatus.OPEN,
+        deadline: { gt: new Date(now), lt: new Date(now + DAY_MS) },
+        deadlineReminderSentAt: null,
+      },
+      select: { id: true },
+    });
+  }
+
+  /**
+   * Отмечает, что напоминание о сроке отправлено, и возвращает заказ с креаторами «в работе».
+   * `null` — уже отмечено (или заказ продлили/закрыли): второй раз не напоминаем.
+   */
+  async markDeadlineReminded(orderId: number) {
+    const { count } = await this.prisma.order.updateMany({
+      where: {
+        id: orderId,
+        status: OrderStatus.OPEN,
+        deadlineReminderSentAt: null,
+      },
+      data: { deadlineReminderSentAt: new Date() },
+    });
+    if (count === 0) return null;
+    return this.prisma.order.findUniqueOrThrow({
+      where: { id: orderId },
+      include: {
+        submissions: {
+          where: { status: SubmissionStatus.IN_PROGRESS },
+          include: { creator: true },
+        },
+      },
+    });
+  }
+
+  /** Открытые заказы с прошедшим сроком — кандидаты на автозакрытие. */
+  listOverdue() {
+    return this.prisma.order.findMany({
+      where: { status: OrderStatus.OPEN, deadline: { lt: new Date() } },
+      select: { id: true },
+    });
+  }
+
+  /**
+   * Закрывает заказ по сроку. Условие повторено в `updateMany`: если рекламодатель успел продлить,
+   * заказ не закроется. `null` — закрывать уже не нужно.
+   */
+  async expire(orderId: number) {
+    const { count } = await this.prisma.order.updateMany({
+      where: {
+        id: orderId,
+        status: OrderStatus.OPEN,
+        deadline: { lt: new Date() },
+      },
+      data: { status: OrderStatus.EXPIRED, closedAt: new Date() },
+    });
+    if (count === 0) return null;
+    return this.prisma.order.findUniqueOrThrow({
+      where: { id: orderId },
+      include: {
+        advertiser: true,
+        submissions: {
+          where: { status: SubmissionStatus.IN_PROGRESS },
+          include: { creator: true },
+        },
+      },
+    });
+  }
+
+  /**
    * Удаляет заказ вместе с откликами — только пока по нему никто не сдал видео: сданные работы
    * нужны для разбора споров. Условие в самом `deleteMany`, поэтому видео, сданное между
    * проверкой и удалением, удаление остановит.
@@ -170,11 +279,23 @@ export class OrdersService {
     return order;
   }
 
+  /**
+   * Публикация. Срок в форме — «N дней», а считался от создания: сдвигаем его на время модерации,
+   * чтобы у креаторов было ровно N дней с момента публикации.
+   */
   async moderatorApprove(orderId: number, moderatorTelegramId: bigint) {
+    const order = await this.mustFind(orderId);
+    const now = new Date();
     await this.transitionStatus(orderId, [OrderStatus.PENDING_MODERATION], {
       status: OrderStatus.OPEN,
       moderatorId: moderatorTelegramId,
-      decidedAt: new Date(),
+      decidedAt: now,
+      deadline: order.deadline
+        ? new Date(
+            order.deadline.getTime() +
+              (now.getTime() - order.createdAt.getTime()),
+          )
+        : null,
     });
     return this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
@@ -206,7 +327,10 @@ export class OrdersService {
       }),
       this.prisma.order.count({ where: { status: OrderStatus.OPEN } }),
       this.prisma.order.count({ where: { status: OrderStatus.REJECTED } }),
-      this.prisma.order.count({ where: { status: OrderStatus.CLOSED } }),
+      // «закрыто» — и вручную, и по сроку
+      this.prisma.order.count({
+        where: { status: { in: [OrderStatus.CLOSED, OrderStatus.EXPIRED] } },
+      }),
       this.prisma.order.count(),
     ]);
     return { pending, open, rejected, closed, total };

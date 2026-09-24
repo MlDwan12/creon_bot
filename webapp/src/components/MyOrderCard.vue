@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { RouterLink } from 'vue-router';
-import { ApiError, closeOrder, deleteOrder, type MyOrder } from '../api';
+import { ApiError, closeOrder, deleteOrder, extendOrder, type MyOrder } from '../api';
 import { formatDate, formatPrice } from '../format';
 import { confirmAction } from '../telegram';
 
@@ -14,13 +14,23 @@ const STATUS: Record<MyOrder['status'], { label: string; tone: string }> = {
   OPEN: { label: 'Открыт', tone: 'success' },
   REJECTED: { label: 'Отклонён', tone: 'danger' },
   CLOSED: { label: 'Закрыт', tone: 'muted' },
+  EXPIRED: { label: 'Срок вышел', tone: 'muted' },
 };
+
+/** На сколько дней продлить — как варианты срока в форме заказа. */
+const EXTEND_DAYS = [3, 7, 14, 30];
 
 const busy = ref(false);
 const error = ref('');
 
-async function run(question: string, action: () => Promise<unknown>) {
-  if (!(await confirmAction(question))) return;
+/** Продлить можно открытый заказ со сроком и заказ, закрытый по сроку. */
+const canExtend = computed(
+  () => props.order.status === 'EXPIRED' || (props.order.status === 'OPEN' && !!props.order.deadline),
+);
+const extending = ref(false);
+
+async function run(question: string | null, action: () => Promise<unknown>) {
+  if (question && !(await confirmAction(question))) return;
   busy.value = true;
   error.value = '';
   try {
@@ -35,6 +45,11 @@ async function run(question: string, action: () => Promise<unknown>) {
 
 const close = () =>
   run('Закрыть заказ? Новые отклики перестанут приниматься.', () => closeOrder(props.order.id));
+const extend = (days: number) =>
+  run(null, async () => {
+    await extendOrder(props.order.id, days);
+    extending.value = false;
+  });
 const remove = () =>
   run('Удалить заказ? Это необратимо — вместе с ним удалятся все отклики.', () =>
     deleteOrder(props.order.id),
@@ -69,7 +84,19 @@ const remove = () =>
       </RouterLink>
     </template>
 
+    <p v-if="order.status === 'EXPIRED'" class="hint">
+      Новые видео не принимаются. Продлите срок, чтобы снова открыть заказ.
+    </p>
+
+    <div v-if="extending" class="buttons">
+      <button v-for="d in EXTEND_DAYS" :key="d" type="button" :disabled="busy" @click="extend(d)">
+        +{{ d }} дн
+      </button>
+    </div>
     <div class="buttons">
+      <button v-if="canExtend" type="button" :disabled="busy" @click="extending = !extending">
+        {{ extending ? 'Отмена' : 'Продлить срок' }}
+      </button>
       <button v-if="order.status === 'OPEN'" type="button" :disabled="busy" @click="close">
         Закрыть набор
       </button>

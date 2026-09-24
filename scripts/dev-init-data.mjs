@@ -11,7 +11,7 @@ if (!token) throw new Error('BOT_TOKEN не задан в .env');
 const fields = {
   auth_date: String(Math.floor(Date.now() / 1000)),
   // Вымышленный Telegram ID: в локальной базе появится пользователь «Dev».
-  user: JSON.stringify({ id: 1, first_name: 'Dev' }),
+  user: JSON.stringify({ id: 1, first_name: 'Dev', username: 'dev' }),
 };
 const dataCheckString = Object.keys(fields)
   .sort()

@@ -17,6 +17,7 @@ import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
 import { attemptNumbers } from './attempts';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
+import { UserThrottlerGuard } from './user-throttler.guard';
 import { ModeratorGuard } from './moderator.guard';
 import { parseRejectComment } from './order-input';
 
@@ -26,7 +27,7 @@ const PAGE_SIZE = 20;
  * Окно модератора в Mini App. Гонки двух модераторов над одним пунктом отсекает transitionStatus.
  */
 @Controller('api/mod')
-@UseGuards(InitDataGuard, ModeratorGuard)
+@UseGuards(InitDataGuard, ModeratorGuard, UserThrottlerGuard)
 export class ModerationController {
   constructor(
     private readonly ordersService: OrdersService,

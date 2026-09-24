@@ -7,22 +7,20 @@ import { Prisma, OrderStatus, SubmissionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 const ALREADY_CLAIMED_MESSAGE =
-  'Вы уже откликнулись на этот заказ — загляните в «Мои отклики»';
-
-const ACTIVE_STATUSES: SubmissionStatus[] = [
-  SubmissionStatus.IN_PROGRESS,
-  SubmissionStatus.SUBMITTED,
-  SubmissionStatus.MODERATOR_APPROVED,
-];
+  'По этому заказу у вас уже есть отклик в работе — отправьте по нему видео в «Мои отклики»';
 
 @Injectable()
 export class SubmissionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  hasActiveClaim(orderId: number, creatorId: number) {
+  /**
+   * Видео по заказу креатор может присылать сколько угодно, но по одному: новый отклик — только
+   * когда нет отклика «в работе» (без видео). Иначе двойной тап плодил бы пустые отклики.
+   */
+  hasInProgress(orderId: number, creatorId: number) {
     return this.prisma.submission
       .findFirst({
-        where: { orderId, creatorId, status: { in: ACTIVE_STATUSES } },
+        where: { orderId, creatorId, status: SubmissionStatus.IN_PROGRESS },
       })
       .then((s) => s !== null);
   }
@@ -39,7 +37,7 @@ export class SubmissionsService {
             throw new ForbiddenException('Нельзя откликнуться на свой заказ');
 
           const existing = await tx.submission.findFirst({
-            where: { orderId, creatorId, status: { in: ACTIVE_STATUSES } },
+            where: { orderId, creatorId, status: SubmissionStatus.IN_PROGRESS },
           });
           if (existing) throw new ForbiddenException(ALREADY_CLAIMED_MESSAGE);
 
@@ -68,11 +66,21 @@ export class SubmissionsService {
     const submission = await this.mustFind(submissionId);
     if (submission.creatorId !== creatorId)
       throw new ForbiddenException('Это не ваш отклик');
-    await this.transitionStatus(submissionId, [SubmissionStatus.IN_PROGRESS], {
-      videoUrl,
-      status: SubmissionStatus.SUBMITTED,
-      submittedAt: new Date(),
-    });
+    // После срока видео не принимаются. После ручного закрытия — принимаются: закрыт только набор.
+    if (submission.order.status === OrderStatus.EXPIRED)
+      throw new ForbiddenException(
+        'Срок заказа истёк — видео больше не принимаются',
+      );
+    await this.transitionStatus(
+      submissionId,
+      [SubmissionStatus.IN_PROGRESS],
+      {
+        videoUrl,
+        status: SubmissionStatus.SUBMITTED,
+        submittedAt: new Date(),
+      },
+      { status: { not: OrderStatus.EXPIRED } },
+    );
     return this.mustFind(submissionId);
   }
 
@@ -208,9 +216,11 @@ export class SubmissionsService {
     submissionId: number,
     fromStatuses: SubmissionStatus[],
     data: Prisma.SubmissionUpdateManyMutationInput,
+    /** Доп. условие на заказ — проверяется в том же запросе (срок мог истечь после проверки выше). */
+    order?: Prisma.OrderWhereInput,
   ) {
     const result = await this.prisma.submission.updateMany({
-      where: { id: submissionId, status: { in: fromStatuses } },
+      where: { id: submissionId, status: { in: fromStatuses }, order },
       data,
     });
     if (result.count === 0) {

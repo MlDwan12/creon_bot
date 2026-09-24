@@ -13,11 +13,12 @@ import { NotificationsService } from '../bot/notifications.service';
 import { MAX_URL_LENGTH, VIDEO_URL_RE } from '../common/validation';
 import { SubmissionsService } from '../submissions/submissions.service';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
+import { UserThrottlerGuard } from './user-throttler.guard';
 import { toMySubmissions } from './my-submissions';
 import { parseRejectComment } from './order-input';
 
 @Controller('api/submissions')
-@UseGuards(InitDataGuard)
+@UseGuards(InitDataGuard, UserThrottlerGuard)
 export class SubmissionsController {
   constructor(
     private readonly submissionsService: SubmissionsService,

@@ -126,6 +126,40 @@ export class NotificationsService {
     );
   }
 
+  /** Срок заказа истёк: рекламодателю — что можно продлить, креаторам с откликом «в работе» — что видео уже не примут. */
+  async orderExpired(order: Order & { advertiser: User } & OrderWithCreators) {
+    await this.send(
+      order.advertiser.telegramId,
+      `⏰ Срок заказа «${escapeHtml(order.title)}» истёк — заказ закрыт, новые видео не принимаются.\n\nУже присланные видео можно принять или отклонить. Чтобы собрать ещё, продлите срок в «Мои заказы».`,
+      '/my-orders',
+      true,
+    );
+    await this.toCreators(
+      order,
+      `⏰ Срок заказа «${escapeHtml(order.title)}» истёк — видео по нему больше не принимаются.`,
+    );
+  }
+
+  /** Креаторам с откликом «в работе»: срок заказа истекает меньше чем через сутки. */
+  async deadlineSoon(order: OrderWithCreators & Order) {
+    await this.toCreators(
+      order,
+      `⏳ Меньше чем через сутки истекает срок заказа «${escapeHtml(order.title)}» — успейте отправить видео. После срока его не примут.`,
+    );
+  }
+
+  /** Модераторам: в очереди есть то, что ждёт дольше положенного. */
+  async moderationQueueStale(orders: number, videos: number, hours: number) {
+    const parts = [
+      orders ? `заказов: ${orders}` : '',
+      videos ? `видео: ${videos}` : '',
+    ].filter(Boolean);
+    await this.toModerators(
+      `🕓 Дольше ${hours} ч ждут проверки — ${parts.join(', ')}.`,
+      '/mod',
+    );
+  }
+
   /** Креатору: рекламодатель принял видео. */
   async videoAccepted(submission: SubmissionWithParties) {
     await this.send(

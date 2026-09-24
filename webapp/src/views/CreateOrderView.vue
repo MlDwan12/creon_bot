@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ApiError, createOrder, fetchMyOrders, ORDER_CATEGORIES, type NewOrderInput } from '../api';
+import { ApiError, createOrder, fetchMe, fetchMyOrders, ORDER_CATEGORIES, type NewOrderInput } from '../api';
 
-// Лимиты — те же, что проверяет бэкенд (src/bot/utils/validation.ts); здесь только чтобы не дать ввести больше.
+// Лимиты — те же, что проверяет бэкенд (src/common/validation.ts); здесь только чтобы не дать ввести больше.
 const MAX_TITLE = 100;
 const MAX_DESCRIPTION = 1000;
 const MAX_PRICE = 50;
@@ -28,6 +28,11 @@ const form = reactive<NewOrderInput>({
 });
 const sending = ref(false);
 const error = ref('');
+// Без username бэкенд заказ не примет — предупреждаем, пока форма не заполнена.
+const noUsername = ref(false);
+fetchMe()
+  .then((me) => (noUsername.value = !me.hasUsername))
+  .catch(() => {});
 
 /** «Исправить и отправить снова»: /my-orders/new?from=<id> — подставляем данные отклонённого заказа. */
 async function prefill() {
@@ -48,7 +53,7 @@ async function submit() {
     await createOrder({ ...form });
     await router.replace('/my-orders');
   } catch (err) {
-    // Тексты ошибок проверки пишет бэкенд — те же правила, что в боте.
+    // Тексты ошибок проверки пишет бэкенд.
     error.value = err instanceof ApiError ? err.userMessage : 'Не удалось отправить заказ';
   } finally {
     sending.value = false;
@@ -61,6 +66,10 @@ void prefill();
 <template>
   <main class="page">
     <h1>Новый заказ</h1>
+    <p v-if="noUsername" class="error" role="alert">
+      Чтобы креаторы могли с вами связаться, укажите имя пользователя (username) в настройках Telegram
+      и откройте приложение заново — без него заказ не отправится.
+    </p>
 
     <form id="order-form" class="form" @submit.prevent="submit">
       <div class="field">
