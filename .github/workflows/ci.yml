@@ -13,6 +13,21 @@ jobs:
     env:
       DATABASE_URL: postgresql://creon:creon@localhost:5432/creon_bot
 
+    # Для интеграционных тестов (yarn test:int): базу creon_bot_test создаст prisma migrate deploy.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: creon
+          POSTGRES_PASSWORD: creon
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U creon"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -38,6 +53,9 @@ jobs:
 
       - name: Test
         run: yarn test
+
+      - name: Integration tests
+        run: yarn test:int
 
       - name: Build
         run: yarn build

@@ -1,0 +1,10 @@
+{
+  "rootDir": "../src",
+  "testRegex": "\\.int-spec\\.ts$",
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "transform": { "^.+\\.(t|j)s$": "ts-jest" },
+  "testEnvironment": "node",
+  "moduleNameMapper": {
+    "^@nestjs/config$": "<rootDir>/../test/nestjs-config.stub.ts"
+  }
+}
