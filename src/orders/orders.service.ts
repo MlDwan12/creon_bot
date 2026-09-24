@@ -51,6 +51,40 @@ export class OrdersService {
     return { order: items[0], total };
   }
 
+  /**
+   * Страница открытых заказов для каталога Mini App. Поля перечислены явно: наружу уходит
+   * только публичное (без модераторских полей), и в ответе нет BigInt, который не сериализуется в JSON.
+   */
+  async listOpen(
+    category: OrderCategory | undefined,
+    skip: number,
+    take: number,
+  ) {
+    const where = {
+      status: OrderStatus.OPEN,
+      ...(category ? { category } : {}),
+    };
+    const [items, total] = await Promise.all([
+      this.prisma.order.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          price: true,
+          category: true,
+          deadline: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.order.count({ where }),
+    ]);
+    return { items, total };
+  }
+
   /** Fetches a single order (any status) by its position, for the moderator's "all orders" carousel. */
   async getAllAt(index: number) {
     const [items, total] = await Promise.all([
