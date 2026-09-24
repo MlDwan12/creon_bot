@@ -8,6 +8,7 @@ import {
   MAX_PRICE,
   MAX_TITLE_LENGTH,
 } from '../common/validation';
+import { rublesToKopecks } from '../common/money';
 import { deadlineIn } from '../orders/deadline';
 
 function text(value: unknown): string {
@@ -39,7 +40,7 @@ export function parseOrderInput(body: unknown) {
     );
   }
 
-  // Пусто — «договорная». Иначе целые рубли за одно видео.
+  // Пусто — «договорная». Иначе целые рубли за одно видео; в базу — копейками.
   const price =
     b.price === undefined || b.price === null || b.price === ''
       ? undefined
@@ -63,7 +64,13 @@ export function parseOrderInput(body: unknown) {
       ? undefined
       : deadlineIn(parseDeadlineDays(b.deadlineDays));
 
-  return { title, description, price, category, deadline };
+  return {
+    title,
+    description,
+    priceKopecks: price === undefined ? undefined : rublesToKopecks(price),
+    category,
+    deadline,
+  };
 }
 
 /** Срок в днях — при создании заказа и при продлении. */

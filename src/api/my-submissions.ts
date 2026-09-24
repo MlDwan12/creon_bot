@@ -1,4 +1,5 @@
 import { type Order, type Submission, SubmissionStatus } from '@prisma/client';
+import { kopecksToRubles } from '../common/money';
 
 /**
  * «Мои отклики» для Mini App: каждый отклик (одно видео) — своя карточка; `attempt` — номер видео
@@ -32,7 +33,7 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
       order: {
         id: row.order.id,
         title: row.order.title,
-        price: row.order.price,
+        price: kopecksToRubles(row.order.priceKopecks),
         deadline: row.order.deadline,
         status: row.order.status,
       },

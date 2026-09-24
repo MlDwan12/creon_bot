@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { OrderCategory } from '@prisma/client';
 import { Throttle } from '@nestjs/throttler';
+import { kopecksToRubles } from '../common/money';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
 import {
@@ -24,6 +25,12 @@ import {
 import { UserThrottlerGuard } from './user-throttler.guard';
 
 const PAGE_SIZE = 20;
+
+/** Цена наружу — в рублях. */
+function toPublic<T extends { priceKopecks: number | null }>(order: T) {
+  const { priceKopecks, ...rest } = order;
+  return { ...rest, price: kopecksToRubles(priceKopecks) };
+}
 
 @Controller('api/orders')
 @UseGuards(InitDataGuard, UserThrottlerGuard)
@@ -45,7 +52,7 @@ export class OrdersController {
       Math.max(0, page) * PAGE_SIZE,
       PAGE_SIZE,
     );
-    return { items, total, page, pageSize: PAGE_SIZE };
+    return { items: items.map(toPublic), total, page, pageSize: PAGE_SIZE };
   }
 
   /** Карточка открытого заказа; `claimed` — есть ли у текущего пользователя отклик «в работе», `own` — заказ его. */
@@ -61,7 +68,7 @@ export class OrdersController {
       req.user.id,
     );
     const { advertiserId, ...pub } = order;
-    return { ...pub, claimed, own: advertiserId === req.user.id };
+    return { ...toPublic(pub), claimed, own: advertiserId === req.user.id };
   }
 
   /** Отклик на заказ (дубли, гонки и отклик на свой заказ отсекает сервис). */

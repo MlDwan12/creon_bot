@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Order, Submission, User } from '@prisma/client';
 import { InjectBot } from 'nestjs-telegraf';
+import { kopecksToRubles } from '../common/money';
 import { Context, Markup, Telegraf } from 'telegraf';
 import {
   creatorLabel,
@@ -42,7 +43,7 @@ export class NotificationsService {
       `#${order.id}: <b>${escapeHtml(order.title)}</b>`,
       escapeHtml(order.description),
       orderCategoryLabel(order.category),
-      `💰 ${formatPrice(order.price)}`,
+      `💰 ${formatPrice(kopecksToRubles(order.priceKopecks))}`,
       order.deadline ? `⏰ Дедлайн: ${formatDeadline(order.deadline)}` : '',
       `Рекламодатель: ${escapeHtml(creatorLabel(order.advertiser))}`,
     ]
