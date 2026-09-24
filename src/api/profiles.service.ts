@@ -92,6 +92,14 @@ export class ProfilesService {
     };
   }
 
+  async telegramIdOf(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { telegramId: true },
+    });
+    return user?.telegramId ?? null;
+  }
+
   updateLinks(
     userId: number,
     links: {

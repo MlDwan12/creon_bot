@@ -10,6 +10,7 @@ import {
   removeReview,
   updateProfileLinks,
 } from '../api';
+import UserAvatar from '../components/UserAvatar.vue';
 import { formatDate } from '../format';
 import { confirmAction, safeUrl } from '../telegram';
 
@@ -82,8 +83,11 @@ void load();
 
     <template v-else>
       <header class="head">
-        <span class="hint">{{ own ? 'Мой профиль креатора' : 'Профиль креатора' }}</span>
-        <h1>{{ profile.name }}</h1>
+        <UserAvatar :user-id="profile.id" :name="profile.name" :size="72" />
+        <div class="who">
+          <span class="hint">{{ own ? 'Мой профиль креатора' : 'Профиль креатора' }}</span>
+          <h1>{{ profile.name }}</h1>
+        </div>
       </header>
 
       <div class="tiles">
@@ -173,8 +177,14 @@ void load();
 }
 .head {
   display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.who {
+  display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 h1 {
   margin: 0;

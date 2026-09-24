@@ -328,6 +328,25 @@ export function fetchCreator(id: number) {
   return request<CreatorProfile>('GET', `/api/creators/${id}`);
 }
 
+const photos = new Map<number, Promise<string | null>>();
+
+/**
+ * Фото креатора из Telegram как blob-ссылка для <img>; null — фото нет или оно недоступно.
+ * Через fetch, а не <img src>: картинке тоже нужен заголовок авторизации. Один запрос на запуск.
+ */
+export function fetchCreatorPhoto(id: number): Promise<string | null> {
+  let photo = photos.get(id);
+  if (!photo) {
+    photo = fetch(`/api/creators/${id}/photo`, {
+      headers: { Authorization: `tma ${getInitData()}` },
+    })
+      .then(async (res) => (res.ok ? URL.createObjectURL(await res.blob()) : null))
+      .catch(() => null);
+    photos.set(id, photo);
+  }
+  return photo;
+}
+
 export function updateProfileLinks(links: ProfileLinks) {
   return request<{ ok: true }>('PUT', '/api/profile/links', links);
 }
