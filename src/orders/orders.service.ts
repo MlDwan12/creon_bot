@@ -23,11 +23,16 @@ const PUBLIC_ORDER_FIELDS = {
   createdAt: true,
 } satisfies Prisma.OrderSelect;
 
+/** Сколько заказов у рекламодателя может быть одновременно на модерации и открытыми. */
+export const MAX_ACTIVE_ORDERS = 10;
+
 @Injectable()
 export class OrdersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(
+  // ponytail: count и create не атомарны — два одновременных запроса могут дать 11-й заказ.
+  // Спам этим не сделать: создание ещё и ограничено по частоте (@Throttle в контроллере).
+  async create(
     advertiserId: number,
     data: {
       title: string;
@@ -37,6 +42,16 @@ export class OrdersService {
       deadline?: Date;
     },
   ) {
+    const active = await this.prisma.order.count({
+      where: {
+        advertiserId,
+        status: { in: [OrderStatus.PENDING_MODERATION, OrderStatus.OPEN] },
+      },
+    });
+    if (active >= MAX_ACTIVE_ORDERS)
+      throw new ForbiddenException(
+        `У вас уже ${MAX_ACTIVE_ORDERS} активных заказов — закройте ненужные, чтобы разместить новый`,
+      );
     return this.prisma.order.create({
       data: {
         advertiserId,

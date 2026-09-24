@@ -1,5 +1,5 @@
 import type { ConfigService } from '@nestjs/config';
-import { OrdersService } from './orders/orders.service';
+import { MAX_ACTIVE_ORDERS, OrdersService } from './orders/orders.service';
 import { PrismaService } from './prisma/prisma.service';
 import { SubmissionsService } from './submissions/submissions.service';
 
@@ -191,6 +191,22 @@ describe('срок от публикации и напоминания', () => {
       data: { deadline: new Date(Date.now() + DAY / 2) },
     });
     expect(await orders.listDeadlineSoon()).toEqual([{ id: order.id }]);
+  });
+});
+
+describe('лимит активных заказов', () => {
+  it('больше MAX_ACTIVE_ORDERS на модерации и открытых — нельзя, закрытые не считаются', async () => {
+    const advertiser = await user();
+    const created: { id: number }[] = [];
+    for (let i = 0; i < MAX_ACTIVE_ORDERS; i++)
+      created.push(await pendingOrder(advertiser.id));
+    await expect(pendingOrder(advertiser.id)).rejects.toThrow(
+      'активных заказов',
+    );
+
+    const first = await orders.moderatorApprove(created[0].id, 1n);
+    await orders.close(first.id, advertiser.id);
+    await expect(pendingOrder(advertiser.id)).resolves.toBeDefined();
   });
 });
 

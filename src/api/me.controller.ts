@@ -1,5 +1,6 @@
 import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
+import { UserThrottlerGuard } from './user-throttler.guard';
 import { ModeratorGuard } from './moderator.guard';
 
 /**
@@ -7,7 +8,7 @@ import { ModeratorGuard } from './moderator.guard';
  * формы заказа. Права всё равно проверяет каждый эндпоинт.
  */
 @Controller('api/me')
-@UseGuards(InitDataGuard)
+@UseGuards(InitDataGuard, UserThrottlerGuard)
 export class MeController {
   constructor(private readonly moderatorGuard: ModeratorGuard) {}
 
