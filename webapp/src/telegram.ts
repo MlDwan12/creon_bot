@@ -3,6 +3,7 @@ interface TelegramWebApp {
   initData: string;
   ready(): void;
   expand(): void;
+  showConfirm(message: string, callback: (ok: boolean) => void): void;
   BackButton: {
     show(): void;
     hide(): void;
@@ -20,6 +21,17 @@ export const webApp = window.Telegram?.WebApp;
 
 /** SDK грузится и в обычном браузере, но initData есть только внутри Telegram. */
 export const inTelegram = Boolean(webApp?.initData);
+
+/** «Точно удалить?» — внутри Telegram его родным диалогом, в браузере — обычным confirm. */
+export function confirmAction(message: string): Promise<boolean> {
+  if (!inTelegram) return Promise.resolve(window.confirm(message));
+  return new Promise((resolve) => webApp!.showConfirm(message, resolve));
+}
+
+/** Ссылку от пользователя делаем кликабельной только если это http(s) — не `javascript:` и прочее. */
+export function safeUrl(url: string | null): string | undefined {
+  return url && /^https?:\/\//i.test(url) ? url : undefined;
+}
 
 /**
  * Подписанные Telegram данные о пользователе — ими авторизуется каждый запрос к API.
