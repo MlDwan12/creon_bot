@@ -79,10 +79,3 @@ model Submission {
   submittedAt       DateTime?
   decidedAt         DateTime?
 }
-
-/// Сессии Telegraf (состояние сцен/визардов), чтобы редеплой не обрывал недозаполненные формы.
-/// Ключ — `${fromId}:${chatId}`, как в `session()` по умолчанию.
-model BotSession {
-  key  String @id
-  data Json
-}
