@@ -77,20 +77,29 @@ export class StartUpdate implements OnApplicationBootstrap {
     );
   }
 
+  /** ID чата — чтобы узнать ID группы поддержки для SUPPORT_CHAT_ID. */
+  @Command('chatid')
+  async onChatId(@Ctx() ctx: Context) {
+    await ctx.reply(`ID этого чата: ${ctx.chat!.id}`);
+  }
+
   /** Кнопки в старых сообщениях — их обработчиков больше нет. */
   @Action(/.*/)
   async onOldButton(@Ctx() ctx: Context) {
     await ctx.answerCbQuery(MOVED, { show_alert: true });
   }
 
-  /** Сообщение — в поддержку (или ответ поддержки — пользователю). Заодно убирает старую клавиатуру. */
+  /**
+   * Личное сообщение — в тему пользователя в группе поддержки; сообщение в теме группы — пользователю.
+   * Заодно убирает старую клавиатуру. Другие группы (если бота туда добавят) игнорируем.
+   */
   @On('message')
   async onMessage(@Ctx() ctx: Context) {
     if (this.support.isSupportChat(ctx.chat!.id)) {
-      const problem = await this.support.fromSupport(ctx);
-      if (problem) await ctx.reply(problem);
+      await this.support.fromSupport(ctx);
       return;
     }
+    if (ctx.chat!.type !== 'private') return;
     if (!this.support.chatId) {
       await ctx.reply(MOVED, Markup.removeKeyboard());
       return;

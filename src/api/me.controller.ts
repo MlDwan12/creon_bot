@@ -6,7 +6,7 @@ import { ModeratorGuard } from './moderator.guard';
 
 /**
  * Кто открыл Mini App: модератору — его отдельное окно, без username — предупреждение до заполнения
- * формы заказа; ссылка на чат с ботом для поддержки (null — выключена). Права проверяет каждый эндпоинт.
+ * формы заказа; supportUrl — ссылка на чат с ботом (null — поддержка выключена). Права проверяет каждый эндпоинт.
  */
 @Controller('api/me')
 @UseGuards(InitDataGuard, UserThrottlerGuard)
@@ -21,10 +21,7 @@ export class MeController {
     return {
       isModerator: this.moderatorGuard.isModerator(req.user),
       hasUsername: Boolean(req.user.username),
-      // самой поддержке кнопка «Поддержка» ни к чему — ей пишут в её же чат
-      supportUrl: this.support.isSupportChat(req.user.telegramId)
-        ? null
-        : await this.support.url(),
+      supportUrl: await this.support.url(),
     };
   }
 }
