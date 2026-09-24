@@ -16,16 +16,20 @@ describe('parseOrderInput', () => {
     expect(r).toMatchObject({
       title: 'Распаковка наушников',
       description: 'Снять 30 секунд',
-      price: undefined,
+      priceKopecks: undefined,
       category: 'TECH',
     });
     const days = (r.deadline!.getTime() - before) / (24 * 60 * 60 * 1000);
     expect(Math.round(days)).toBe(7);
   });
 
-  it('цена — целые рубли, пустая строка — договорная', () => {
-    expect(parseOrderInput({ ...valid, price: 3000 }).price).toBe(3000);
-    expect(parseOrderInput({ ...valid, price: '' }).price).toBeUndefined();
+  it('цена — целые рубли, в базу копейками; пустая строка — договорная', () => {
+    expect(parseOrderInput({ ...valid, price: 3000 }).priceKopecks).toBe(
+      300_000,
+    );
+    expect(
+      parseOrderInput({ ...valid, price: '' }).priceKopecks,
+    ).toBeUndefined();
   });
 
   it('без срока — deadline не задан', () => {

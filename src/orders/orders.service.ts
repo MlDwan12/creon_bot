@@ -17,7 +17,7 @@ const PUBLIC_ORDER_FIELDS = {
   id: true,
   title: true,
   description: true,
-  price: true,
+  priceKopecks: true,
   category: true,
   deadline: true,
   createdAt: true,
@@ -37,7 +37,7 @@ export class OrdersService {
     data: {
       title: string;
       description: string;
-      price?: number;
+      priceKopecks?: number;
       category: OrderCategory;
       deadline?: Date;
     },
@@ -57,7 +57,7 @@ export class OrdersService {
         advertiserId,
         title: data.title,
         description: data.description,
-        price: data.price,
+        priceKopecks: data.priceKopecks,
         category: data.category,
         deadline: data.deadline,
       },

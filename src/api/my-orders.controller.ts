@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { OrderStatus, SubmissionStatus } from '@prisma/client';
+import { kopecksToRubles } from '../common/money';
 import { NotificationsService } from '../bot/notifications.service';
 import { creatorLabel } from '../bot/utils/format';
 import { Throttle } from '@nestjs/throttler';
@@ -43,7 +44,7 @@ export class MyOrdersController {
       id: o.id,
       title: o.title,
       description: o.description,
-      price: o.price,
+      price: kopecksToRubles(o.priceKopecks),
       category: o.category,
       deadline: o.deadline,
       status: o.status,

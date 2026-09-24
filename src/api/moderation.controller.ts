@@ -11,6 +11,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { kopecksToRubles } from '../common/money';
 import { NotificationsService } from '../bot/notifications.service';
 import { creatorLabel } from '../bot/utils/format';
 import { OrdersService } from '../orders/orders.service';
@@ -46,7 +47,7 @@ export class ModerationController {
       orders: orders.map((o) => ({
         id: o.id,
         title: o.title,
-        price: o.price,
+        price: kopecksToRubles(o.priceKopecks),
         advertiser: creatorLabel(o.advertiser),
         createdAt: o.createdAt,
       })),
@@ -81,7 +82,7 @@ export class ModerationController {
       items: items.map((o) => ({
         id: o.id,
         title: o.title,
-        price: o.price,
+        price: kopecksToRubles(o.priceKopecks),
         status: o.status,
         advertiser: creatorLabel(o.advertiser),
         submissionsCount: o._count.submissions,
@@ -101,7 +102,7 @@ export class ModerationController {
       id: o.id,
       title: o.title,
       description: o.description,
-      price: o.price,
+      price: kopecksToRubles(o.priceKopecks),
       category: o.category,
       deadline: o.deadline,
       status: o.status,
