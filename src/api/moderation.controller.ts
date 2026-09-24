@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   DefaultValuePipe,
+  Delete,
   Get,
   NotFoundException,
   Param,
@@ -168,6 +169,7 @@ export class ModerationController {
       videoUrl: s.videoUrl,
       submittedAt: s.submittedAt,
       creator: creatorLabel(s.creator),
+      creatorId: s.creatorId,
       attempt: attempts.get(s.id)!,
       order: {
         id: s.order.id,
@@ -175,6 +177,15 @@ export class ModerationController {
         description: s.order.description,
       },
     };
+  }
+
+  /** Удалить отзыв креатору (оскорбления и т.п.); приёмка видео остаётся. */
+  @Delete('reviews/:submissionId')
+  async removeReview(
+    @Param('submissionId', ParseIntPipe) submissionId: number,
+  ) {
+    await this.submissionsService.removeReview(submissionId);
+    return { ok: true };
   }
 
   @Post('videos/:id/approve')

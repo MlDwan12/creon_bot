@@ -40,7 +40,10 @@ void load();
 
 <template>
   <main class="page">
-    <h1>Мои отклики</h1>
+    <header class="head">
+      <h1>Мои отклики</h1>
+      <RouterLink to="/profile" class="profile-link">Мой профиль</RouterLink>
+    </header>
 
     <div class="segmented" role="tablist" aria-label="Фильтр откликов">
       <button type="button" role="tab" :aria-selected="tab === 'active'" @click="tab = 'active'">
@@ -79,6 +82,19 @@ void load();
   flex-direction: column;
   gap: 14px;
   padding: 16px 16px calc(96px + var(--safe-bottom));
+}
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.profile-link {
+  flex: none;
+  color: var(--link);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
 }
 h1 {
   margin: 0;

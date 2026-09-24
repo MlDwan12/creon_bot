@@ -1,5 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
 import { AnalyticsService } from './api/analytics.service';
+import { ProfilesService } from './api/profiles.service';
 import { MAX_ACTIVE_ORDERS, OrdersService } from './orders/orders.service';
 import { PrismaService } from './prisma/prisma.service';
 import { SubmissionsService } from './submissions/submissions.service';
@@ -22,6 +23,7 @@ const prisma = new PrismaService({
 const orders = new OrdersService(prisma);
 const submissions = new SubmissionsService(prisma);
 const analytics = new AnalyticsService(prisma);
+const profiles = new ProfilesService(prisma);
 
 const DAY = 24 * 60 * 60 * 1000;
 let nextTelegramId = 1n;
@@ -265,7 +267,11 @@ describe('воронка', () => {
     const s = await submissions.claim(accepted.id, creator.id);
     await submissions.attachVideo(s.id, creator.id, 'https://v.example/1');
     await submissions.moderatorApprove(s.id, 1n);
-    await submissions.advertiserApprove(s.id, advertiser.id);
+    await submissions.advertiserApprove(s.id, advertiser.id, {
+      rating: 5,
+      review: null,
+      portfolioAllowed: false,
+    });
 
     const rejected = await pendingOrder(advertiser.id);
     await orders.moderatorReject(rejected.id, 1n, 'причина');
@@ -291,5 +297,92 @@ describe('воронка', () => {
     expect(future.orders.created).toBe(0);
     expect(future.turnover.rubles).toBe(0);
     expect(future.orders.moderationHours).toBeNull();
+  });
+});
+
+describe('профиль креатора', () => {
+  /** Видео креатора доходит до рекламодателя (одобрено модератором) и принимается с оценкой. */
+  async function acceptedVideo(
+    advertiserId: number,
+    creatorId: number,
+    rating: number,
+    portfolioAllowed = false,
+  ) {
+    const order = await openOrder(advertiserId);
+    const s = await submissions.claim(order.id, creatorId);
+    await submissions.attachVideo(s.id, creatorId, `https://v.example/${s.id}`);
+    await submissions.moderatorApprove(s.id, 1n);
+    await submissions.advertiserApprove(s.id, advertiserId, {
+      rating,
+      review: `отзыв ${rating}`,
+      portfolioAllowed,
+    });
+    return s;
+  }
+
+  it('рейтинг, выполненные заказы, отзывы и портфолио только с согласия', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    await acceptedVideo(advertiser.id, creator.id, 5, true);
+    await acceptedVideo(advertiser.id, creator.id, 4);
+
+    const profile = await profiles.profile(creator.id);
+
+    expect(profile).toMatchObject({
+      rating: 4.5,
+      reviewsCount: 2,
+      completed: 2,
+    });
+    expect(profile.reviews.map((r) => r.rating).sort()).toEqual([4, 5]);
+    expect(profile.portfolio).toHaveLength(1);
+  });
+
+  it('видят сам креатор, модератор и рекламодатель, до которого дошло его видео', async () => {
+    const [advertiser, creator, stranger] = [
+      await user(),
+      await user(),
+      await user(),
+    ];
+    const order = await openOrder(advertiser.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, 'https://v.example/1');
+
+    // видео ещё у модератора — рекламодатель его не видел
+    expect(await profiles.canView(advertiser, creator.id, false)).toBe(false);
+    await submissions.moderatorApprove(s.id, 1n);
+    expect(await profiles.canView(advertiser, creator.id, false)).toBe(true);
+
+    expect(await profiles.canView(creator, creator.id, false)).toBe(true);
+    expect(await profiles.canView(stranger, creator.id, true)).toBe(true);
+    expect(await profiles.canView(stranger, creator.id, false)).toBe(false);
+  });
+
+  it('модератор удаляет отзыв — приёмка и счётчик выполненных остаются', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const s = await acceptedVideo(advertiser.id, creator.id, 1);
+
+    await submissions.removeReview(s.id);
+
+    const profile = await profiles.profile(creator.id);
+    expect(profile).toMatchObject({
+      rating: null,
+      reviewsCount: 0,
+      completed: 1,
+    });
+    await expect(submissions.removeReview(s.id)).rejects.toThrow('не найден');
+  });
+
+  it('статистика рекламодателя: принятые и отклонённые видео', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    await acceptedVideo(advertiser.id, creator.id, 5);
+    const order = await openOrder(advertiser.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, 'https://v.example/2');
+    await submissions.moderatorApprove(s.id, 1n);
+    await submissions.advertiserReject(s.id, advertiser.id, 'не то');
+
+    expect(await submissions.advertiserStats(advertiser.id)).toEqual({
+      accepted: 1,
+      rejected: 1,
+    });
   });
 });

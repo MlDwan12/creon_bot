@@ -12,6 +12,10 @@ model User {
   username   String?
   firstName  String?
   createdAt  DateTime @default(now())
+  /// Ссылки креатора на свои соцсети — в профиле (проверка домена: src/api/profile-input.ts).
+  tiktokUrl  String?
+  youtubeUrl String?
+  vkUrl      String?
 
   orders      Order[]
   submissions Submission[]
@@ -81,6 +85,11 @@ model Submission {
   moderatorId       BigInt?
   moderatorComment  String?
   advertiserComment String?
+  /// Оценка рекламодателя 1–5 при приёмке видео (ADVERTISER_APPROVED); менять нельзя, модератор может удалить.
+  rating            Int?
+  review            String?
+  /// Рекламодатель разрешил показывать видео в портфолио креатора.
+  portfolioAllowed  Boolean          @default(false)
   createdAt         DateTime         @default(now())
   submittedAt       DateTime?
   decidedAt         DateTime?

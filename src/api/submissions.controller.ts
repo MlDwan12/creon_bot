@@ -16,6 +16,7 @@ import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { UserThrottlerGuard } from './user-throttler.guard';
 import { toMySubmissions } from './my-submissions';
 import { parseRejectComment } from './order-input';
+import { parseFeedback } from './profile-input';
 
 @Controller('api/submissions')
 @UseGuards(InitDataGuard, UserThrottlerGuard)
@@ -61,12 +62,17 @@ export class SubmissionsController {
     return { ok: true };
   }
 
-  /** Рекламодатель принимает видео (advertiserApprove проверяет, что заказ его). */
+  /** Рекламодатель принимает видео с оценкой (advertiserApprove проверяет, что заказ его). */
   @Post(':id/accept')
-  async accept(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {
+  async accept(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: unknown,
+    @Req() req: ApiRequest,
+  ) {
     const submission = await this.submissionsService.advertiserApprove(
       id,
       req.user.id,
+      parseFeedback(body),
     );
     await this.notifications.videoAccepted(submission);
     return { ok: true };

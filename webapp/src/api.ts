@@ -45,6 +45,8 @@ export interface OrderDetail extends OrderSummary {
   claimed: boolean;
   /** Заказ текущего пользователя — откликнуться нельзя. */
   own: boolean;
+  /** Сколько видео рекламодатель уже принял и отклонил. */
+  advertiser: { accepted: number; rejected: number };
 }
 
 export type SubmissionStatus =
@@ -111,6 +113,7 @@ export interface PendingVideos {
     id: number;
     videoUrl: string | null;
     creator: string;
+    creatorId: number;
     attempt: number;
     submittedAt: string | null;
   }[];
@@ -180,8 +183,42 @@ export interface ModVideo {
   videoUrl: string | null;
   submittedAt: string | null;
   creator: string;
+  creatorId: number;
   attempt: number;
   order: { id: number; title: string; description: string };
+}
+
+/** Ссылки креатора на соцсети; null — не указана. */
+export interface ProfileLinks {
+  tiktokUrl: string | null;
+  youtubeUrl: string | null;
+  vkUrl: string | null;
+}
+
+/** Профиль креатора — см. src/api/profiles.service.ts. */
+export interface CreatorProfile {
+  id: number;
+  name: string;
+  /** Средняя оценка 1–5; null — отзывов нет. */
+  rating: number | null;
+  reviewsCount: number;
+  completed: number;
+  links: ProfileLinks;
+  reviews: {
+    submissionId: number;
+    rating: number;
+    review: string | null;
+    orderTitle: string;
+    decidedAt: string | null;
+  }[];
+  portfolio: { submissionId: number; videoUrl: string | null; orderTitle: string }[];
+}
+
+/** Оценка при приёмке видео. */
+export interface Feedback {
+  rating: number;
+  review: string;
+  portfolioAllowed: boolean;
 }
 
 export interface Page<T> {
@@ -205,7 +242,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(
-  method: 'GET' | 'POST' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   body?: unknown,
 ): Promise<T> {
@@ -279,8 +316,25 @@ export function fetchPendingVideos(orderId: number) {
   return request<PendingVideos>('GET', `/api/my-orders/${orderId}/pending-videos`);
 }
 
-export function acceptVideo(submissionId: number) {
-  return request<{ ok: true }>('POST', `/api/submissions/${submissionId}/accept`);
+export function acceptVideo(submissionId: number, feedback: Feedback) {
+  return request<{ ok: true }>('POST', `/api/submissions/${submissionId}/accept`, feedback);
+}
+
+export function fetchMyProfile() {
+  return request<CreatorProfile>('GET', '/api/profile');
+}
+
+export function fetchCreator(id: number) {
+  return request<CreatorProfile>('GET', `/api/creators/${id}`);
+}
+
+export function updateProfileLinks(links: ProfileLinks) {
+  return request<{ ok: true }>('PUT', '/api/profile/links', links);
+}
+
+/** Модератор: удалить отзыв (оценку и текст). */
+export function removeReview(submissionId: number) {
+  return request<{ ok: true }>('DELETE', `/api/mod/reviews/${submissionId}`);
 }
 
 export function rejectVideo(submissionId: number, comment: string) {

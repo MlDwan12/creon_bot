@@ -68,7 +68,13 @@ export class OrdersController {
       req.user.id,
     );
     const { advertiserId, ...pub } = order;
-    return { ...toPublic(pub), claimed, own: advertiserId === req.user.id };
+    return {
+      ...toPublic(pub),
+      claimed,
+      own: advertiserId === req.user.id,
+      // сколько видео рекламодатель принял и отклонил — платит ли он за работу
+      advertiser: await this.submissionsService.advertiserStats(advertiserId),
+    };
   }
 
   /** Отклик на заказ (дубли, гонки и отклик на свой заказ отсекает сервис). */
