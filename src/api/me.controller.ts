@@ -21,7 +21,10 @@ export class MeController {
     return {
       isModerator: this.moderatorGuard.isModerator(req.user),
       hasUsername: Boolean(req.user.username),
-      supportUrl: await this.support.url(),
+      // самой поддержке кнопка «Поддержка» ни к чему — ей пишут в её же чат
+      supportUrl: this.support.isSupportChat(req.user.telegramId)
+        ? null
+        : await this.support.url(),
     };
   }
 }

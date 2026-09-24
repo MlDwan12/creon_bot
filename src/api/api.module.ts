@@ -18,6 +18,7 @@ import { ProfilesController } from './profiles.controller';
 import { ProfilesService } from './profiles.service';
 import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
+import { SupportController } from './support.controller';
 import { SubmissionsController } from './submissions.controller';
 
 /** HTTP API для Telegram Mini App — тонкий слой над сервисами; плюс фоновые задачи по срокам и очереди модерации. */
@@ -43,6 +44,7 @@ import { SubmissionsController } from './submissions.controller';
     ModerationController,
     ProfilesController,
     ReportsController,
+    SupportController,
   ],
   providers: [
     AnalyticsService,

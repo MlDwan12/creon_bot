@@ -97,7 +97,10 @@ void load();
       >
         Пожаловаться на заказ
       </RouterLink>
-      <SupportLink :label="`Вопрос по заказу #${order.id} — написать менеджеру`" />
+      <SupportLink
+        :label="`Вопрос по заказу #${order.id} — написать менеджеру`"
+        :about="`Вопрос по заказу #${order.id} «${order.title}»`"
+      />
 
       <p v-if="justClaimed" class="notice success" role="status">
         Заказ взят в работу. Когда видео будет готово, отправьте его в «Мои отклики».
