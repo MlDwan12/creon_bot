@@ -126,7 +126,15 @@ export interface PendingVideos {
 
 /** Ответы `/api/mod/*` — см. src/api/moderation.controller.ts. */
 export interface ModQueue {
-  orders: { id: number; title: string; price: number | null; advertiser: string; createdAt: string }[];
+  orders: {
+    id: number;
+    title: string;
+    price: number | null;
+    advertiser: string;
+    createdAt: string;
+    /** В тексте похоже на контакты для связи в обход площадки. */
+    hasContacts: boolean;
+  }[];
   videos: { id: number; orderTitle: string; creator: string; submittedAt: string | null }[];
 }
 
@@ -179,6 +187,8 @@ export interface ModOrder {
   moderatorComment: string | null;
   advertiser: string;
   createdAt: string;
+  /** Фрагменты, похожие на контакты (@ник, t.me, телефон…) — см. src/common/contacts.ts. */
+  contacts: string[];
 }
 
 export interface ModVideo {
