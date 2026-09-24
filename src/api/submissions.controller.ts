@@ -9,18 +9,19 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { ModerationNotifier } from '../bot/moderation-notifier.service';
+import { NotificationsService } from '../bot/notifications.service';
 import { MAX_URL_LENGTH, VIDEO_URL_RE } from '../bot/utils/validation';
 import { SubmissionsService } from '../submissions/submissions.service';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { toMySubmissions } from './my-submissions';
+import { parseRejectComment } from './order-input';
 
 @Controller('api/submissions')
 @UseGuards(InitDataGuard)
 export class SubmissionsController {
   constructor(
     private readonly submissionsService: SubmissionsService,
-    private readonly notifier: ModerationNotifier,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Отклики текущего пользователя как креатора. */
@@ -55,7 +56,35 @@ export class SubmissionsController {
       req.user.id,
       url,
     );
-    await this.notifier.videoSubmitted(submission);
+    await this.notifications.videoSubmitted(submission);
+    return { ok: true };
+  }
+
+  /** Рекламодатель принимает видео (advertiserApprove проверяет, что заказ его). */
+  @Post(':id/accept')
+  async accept(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {
+    const submission = await this.submissionsService.advertiserApprove(
+      id,
+      req.user.id,
+    );
+    await this.notifications.videoAccepted(submission);
+    return { ok: true };
+  }
+
+  /** Рекламодатель отклоняет видео с причиной — креатору уходит уведомление, как из бота. */
+  @Post(':id/reject')
+  async reject(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: unknown,
+    @Req() req: ApiRequest,
+  ) {
+    const comment = parseRejectComment(body);
+    const submission = await this.submissionsService.advertiserReject(
+      id,
+      req.user.id,
+      comment,
+    );
+    await this.notifications.videoRejectedByAdvertiser(submission, comment);
     return { ok: true };
   }
 }

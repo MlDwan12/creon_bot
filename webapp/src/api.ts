@@ -70,6 +70,41 @@ export interface MySubmission {
   };
 }
 
+/** Ответ `GET /api/my-orders` — см. src/api/my-orders.controller.ts. */
+export interface MyOrder {
+  id: number;
+  title: string;
+  description: string;
+  price: string | null;
+  category: OrderCategory;
+  deadline: string | null;
+  status: 'PENDING_MODERATION' | 'OPEN' | 'REJECTED' | 'CLOSED';
+  rejectReason: string | null;
+  submissionsCount: number;
+  pendingDecision: number;
+  createdAt: string;
+}
+
+export interface NewOrderInput {
+  title: string;
+  description: string;
+  price: string;
+  category: OrderCategory;
+  deadlineDays: number | null;
+}
+
+/** Ответ `GET /api/my-orders/:id/pending-videos`. */
+export interface PendingVideos {
+  order: { id: number; title: string };
+  items: {
+    id: number;
+    videoUrl: string | null;
+    creator: string;
+    attempt: number;
+    submittedAt: string | null;
+  }[];
+}
+
 export interface Page<T> {
   items: T[];
   total: number;
@@ -91,7 +126,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'DELETE',
   path: string,
   body?: unknown,
 ): Promise<T> {
@@ -137,5 +172,35 @@ export function fetchMySubmissions() {
 export function submitVideo(submissionId: number, videoUrl: string) {
   return request<{ ok: true }>('POST', `/api/submissions/${submissionId}/video`, {
     videoUrl,
+  });
+}
+
+export function fetchMyOrders() {
+  return request<MyOrder[]>('GET', '/api/my-orders');
+}
+
+export function createOrder(input: NewOrderInput) {
+  return request<{ id: number }>('POST', '/api/my-orders', input);
+}
+
+export function closeOrder(id: number) {
+  return request<{ ok: true }>('POST', `/api/my-orders/${id}/close`);
+}
+
+export function deleteOrder(id: number) {
+  return request<{ ok: true }>('DELETE', `/api/my-orders/${id}`);
+}
+
+export function fetchPendingVideos(orderId: number) {
+  return request<PendingVideos>('GET', `/api/my-orders/${orderId}/pending-videos`);
+}
+
+export function acceptVideo(submissionId: number) {
+  return request<{ ok: true }>('POST', `/api/submissions/${submissionId}/accept`);
+}
+
+export function rejectVideo(submissionId: number, comment: string) {
+  return request<{ ok: true }>('POST', `/api/submissions/${submissionId}/reject`, {
+    comment,
   });
 }

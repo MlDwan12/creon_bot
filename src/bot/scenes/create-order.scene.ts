@@ -1,14 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type { OrderCategory } from '@prisma/client';
 import { Action, Command, Ctx, On, Scene, SceneEnter } from 'nestjs-telegraf';
 import { Markup } from 'telegraf';
 import type { BotContext } from '../interfaces/bot-context.interface';
 import { getCurrentUser } from '../interfaces/bot-context.interface';
 import { userMenuKeyboard } from '../keyboards/menu.keyboard';
+import { NotificationsService } from '../notifications.service';
 import { styled } from '../utils/button.util';
 import {
-  creatorLabel,
   escapeHtml,
   formatDeadline,
   html,
@@ -16,7 +15,6 @@ import {
   ORDER_CATEGORIES,
   truncate,
 } from '../utils/format';
-import { parseModeratorIds } from '../utils/moderator.util';
 import { getMatch } from '../utils/ui.util';
 import {
   isMeaningfulText,
@@ -161,16 +159,10 @@ function categoryKeyboard() {
 @Injectable()
 @Scene(CREATE_ORDER_SCENE_ID)
 export class CreateOrderScene {
-  private readonly moderatorIds: string[];
-
   constructor(
     private readonly ordersService: OrdersService,
-    config: ConfigService,
-  ) {
-    this.moderatorIds = Array.from(
-      parseModeratorIds(config.get<string>('MODERATOR_IDS')),
-    );
-  }
+    private readonly notifications: NotificationsService,
+  ) {}
 
   @SceneEnter()
   async onEnter(@Ctx() ctx: BotContext) {
@@ -355,37 +347,7 @@ export class CreateOrderScene {
     );
     await restoreReplyKeyboard(ctx, userMenuKeyboard());
 
-    const notifyText = [
-      '🆕 <b>Новый заказ на проверку</b>',
-      '',
-      `#${order.id}: <b>${escapeHtml(order.title)}</b>`,
-      escapeHtml(order.description),
-      orderCategoryLabel(order.category),
-      order.price ? `💰 ${escapeHtml(order.price)}` : '💰 цена не указана',
-      order.deadline ? `⏰ Дедлайн: ${formatDeadline(order.deadline)}` : '',
-      `Рекламодатель: ${escapeHtml(creatorLabel(order.advertiser))}`,
-    ]
-      .filter(Boolean)
-      .join('\n');
-    const kb = html(
-      Markup.inlineKeyboard([
-        styled(
-          Markup.button.callback('✅ Одобрить', `order:approve:${order.id}`),
-          'success',
-        ),
-        styled(
-          Markup.button.callback('❌ Отклонить', `order:reject:${order.id}`),
-          'danger',
-        ),
-      ]),
-    );
-    for (const modId of this.moderatorIds) {
-      try {
-        await ctx.telegram.sendMessage(modId, notifyText, kb);
-      } catch {
-        // модератор ещё не запускал бота — пропускаем
-      }
-    }
+    await this.notifications.orderCreated(order);
     await ctx.scene.leave();
   }
 

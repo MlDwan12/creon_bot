@@ -5,6 +5,7 @@ import { SubmissionsService } from '../../submissions/submissions.service';
 import type { BotContext } from '../interfaces/bot-context.interface';
 import { getCurrentUser } from '../interfaces/bot-context.interface';
 import { USER_MENU_BUTTONS } from '../keyboards/menu.keyboard';
+import { NotificationsService } from '../notifications.service';
 import { ADVERTISER_REJECT_SCENE_ID } from '../scenes/advertiser-reject.scene';
 import { styled } from '../utils/button.util';
 import { errorMessage } from '../utils/error.util';
@@ -29,6 +30,7 @@ export class MyOrdersUpdate {
   constructor(
     private readonly ordersService: OrdersService,
     private readonly submissionsService: SubmissionsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   @Hears(USER_MENU_BUTTONS.MY_ORDERS)
@@ -101,25 +103,6 @@ export class MyOrdersUpdate {
     await closeMessage(ctx);
   }
 
-  /** Notifies every distinct creator who has a submission on this order (dedupes multiple attempts by the same creator). */
-  private async notifyOrderCreators(
-    ctx: BotContext,
-    submissions: { creator: { telegramId: bigint } }[],
-    text: string,
-  ) {
-    const seen = new Set<string>();
-    for (const s of submissions) {
-      const chatId = s.creator.telegramId.toString();
-      if (seen.has(chatId)) continue;
-      seen.add(chatId);
-      try {
-        await ctx.telegram.sendMessage(chatId, text, html());
-      } catch {
-        // креатор мог заблокировать бота
-      }
-    }
-  }
-
   @Action(/^close:(\d+):(\d+)$/)
   async onCloseOrder(@Ctx() ctx: BotContext) {
     const match = getMatch(ctx);
@@ -133,11 +116,7 @@ export class MyOrdersUpdate {
       return;
     }
     await ctx.answerCbQuery('Заказ закрыт');
-    await this.notifyOrderCreators(
-      ctx,
-      order.submissions,
-      `🔒 Заказ «${escapeHtml(order.title)}» закрыт рекламодателем. Новые отклики по нему больше не принимаются.`,
-    );
+    await this.notifications.orderClosed(order);
     await this.sendMyOrderCard(ctx, index, true);
   }
 
@@ -182,11 +161,7 @@ export class MyOrdersUpdate {
       return;
     }
     await ctx.answerCbQuery('Заказ удалён');
-    await this.notifyOrderCreators(
-      ctx,
-      order.submissions,
-      `🗑 Заказ «${escapeHtml(order.title)}» удалён рекламодателем. Отклик по нему больше не актуален.`,
-    );
+    await this.notifications.orderRemoved(order);
     await this.sendMyOrderCard(ctx, Math.max(0, index - 1), true);
   }
 
@@ -321,14 +296,7 @@ export class MyOrdersUpdate {
     }
     await ctx.answerCbQuery('Подтверждено');
     await ctx.editMessageText('✅ Подтверждено.');
-    try {
-      await ctx.telegram.sendMessage(
-        submission.creator.telegramId.toString(),
-        `🎉 Рекламодатель подтвердил ваше видео по заказу «${submission.order.title}»!`,
-      );
-    } catch {
-      // креатор мог заблокировать бота
-    }
+    await this.notifications.videoAccepted(submission);
   }
 
   @Action(/^adv:reject:(\d+)$/)

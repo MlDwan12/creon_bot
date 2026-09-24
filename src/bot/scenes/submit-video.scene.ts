@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Command, Ctx, On, Scene, SceneEnter } from 'nestjs-telegraf';
 import type { BotContext } from '../interfaces/bot-context.interface';
 import { getCurrentUser } from '../interfaces/bot-context.interface';
-import { ModerationNotifier } from '../moderation-notifier.service';
+import { NotificationsService } from '../notifications.service';
 import { errorMessage } from '../utils/error.util';
 import { MAX_URL_LENGTH, VIDEO_URL_RE } from '../utils/validation';
 import { deleteIncoming, editForm, sendForm } from '../utils/wizard-form.util';
@@ -22,7 +22,7 @@ interface SubmitVideoState {
 export class SubmitVideoScene {
   constructor(
     private readonly submissionsService: SubmissionsService,
-    private readonly notifier: ModerationNotifier,
+    private readonly notifications: NotificationsService,
   ) {}
 
   @SceneEnter()
@@ -96,7 +96,7 @@ export class SubmitVideoScene {
       '✅ Работа отправлена на модерацию.',
     );
 
-    await this.notifier.videoSubmitted(submission);
+    await this.notifications.videoSubmitted(submission);
     await ctx.scene.leave();
   }
 }
