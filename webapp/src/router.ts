@@ -68,6 +68,8 @@ export const router = createRouter({
       props: true,
       meta: { back: true },
     },
+    // Та же форма поддержки в окне модератора (обычные страницы ему закрыты).
+    { path: '/mod/support', component: SupportView, meta: { back: true } },
     // Тот же профиль в окне модератора — с удалением отзывов.
     { path: '/mod/creators/:id', component: ProfileView, props: true, meta: { back: true } },
     {
