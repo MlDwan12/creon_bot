@@ -6,6 +6,7 @@ import {
   type OrderCategory,
   type OrderSummary,
 } from '../api';
+import { RouterLink } from 'vue-router';
 import OrderCard from '../components/OrderCard.vue';
 
 // ref() — реактивное значение: поменяли `.value` в коде, и шаблон ниже перерисовался сам.
@@ -80,6 +81,8 @@ watch(category, () => load(true), { immediate: true });
     >
       {{ loading ? 'Загрузка…' : 'Показать ещё' }}
     </button>
+
+    <RouterLink to="/privacy" class="privacy">Политика конфиденциальности</RouterLink>
   </main>
 </template>
 
@@ -140,5 +143,11 @@ watch(category, () => load(true), { immediate: true });
   color: var(--link);
   font-size: 16px;
   font-weight: 600;
+}
+.privacy {
+  margin-top: 8px;
+  align-self: center;
+  color: var(--hint);
+  font-size: 13px;
 }
 </style>

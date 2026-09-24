@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { fetchMe } from './api';
 import CatalogView from './views/CatalogView.vue';
 import OrderDetailView from './views/OrderDetailView.vue';
+import PrivacyView from './views/PrivacyView.vue';
 import CreateOrderView from './views/CreateOrderView.vue';
 import ModAllOrdersView from './views/mod/ModAllOrdersView.vue';
 import ModOrderView from './views/mod/ModOrderView.vue';
@@ -63,6 +64,8 @@ export const router = createRouter({
       props: true,
       meta: { back: true },
     },
+    // Открывается и вне Telegram — ссылка на неё указана в BotFather.
+    { path: '/privacy', component: PrivacyView, meta: { back: true } },
     { path: '/:rest(.*)', redirect: '/' },
   ],
 });
@@ -71,6 +74,7 @@ export const router = createRouter({
 // права на каждый /api/mod/* всё равно проверяет бэкенд (ModeratorGuard).
 let me: Promise<{ isModerator: boolean }> | undefined;
 router.beforeEach(async (to) => {
+  if (to.path === '/privacy') return;
   me ??= fetchMe().catch(() => ({ isModerator: false }));
   const { isModerator } = await me;
   const inModeration = to.path.startsWith('/mod');
