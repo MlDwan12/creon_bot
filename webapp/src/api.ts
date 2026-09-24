@@ -45,6 +45,31 @@ export interface OrderDetail extends OrderSummary {
   claimed: boolean;
 }
 
+export type SubmissionStatus =
+  | 'IN_PROGRESS'
+  | 'SUBMITTED'
+  | 'MODERATOR_APPROVED'
+  | 'MODERATOR_REJECTED'
+  | 'ADVERTISER_APPROVED'
+  | 'ADVERTISER_REJECTED';
+
+/** Ответ `GET /api/submissions`: по одной карточке на заказ (последняя попытка). См. src/api/my-submissions.ts. */
+export interface MySubmission {
+  id: number;
+  status: SubmissionStatus;
+  attempt: number;
+  videoUrl: string | null;
+  comment: string | null;
+  createdAt: string;
+  order: {
+    id: number;
+    title: string;
+    price: string | null;
+    deadline: string | null;
+    status: 'PENDING_MODERATION' | 'OPEN' | 'REJECTED' | 'CLOSED';
+  };
+}
+
 export interface Page<T> {
   items: T[];
   total: number;
@@ -54,7 +79,7 @@ export interface Page<T> {
 
 /**
  * Ошибка API. `userMessage` — текст, который можно показать пользователю: только наши
- * 403/404 (их пишет бэкенд сам, как в боте). Остальное — общий текст, чтобы не светить внутренности.
+ * 400/403/404 (их тексты пишет бэкенд сам, как в боте). Остальное — общий текст, чтобы не светить внутренности.
  */
 export class ApiError extends Error {
   constructor(
@@ -65,18 +90,26 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(method: 'GET' | 'POST', path: string): Promise<T> {
+async function request<T>(
+  method: 'GET' | 'POST',
+  path: string,
+  body?: unknown,
+): Promise<T> {
   const res = await fetch(path, {
     method,
-    headers: { Authorization: `tma ${getInitData()}` },
+    headers: {
+      Authorization: `tma ${getInitData()}`,
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!res.ok) {
     let userMessage = 'Что-то пошло не так, попробуйте ещё раз';
-    if (res.status === 403 || res.status === 404) {
-      const body = (await res.json().catch(() => null)) as {
+    if ([400, 403, 404].includes(res.status)) {
+      const data = (await res.json().catch(() => null)) as {
         message?: unknown;
       } | null;
-      if (typeof body?.message === 'string') userMessage = body.message;
+      if (typeof data?.message === 'string') userMessage = data.message;
     }
     throw new ApiError(res.status, userMessage);
   }
@@ -95,4 +128,14 @@ export function fetchOrder(id: number) {
 
 export function claimOrder(id: number) {
   return request<{ submissionId: number }>('POST', `/api/orders/${id}/claim`);
+}
+
+export function fetchMySubmissions() {
+  return request<MySubmission[]>('GET', '/api/submissions');
+}
+
+export function submitVideo(submissionId: number, videoUrl: string) {
+  return request<{ ok: true }>('POST', `/api/submissions/${submissionId}/video`, {
+    videoUrl,
+  });
 }

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TelegrafModule } from 'nestjs-telegraf';
 import { session } from 'telegraf';
+import { ModerationNotifier } from './moderation-notifier.service';
 import { currentUserMiddleware } from './middlewares/current-user.middleware';
 import { ignoreNotModifiedMiddleware } from './middlewares/ignore-not-modified.middleware';
 import { leaveSceneOnMenuMiddleware } from './middlewares/leave-scene-on-menu.middleware';
@@ -47,6 +48,7 @@ import { PrismaService } from '../prisma/prisma.service';
     }),
   ],
   providers: [
+    ModerationNotifier,
     StartUpdate,
     BrowseUpdate,
     MyOrdersUpdate,
@@ -58,5 +60,6 @@ import { PrismaService } from '../prisma/prisma.service';
     AdvertiserRejectWizard,
     OrderRejectWizard,
   ],
+  exports: [ModerationNotifier],
 })
 export class BotModule {}
