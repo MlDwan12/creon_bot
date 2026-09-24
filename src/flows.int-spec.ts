@@ -1,5 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
 import { AnalyticsService } from './api/analytics.service';
+import { BansService } from './api/bans.service';
 import { ProfilesService } from './api/profiles.service';
 import { ReportsService } from './api/reports.service';
 import { MAX_ACTIVE_ORDERS, OrdersService } from './orders/orders.service';
@@ -24,6 +25,7 @@ const prisma = new PrismaService({
 const orders = new OrdersService(prisma);
 const submissions = new SubmissionsService(prisma);
 const analytics = new AnalyticsService(prisma);
+const bans = new BansService(prisma);
 const profiles = new ProfilesService(prisma);
 const reports = new ReportsService(prisma, orders, profiles);
 
@@ -491,5 +493,65 @@ describe('жалобы', () => {
       rating: null,
       completed: 1,
     });
+  });
+});
+
+describe('блокировка', () => {
+  it('закрывает заказы, отклоняет ожидающие модерации, убирает отклики без видео', async () => {
+    const [banned, other, creator] = [await user(), await user(), await user()];
+    // заказы заблокированного: открытый (с откликом другого креатора) и на модерации
+    const open = await openOrder(banned.id);
+    const pending = await pendingOrder(banned.id);
+    await submissions.claim(open.id, creator.id);
+    // отклики заблокированного как креатора: без видео, у модератора, у рекламодателя
+    const otherOrder = await openOrder(other.id);
+    await submissions.claim(otherOrder.id, banned.id);
+    const [o2, o3] = [await openOrder(other.id), await openOrder(other.id)];
+    const atModerator = await submissions.claim(o2.id, banned.id);
+    await submissions.attachVideo(
+      atModerator.id,
+      banned.id,
+      'https://v.example/1',
+    );
+    const atAdvertiser = await submissions.claim(o3.id, banned.id);
+    await submissions.attachVideo(
+      atAdvertiser.id,
+      banned.id,
+      'https://v.example/2',
+    );
+    await submissions.moderatorApprove(atAdvertiser.id, 1n);
+
+    const closed = await bans.ban(banned.id, 'мошенничество');
+
+    expect(closed.map((o) => o.id)).toEqual([open.id]);
+    // креатору закрытого заказа придёт уведомление
+    expect(closed[0].submissions.map((s) => s.creator.id)).toEqual([
+      creator.id,
+    ]);
+    expect(await statusOf(open.id)).toBe('CLOSED');
+    expect(await statusOf(pending.id)).toBe('REJECTED');
+    const left = await prisma.submission.findMany({
+      where: { creatorId: banned.id },
+      orderBy: { id: 'asc' },
+    });
+    expect(left.map((s) => [s.id, s.status])).toEqual([
+      [atModerator.id, 'MODERATOR_REJECTED'],
+      [atAdvertiser.id, 'MODERATOR_APPROVED'],
+    ]);
+    expect(
+      await prisma.user.findUniqueOrThrow({ where: { id: banned.id } }),
+    ).toMatchObject({ banReason: 'мошенничество' });
+  });
+
+  it('повторно не блокирует; разблокировка снимает бан', async () => {
+    const u = await user();
+    await bans.ban(u.id, 'спам');
+    await expect(bans.ban(u.id, 'спам')).rejects.toThrow('уже заблокирован');
+
+    await bans.unban(u.id);
+    expect(
+      await prisma.user.findUniqueOrThrow({ where: { id: u.id } }),
+    ).toMatchObject({ bannedAt: null, banReason: null });
+    await expect(bans.unban(u.id)).rejects.toThrow('не заблокирован');
   });
 });

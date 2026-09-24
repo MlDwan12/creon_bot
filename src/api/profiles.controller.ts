@@ -30,8 +30,8 @@ export class ProfilesController {
 
   /** Свой профиль креатора. */
   @Get('profile')
-  mine(@Req() req: ApiRequest) {
-    return this.profiles.profile(req.user.id);
+  async mine(@Req() req: ApiRequest) {
+    return { ...(await this.profiles.profile(req.user.id)), ban: null };
   }
 
   /** Ссылки на соцсети в своём профиле. */
@@ -45,7 +45,11 @@ export class ProfilesController {
   @Get('creators/:id')
   async creator(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {
     await this.mustView(req, id);
-    return this.profiles.profile(id);
+    const profile = await this.profiles.profile(id);
+    // причина блокировки — внутреннее дело модерации
+    return this.moderatorGuard.isModerator(req.user)
+      ? profile
+      : { ...profile, ban: null };
   }
 
   /**

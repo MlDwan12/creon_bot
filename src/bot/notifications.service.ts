@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Order, Submission, User } from '@prisma/client';
 import { InjectBot } from 'nestjs-telegraf';
 import { kopecksToRubles } from '../common/money';
+import { PrismaService } from '../prisma/prisma.service';
 import { Context, Markup, Telegraf } from 'telegraf';
 import {
   creatorLabel,
@@ -27,6 +28,7 @@ export class NotificationsService {
 
   constructor(
     @InjectBot() private readonly bot: Telegraf<Context>,
+    private readonly prisma: PrismaService,
     config: ConfigService,
   ) {
     this.moderatorIds = Array.from(
@@ -245,6 +247,12 @@ export class NotificationsService {
     path: string,
     asHtml = false,
   ) {
+    // Заблокированным бот не пишет.
+    const user = await this.prisma.user.findUnique({
+      where: { telegramId },
+      select: { bannedAt: true },
+    });
+    if (user?.bannedAt) return;
     const kb = this.openButton(path);
     try {
       await this.bot.telegram.sendMessage(

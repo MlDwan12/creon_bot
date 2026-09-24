@@ -72,6 +72,10 @@ export class ProfilesService {
       rating: avg === null ? null : Math.round(avg * 10) / 10,
       reviewsCount: ratings._count.rating,
       completed,
+      /** Блокировка — показывать только модераторам (см. ProfilesController). */
+      ban: creator.bannedAt
+        ? { at: creator.bannedAt, reason: creator.banReason }
+        : null,
       links: {
         tiktokUrl: creator.tiktokUrl,
         youtubeUrl: creator.youtubeUrl,

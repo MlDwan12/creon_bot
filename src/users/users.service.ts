@@ -11,6 +11,10 @@ interface TelegramUserInput {
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
+  findById(id: number) {
+    return this.prisma.user.findUnique({ where: { id } });
+  }
+
   findOrCreate(input: TelegramUserInput) {
     return this.prisma.user.upsert({
       where: { telegramId: input.telegramId },

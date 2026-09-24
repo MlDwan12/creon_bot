@@ -5,6 +5,7 @@ import { OrdersModule } from '../orders/orders.module';
 import { SubmissionsModule } from '../submissions/submissions.module';
 import { UsersModule } from '../users/users.module';
 import { AnalyticsService } from './analytics.service';
+import { BansService } from './bans.service';
 import { InitDataGuard } from './init-data.guard';
 import { MeController } from './me.controller';
 import { ModerationController } from './moderation.controller';
@@ -45,6 +46,7 @@ import { SubmissionsController } from './submissions.controller';
   ],
   providers: [
     AnalyticsService,
+    BansService,
     ProfilesService,
     ReportsService,
     InitDataGuard,

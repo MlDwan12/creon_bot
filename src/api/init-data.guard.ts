@@ -57,6 +57,15 @@ export class InitDataGuard implements CanActivate {
       username: tgUser.username,
       firstName: tgUser.first_name,
     });
+    // `banned` — мини-апп по нему показывает экран блокировки вместо любого экрана.
+    if (req.user.bannedAt)
+      throw new ForbiddenException({
+        message: 'Ваш аккаунт заблокирован',
+        banned: true,
+        reason: req.user.banReason,
+        // /api/me заблокированному недоступен — ссылку на поддержку отдаём прямо здесь
+        supportUrl: this.config.get<string>('SUPPORT_URL') || null,
+      });
     return true;
   }
 }

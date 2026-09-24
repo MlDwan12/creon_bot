@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Body,
+  ForbiddenException,
   Controller,
   DefaultValuePipe,
   Delete,
@@ -20,7 +21,9 @@ import { creatorLabel } from '../bot/utils/format';
 import { OrdersService } from '../orders/orders.service';
 import { DAY_MS } from '../orders/deadline';
 import { SubmissionsService } from '../submissions/submissions.service';
+import { UsersService } from '../users/users.service';
 import { AnalyticsService } from './analytics.service';
+import { BansService, parseBanReason } from './bans.service';
 import { ReportsService } from './reports.service';
 import { attemptNumbers } from './attempts';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
@@ -42,6 +45,9 @@ export class ModerationController {
     private readonly notifications: NotificationsService,
     private readonly analytics: AnalyticsService,
     private readonly reports: ReportsService,
+    private readonly bans: BansService,
+    private readonly usersService: UsersService,
+    private readonly moderatorGuard: ModeratorGuard,
   ) {}
 
   /** Обе очереди сразу: заказы и видео на проверке, старые первыми. */
@@ -199,15 +205,60 @@ export class ModerationController {
       typeof b.actioned !== 'boolean'
     )
       throw new BadRequestException('Некорректное решение');
+    const group = { target, targetId: b.targetId as number };
+    // banReason — заодно заблокировать автора объекта (мера применяется в любом случае)
+    const banReason =
+      b.banReason === undefined ? null : parseBanReason(b.banReason);
+    const authorId = banReason ? await this.reports.authorOf(group) : null;
+    if (banReason && !authorId)
+      throw new BadRequestException('Объект удалён — автора не найти');
+    // уже заблокированного автора повторно не блокируем — мера по жалобе всё равно применится
+    const toBan =
+      authorId && !(await this.mustNotBeModerator(authorId)).bannedAt
+        ? authorId
+        : null;
+
+    const actioned = b.actioned || banReason !== null;
     const { reporters, closedOrder } = await this.reports.resolve(
-      { target, targetId: b.targetId as number },
-      b.actioned,
+      group,
+      actioned,
       req.user.telegramId,
     );
     if (closedOrder)
       await this.notifications.orderClosedByModerator(closedOrder);
-    await this.notifications.reportResolved(reporters, b.actioned);
+    if (toBan) await this.banAndNotify(toBan, banReason!);
+    await this.notifications.reportResolved(reporters, actioned);
     return { ok: true };
+  }
+
+  @Post('users/:id/ban')
+  async ban(@Param('id', ParseIntPipe) id: number, @Body() body: unknown) {
+    const reason = parseBanReason(
+      (body as { reason?: unknown } | null)?.reason,
+    );
+    await this.mustNotBeModerator(id);
+    await this.banAndNotify(id, reason);
+    return { ok: true };
+  }
+
+  @Post('users/:id/unban')
+  async unban(@Param('id', ParseIntPipe) id: number) {
+    await this.bans.unban(id);
+    return { ok: true };
+  }
+
+  private async banAndNotify(userId: number, reason: string) {
+    for (const order of await this.bans.ban(userId, reason))
+      await this.notifications.orderClosedByModerator(order);
+  }
+
+  /** Модераторы задаются в env — их не блокируют. Возвращает пользователя. */
+  private async mustNotBeModerator(userId: number) {
+    const user = await this.usersService.findById(userId);
+    if (!user) throw new NotFoundException('Пользователь не найден');
+    if (this.moderatorGuard.isModerator(user))
+      throw new ForbiddenException('Модератора заблокировать нельзя');
+    return user;
   }
 
   /** Удалить отзыв креатору (оскорбления и т.п.); приёмка видео остаётся. */
