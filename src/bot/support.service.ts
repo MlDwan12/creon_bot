@@ -33,8 +33,25 @@ export class SupportService {
     return `https://t.me/${await this.botUsername}`;
   }
 
-  isSupportChat(chatId: number) {
+  isSupportChat(chatId: number | bigint) {
     return this.chatId !== null && String(chatId) === this.chatId;
+  }
+
+  /** Сообщение из формы в мини-аппе — в поддержку, как если бы человек написал боту. */
+  async fromApp(
+    user: {
+      telegramId: bigint;
+      username: string | null;
+      firstName: string | null;
+    },
+    text: string,
+  ) {
+    const who = user.username ? `@${user.username}` : (user.firstName ?? '');
+    await this.bot.telegram.sendMessage(
+      this.chatId!,
+      `${escapeHtml(`✉️ #u${user.telegramId} · ${who} · из приложения`)}\n\n${escapeHtml(text)}`,
+      html(),
+    );
   }
 
   /** Сообщение пользователя → в поддержку. false — такой тип сообщения не пересылаем. */

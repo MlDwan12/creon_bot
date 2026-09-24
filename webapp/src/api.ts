@@ -454,6 +454,11 @@ export function reasonLabel(target: ReportTarget, code: string): string {
   return REPORT_REASONS[target].find((r) => r.code === code)?.label ?? code;
 }
 
+/** Сообщение менеджеру из мини-аппа; ответ придёт в чат с ботом. */
+export function sendSupportMessage(text: string) {
+  return request<{ ok: true }>('POST', '/api/support', { text });
+}
+
 export function createReport(report: {
   target: ReportTarget;
   targetId: number;

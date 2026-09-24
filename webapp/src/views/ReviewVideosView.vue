@@ -104,7 +104,10 @@ void load();
       >
         Пожаловаться на видео
       </RouterLink>
-      <SupportLink :label="`Вопрос по заказу #${data.order.id} — написать менеджеру`" />
+      <SupportLink
+        :label="`Вопрос по заказу #${data.order.id} — написать менеджеру`"
+        :about="`Вопрос по видео ${current.id}, заказ #${data.order.id} «${data.order.title}»`"
+      />
 
       <fieldset v-if="accepting" class="feedback">
         <legend class="section-title">Оцените работу креатора</legend>

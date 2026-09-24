@@ -1,19 +1,20 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import { RouterLink } from 'vue-router';
 import { fetchMe } from '../api';
-import { openTelegramLink } from '../telegram';
 
-/** Ссылка «написать менеджеру» — открывает чат с ботом, сообщения оттуда уходят в поддержку. */
-defineProps<{ label?: string }>();
+/** Ссылка «написать менеджеру» — форма в мини-аппе; `about` — тема, уйдёт вместе с сообщением. */
+defineProps<{ label?: string; about?: string }>();
 
-const url = ref<string | null>(null);
+// null — поддержка не настроена (или это сам аккаунт поддержки)
+const enabled = ref(false);
 fetchMe()
-  .then((me) => (url.value = me.supportUrl))
+  .then((me) => (enabled.value = Boolean(me.supportUrl)))
   .catch(() => {});
 </script>
 
 <template>
-  <button v-if="url" type="button" class="quiet-link" @click="openTelegramLink(url)">
+  <RouterLink v-if="enabled" :to="{ path: '/support', query: about ? { about } : {} }" class="quiet-link">
     {{ label ?? 'Поддержка' }}
-  </button>
+  </RouterLink>
 </template>
