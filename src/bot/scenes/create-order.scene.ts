@@ -17,6 +17,7 @@ import {
   truncate,
 } from '../utils/format';
 import { parseModeratorIds } from '../utils/moderator.util';
+import { getMatch } from '../utils/ui.util';
 import {
   isMeaningfulText,
   MAX_DEADLINE_DAYS,
@@ -186,8 +187,7 @@ export class CreateOrderScene {
 
   @Action(/^field:(title|description|price|deadline)$/)
   async onEditField(@Ctx() ctx: BotContext) {
-    const field = (ctx as unknown as { match: RegExpMatchArray })
-      .match[1] as FieldKey;
+    const field = getMatch(ctx)[1] as FieldKey;
     const state = ctx.scene.state as CreateOrderState;
     state.editingField = field;
     await ctx.answerCbQuery();
@@ -213,7 +213,7 @@ export class CreateOrderScene {
 
   @Action(/^category:(.+)$/)
   async onCategoryPicked(@Ctx() ctx: BotContext) {
-    const code = (ctx as unknown as { match: RegExpMatchArray }).match[1];
+    const code = getMatch(ctx)[1];
     if (!ORDER_CATEGORIES.some((c) => c.code === code)) {
       await ctx.answerCbQuery('Неизвестная категория');
       return;
