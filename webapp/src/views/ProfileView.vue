@@ -3,11 +3,13 @@ import { computed, reactive, ref } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import {
   ApiError,
+  banUser,
   type CreatorProfile,
   fetchCreator,
   fetchMyProfile,
   type ProfileLinks,
   removeReview,
+  unbanUser,
   updateProfileLinks,
 } from '../api';
 import UserAvatar from '../components/UserAvatar.vue';
@@ -71,6 +73,36 @@ async function remove(submissionId: number) {
   }
 }
 
+// Блокировка — только в окне модератора.
+const banning = ref(false);
+const banReason = ref('');
+
+async function ban() {
+  if (!(await confirmAction('Заблокировать? Его открытые заказы закроются, отклики без видео удалятся.'))) return;
+  busy.value = true;
+  error.value = '';
+  try {
+    await banUser(profile.value!.id, banReason.value);
+    banning.value = false;
+    banReason.value = '';
+    await load();
+  } catch (err) {
+    error.value = err instanceof ApiError ? err.userMessage : 'Не удалось заблокировать';
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function unban() {
+  if (!(await confirmAction('Разблокировать? Закрытые заказы не откроются сами.'))) return;
+  try {
+    await unbanUser(profile.value!.id);
+    await load();
+  } catch (err) {
+    error.value = err instanceof ApiError ? err.userMessage : 'Не удалось разблокировать';
+  }
+}
+
 const stars = (n: number) => '★'.repeat(n) + '☆'.repeat(5 - n);
 
 void load();
@@ -89,6 +121,21 @@ void load();
           <h1>{{ profile.name }}</h1>
         </div>
       </header>
+
+      <section v-if="moderator" class="ban">
+        <template v-if="profile.ban">
+          <p><strong>Заблокирован</strong> {{ formatDate(profile.ban.at) }}<template v-if="profile.ban.reason">: {{ profile.ban.reason }}</template></p>
+          <button type="button" class="edit" @click="unban">Разблокировать</button>
+        </template>
+        <template v-else-if="banning">
+          <textarea v-model="banReason" rows="2" maxlength="500" placeholder="Причина — пользователь её увидит" />
+          <div class="buttons">
+            <button type="button" :disabled="busy" @click="banning = false">Отмена</button>
+            <button type="button" class="danger" :disabled="busy || !banReason.trim()" @click="ban">Заблокировать</button>
+          </div>
+        </template>
+        <button v-else type="button" class="remove" @click="banning = true">Заблокировать пользователя</button>
+      </section>
 
       <div class="tiles">
         <div class="tile">
@@ -359,6 +406,33 @@ h1 {
 .quiet-link.start {
   align-self: flex-start;
   padding: 0;
+}
+.ban {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+}
+.ban p {
+  margin: 0;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.ban textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--separator);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+.buttons .danger {
+  background: var(--danger);
+  color: #fff;
+  font-weight: 600;
 }
 .remove {
   align-self: flex-start;

@@ -41,14 +41,27 @@ const TARGET_NAMES: Record<ReportTarget, string> = {
   PROFILE: 'Профиль',
 };
 
-async function resolve(group: ModReportGroup, actioned: boolean) {
-  const question = actioned
-    ? ACTIONS[group.target].confirm
-    : 'Нарушений нет? Жалобы закроются, авторам придёт ответ.';
+/** Карточка, в которой открыта форма блокировки автора, и причина. */
+const banningKey = ref('');
+const banReason = ref('');
+const keyOf = (g: ModReportGroup) => `${g.target}:${g.targetId}`;
+
+function startBan(g: ModReportGroup) {
+  banningKey.value = keyOf(g);
+  banReason.value = reasonLabel(g.target, g.reports[0].reason);
+}
+
+async function resolve(group: ModReportGroup, actioned: boolean, banReasonText?: string) {
+  const question = banReasonText
+    ? `${ACTIONS[group.target].confirm}\nИ заблокировать автора — ${group.subject?.author}?`
+    : actioned
+      ? ACTIONS[group.target].confirm
+      : 'Нарушений нет? Жалобы закроются, авторам придёт ответ.';
   if (!(await confirmAction(question))) return;
   reportError.value = '';
+  banningKey.value = '';
   try {
-    await resolveReports(group.target, group.targetId, actioned);
+    await resolveReports(group.target, group.targetId, actioned, banReasonText);
   } catch (err) {
     reportError.value = err instanceof ApiError ? err.userMessage : 'Не получилось, попробуйте ещё раз';
   }
@@ -143,12 +156,26 @@ void load();
             </li>
           </ul>
 
-          <div class="actions">
-            <button type="button" @click="resolve(g, false)">Нарушений нет</button>
-            <button v-if="g.subject" type="button" class="danger" @click="resolve(g, true)">
-              {{ ACTIONS[g.target].label }}
-            </button>
+          <div v-if="banningKey === keyOf(g)" class="ban-form">
+            <textarea v-model="banReason" rows="2" maxlength="500" placeholder="Причина — автор её увидит" />
+            <div class="actions">
+              <button type="button" @click="banningKey = ''">Отмена</button>
+              <button type="button" class="danger" :disabled="!banReason.trim()" @click="resolve(g, true, banReason)">
+                Заблокировать
+              </button>
+            </div>
           </div>
+          <template v-else>
+            <div class="actions">
+              <button type="button" @click="resolve(g, false)">Нарушений нет</button>
+              <button v-if="g.subject" type="button" class="danger" @click="resolve(g, true)">
+                {{ ACTIONS[g.target].label }}
+              </button>
+            </div>
+            <button v-if="g.subject" type="button" class="ban-link" @click="startBan(g)">
+              {{ ACTIONS[g.target].label }} и заблокировать автора
+            </button>
+          </template>
         </article>
       </template>
 
@@ -309,6 +336,28 @@ a.subject {
   background: color-mix(in srgb, var(--danger) 12%, transparent);
   color: var(--danger);
   font-weight: 600;
+}
+.ban-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ban-form textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--separator);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+.ban-link {
+  align-self: center;
+  min-height: 36px;
+  border: none;
+  background: none;
+  color: var(--danger);
+  font-size: 14px;
 }
 .error {
   margin: 0;

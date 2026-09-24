@@ -16,6 +16,9 @@ model User {
   tiktokUrl  String?
   youtubeUrl String?
   vkUrl      String?
+  /// Заблокирован модератором: мини-апп показывает только экран блокировки, бот не пишет.
+  bannedAt   DateTime?
+  banReason  String?
 
   orders      Order[]
   submissions Submission[]

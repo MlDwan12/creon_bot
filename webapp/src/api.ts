@@ -1,4 +1,8 @@
+import { ref } from 'vue';
 import { getInitData } from './telegram';
+
+/** Аккаунт заблокирован — App.vue показывает экран блокировки вместо любого экрана. */
+export const banned = ref<{ reason: string | null; supportUrl: string | null } | null>(null);
 
 export type OrderCategory =
   | 'PRODUCT_REVIEW'
@@ -203,6 +207,8 @@ export interface CreatorProfile {
   rating: number | null;
   reviewsCount: number;
   completed: number;
+  /** Блокировка — приходит только модератору. */
+  ban: { at: string; reason: string | null } | null;
   links: ProfileLinks;
   reviews: {
     submissionId: number;
@@ -259,8 +265,13 @@ async function request<T>(
     if ([400, 403, 404, 429].includes(res.status)) {
       const data = (await res.json().catch(() => null)) as {
         message?: unknown;
+        banned?: boolean;
+        reason?: string | null;
+        supportUrl?: string | null;
       } | null;
       if (typeof data?.message === 'string') userMessage = data.message;
+      if (data?.banned)
+        banned.value = { reason: data.reason ?? null, supportUrl: data.supportUrl ?? null };
     }
     throw new ApiError(res.status, userMessage);
   }
@@ -470,7 +481,28 @@ export function fetchModReports() {
   return request<ModReportGroup[]>('GET', '/api/mod/reports');
 }
 
-/** actioned — применить меру (закрыть заказ, убрать видео из портфолио, удалить отзыв, стереть ссылки). */
-export function resolveReports(target: ReportTarget, targetId: number, actioned: boolean) {
-  return request<{ ok: true }>('POST', '/api/mod/reports/resolve', { target, targetId, actioned });
+/**
+ * actioned — применить меру (закрыть заказ, убрать видео из портфолио, удалить отзыв, стереть ссылки).
+ * banReason — ещё и заблокировать автора объекта.
+ */
+export function resolveReports(
+  target: ReportTarget,
+  targetId: number,
+  actioned: boolean,
+  banReason?: string,
+) {
+  return request<{ ok: true }>('POST', '/api/mod/reports/resolve', {
+    target,
+    targetId,
+    actioned,
+    banReason,
+  });
+}
+
+export function banUser(userId: number, reason: string) {
+  return request<{ ok: true }>('POST', `/api/mod/users/${userId}/ban`, { reason });
+}
+
+export function unbanUser(userId: number) {
+  return request<{ ok: true }>('POST', `/api/mod/users/${userId}/unban`);
 }
