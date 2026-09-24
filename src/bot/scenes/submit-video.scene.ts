@@ -1,20 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Command, Ctx, On, Scene, SceneEnter } from 'nestjs-telegraf';
-import { Markup } from 'telegraf';
 import type { BotContext } from '../interfaces/bot-context.interface';
 import { getCurrentUser } from '../interfaces/bot-context.interface';
-import { styled } from '../utils/button.util';
+import { ModerationNotifier } from '../moderation-notifier.service';
 import { errorMessage } from '../utils/error.util';
-import { creatorLabel, escapeHtml, html } from '../utils/format';
-import { parseModeratorIds } from '../utils/moderator.util';
-import { MAX_URL_LENGTH } from '../utils/validation';
+import { MAX_URL_LENGTH, VIDEO_URL_RE } from '../utils/validation';
 import { deleteIncoming, editForm, sendForm } from '../utils/wizard-form.util';
 import { SubmissionsService } from '../../submissions/submissions.service';
 
 export const SUBMIT_VIDEO_SCENE_ID = 'submit-video';
-
-const URL_RE = /^https?:\/\/\S+$/i;
 
 const PROMPT = 'Пришлите ссылку на готовое видео (или /cancel для отмены):';
 
@@ -26,16 +20,10 @@ interface SubmitVideoState {
 @Injectable()
 @Scene(SUBMIT_VIDEO_SCENE_ID)
 export class SubmitVideoScene {
-  private readonly moderatorIds: string[];
-
   constructor(
     private readonly submissionsService: SubmissionsService,
-    config: ConfigService,
-  ) {
-    this.moderatorIds = Array.from(
-      parseModeratorIds(config.get<string>('MODERATOR_IDS')),
-    );
-  }
+    private readonly notifier: ModerationNotifier,
+  ) {}
 
   @SceneEnter()
   async onEnter(@Ctx() ctx: BotContext) {
@@ -71,7 +59,7 @@ export class SubmitVideoScene {
     const url = ctx.message.text.trim();
     await deleteIncoming(ctx);
 
-    if (!URL_RE.test(url)) {
+    if (!VIDEO_URL_RE.test(url)) {
       await editForm(
         ctx,
         state.formMessageId!,
@@ -108,32 +96,7 @@ export class SubmitVideoScene {
       '✅ Работа отправлена на модерацию.',
     );
 
-    const notifyText = [
-      '🆕 <b>Новый отклик на модерацию</b>',
-      '',
-      `Заказ #${submission.order.id}: <b>${escapeHtml(submission.order.title)}</b>`,
-      `Креатор: ${escapeHtml(creatorLabel(submission.creator))}`,
-      `Видео: ${escapeHtml(submission.videoUrl!)}`,
-    ].join('\n');
-    const kb = html(
-      Markup.inlineKeyboard([
-        styled(
-          Markup.button.callback('✅ Одобрить', `mod:approve:${submission.id}`),
-          'success',
-        ),
-        styled(
-          Markup.button.callback('❌ Отклонить', `mod:reject:${submission.id}`),
-          'danger',
-        ),
-      ]),
-    );
-    for (const modId of this.moderatorIds) {
-      try {
-        await ctx.telegram.sendMessage(modId, notifyText, kb);
-      } catch {
-        // модератор ещё не запускал бота — пропускаем
-      }
-    }
+    await this.notifier.videoSubmitted(submission);
     await ctx.scene.leave();
   }
 }
