@@ -20,7 +20,9 @@ FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 RUN addgroup -S app && adduser -S app -G app
-COPY --from=deps /app/node_modules ./node_modules
+# from `build`, not `deps` — only `build` ran `prisma generate`, which writes the
+# generated client into node_modules (.prisma/client, @prisma/client/default.js)
+COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY prisma ./prisma
 COPY prisma.config.ts package.json ./
