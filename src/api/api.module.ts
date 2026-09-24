@@ -13,6 +13,8 @@ import { MyOrdersController } from './my-orders.controller';
 import { ScheduledJob } from './scheduled.job';
 import { UserThrottlerGuard } from './user-throttler.guard';
 import { OrdersController } from './orders.controller';
+import { ProfilesController } from './profiles.controller';
+import { ProfilesService } from './profiles.service';
 import { SubmissionsController } from './submissions.controller';
 
 /** HTTP API для Telegram Mini App — тонкий слой над сервисами; плюс фоновые задачи по срокам и очереди модерации. */
@@ -36,9 +38,11 @@ import { SubmissionsController } from './submissions.controller';
     MyOrdersController,
     MeController,
     ModerationController,
+    ProfilesController,
   ],
   providers: [
     AnalyticsService,
+    ProfilesService,
     InitDataGuard,
     ModeratorGuard,
     UserThrottlerGuard,

@@ -166,7 +166,10 @@ export class NotificationsService {
   async videoAccepted(submission: SubmissionWithParties) {
     await this.send(
       submission.creator.telegramId,
-      `🎉 Рекламодатель подтвердил ваше видео по заказу «${submission.order.title}»!`,
+      `🎉 Рекламодатель подтвердил ваше видео по заказу «${submission.order.title}»!` +
+        (submission.rating
+          ? `\nОценка: ${'★'.repeat(submission.rating)}${'☆'.repeat(5 - submission.rating)}`
+          : ''),
       '/submissions',
     );
   }

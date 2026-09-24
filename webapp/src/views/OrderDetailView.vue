@@ -59,6 +59,16 @@ void load();
           <span class="value">{{ formatDeadline(order.deadline) }}</span>
         </div>
         <div class="row">
+          <span>Рекламодатель</span>
+          <span class="value">
+            {{
+              order.advertiser.accepted + order.advertiser.rejected
+                ? `принял видео: ${order.advertiser.accepted}, отклонил: ${order.advertiser.rejected}`
+                : 'ещё не принимал видео'
+            }}
+          </span>
+        </div>
+        <div class="row">
           <span>Расчёт</span>
           <span class="value">напрямую, вне бота</span>
         </div>

@@ -3,6 +3,7 @@ import { fetchMe } from './api';
 import CatalogView from './views/CatalogView.vue';
 import OrderDetailView from './views/OrderDetailView.vue';
 import PrivacyView from './views/PrivacyView.vue';
+import ProfileView from './views/ProfileView.vue';
 import CreateOrderView from './views/CreateOrderView.vue';
 import ModAllOrdersView from './views/mod/ModAllOrdersView.vue';
 import ModOrderView from './views/mod/ModOrderView.vue';
@@ -39,6 +40,9 @@ export const router = createRouter({
       props: true,
       meta: { back: true },
     },
+    // Свой профиль креатора (без id) и чужой — рекламодателю, чьи видео он смотрел.
+    { path: '/profile', component: ProfileView, meta: { back: true } },
+    { path: '/creators/:id', component: ProfileView, props: true, meta: { back: true } },
     { path: '/my-orders', component: MyOrdersView },
     // ?from=<id> — «Исправить и отправить снова»: форма заполнена данными отклонённого заказа.
     { path: '/my-orders/new', component: CreateOrderView, meta: { back: true } },
@@ -58,6 +62,8 @@ export const router = createRouter({
       props: true,
       meta: { back: true },
     },
+    // Тот же профиль в окне модератора — с удалением отзывов.
+    { path: '/mod/creators/:id', component: ProfileView, props: true, meta: { back: true } },
     {
       path: '/mod/videos/:id',
       component: ModVideoView,

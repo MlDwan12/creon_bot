@@ -121,6 +121,7 @@ export class MyOrdersController {
           id: s.id,
           videoUrl: s.videoUrl,
           creator: creatorLabel(s.creator),
+          creatorId: s.creatorId,
           attempt: attempts.get(s.id)!,
           submittedAt: s.submittedAt,
         })),
