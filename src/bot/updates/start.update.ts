@@ -1,6 +1,14 @@
 import { Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Action, Ctx, InjectBot, On, Start, Update } from 'nestjs-telegraf';
+import {
+  Action,
+  Command,
+  Ctx,
+  InjectBot,
+  On,
+  Start,
+  Update,
+} from 'nestjs-telegraf';
 import { Context, Markup, Telegraf } from 'telegraf';
 
 const INTRO = [
@@ -24,7 +32,7 @@ export class StartUpdate implements OnApplicationBootstrap {
     @InjectBot() private readonly bot: Telegraf<Context>,
     config: ConfigService,
   ) {
-    this.webAppUrl = config.get<string>('WEBAPP_URL')!;
+    this.webAppUrl = config.get<string>('WEBAPP_URL')!.replace(/\/$/, '');
   }
 
   /** Кнопка меню слева от поля ввода — для всех чатов с ботом. */
@@ -48,6 +56,17 @@ export class StartUpdate implements OnApplicationBootstrap {
       INTRO,
       Markup.inlineKeyboard([
         Markup.button.webApp('Открыть CreON', this.webAppUrl),
+      ]),
+    );
+  }
+
+  /** Telegram ждёт от ботов команду /privacy. Обработчик — до @On('message'), иначе тот перехватит. */
+  @Command('privacy')
+  async onPrivacy(@Ctx() ctx: Context) {
+    await ctx.reply(
+      'Политика конфиденциальности CreON:',
+      Markup.inlineKeyboard([
+        Markup.button.webApp('Открыть', `${this.webAppUrl}/privacy`),
       ]),
     );
   }
