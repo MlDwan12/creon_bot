@@ -169,7 +169,7 @@ export interface Page<T> {
 
 /**
  * Ошибка API. `userMessage` — текст, который можно показать пользователю: только наши
- * 400/403/404 (их тексты пишет бэкенд сам). Остальное — общий текст, чтобы не светить внутренности.
+ * 400/403/404/429 (их тексты пишет бэкенд сам). Остальное — общий текст, чтобы не светить внутренности.
  */
 export class ApiError extends Error {
   constructor(
@@ -195,7 +195,7 @@ async function request<T>(
   });
   if (!res.ok) {
     let userMessage = 'Что-то пошло не так, попробуйте ещё раз';
-    if ([400, 403, 404].includes(res.status)) {
+    if ([400, 403, 404, 429].includes(res.status)) {
       const data = (await res.json().catch(() => null)) as {
         message?: unknown;
       } | null;

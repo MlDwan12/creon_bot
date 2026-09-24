@@ -13,6 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { OrderCategory } from '@prisma/client';
+import { Throttle } from '@nestjs/throttler';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
 import {
@@ -20,11 +21,12 @@ import {
   InitDataGuard,
   requireUsername,
 } from './init-data.guard';
+import { UserThrottlerGuard } from './user-throttler.guard';
 
 const PAGE_SIZE = 20;
 
 @Controller('api/orders')
-@UseGuards(InitDataGuard)
+@UseGuards(InitDataGuard, UserThrottlerGuard)
 export class OrdersController {
   constructor(
     private readonly ordersService: OrdersService,
@@ -64,6 +66,7 @@ export class OrdersController {
 
   /** Отклик на заказ (дубли, гонки и отклик на свой заказ отсекает сервис). */
   @Post(':id/claim')
+  @Throttle({ default: { limit: 30, ttl: 60 * 60_000 } })
   @HttpCode(201)
   async claim(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {
     requireUsername(req.user);
