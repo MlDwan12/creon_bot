@@ -6,6 +6,17 @@ import {
 import { OrderCategory, OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
+/** Поля заказа, которые видит любой пользователь Mini App: без модераторских данных и без BigInt. */
+const PUBLIC_ORDER_FIELDS = {
+  id: true,
+  title: true,
+  description: true,
+  price: true,
+  category: true,
+  deadline: true,
+  createdAt: true,
+} satisfies Prisma.OrderSelect;
+
 @Injectable()
 export class OrdersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -51,10 +62,7 @@ export class OrdersService {
     return { order: items[0], total };
   }
 
-  /**
-   * Страница открытых заказов для каталога Mini App. Поля перечислены явно: наружу уходит
-   * только публичное (без модераторских полей), и в ответе нет BigInt, который не сериализуется в JSON.
-   */
+  /** Страница открытых заказов для каталога Mini App. */
   async listOpen(
     category: OrderCategory | undefined,
     skip: number,
@@ -70,19 +78,19 @@ export class OrdersService {
         orderBy: { createdAt: 'desc' },
         skip,
         take,
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          price: true,
-          category: true,
-          deadline: true,
-          createdAt: true,
-        },
+        select: PUBLIC_ORDER_FIELDS,
       }),
       this.prisma.order.count({ where }),
     ]);
     return { items, total };
+  }
+
+  /** Открытый заказ для карточки в Mini App (те же публичные поля); `null` — нет или уже не открыт. */
+  findOpenById(id: number) {
+    return this.prisma.order.findFirst({
+      where: { id, status: OrderStatus.OPEN },
+      select: PUBLIC_ORDER_FIELDS,
+    });
   }
 
   /** Fetches a single order (any status) by its position, for the moderator's "all orders" carousel. */

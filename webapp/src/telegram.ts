@@ -3,6 +3,11 @@ interface TelegramWebApp {
   initData: string;
   ready(): void;
   expand(): void;
+  BackButton: {
+    show(): void;
+    hide(): void;
+    onClick(cb: () => void): void;
+  };
 }
 
 declare global {
@@ -12,6 +17,9 @@ declare global {
 }
 
 export const webApp = window.Telegram?.WebApp;
+
+/** SDK грузится и в обычном браузере, но initData есть только внутри Telegram. */
+export const inTelegram = Boolean(webApp?.initData);
 
 /**
  * Подписанные Telegram данные о пользователе — ими авторизуется каждый запрос к API.

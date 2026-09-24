@@ -2,21 +2,30 @@ import {
   Controller,
   DefaultValuePipe,
   Get,
+  HttpCode,
+  NotFoundException,
+  Param,
   ParseEnumPipe,
   ParseIntPipe,
+  Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { OrderCategory } from '@prisma/client';
 import { OrdersService } from '../orders/orders.service';
-import { InitDataGuard } from './init-data.guard';
+import { SubmissionsService } from '../submissions/submissions.service';
+import { type ApiRequest, InitDataGuard } from './init-data.guard';
 
 const PAGE_SIZE = 20;
 
 @Controller('api/orders')
 @UseGuards(InitDataGuard)
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly submissionsService: SubmissionsService,
+  ) {}
 
   /** Каталог открытых заказов для креатора. `page` с нуля. */
   @Get()
@@ -31,5 +40,28 @@ export class OrdersController {
       PAGE_SIZE,
     );
     return { items, total, page, pageSize: PAGE_SIZE };
+  }
+
+  /** Карточка открытого заказа; `claimed` — есть ли у текущего пользователя активный отклик. */
+  @Get(':id')
+  async findOpen(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: ApiRequest,
+  ) {
+    const order = await this.ordersService.findOpenById(id);
+    if (!order) throw new NotFoundException('Заказ не найден или уже закрыт');
+    const claimed = await this.submissionsService.hasActiveClaim(
+      id,
+      req.user.id,
+    );
+    return { ...order, claimed };
+  }
+
+  /** Отклик на заказ — та же логика, что у кнопки «Откликнуться» в боте (дубли и гонки отсекает сервис). */
+  @Post(':id/claim')
+  @HttpCode(201)
+  async claim(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {
+    const submission = await this.submissionsService.claim(id, req.user.id);
+    return { submissionId: submission.id };
   }
 }

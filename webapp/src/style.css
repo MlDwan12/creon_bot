@@ -1,13 +1,71 @@
-/* Цвета берём из темы Telegram (он сам задаёт --tg-theme-* внутри клиента),
-   после запятой — запасной цвет для обычного браузера. */
+/* Токены дизайна. Внутри Telegram цвета берутся из его темы (--tg-theme-*, их задаёт SDK) —
+   поэтому тёмная тема работает сама; после запятой — цвета макета для обычного браузера. */
+:root {
+  --bg: var(--tg-theme-secondary-bg-color, #efeff4);
+  --surface: var(--tg-theme-section-bg-color, #ffffff);
+  --text: var(--tg-theme-text-color, #111114);
+  --hint: var(--tg-theme-hint-color, #6d6d72);
+  --accent: var(--tg-theme-button-color, #1f72b8);
+  --accent-text: var(--tg-theme-button-text-color, #ffffff);
+  --link: var(--tg-theme-link-color, #1f72b8);
+  --separator: var(--tg-theme-section-separator-color, #e2e2e7);
+  --danger: var(--tg-theme-destructive-text-color, #c4291f);
+  /* Подложки чипов/переключателей — полупрозрачный текст, чтобы работали в любой теме. */
+  --fill: color-mix(in srgb, var(--text) 8%, transparent);
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  --success-soft: color-mix(in srgb, #1e7b34 14%, transparent);
+  --safe-bottom: max(env(safe-area-inset-bottom), 12px);
+}
+
 body {
   margin: 0;
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: var(--tg-theme-secondary-bg-color, #f1f1f4);
-  color: var(--tg-theme-text-color, #000);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
 }
+
 button {
   font: inherit;
   cursor: pointer;
+}
+
+/* Заголовок секции: «ЗАДАНИЕ», «12 ОТКРЫТЫХ ЗАКАЗОВ». */
+.section-title {
+  margin: 0;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--hint);
+}
+
+/* Нижняя кнопка действия — как BottomButton в Telegram. */
+.bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 10px 16px var(--safe-bottom);
+  background: var(--surface);
+  border-top: 1px solid var(--separator);
+}
+.main-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 50px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 17px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.main-button:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
