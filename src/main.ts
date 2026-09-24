@@ -11,12 +11,13 @@ process.on('unhandledRejection', (reason) => {
   Logger.error(reason, undefined, 'UnhandledRejection');
 });
 
-// Бот работает через long polling, HTTP-сервер не нужен — только DI-контейнер.
 async function bootstrap() {
-  const app = await NestFactory.createApplicationContext(AppModule, {
+  // HTTP нужен для API Mini App (src/api); бот по-прежнему работает через long polling.
+  const app = await NestFactory.create(AppModule, {
     logger: new RedactingLogger(),
   });
   // На SIGTERM (docker stop / редеплой) останавливает polling и закрывает соединение Prisma.
   app.enableShutdownHooks();
+  await app.listen(process.env.PORT ?? 3000);
 }
 void bootstrap();
