@@ -42,7 +42,7 @@ export class OrdersController {
     return { items, total, page, pageSize: PAGE_SIZE };
   }
 
-  /** Карточка открытого заказа; `claimed` — есть ли у текущего пользователя активный отклик. */
+  /** Карточка открытого заказа; `claimed` — есть ли у текущего пользователя активный отклик, `own` — заказ его. */
   @Get(':id')
   async findOpen(
     @Param('id', ParseIntPipe) id: number,
@@ -54,10 +54,11 @@ export class OrdersController {
       id,
       req.user.id,
     );
-    return { ...order, claimed };
+    const { advertiserId, ...pub } = order;
+    return { ...pub, claimed, own: advertiserId === req.user.id };
   }
 
-  /** Отклик на заказ — та же логика, что у кнопки «Откликнуться» в боте (дубли и гонки отсекает сервис). */
+  /** Отклик на заказ (дубли, гонки и отклик на свой заказ отсекает сервис). */
   @Post(':id/claim')
   @HttpCode(201)
   async claim(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {

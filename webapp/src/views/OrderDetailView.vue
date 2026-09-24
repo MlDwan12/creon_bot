@@ -84,7 +84,8 @@ void load();
       </p>
       <p v-if="claimError" class="notice error" role="alert">{{ claimError }}</p>
 
-      <div class="bottom-bar">
+      <p v-if="order.own" class="notice" role="status">Это ваш заказ — откликаться на него могут только другие.</p>
+      <div v-else class="bottom-bar">
         <RouterLink v-if="order.claimed" to="/submissions" class="main-button">
           Мои отклики
         </RouterLink>

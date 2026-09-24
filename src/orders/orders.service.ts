@@ -3,7 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderCategory, OrderStatus, Prisma } from '@prisma/client';
+import {
+  OrderCategory,
+  OrderStatus,
+  Prisma,
+  SubmissionStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Поля заказа, которые видит любой пользователь Mini App: без модераторских данных и без BigInt. */
@@ -44,24 +49,6 @@ export class OrdersService {
     });
   }
 
-  /** Fetches a single open order by its position in the browse order, for a one-card-at-a-time carousel. Optionally filtered to one category. */
-  async getOpenAt(index: number, category?: OrderCategory) {
-    const where = {
-      status: OrderStatus.OPEN,
-      ...(category ? { category } : {}),
-    };
-    const [items, total] = await Promise.all([
-      this.prisma.order.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: index,
-        take: 1,
-      }),
-      this.prisma.order.count({ where }),
-    ]);
-    return { order: items[0], total };
-  }
-
   /** Страница открытых заказов для каталога Mini App. */
   async listOpen(
     category: OrderCategory | undefined,
@@ -85,11 +72,11 @@ export class OrdersService {
     return { items, total };
   }
 
-  /** Открытый заказ для карточки в Mini App (те же публичные поля); `null` — нет или уже не открыт. */
+  /** Открытый заказ для карточки в Mini App; `advertiserId` — только чтобы узнать «свой ли», наружу не отдавать. */
   findOpenById(id: number) {
     return this.prisma.order.findFirst({
       where: { id, status: OrderStatus.OPEN },
-      select: PUBLIC_ORDER_FIELDS,
+      select: { ...PUBLIC_ORDER_FIELDS, advertiserId: true },
     });
   }
 
@@ -126,37 +113,6 @@ export class OrdersService {
     });
   }
 
-  /** Fetches a single order (any status) by its position, for the moderator's "all orders" carousel. */
-  async getAllAt(index: number) {
-    const [items, total] = await Promise.all([
-      this.prisma.order.findMany({
-        orderBy: { createdAt: 'desc' },
-        include: { advertiser: true, submissions: true },
-        skip: index,
-        take: 1,
-      }),
-      this.prisma.order.count(),
-    ]);
-    return { order: items[0], total };
-  }
-
-  /** Fetches a single pending order by its position, for the moderator's review carousel. */
-  async getPendingAt(index: number) {
-    const [items, total] = await Promise.all([
-      this.prisma.order.findMany({
-        where: { status: OrderStatus.PENDING_MODERATION },
-        orderBy: { createdAt: 'asc' },
-        include: { advertiser: true },
-        skip: index,
-        take: 1,
-      }),
-      this.prisma.order.count({
-        where: { status: OrderStatus.PENDING_MODERATION },
-      }),
-    ]);
-    return { order: items[0], total };
-  }
-
   listByAdvertiser(advertiserId: number) {
     return this.prisma.order.findMany({
       where: { advertiserId },
@@ -186,7 +142,11 @@ export class OrdersService {
     });
   }
 
-  /** Deletes an order outright (auto-closing it first if still open). Submissions cascade-delete with it. */
+  /**
+   * Удаляет заказ вместе с откликами — только пока по нему никто не сдал видео: сданные работы
+   * нужны для разбора споров. Условие в самом `deleteMany`, поэтому видео, сданное между
+   * проверкой и удалением, удаление остановит.
+   */
   async remove(orderId: number, advertiserId: number) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
@@ -195,7 +155,18 @@ export class OrdersService {
     if (!order) throw new NotFoundException('Заказ не найден');
     if (order.advertiserId !== advertiserId)
       throw new ForbiddenException('Это не ваш заказ');
-    await this.prisma.order.delete({ where: { id: orderId } });
+    const { count } = await this.prisma.order.deleteMany({
+      where: {
+        id: orderId,
+        submissions: {
+          none: { status: { not: SubmissionStatus.IN_PROGRESS } },
+        },
+      },
+    });
+    if (count === 0)
+      throw new ForbiddenException(
+        'По заказу уже сдавали видео — удалить его нельзя, только закрыть',
+      );
     return order;
   }
 

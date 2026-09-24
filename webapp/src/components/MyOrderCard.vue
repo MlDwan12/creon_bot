@@ -73,7 +73,7 @@ const remove = () =>
       <button v-if="order.status === 'OPEN'" type="button" :disabled="busy" @click="close">
         Закрыть набор
       </button>
-      <button type="button" class="danger" :disabled="busy" @click="remove">Удалить</button>
+      <button v-if="order.deletable" type="button" class="danger" :disabled="busy" @click="remove">Удалить</button>
     </div>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
   </article>

@@ -7,7 +7,7 @@ import {
   MAX_DESCRIPTION_LENGTH,
   MAX_PRICE_LENGTH,
   MAX_TITLE_LENGTH,
-} from '../bot/utils/validation';
+} from '../common/validation';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -16,8 +16,8 @@ function text(value: unknown): string {
 }
 
 /**
- * Тело `POST /api/my-orders` → данные для OrdersService.create. Те же правила, что в сцене
- * создания заказа в боте; нарушение — 400 с текстом, который Mini App показывает пользователю.
+ * Тело `POST /api/my-orders` → данные для OrdersService.create. Нарушение — 400 с текстом,
+ * который Mini App показывает пользователю.
  */
 export function parseOrderInput(body: unknown) {
   const b = (body ?? {}) as Record<string, unknown>;
@@ -70,7 +70,7 @@ export function parseOrderInput(body: unknown) {
   return { title, description, price, category, deadline };
 }
 
-/** Причина отклонения видео — те же правила, что в сцене отклонения в боте. */
+/** Причина отклонения заказа или видео. */
 export function parseRejectComment(body: unknown): string {
   const comment = text((body as Record<string, unknown> | null)?.comment);
   if (!isMeaningfulText(comment))

@@ -10,7 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { NotificationsService } from '../bot/notifications.service';
-import { MAX_URL_LENGTH, VIDEO_URL_RE } from '../bot/utils/validation';
+import { MAX_URL_LENGTH, VIDEO_URL_RE } from '../common/validation';
 import { SubmissionsService } from '../submissions/submissions.service';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { toMySubmissions } from './my-submissions';
@@ -32,7 +32,7 @@ export class SubmissionsController {
     );
   }
 
-  /** Ссылка на готовое видео — как в сцене бота: те же проверки, тот же сервис, то же уведомление модераторам. */
+  /** Ссылка на готовое видео; модераторам уведомление. */
   @Post(':id/video')
   async submitVideo(
     @Param('id', ParseIntPipe) id: number,
@@ -71,7 +71,7 @@ export class SubmissionsController {
     return { ok: true };
   }
 
-  /** Рекламодатель отклоняет видео с причиной — креатору уходит уведомление, как из бота. */
+  /** Рекламодатель отклоняет видео с причиной — креатору уходит уведомление. */
   @Post(':id/reject')
   async reject(
     @Param('id', ParseIntPipe) id: number,
