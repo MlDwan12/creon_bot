@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Order, Submission, User } from '@prisma/client';
 import { InjectBot } from 'nestjs-telegraf';
@@ -20,11 +20,19 @@ type SubmissionWithParties = Submission & { order: Order; creator: User };
 /**
  * Все уведомления в чат бота о событиях из Mini App. К каждому — кнопка, открывающая нужный экран.
  * Каждая отправка глушит ошибку: получатель мог заблокировать бота или ещё не запускал его.
+ *
+ * Отправка — в фоне, через одну общую очередь: HTTP-запрос не ждёт Telegram (закрытие заказа
+ * с 50 откликами — это 50 сообщений), а сообщения уходят по одному, что заодно держит бота
+ * в лимите Telegram (~30 сообщений в секунду на бота).
+ * ponytail: очередь в памяти — при падении процесса неотправленное теряется (при штатной остановке
+ * дожидаемся её). Станет важно — таблица-очередь в Postgres.
  */
 @Injectable()
-export class NotificationsService {
+export class NotificationsService implements OnModuleDestroy {
+  private readonly logger = new Logger(NotificationsService.name);
   private readonly moderatorIds: string[];
   private readonly webAppUrl: string;
+  private queue: Promise<void> = Promise.resolve();
 
   constructor(
     @InjectBot() private readonly bot: Telegraf<Context>,
@@ -220,15 +228,31 @@ export class NotificationsService {
     );
   }
 
-  private async toModerators(text: string, path: string) {
+  /** Штатная остановка (редеплой) — сначала дослать то, что уже в очереди. */
+  async onModuleDestroy() {
+    await this.queue;
+  }
+
+  /** В очередь: задача выполнится после предыдущих; её сбой не останавливает следующие. */
+  private enqueue(task: () => Promise<unknown>) {
+    this.queue = this.queue.then(task).then(
+      () => undefined,
+      (err) => this.logger.error(err),
+    );
+  }
+
+  private toModerators(text: string, path: string) {
     const extra = html(this.openButton(path));
     for (const modId of this.moderatorIds) {
-      try {
-        await this.bot.telegram.sendMessage(modId, text, extra);
-      } catch {
-        // модератор ещё не запускал бота — пропускаем
-      }
+      this.enqueue(async () => {
+        try {
+          await this.bot.telegram.sendMessage(modId, text, extra);
+        } catch {
+          // модератор ещё не запускал бота — пропускаем
+        }
+      });
     }
+    return Promise.resolve();
   }
 
   /** Каждому креатору один раз, даже если у него несколько попыток по заказу. */
@@ -241,28 +265,27 @@ export class NotificationsService {
     }
   }
 
-  private async send(
-    telegramId: bigint,
-    text: string,
-    path: string,
-    asHtml = false,
-  ) {
-    // Заблокированным бот не пишет.
-    const user = await this.prisma.user.findUnique({
-      where: { telegramId },
-      select: { bannedAt: true },
-    });
-    if (user?.bannedAt) return;
+  private send(telegramId: bigint, text: string, path: string, asHtml = false) {
     const kb = this.openButton(path);
-    try {
-      await this.bot.telegram.sendMessage(
-        telegramId.toString(),
-        text,
-        asHtml ? html(kb) : kb,
-      );
-    } catch {
-      // получатель мог заблокировать бота
-    }
+    this.enqueue(async () => {
+      // Заблокированным бот не пишет. Проверяем в момент отправки: блокировка могла случиться,
+      // пока сообщение ждало в очереди.
+      const user = await this.prisma.user.findUnique({
+        where: { telegramId },
+        select: { bannedAt: true },
+      });
+      if (user?.bannedAt) return;
+      try {
+        await this.bot.telegram.sendMessage(
+          telegramId.toString(),
+          text,
+          asHtml ? html(kb) : kb,
+        );
+      } catch {
+        // получатель мог заблокировать бота
+      }
+    });
+    return Promise.resolve();
   }
 
   /** Кнопка web_app работает только в личных чатах — все уведомления как раз туда. */
