@@ -15,7 +15,20 @@ export class UsersService {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
-  findOrCreate(input: TelegramUserInput) {
+  /**
+   * Вызывается на каждый запрос к API (InitDataGuard), поэтому сначала читаем: пишем в базу, только
+   * если человек новый или сменил имя/username в Telegram.
+   */
+  async findOrCreate(input: TelegramUserInput) {
+    const existing = await this.prisma.user.findUnique({
+      where: { telegramId: input.telegramId },
+    });
+    if (
+      existing &&
+      existing.username === (input.username ?? null) &&
+      existing.firstName === (input.firstName ?? null)
+    )
+      return existing;
     return this.prisma.user.upsert({
       where: { telegramId: input.telegramId },
       // Telegram не присылает username, если его нет. undefined Prisma поняла бы как «не трогать»,
