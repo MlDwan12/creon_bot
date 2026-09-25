@@ -5,11 +5,11 @@ import {
   Get,
   NotFoundException,
   Param,
-  ParseIntPipe,
   Post,
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { ParseIdPipe } from './parse-id.pipe';
 import { OrderStatus, SubmissionStatus } from '@prisma/client';
 import { kopecksToRubles } from '../common/money';
 import { NotificationsService } from '../bot/notifications.service';
@@ -76,7 +76,7 @@ export class MyOrdersController {
   }
 
   @Post(':id/close')
-  async close(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {
+  async close(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
     const order = await this.ordersService.close(id, req.user.id);
     await this.notifications.orderClosed(order);
     return { ok: true };
@@ -85,7 +85,7 @@ export class MyOrdersController {
   /** Продлить срок на `days` дней; заказ с истёкшим сроком снова открывается. */
   @Post(':id/extend')
   async extend(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseIdPipe) id: number,
     @Body('days') days: unknown,
     @Req() req: ApiRequest,
   ) {
@@ -94,7 +94,7 @@ export class MyOrdersController {
   }
 
   @Delete(':id')
-  async remove(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {
+  async remove(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
     const order = await this.ordersService.remove(id, req.user.id);
     await this.notifications.orderRemoved(order);
     return { ok: true };
@@ -103,7 +103,7 @@ export class MyOrdersController {
   /** Видео по моему заказу, одобренные модератором и ждущие моего решения. */
   @Get(':id/pending-videos')
   async pendingVideos(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseIdPipe) id: number,
     @Req() req: ApiRequest,
   ) {
     const order = await this.ordersService.findById(id);

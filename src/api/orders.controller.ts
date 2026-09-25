@@ -12,6 +12,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { ParseIdPipe } from './parse-id.pipe';
 import { OrderCategory } from '@prisma/client';
 import { Throttle } from '@nestjs/throttler';
 import { kopecksToRubles } from '../common/money';
@@ -57,10 +58,7 @@ export class OrdersController {
 
   /** Карточка открытого заказа; `claimed` — есть ли у текущего пользователя отклик «в работе», `own` — заказ его. */
   @Get(':id')
-  async findOpen(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: ApiRequest,
-  ) {
+  async findOpen(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
     const order = await this.ordersService.findOpenById(id);
     if (!order) throw new NotFoundException('Заказ не найден или уже закрыт');
     const claimed = await this.submissionsService.hasInProgress(
@@ -81,7 +79,7 @@ export class OrdersController {
   @Post(':id/claim')
   @Throttle({ default: { limit: 30, ttl: 60 * 60_000 } })
   @HttpCode(201)
-  async claim(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {
+  async claim(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
     requireUsername(req.user);
     const submission = await this.submissionsService.claim(id, req.user.id);
     return { submissionId: submission.id };

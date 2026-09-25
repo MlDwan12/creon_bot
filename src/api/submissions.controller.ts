@@ -4,11 +4,11 @@ import {
   Controller,
   Get,
   Param,
-  ParseIntPipe,
   Post,
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { ParseIdPipe } from './parse-id.pipe';
 import { NotificationsService } from '../bot/notifications.service';
 import { SupportService } from '../bot/support.service';
 import { creatorLabel, escapeHtml, formatPrice } from '../bot/utils/format';
@@ -19,7 +19,7 @@ import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { UserThrottlerGuard } from './user-throttler.guard';
 import { toMySubmissions } from './my-submissions';
 import { parseRejectComment } from './order-input';
-import { parseFeedback } from './profile-input';
+import { assertNoContacts, parseFeedback } from './profile-input';
 
 @Controller('api/submissions')
 @UseGuards(InitDataGuard, UserThrottlerGuard)
@@ -41,7 +41,7 @@ export class SubmissionsController {
   /** Ссылка на готовое видео; модераторам уведомление. */
   @Post(':id/video')
   async submitVideo(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseIdPipe) id: number,
     @Body('videoUrl') videoUrl: unknown,
     @Req() req: ApiRequest,
   ) {
@@ -69,7 +69,7 @@ export class SubmissionsController {
   /** Рекламодатель принимает видео с оценкой (advertiserApprove проверяет, что заказ его). */
   @Post(':id/accept')
   async accept(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseIdPipe) id: number,
     @Body() body: unknown,
     @Req() req: ApiRequest,
   ) {
@@ -97,11 +97,12 @@ export class SubmissionsController {
   /** Рекламодатель отклоняет видео с причиной — креатору уходит уведомление. */
   @Post(':id/reject')
   async reject(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseIdPipe) id: number,
     @Body() body: unknown,
     @Req() req: ApiRequest,
   ) {
     const comment = parseRejectComment(body);
+    assertNoContacts(comment);
     const submission = await this.submissionsService.advertiserReject(
       id,
       req.user.id,

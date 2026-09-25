@@ -14,8 +14,10 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { ParseIdPipe } from './parse-id.pipe';
 import { ReportTarget } from '@prisma/client';
 import { findContacts } from '../common/contacts';
+import { isDbId } from '../common/validation';
 import { kopecksToRubles } from '../common/money';
 import { NotificationsService } from '../bot/notifications.service';
 import { creatorLabel } from '../bot/utils/format';
@@ -122,7 +124,7 @@ export class ModerationController {
   }
 
   @Get('orders/:id')
-  async order(@Param('id', ParseIntPipe) id: number) {
+  async order(@Param('id', ParseIdPipe) id: number) {
     const o = await this.ordersService.findWithAdvertiser(id);
     if (!o) throw new NotFoundException('Заказ не найден');
     return {
@@ -142,7 +144,7 @@ export class ModerationController {
 
   @Post('orders/:id/approve')
   async approveOrder(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseIdPipe) id: number,
     @Req() req: ApiRequest,
   ) {
     const order = await this.ordersService.moderatorApprove(
@@ -155,7 +157,7 @@ export class ModerationController {
 
   @Post('orders/:id/reject')
   async rejectOrder(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseIdPipe) id: number,
     @Body() body: unknown,
     @Req() req: ApiRequest,
   ) {
@@ -170,7 +172,7 @@ export class ModerationController {
   }
 
   @Get('videos/:id')
-  async video(@Param('id', ParseIntPipe) id: number) {
+  async video(@Param('id', ParseIdPipe) id: number) {
     const s = await this.submissionsService.findById(id);
     if (!s) throw new NotFoundException('Отклик не найден');
     const attempts = attemptNumbers(
@@ -205,11 +207,11 @@ export class ModerationController {
     const target = b.target as ReportTarget;
     if (
       !Object.values(ReportTarget).includes(target) ||
-      !Number.isInteger(b.targetId) ||
+      !isDbId(b.targetId) ||
       typeof b.actioned !== 'boolean'
     )
       throw new BadRequestException('Некорректное решение');
-    const group = { target, targetId: b.targetId as number };
+    const group = { target, targetId: b.targetId };
     // banReason — заодно заблокировать автора объекта (мера применяется в любом случае)
     const banReason =
       b.banReason === undefined ? null : parseBanReason(b.banReason);
@@ -236,7 +238,7 @@ export class ModerationController {
   }
 
   @Post('users/:id/ban')
-  async ban(@Param('id', ParseIntPipe) id: number, @Body() body: unknown) {
+  async ban(@Param('id', ParseIdPipe) id: number, @Body() body: unknown) {
     const reason = parseBanReason(
       (body as { reason?: unknown } | null)?.reason,
     );
@@ -246,7 +248,7 @@ export class ModerationController {
   }
 
   @Post('users/:id/unban')
-  async unban(@Param('id', ParseIntPipe) id: number) {
+  async unban(@Param('id', ParseIdPipe) id: number) {
     await this.bans.unban(id);
     return { ok: true };
   }
@@ -267,16 +269,14 @@ export class ModerationController {
 
   /** Удалить отзыв креатору (оскорбления и т.п.); приёмка видео остаётся. */
   @Delete('reviews/:submissionId')
-  async removeReview(
-    @Param('submissionId', ParseIntPipe) submissionId: number,
-  ) {
+  async removeReview(@Param('submissionId', ParseIdPipe) submissionId: number) {
     await this.submissionsService.removeReview(submissionId);
     return { ok: true };
   }
 
   @Post('videos/:id/approve')
   async approveVideo(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseIdPipe) id: number,
     @Req() req: ApiRequest,
   ) {
     const submission = await this.submissionsService.moderatorApprove(
@@ -289,7 +289,7 @@ export class ModerationController {
 
   @Post('videos/:id/reject')
   async rejectVideo(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseIdPipe) id: number,
     @Body() body: unknown,
     @Req() req: ApiRequest,
   ) {

@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { parseFeedback, parseLinks } from './profile-input';
+import { assertNoContacts, parseFeedback, parseLinks } from './profile-input';
 
 describe('parseFeedback', () => {
   it('оценка обязательна, отзыв и портфолио — по желанию', () => {
@@ -19,6 +19,12 @@ describe('parseFeedback', () => {
 
   it('заглушка вместо отзыва — как без отзыва', () => {
     expect(parseFeedback({ rating: 3, review: '...' }).review).toBeNull();
+  });
+
+  it('отзыв с контактами не принимает', () => {
+    expect(() =>
+      parseFeedback({ rating: 5, review: 'Супер, пишите мне @ivan_petrov' }),
+    ).toThrow(BadRequestException);
   });
 
   it.each([[undefined], [0], [6], [4.5], ['5']])(
@@ -53,4 +59,19 @@ describe('parseLinks', () => {
   ])('отклоняет: %s', (_name, body) => {
     expect(() => parseLinks(body)).toThrow(BadRequestException);
   });
+});
+
+describe('assertNoContacts', () => {
+  it('пропускает обычный текст, в том числе со словом «телеграм»', () => {
+    expect(() =>
+      assertNoContacts('Звук тихий, для телеграма не подойдёт'),
+    ).not.toThrow();
+  });
+
+  it.each(['мой номер 89991234567', 'почта ivan@mail.ru', 'wa.me/79991234567'])(
+    'отклоняет: %s',
+    (text) => {
+      expect(() => assertNoContacts(text)).toThrow(BadRequestException);
+    },
+  );
 });

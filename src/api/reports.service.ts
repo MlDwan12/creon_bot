@@ -13,7 +13,11 @@ import {
   type User,
 } from '@prisma/client';
 import { creatorLabel } from '../bot/utils/format';
-import { isMeaningfulText, MAX_COMMENT_LENGTH } from '../common/validation';
+import {
+  isDbId,
+  isMeaningfulText,
+  MAX_COMMENT_LENGTH,
+} from '../common/validation';
 import { OrdersService } from '../orders/orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProfilesService } from './profiles.service';
@@ -70,7 +74,7 @@ export class ReportsService {
     if (!Object.values(ReportTarget).includes(target))
       throw new BadRequestException('Неизвестно, на что жалоба');
     const targetId = b.targetId;
-    if (!Number.isInteger(targetId))
+    if (!isDbId(targetId))
       throw new BadRequestException('Неизвестно, на что жалоба');
     const reason = b.reason as string;
     if (!REPORT_REASONS[target].includes(reason))
@@ -85,7 +89,7 @@ export class ReportsService {
       throw new BadRequestException('Опишите, что не так');
     return {
       target,
-      targetId: targetId as number,
+      targetId,
       reason,
       comment: meaningful ? comment : null,
     };

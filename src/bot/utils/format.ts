@@ -1,4 +1,5 @@
 import type { OrderCategory, User } from '@prisma/client';
+import { stripContacts } from '../../common/contacts';
 
 /** Уведомления уходят с parse_mode HTML — пользовательский текст экранировать перед подстановкой. */
 export function escapeHtml(text: string): string {
@@ -50,10 +51,11 @@ export function formatPrice(price: number | null): string {
 
 /**
  * Имя для другой стороны сделки — без @username: стороны общаются только через площадку,
- * чтобы не договаривались в обход неё. creatorLabel (с username) — только модераторам и поддержке.
+ * чтобы не договаривались в обход неё. Контакты, вписанные в само имя («Аня @anya_ugc»), вырезаются.
+ * creatorLabel (с username) — только модераторам и поддержке.
  */
 export function publicName(user: User): string {
-  return user.firstName?.trim() || 'Креатор';
+  return stripContacts(user.firstName ?? '') || 'Креатор';
 }
 
 export function creatorLabel(user: User): string {

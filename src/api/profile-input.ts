@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { findExactContacts } from '../common/contacts';
 import { isMeaningfulText, MAX_COMMENT_LENGTH } from '../common/validation';
 
 /** Оценка при приёмке видео: звёзды обязательны, отзыв и согласие на портфолио — по желанию. */
@@ -17,12 +18,25 @@ export function parseFeedback(body: unknown) {
     throw new BadRequestException(
       `Отзыв длиннее ${MAX_COMMENT_LENGTH} символов`,
     );
+  assertNoContacts(review);
 
   return {
     rating: rating as number,
     review: isMeaningfulText(review) ? review : null,
     portfolioAllowed: b.portfolioAllowed === true,
   };
+}
+
+/**
+ * Текст, который уходит другой стороне сделки без модерации (отзыв, причина отказа), — без контактов:
+ * стороны общаются только через площадку.
+ */
+export function assertNoContacts(text: string) {
+  const [found] = findExactContacts(text);
+  if (found)
+    throw new BadRequestException(
+      `Уберите контакты (${found}) — общение между сторонами только через поддержку CreON`,
+    );
 }
 
 const MAX_LINK_LENGTH = 200;
