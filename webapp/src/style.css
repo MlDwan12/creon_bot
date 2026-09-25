@@ -75,3 +75,14 @@ body:has(.bottom-bar) .tabbar {
   opacity: 0.55;
   cursor: default;
 }
+
+/* «Пожаловаться», «Поддержка» — второстепенные ссылки внизу экрана: доступны, но не спорят с основным действием. */
+.quiet-link {
+  align-self: center;
+  padding: 8px;
+  border: none;
+  background: none;
+  color: var(--hint);
+  font-size: 14px;
+  text-decoration: none;
+}

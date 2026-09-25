@@ -7,5 +7,6 @@ coverage
 *.md
 .vscode
 .claude
-# мини-апп пока не входит в образ (соберём его туда на шаге с продом)
-webapp
+webapp/node_modules
+webapp/dist
+webapp/.env*

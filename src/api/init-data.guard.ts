@@ -8,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { User } from '@prisma/client';
 import type { Request } from 'express';
+import { SupportService } from '../bot/support.service';
 import { UsersService } from '../users/users.service';
 import { validateInitData } from './init-data.util';
 
@@ -37,6 +38,7 @@ export class InitDataGuard implements CanActivate {
   constructor(
     private readonly config: ConfigService,
     private readonly usersService: UsersService,
+    private readonly support: SupportService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -57,6 +59,15 @@ export class InitDataGuard implements CanActivate {
       username: tgUser.username,
       firstName: tgUser.first_name,
     });
+    // `banned` — мини-апп по нему показывает экран блокировки вместо любого экрана.
+    if (req.user.bannedAt)
+      throw new ForbiddenException({
+        message: 'Ваш аккаунт заблокирован',
+        banned: true,
+        reason: req.user.banReason,
+        // /api/me заблокированному недоступен — ссылку на поддержку отдаём прямо здесь
+        supportUrl: await this.support.url(),
+      });
     return true;
   }
 }

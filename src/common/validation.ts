@@ -2,12 +2,13 @@
 // well within that even after it's wrapped in a formatted card alongside other fields.
 export const MAX_TITLE_LENGTH = 100;
 export const MAX_DESCRIPTION_LENGTH = 1000;
-export const MAX_PRICE_LENGTH = 50;
+/** Цена за видео в рублях. */
+export const MAX_PRICE = 1_000_000;
 export const MAX_COMMENT_LENGTH = 500;
 export const MAX_URL_LENGTH = 500;
 export const MAX_DEADLINE_DAYS = 365;
 
-// Ссылка на готовое видео — проверяется и в сцене бота, и в API Mini App.
+// Ссылка на готовое видео.
 export const VIDEO_URL_RE = /^https?:\/\/\S+$/i;
 
 // Отсекает заглушки вроде "-", "..." или одних пробелов — формально непустая строка,

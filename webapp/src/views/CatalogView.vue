@@ -8,6 +8,7 @@ import {
 } from '../api';
 import { RouterLink } from 'vue-router';
 import OrderCard from '../components/OrderCard.vue';
+import SupportLink from '../components/SupportLink.vue';
 
 // ref() — реактивное значение: поменяли `.value` в коде, и шаблон ниже перерисовался сам.
 const category = ref<OrderCategory>();
@@ -82,7 +83,10 @@ watch(category, () => load(true), { immediate: true });
       {{ loading ? 'Загрузка…' : 'Показать ещё' }}
     </button>
 
-    <RouterLink to="/privacy" class="privacy">Политика конфиденциальности</RouterLink>
+    <footer class="footer">
+      <SupportLink />
+      <RouterLink to="/privacy" class="quiet-link">Политика конфиденциальности</RouterLink>
+    </footer>
   </main>
 </template>
 
@@ -144,10 +148,10 @@ watch(category, () => load(true), { immediate: true });
   font-size: 16px;
   font-weight: 600;
 }
-.privacy {
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   margin-top: 8px;
-  align-self: center;
-  color: var(--hint);
-  font-size: 13px;
 }
 </style>

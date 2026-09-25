@@ -1,7 +1,10 @@
 import {
+  BadRequestException,
   Body,
+  ForbiddenException,
   Controller,
   DefaultValuePipe,
+  Delete,
   Get,
   NotFoundException,
   Param,
@@ -11,10 +14,18 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { ReportTarget } from '@prisma/client';
+import { findContacts } from '../common/contacts';
+import { kopecksToRubles } from '../common/money';
 import { NotificationsService } from '../bot/notifications.service';
 import { creatorLabel } from '../bot/utils/format';
 import { OrdersService } from '../orders/orders.service';
+import { DAY_MS } from '../orders/deadline';
 import { SubmissionsService } from '../submissions/submissions.service';
+import { UsersService } from '../users/users.service';
+import { AnalyticsService } from './analytics.service';
+import { BansService, parseBanReason } from './bans.service';
+import { ReportsService } from './reports.service';
 import { attemptNumbers } from './attempts';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { UserThrottlerGuard } from './user-throttler.guard';
@@ -33,6 +44,11 @@ export class ModerationController {
     private readonly ordersService: OrdersService,
     private readonly submissionsService: SubmissionsService,
     private readonly notifications: NotificationsService,
+    private readonly analytics: AnalyticsService,
+    private readonly reports: ReportsService,
+    private readonly bans: BansService,
+    private readonly usersService: UsersService,
+    private readonly moderatorGuard: ModeratorGuard,
   ) {}
 
   /** Обе очереди сразу: заказы и видео на проверке, старые первыми. */
@@ -46,9 +62,11 @@ export class ModerationController {
       orders: orders.map((o) => ({
         id: o.id,
         title: o.title,
-        price: o.price,
+        price: kopecksToRubles(o.priceKopecks),
         advertiser: creatorLabel(o.advertiser),
         createdAt: o.createdAt,
+        // похоже на контакты в обход площадки — модератору пометка в списке
+        hasContacts: findContacts(o.title, o.description).length > 0,
       })),
       videos: videos.map((s) => ({
         id: s.id,
@@ -68,6 +86,16 @@ export class ModerationController {
     return { orders, submissions };
   }
 
+  /** Воронка за последние `days` дней (1–365); без параметра — за всё время. */
+  @Get('funnel')
+  funnel(@Query('days', new ParseIntPipe({ optional: true })) days?: number) {
+    if (days !== undefined && (days < 1 || days > 365))
+      throw new BadRequestException('Период — от 1 до 365 дней');
+    return this.analytics.funnel(
+      days === undefined ? undefined : new Date(Date.now() - days * DAY_MS),
+    );
+  }
+
   /** Все заказы любого статуса — страница, новые первыми. */
   @Get('orders')
   async allOrders(
@@ -81,7 +109,7 @@ export class ModerationController {
       items: items.map((o) => ({
         id: o.id,
         title: o.title,
-        price: o.price,
+        price: kopecksToRubles(o.priceKopecks),
         status: o.status,
         advertiser: creatorLabel(o.advertiser),
         submissionsCount: o._count.submissions,
@@ -101,13 +129,14 @@ export class ModerationController {
       id: o.id,
       title: o.title,
       description: o.description,
-      price: o.price,
+      price: kopecksToRubles(o.priceKopecks),
       category: o.category,
       deadline: o.deadline,
       status: o.status,
       moderatorComment: o.moderatorComment,
       advertiser: creatorLabel(o.advertiser),
       createdAt: o.createdAt,
+      contacts: findContacts(o.title, o.description),
     };
   }
 
@@ -153,6 +182,7 @@ export class ModerationController {
       videoUrl: s.videoUrl,
       submittedAt: s.submittedAt,
       creator: creatorLabel(s.creator),
+      creatorId: s.creatorId,
       attempt: attempts.get(s.id)!,
       order: {
         id: s.order.id,
@@ -160,6 +190,88 @@ export class ModerationController {
         description: s.order.description,
       },
     };
+  }
+
+  /** Открытые жалобы, сгруппированные по объекту. */
+  @Get('reports')
+  reportsList() {
+    return this.reports.listOpen();
+  }
+
+  /** Решение по всем жалобам на объект: `actioned` — применить меру, иначе «нарушений нет». */
+  @Post('reports/resolve')
+  async resolveReports(@Body() body: unknown, @Req() req: ApiRequest) {
+    const b = (body ?? {}) as Record<string, unknown>;
+    const target = b.target as ReportTarget;
+    if (
+      !Object.values(ReportTarget).includes(target) ||
+      !Number.isInteger(b.targetId) ||
+      typeof b.actioned !== 'boolean'
+    )
+      throw new BadRequestException('Некорректное решение');
+    const group = { target, targetId: b.targetId as number };
+    // banReason — заодно заблокировать автора объекта (мера применяется в любом случае)
+    const banReason =
+      b.banReason === undefined ? null : parseBanReason(b.banReason);
+    const authorId = banReason ? await this.reports.authorOf(group) : null;
+    if (banReason && !authorId)
+      throw new BadRequestException('Объект удалён — автора не найти');
+    // уже заблокированного автора повторно не блокируем — мера по жалобе всё равно применится
+    const toBan =
+      authorId && !(await this.mustNotBeModerator(authorId)).bannedAt
+        ? authorId
+        : null;
+
+    const actioned = b.actioned || banReason !== null;
+    const { reporters, closedOrder } = await this.reports.resolve(
+      group,
+      actioned,
+      req.user.telegramId,
+    );
+    if (closedOrder)
+      await this.notifications.orderClosedByModerator(closedOrder);
+    if (toBan) await this.banAndNotify(toBan, banReason!);
+    await this.notifications.reportResolved(reporters, actioned);
+    return { ok: true };
+  }
+
+  @Post('users/:id/ban')
+  async ban(@Param('id', ParseIntPipe) id: number, @Body() body: unknown) {
+    const reason = parseBanReason(
+      (body as { reason?: unknown } | null)?.reason,
+    );
+    await this.mustNotBeModerator(id);
+    await this.banAndNotify(id, reason);
+    return { ok: true };
+  }
+
+  @Post('users/:id/unban')
+  async unban(@Param('id', ParseIntPipe) id: number) {
+    await this.bans.unban(id);
+    return { ok: true };
+  }
+
+  private async banAndNotify(userId: number, reason: string) {
+    for (const order of await this.bans.ban(userId, reason))
+      await this.notifications.orderClosedByModerator(order);
+  }
+
+  /** Модераторы задаются в env — их не блокируют. Возвращает пользователя. */
+  private async mustNotBeModerator(userId: number) {
+    const user = await this.usersService.findById(userId);
+    if (!user) throw new NotFoundException('Пользователь не найден');
+    if (this.moderatorGuard.isModerator(user))
+      throw new ForbiddenException('Модератора заблокировать нельзя');
+    return user;
+  }
+
+  /** Удалить отзыв креатору (оскорбления и т.п.); приёмка видео остаётся. */
+  @Delete('reviews/:submissionId')
+  async removeReview(
+    @Param('submissionId', ParseIntPipe) submissionId: number,
+  ) {
+    await this.submissionsService.removeReview(submissionId);
+    return { ok: true };
   }
 
   @Post('videos/:id/approve')

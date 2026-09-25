@@ -1,4 +1,8 @@
 import type { ConfigService } from '@nestjs/config';
+import { AnalyticsService } from './api/analytics.service';
+import { BansService } from './api/bans.service';
+import { ProfilesService } from './api/profiles.service';
+import { ReportsService } from './api/reports.service';
 import { MAX_ACTIVE_ORDERS, OrdersService } from './orders/orders.service';
 import { PrismaService } from './prisma/prisma.service';
 import { SubmissionsService } from './submissions/submissions.service';
@@ -20,6 +24,10 @@ const prisma = new PrismaService({
 } as unknown as ConfigService);
 const orders = new OrdersService(prisma);
 const submissions = new SubmissionsService(prisma);
+const analytics = new AnalyticsService(prisma);
+const bans = new BansService(prisma);
+const profiles = new ProfilesService(prisma);
+const reports = new ReportsService(prisma, orders, profiles);
 
 const DAY = 24 * 60 * 60 * 1000;
 let nextTelegramId = 1n;
@@ -50,7 +58,7 @@ const statusOf = async (orderId: number) =>
 
 beforeEach(() =>
   prisma.$executeRawUnsafe(
-    'TRUNCATE "Submission", "Order", "User" RESTART IDENTITY CASCADE',
+    'TRUNCATE "Report", "Submission", "Order", "User" RESTART IDENTITY CASCADE',
   ),
 );
 afterAll(() => prisma.$disconnect());
@@ -247,5 +255,332 @@ describe('модерация', () => {
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect(['OPEN', 'REJECTED']).toContain(await statusOf(order.id));
+  });
+});
+
+describe('воронка', () => {
+  it('считает заказы, видео, пользователей и оборот за период', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const accepted = await orders.create(advertiser.id, {
+      title: 'Заказ',
+      description: 'Описание',
+      category: 'OTHER',
+      priceKopecks: 300_000,
+    });
+    await orders.moderatorApprove(accepted.id, 1n);
+    const s = await submissions.claim(accepted.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, 'https://v.example/1');
+    await submissions.moderatorApprove(s.id, 1n);
+    await submissions.advertiserApprove(s.id, advertiser.id, {
+      rating: 5,
+      review: null,
+      portfolioAllowed: false,
+    });
+
+    const rejected = await pendingOrder(advertiser.id);
+    await orders.moderatorReject(rejected.id, 1n, 'причина');
+    await pendingOrder(advertiser.id);
+
+    expect(await analytics.funnel()).toMatchObject({
+      orders: {
+        created: 3,
+        published: 1,
+        rejected: 1,
+        withClaims: 1,
+        withVideos: 1,
+        withAccepted: 1,
+      },
+      videos: { submitted: 1, accepted: 1, pending: 0 },
+      users: { new: 2, activeAdvertisers: 1, activeCreators: 1 },
+      turnover: { rubles: 3000, acceptedPriced: 1 },
+    });
+    expect((await analytics.funnel()).orders.moderationHours).toBe(0);
+
+    // период, в который ничего не попало
+    const future = await analytics.funnel(new Date(Date.now() + DAY));
+    expect(future.orders.created).toBe(0);
+    expect(future.turnover.rubles).toBe(0);
+    expect(future.orders.moderationHours).toBeNull();
+  });
+});
+
+describe('профиль креатора', () => {
+  /** Видео креатора доходит до рекламодателя (одобрено модератором) и принимается с оценкой. */
+  async function acceptedVideo(
+    advertiserId: number,
+    creatorId: number,
+    rating: number,
+    portfolioAllowed = false,
+  ) {
+    const order = await openOrder(advertiserId);
+    const s = await submissions.claim(order.id, creatorId);
+    await submissions.attachVideo(s.id, creatorId, `https://v.example/${s.id}`);
+    await submissions.moderatorApprove(s.id, 1n);
+    await submissions.advertiserApprove(s.id, advertiserId, {
+      rating,
+      review: `отзыв ${rating}`,
+      portfolioAllowed,
+    });
+    return s;
+  }
+
+  it('рейтинг, выполненные заказы, отзывы и портфолио только с согласия', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    await acceptedVideo(advertiser.id, creator.id, 5, true);
+    await acceptedVideo(advertiser.id, creator.id, 4);
+
+    const profile = await profiles.profile(creator.id, true);
+
+    expect(profile).toMatchObject({
+      rating: 4.5,
+      reviewsCount: 2,
+      completed: 2,
+    });
+    expect(profile.reviews.map((r) => r.rating).sort()).toEqual([4, 5]);
+    expect(profile.portfolio).toHaveLength(1);
+  });
+
+  it('видят сам креатор, модератор и рекламодатель, до которого дошло его видео', async () => {
+    const [advertiser, creator, stranger] = [
+      await user(),
+      await user(),
+      await user(),
+    ];
+    const order = await openOrder(advertiser.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, 'https://v.example/1');
+
+    // видео ещё у модератора — рекламодатель его не видел
+    expect(await profiles.canView(advertiser, creator.id, false)).toBe(false);
+    await submissions.moderatorApprove(s.id, 1n);
+    expect(await profiles.canView(advertiser, creator.id, false)).toBe(true);
+
+    expect(await profiles.canView(creator, creator.id, false)).toBe(true);
+    expect(await profiles.canView(stranger, creator.id, true)).toBe(true);
+    expect(await profiles.canView(stranger, creator.id, false)).toBe(false);
+  });
+
+  it('рекламодателю — только имя, без @username и соцсетей', async () => {
+    const creator = await prisma.user.create({
+      data: {
+        telegramId: nextTelegramId++,
+        username: 'secret_creator',
+        firstName: 'Аня',
+        tiktokUrl: 'https://www.tiktok.com/@secret_creator',
+      },
+    });
+    await acceptedVideo((await user()).id, creator.id, 5, true);
+
+    const forAdvertiser = await profiles.profile(creator.id, false);
+    expect(forAdvertiser.name).toBe('Аня');
+    // портфолио — только названия работ: ссылка обычно ведёт на аккаунт креатора
+    expect(forAdvertiser.portfolio).toHaveLength(1);
+    expect(forAdvertiser.portfolio[0].videoUrl).toBeNull();
+    expect(forAdvertiser.links).toEqual({
+      tiktokUrl: null,
+      youtubeUrl: null,
+      vkUrl: null,
+    });
+    expect(JSON.stringify(forAdvertiser)).not.toContain('secret_creator');
+
+    const full = await profiles.profile(creator.id, true);
+    expect(full.name).toBe('@secret_creator');
+    expect(full.links.tiktokUrl).toContain('secret_creator');
+    expect(full.portfolio[0].videoUrl).not.toBeNull();
+  });
+
+  it('модератор удаляет отзыв — приёмка и счётчик выполненных остаются', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const s = await acceptedVideo(advertiser.id, creator.id, 1);
+
+    await submissions.removeReview(s.id);
+
+    const profile = await profiles.profile(creator.id, true);
+    expect(profile).toMatchObject({
+      rating: null,
+      reviewsCount: 0,
+      completed: 1,
+    });
+    await expect(submissions.removeReview(s.id)).rejects.toThrow('не найден');
+  });
+
+  it('статистика рекламодателя: принятые и отклонённые видео', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    await acceptedVideo(advertiser.id, creator.id, 5);
+    const order = await openOrder(advertiser.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, 'https://v.example/2');
+    await submissions.moderatorApprove(s.id, 1n);
+    await submissions.advertiserReject(s.id, advertiser.id, 'не то');
+
+    expect(await submissions.advertiserStats(advertiser.id)).toEqual({
+      accepted: 1,
+      rejected: 1,
+    });
+  });
+});
+
+describe('жалобы', () => {
+  const report = (
+    target: string,
+    targetId: number,
+    reason = 'FRAUD',
+    comment?: string,
+  ) => reports.parse({ target, targetId, reason, comment });
+
+  it('на заказ: чужой опубликованный — можно, свой и на модерации — нельзя, дважды — нельзя', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const open = await openOrder(advertiser.id);
+    const pending = await pendingOrder(advertiser.id);
+
+    await expect(
+      reports.create(creator, report('ORDER', open.id)),
+    ).resolves.toContain('заказ');
+    await expect(
+      reports.create(creator, report('ORDER', open.id)),
+    ).rejects.toThrow('уже пожаловались');
+    await expect(
+      reports.create(advertiser, report('ORDER', open.id)),
+    ).rejects.toThrow('Не найдено');
+    await expect(
+      reports.create(creator, report('ORDER', pending.id)),
+    ).rejects.toThrow('Не найдено');
+  });
+
+  it('причина — из списка своего типа; «Другое» — только с комментарием', () => {
+    expect(() => report('ORDER', 1, 'STOLEN')).toThrow('причину');
+    expect(() => report('ORDER', 1, 'OTHER')).toThrow('Опишите');
+    expect(
+      report('ORDER', 1, 'OTHER', 'просят оплатить доставку').comment,
+    ).toBe('просят оплатить доставку');
+  });
+
+  it('на видео — только рекламодатель заказа и только после модератора', async () => {
+    const [advertiser, creator, stranger] = [
+      await user(),
+      await user(),
+      await user(),
+    ];
+    const order = await openOrder(advertiser.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, 'https://v.example/1');
+
+    await expect(
+      reports.create(advertiser, report('VIDEO', s.id, 'STOLEN')),
+    ).rejects.toThrow('Не найдено');
+    await submissions.moderatorApprove(s.id, 1n);
+    await expect(
+      reports.create(stranger, report('VIDEO', s.id, 'STOLEN')),
+    ).rejects.toThrow('Не найдено');
+    await expect(
+      reports.create(advertiser, report('VIDEO', s.id, 'STOLEN')),
+    ).resolves.toContain('видео');
+  });
+
+  it('мера по заказу закрывает его, повторное решение — отказ', async () => {
+    const [advertiser, c1, c2] = [await user(), await user(), await user()];
+    const order = await openOrder(advertiser.id);
+    await reports.create(c1, report('ORDER', order.id));
+    await reports.create(c2, report('ORDER', order.id, 'SPAM'));
+
+    const [group] = await reports.listOpen();
+    expect(group).toMatchObject({ target: 'ORDER', targetId: order.id });
+    expect(group.reports).toHaveLength(2);
+
+    const { reporters, closedOrder } = await reports.resolve(
+      { target: 'ORDER', targetId: order.id },
+      true,
+      1n,
+    );
+    expect(reporters.sort()).toEqual([c1.telegramId, c2.telegramId].sort());
+    expect(closedOrder?.status).toBe('CLOSED');
+    expect(await reports.listOpen()).toEqual([]);
+    await expect(
+      reports.resolve({ target: 'ORDER', targetId: order.id }, false, 2n),
+    ).rejects.toThrow('уже рассмотрены');
+  });
+
+  it('жалоба на отзыв: пишет только тот, о ком отзыв; мера удаляет отзыв', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const order = await openOrder(advertiser.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, 'https://v.example/1');
+    await submissions.moderatorApprove(s.id, 1n);
+    await submissions.advertiserApprove(s.id, advertiser.id, {
+      rating: 1,
+      review: 'ужас',
+      portfolioAllowed: false,
+    });
+
+    await expect(
+      reports.create(advertiser, report('REVIEW', s.id, 'INSULT')),
+    ).rejects.toThrow('Не найдено');
+    await reports.create(creator, report('REVIEW', s.id, 'INSULT'));
+    await reports.resolve({ target: 'REVIEW', targetId: s.id }, true, 1n);
+
+    expect(await profiles.profile(creator.id, true)).toMatchObject({
+      rating: null,
+      completed: 1,
+    });
+  });
+});
+
+describe('блокировка', () => {
+  it('закрывает заказы, отклоняет ожидающие модерации, убирает отклики без видео', async () => {
+    const [banned, other, creator] = [await user(), await user(), await user()];
+    // заказы заблокированного: открытый (с откликом другого креатора) и на модерации
+    const open = await openOrder(banned.id);
+    const pending = await pendingOrder(banned.id);
+    await submissions.claim(open.id, creator.id);
+    // отклики заблокированного как креатора: без видео, у модератора, у рекламодателя
+    const otherOrder = await openOrder(other.id);
+    await submissions.claim(otherOrder.id, banned.id);
+    const [o2, o3] = [await openOrder(other.id), await openOrder(other.id)];
+    const atModerator = await submissions.claim(o2.id, banned.id);
+    await submissions.attachVideo(
+      atModerator.id,
+      banned.id,
+      'https://v.example/1',
+    );
+    const atAdvertiser = await submissions.claim(o3.id, banned.id);
+    await submissions.attachVideo(
+      atAdvertiser.id,
+      banned.id,
+      'https://v.example/2',
+    );
+    await submissions.moderatorApprove(atAdvertiser.id, 1n);
+
+    const closed = await bans.ban(banned.id, 'мошенничество');
+
+    expect(closed.map((o) => o.id)).toEqual([open.id]);
+    // креатору закрытого заказа придёт уведомление
+    expect(closed[0].submissions.map((s) => s.creator.id)).toEqual([
+      creator.id,
+    ]);
+    expect(await statusOf(open.id)).toBe('CLOSED');
+    expect(await statusOf(pending.id)).toBe('REJECTED');
+    const left = await prisma.submission.findMany({
+      where: { creatorId: banned.id },
+      orderBy: { id: 'asc' },
+    });
+    expect(left.map((s) => [s.id, s.status])).toEqual([
+      [atModerator.id, 'MODERATOR_REJECTED'],
+      [atAdvertiser.id, 'MODERATOR_APPROVED'],
+    ]);
+    expect(
+      await prisma.user.findUniqueOrThrow({ where: { id: banned.id } }),
+    ).toMatchObject({ banReason: 'мошенничество' });
+  });
+
+  it('повторно не блокирует; разблокировка снимает бан', async () => {
+    const u = await user();
+    await bans.ban(u.id, 'спам');
+    await expect(bans.ban(u.id, 'спам')).rejects.toThrow('уже заблокирован');
+
+    await bans.unban(u.id);
+    expect(
+      await prisma.user.findUniqueOrThrow({ where: { id: u.id } }),
+    ).toMatchObject({ bannedAt: null, banReason: null });
+    await expect(bans.unban(u.id)).rejects.toThrow('не заблокирован');
   });
 });

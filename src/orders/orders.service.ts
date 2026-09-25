@@ -17,7 +17,7 @@ const PUBLIC_ORDER_FIELDS = {
   id: true,
   title: true,
   description: true,
-  price: true,
+  priceKopecks: true,
   category: true,
   deadline: true,
   createdAt: true,
@@ -37,7 +37,7 @@ export class OrdersService {
     data: {
       title: string;
       description: string;
-      price?: string;
+      priceKopecks?: number;
       category: OrderCategory;
       deadline?: Date;
     },
@@ -57,7 +57,7 @@ export class OrdersService {
         advertiserId,
         title: data.title,
         description: data.description,
-        price: data.price,
+        priceKopecks: data.priceKopecks,
         category: data.category,
         deadline: data.deadline,
       },
@@ -155,6 +155,25 @@ export class OrdersService {
     return this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
       include: { submissions: { include: { creator: true } } },
+    });
+  }
+
+  /**
+   * Модератор закрывает открытый заказ (по жалобе). `null` — заказ уже не открыт: закрывать нечего.
+   * Возвращает заказ с рекламодателем и откликами — для уведомлений.
+   */
+  async moderatorClose(orderId: number) {
+    const { count } = await this.prisma.order.updateMany({
+      where: { id: orderId, status: OrderStatus.OPEN },
+      data: { status: OrderStatus.CLOSED, closedAt: new Date() },
+    });
+    if (count === 0) return null;
+    return this.prisma.order.findUniqueOrThrow({
+      where: { id: orderId },
+      include: {
+        advertiser: true,
+        submissions: { include: { creator: true } },
+      },
     });
   }
 

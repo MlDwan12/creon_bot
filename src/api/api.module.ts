@@ -4,6 +4,8 @@ import { BotModule } from '../bot/bot.module';
 import { OrdersModule } from '../orders/orders.module';
 import { SubmissionsModule } from '../submissions/submissions.module';
 import { UsersModule } from '../users/users.module';
+import { AnalyticsService } from './analytics.service';
+import { BansService } from './bans.service';
 import { InitDataGuard } from './init-data.guard';
 import { MeController } from './me.controller';
 import { ModerationController } from './moderation.controller';
@@ -12,6 +14,11 @@ import { MyOrdersController } from './my-orders.controller';
 import { ScheduledJob } from './scheduled.job';
 import { UserThrottlerGuard } from './user-throttler.guard';
 import { OrdersController } from './orders.controller';
+import { ProfilesController } from './profiles.controller';
+import { ProfilesService } from './profiles.service';
+import { ReportsController } from './reports.controller';
+import { ReportsService } from './reports.service';
+import { SupportController } from './support.controller';
 import { SubmissionsController } from './submissions.controller';
 
 /** HTTP API для Telegram Mini App — тонкий слой над сервисами; плюс фоновые задачи по срокам и очереди модерации. */
@@ -35,7 +42,19 @@ import { SubmissionsController } from './submissions.controller';
     MyOrdersController,
     MeController,
     ModerationController,
+    ProfilesController,
+    ReportsController,
+    SupportController,
   ],
-  providers: [InitDataGuard, ModeratorGuard, UserThrottlerGuard, ScheduledJob],
+  providers: [
+    AnalyticsService,
+    BansService,
+    ProfilesService,
+    ReportsService,
+    InitDataGuard,
+    ModeratorGuard,
+    UserThrottlerGuard,
+    ScheduledJob,
+  ],
 })
 export class ApiModule {}

@@ -1,4 +1,8 @@
+import { ref } from 'vue';
 import { getInitData } from './telegram';
+
+/** Аккаунт заблокирован — App.vue показывает экран блокировки вместо любого экрана. */
+export const banned = ref<{ reason: string | null; supportUrl: string | null } | null>(null);
 
 export type OrderCategory =
   | 'PRODUCT_REVIEW'
@@ -34,7 +38,7 @@ export interface OrderSummary {
   id: number;
   title: string;
   description: string;
-  price: string | null;
+  price: number | null;
   category: OrderCategory;
   deadline: string | null;
   createdAt: string;
@@ -45,6 +49,8 @@ export interface OrderDetail extends OrderSummary {
   claimed: boolean;
   /** Заказ текущего пользователя — откликнуться нельзя. */
   own: boolean;
+  /** Сколько видео рекламодатель уже принял и отклонил. */
+  advertiser: { accepted: number; rejected: number };
 }
 
 export type SubmissionStatus =
@@ -72,7 +78,7 @@ export interface MySubmission {
   order: {
     id: number;
     title: string;
-    price: string | null;
+    price: number | null;
     deadline: string | null;
     status: OrderStatus;
   };
@@ -83,7 +89,7 @@ export interface MyOrder {
   id: number;
   title: string;
   description: string;
-  price: string | null;
+  price: number | null;
   category: OrderCategory;
   deadline: string | null;
   status: OrderStatus;
@@ -98,7 +104,8 @@ export interface MyOrder {
 export interface NewOrderInput {
   title: string;
   description: string;
-  price: string;
+  /** Цена за видео, ₽; null — договорная. */
+  price: number | null;
   category: OrderCategory;
   deadlineDays: number | null;
 }
@@ -110,6 +117,7 @@ export interface PendingVideos {
     id: number;
     videoUrl: string | null;
     creator: string;
+    creatorId: number;
     attempt: number;
     submittedAt: string | null;
   }[];
@@ -118,7 +126,15 @@ export interface PendingVideos {
 
 /** Ответы `/api/mod/*` — см. src/api/moderation.controller.ts. */
 export interface ModQueue {
-  orders: { id: number; title: string; price: string | null; advertiser: string; createdAt: string }[];
+  orders: {
+    id: number;
+    title: string;
+    price: number | null;
+    advertiser: string;
+    createdAt: string;
+    /** В тексте похоже на контакты для связи в обход площадки. */
+    hasContacts: boolean;
+  }[];
   videos: { id: number; orderTitle: string; creator: string; submittedAt: string | null }[];
 }
 
@@ -127,10 +143,33 @@ export interface ModStats {
   submissions: { pending: number; approved: number; rejected: number };
 }
 
+export interface ModFunnel {
+  orders: {
+    created: number;
+    published: number;
+    rejected: number;
+    withClaims: number;
+    withVideos: number;
+    withAccepted: number;
+    /** Медиана от создания до решения модератора, часы; null — решений не было. */
+    moderationHours: number | null;
+  };
+  videos: {
+    submitted: number;
+    pending: number;
+    moderatorRejected: number;
+    accepted: number;
+    advertiserRejected: number;
+  };
+  users: { new: number; activeAdvertisers: number; activeCreators: number };
+  /** Сумма цен принятых видео, ₽ (договорные не считаются) и сколько таких видео. */
+  turnover: { rubles: number; acceptedPriced: number };
+}
+
 export interface ModOrderRow {
   id: number;
   title: string;
-  price: string | null;
+  price: number | null;
   status: OrderStatus;
   advertiser: string;
   submissionsCount: number;
@@ -141,13 +180,15 @@ export interface ModOrder {
   id: number;
   title: string;
   description: string;
-  price: string | null;
+  price: number | null;
   category: OrderCategory;
   deadline: string | null;
   status: OrderStatus;
   moderatorComment: string | null;
   advertiser: string;
   createdAt: string;
+  /** Фрагменты, похожие на контакты (@ник, t.me, телефон…) — см. src/common/contacts.ts. */
+  contacts: string[];
 }
 
 export interface ModVideo {
@@ -156,8 +197,44 @@ export interface ModVideo {
   videoUrl: string | null;
   submittedAt: string | null;
   creator: string;
+  creatorId: number;
   attempt: number;
   order: { id: number; title: string; description: string };
+}
+
+/** Ссылки креатора на соцсети; null — не указана. */
+export interface ProfileLinks {
+  tiktokUrl: string | null;
+  youtubeUrl: string | null;
+  vkUrl: string | null;
+}
+
+/** Профиль креатора — см. src/api/profiles.service.ts. */
+export interface CreatorProfile {
+  id: number;
+  name: string;
+  /** Средняя оценка 1–5; null — отзывов нет. */
+  rating: number | null;
+  reviewsCount: number;
+  completed: number;
+  /** Блокировка — приходит только модератору. */
+  ban: { at: string; reason: string | null } | null;
+  links: ProfileLinks;
+  reviews: {
+    submissionId: number;
+    rating: number;
+    review: string | null;
+    orderTitle: string;
+    decidedAt: string | null;
+  }[];
+  portfolio: { submissionId: number; videoUrl: string | null; orderTitle: string }[];
+}
+
+/** Оценка при приёмке видео. */
+export interface Feedback {
+  rating: number;
+  review: string;
+  portfolioAllowed: boolean;
 }
 
 export interface Page<T> {
@@ -181,7 +258,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(
-  method: 'GET' | 'POST' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   body?: unknown,
 ): Promise<T> {
@@ -198,8 +275,13 @@ async function request<T>(
     if ([400, 403, 404, 429].includes(res.status)) {
       const data = (await res.json().catch(() => null)) as {
         message?: unknown;
+        banned?: boolean;
+        reason?: string | null;
+        supportUrl?: string | null;
       } | null;
       if (typeof data?.message === 'string') userMessage = data.message;
+      if (data?.banned)
+        banned.value = { reason: data.reason ?? null, supportUrl: data.supportUrl ?? null };
     }
     throw new ApiError(res.status, userMessage);
   }
@@ -255,8 +337,44 @@ export function fetchPendingVideos(orderId: number) {
   return request<PendingVideos>('GET', `/api/my-orders/${orderId}/pending-videos`);
 }
 
-export function acceptVideo(submissionId: number) {
-  return request<{ ok: true }>('POST', `/api/submissions/${submissionId}/accept`);
+export function acceptVideo(submissionId: number, feedback: Feedback) {
+  return request<{ ok: true }>('POST', `/api/submissions/${submissionId}/accept`, feedback);
+}
+
+export function fetchMyProfile() {
+  return request<CreatorProfile>('GET', '/api/profile');
+}
+
+export function fetchCreator(id: number) {
+  return request<CreatorProfile>('GET', `/api/creators/${id}`);
+}
+
+const photos = new Map<number, Promise<string | null>>();
+
+/**
+ * Фото креатора из Telegram как blob-ссылка для <img>; null — фото нет или оно недоступно.
+ * Через fetch, а не <img src>: картинке тоже нужен заголовок авторизации. Один запрос на запуск.
+ */
+export function fetchCreatorPhoto(id: number): Promise<string | null> {
+  let photo = photos.get(id);
+  if (!photo) {
+    photo = fetch(`/api/creators/${id}/photo`, {
+      headers: { Authorization: `tma ${getInitData()}` },
+    })
+      .then(async (res) => (res.ok ? URL.createObjectURL(await res.blob()) : null))
+      .catch(() => null);
+    photos.set(id, photo);
+  }
+  return photo;
+}
+
+export function updateProfileLinks(links: ProfileLinks) {
+  return request<{ ok: true }>('PUT', '/api/profile/links', links);
+}
+
+/** Модератор: удалить отзыв (оценку и текст). */
+export function removeReview(submissionId: number) {
+  return request<{ ok: true }>('DELETE', `/api/mod/reviews/${submissionId}`);
 }
 
 export function rejectVideo(submissionId: number, comment: string) {
@@ -265,7 +383,7 @@ export function rejectVideo(submissionId: number, comment: string) {
   });
 }
 
-let me: Promise<{ isModerator: boolean; hasUsername: boolean }> | undefined;
+let me: Promise<{ isModerator: boolean; hasUsername: boolean; supportUrl: string | null }> | undefined;
 
 /** Один запрос на запуск: initData, а с ним и ответ, до перезапуска Mini App не меняется. */
 export function fetchMe() {
@@ -278,6 +396,11 @@ export function fetchModQueue() {
 
 export function fetchModStats() {
   return request<ModStats>('GET', '/api/mod/stats');
+}
+
+/** Воронка за последние `days` дней; без аргумента — за всё время. См. src/api/analytics.service.ts. */
+export function fetchModFunnel(days?: number) {
+  return request<ModFunnel>('GET', `/api/mod/funnel${days ? `?days=${days}` : ''}`);
 }
 
 export function fetchAllOrders(page: number) {
@@ -298,4 +421,107 @@ export function fetchModVideo(id: number) {
 
 export function moderateVideo(id: number, decision: 'approve' | 'reject', comment?: string) {
   return request<{ ok: true }>('POST', `/api/mod/videos/${id}/${decision}`, comment === undefined ? undefined : { comment });
+}
+
+/** На что жалоба: VIDEO и REVIEW — по id отклика, PROFILE — по id пользователя. */
+export type ReportTarget = 'ORDER' | 'VIDEO' | 'REVIEW' | 'PROFILE';
+
+/** Причины жалоб по типу объекта; коды проверяет бэкенд (src/api/reports.service.ts). */
+export const REPORT_REASONS: Record<ReportTarget, { code: string; label: string }[]> = {
+  ORDER: [
+    { code: 'FRAUD', label: 'Мошенничество' },
+    { code: 'PROHIBITED', label: 'Запрещённая тематика' },
+    { code: 'FAKE_REVIEWS', label: 'Фейковые отзывы, обман покупателей' },
+    { code: 'PERSONAL_DATA', label: 'Просят личные данные' },
+    { code: 'SPAM', label: 'Спам' },
+    { code: 'OFF_PLATFORM', label: 'Предлагает связь или оплату вне площадки' },
+    { code: 'OTHER', label: 'Другое' },
+  ],
+  VIDEO: [
+    { code: 'STOLEN', label: 'Чужое или краденое видео' },
+    { code: 'UNAVAILABLE', label: 'Видео удалено или недоступно' },
+    { code: 'BRAND_NEGATIVE', label: 'Негатив о бренде' },
+    { code: 'BLACKMAIL', label: 'Шантаж, вымогательство' },
+    { code: 'OFF_PLATFORM', label: 'Предлагает связь или оплату вне площадки' },
+    { code: 'OTHER', label: 'Другое' },
+  ],
+  REVIEW: [
+    { code: 'INSULT', label: 'Оскорбления' },
+    { code: 'FALSE', label: 'Ложный отзыв' },
+    { code: 'PERSONAL_DATA', label: 'Раскрывает личные данные' },
+    { code: 'OFF_PLATFORM', label: 'Предлагает связь или оплату вне площадки' },
+    { code: 'OTHER', label: 'Другое' },
+  ],
+  PROFILE: [
+    { code: 'IMPERSONATION', label: 'Выдаёт себя за другого' },
+    { code: 'OFFENSIVE', label: 'Оскорбительное имя или фото' },
+    { code: 'OFF_PLATFORM', label: 'Предлагает связь или оплату вне площадки' },
+    { code: 'OTHER', label: 'Другое' },
+  ],
+};
+
+export function reasonLabel(target: ReportTarget, code: string): string {
+  return REPORT_REASONS[target].find((r) => r.code === code)?.label ?? code;
+}
+
+/** Сообщение менеджеру из мини-аппа; ответ придёт в чат с ботом. */
+export function sendSupportMessage(text: string) {
+  return request<{ ok: true }>('POST', '/api/support', { text });
+}
+
+export function createReport(report: {
+  target: ReportTarget;
+  targetId: number;
+  reason: string;
+  comment: string;
+}) {
+  return request<{ ok: true }>('POST', '/api/reports', report);
+}
+
+/** Открытые жалобы на один объект — см. ReportsService.listOpen. */
+export interface ModReportGroup {
+  target: ReportTarget;
+  targetId: number;
+  /** null — объект уже удалён. */
+  subject: {
+    title: string;
+    text: string | null;
+    /** Кто отвечает за объект: автор заказа, видео, отзыва или владелец профиля. */
+    author: string;
+    authorId: number;
+    /** Какой профиль креатора открыть (для заказа — нет). */
+    profileId: number | null;
+    orderId: number | null;
+  } | null;
+  reports: { id: number; reason: string; comment: string | null; reporter: string; createdAt: string }[];
+}
+
+export function fetchModReports() {
+  return request<ModReportGroup[]>('GET', '/api/mod/reports');
+}
+
+/**
+ * actioned — применить меру (закрыть заказ, убрать видео из портфолио, удалить отзыв, стереть ссылки).
+ * banReason — ещё и заблокировать автора объекта.
+ */
+export function resolveReports(
+  target: ReportTarget,
+  targetId: number,
+  actioned: boolean,
+  banReason?: string,
+) {
+  return request<{ ok: true }>('POST', '/api/mod/reports/resolve', {
+    target,
+    targetId,
+    actioned,
+    banReason,
+  });
+}
+
+export function banUser(userId: number, reason: string) {
+  return request<{ ok: true }>('POST', `/api/mod/users/${userId}/ban`, { reason });
+}
+
+export function unbanUser(userId: number) {
+  return request<{ ok: true }>('POST', `/api/mod/users/${userId}/unban`);
 }

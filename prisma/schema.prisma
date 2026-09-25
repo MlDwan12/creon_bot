@@ -12,9 +12,19 @@ model User {
   username   String?
   firstName  String?
   createdAt  DateTime @default(now())
+  /// Ссылки креатора на свои соцсети — в профиле (проверка домена: src/api/profile-input.ts).
+  tiktokUrl  String?
+  youtubeUrl String?
+  vkUrl      String?
+  /// Заблокирован модератором: мини-апп показывает только экран блокировки, бот не пишет.
+  bannedAt   DateTime?
+  banReason  String?
+  /// Тема этого пользователя в группе поддержки (message_thread_id), создаётся при первом обращении.
+  supportTopicId Int?
 
   orders      Order[]
   submissions Submission[]
+  reports     Report[]
 }
 
 enum OrderStatus {
@@ -45,7 +55,8 @@ model Order {
   advertiserId     Int
   title            String
   description      String
-  price            String?
+  /// Цена за одно принятое видео в копейках (в API — рубли, см. src/common/money.ts); null — договорная.
+  priceKopecks     Int?
   category         OrderCategory @default(OTHER)
   deadline         DateTime?
   status           OrderStatus   @default(PENDING_MODERATION)
@@ -80,7 +91,47 @@ model Submission {
   moderatorId       BigInt?
   moderatorComment  String?
   advertiserComment String?
+  /// Оценка рекламодателя 1–5 при приёмке видео (ADVERTISER_APPROVED); менять нельзя, модератор может удалить.
+  rating            Int?
+  review            String?
+  /// Рекламодатель разрешил показывать видео в портфолио креатора.
+  portfolioAllowed  Boolean          @default(false)
   createdAt         DateTime         @default(now())
   submittedAt       DateTime?
   decidedAt         DateTime?
+}
+
+/// На что жалоба. VIDEO и REVIEW — по id отклика (Submission), PROFILE — по id пользователя.
+enum ReportTarget {
+  ORDER
+  VIDEO
+  REVIEW
+  PROFILE
+}
+
+enum ReportStatus {
+  OPEN
+  /// Модератор принял меры (закрыл заказ, удалил отзыв и т.п.).
+  ACTIONED
+  DISMISSED
+}
+
+/// Жалоба пользователя. targetId без внешнего ключа: объект может быть удалён — жалоба остаётся.
+model Report {
+  id          Int          @id @default(autoincrement())
+  reporter    User         @relation(fields: [reporterId], references: [id])
+  reporterId  Int
+  target      ReportTarget
+  targetId    Int
+  /// Код причины — список для каждого target в src/api/reports.service.ts.
+  reason      String
+  comment     String?
+  status      ReportStatus @default(OPEN)
+  moderatorId BigInt?
+  createdAt   DateTime     @default(now())
+  decidedAt   DateTime?
+
+  /// Одна жалоба от человека на один объект.
+  @@unique([reporterId, target, targetId])
+  @@index([status])
 }

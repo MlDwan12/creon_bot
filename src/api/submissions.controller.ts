@@ -10,12 +10,16 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { NotificationsService } from '../bot/notifications.service';
+import { SupportService } from '../bot/support.service';
+import { creatorLabel, escapeHtml, formatPrice } from '../bot/utils/format';
+import { kopecksToRubles } from '../common/money';
 import { MAX_URL_LENGTH, VIDEO_URL_RE } from '../common/validation';
 import { SubmissionsService } from '../submissions/submissions.service';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { UserThrottlerGuard } from './user-throttler.guard';
 import { toMySubmissions } from './my-submissions';
 import { parseRejectComment } from './order-input';
+import { parseFeedback } from './profile-input';
 
 @Controller('api/submissions')
 @UseGuards(InitDataGuard, UserThrottlerGuard)
@@ -23,6 +27,7 @@ export class SubmissionsController {
   constructor(
     private readonly submissionsService: SubmissionsService,
     private readonly notifications: NotificationsService,
+    private readonly support: SupportService,
   ) {}
 
   /** Отклики текущего пользователя как креатора. */
@@ -61,14 +66,31 @@ export class SubmissionsController {
     return { ok: true };
   }
 
-  /** Рекламодатель принимает видео (advertiserApprove проверяет, что заказ его). */
+  /** Рекламодатель принимает видео с оценкой (advertiserApprove проверяет, что заказ его). */
   @Post(':id/accept')
-  async accept(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {
+  async accept(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: unknown,
+    @Req() req: ApiRequest,
+  ) {
     const submission = await this.submissionsService.advertiserApprove(
       id,
       req.user.id,
+      parseFeedback(body),
     );
     await this.notifications.videoAccepted(submission);
+    // оплата пока вне бота: менеджеру — кому и сколько перевести
+    const price = submission.order.priceKopecks;
+    await this.support.paymentDue(
+      [
+        '💸 <b>К оплате</b>',
+        `Заказ #${submission.order.id}: ${escapeHtml(submission.order.title)}`,
+        `Креатор: ${escapeHtml(creatorLabel(submission.creator))} (#u${submission.creator.telegramId})`,
+        `Рекламодатель: ${escapeHtml(creatorLabel(req.user))} (#u${req.user.telegramId})`,
+        `Цена: ${formatPrice(price === null ? null : kopecksToRubles(price))}`,
+        `Видео: ${escapeHtml(submission.videoUrl ?? '')}`,
+      ].join('\n'),
+    );
     return { ok: true };
   }
 

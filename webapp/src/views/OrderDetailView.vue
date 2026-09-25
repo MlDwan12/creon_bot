@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { ApiError, categoryLabel, claimOrder, fetchOrder, type OrderDetail } from '../api';
+import SupportLink from '../components/SupportLink.vue';
 import { formatDeadline, formatPrice } from '../format';
 
 // `id` приходит из адреса /orders/:id (в router.ts у маршрута `props: true`).
@@ -59,8 +60,18 @@ void load();
           <span class="value">{{ formatDeadline(order.deadline) }}</span>
         </div>
         <div class="row">
-          <span>Расчёт</span>
-          <span class="value">напрямую, вне бота</span>
+          <span>Рекламодатель</span>
+          <span class="value">
+            {{
+              order.advertiser.accepted + order.advertiser.rejected
+                ? `принял видео: ${order.advertiser.accepted}, отклонил: ${order.advertiser.rejected}`
+                : 'ещё не принимал видео'
+            }}
+          </span>
+        </div>
+        <div class="row">
+          <span>Оплата</span>
+          <span class="value">через CreON, после приёмки видео</span>
         </div>
       </section>
 
@@ -78,6 +89,18 @@ void load();
           <li>Рекламодатель подтверждает работу</li>
         </ol>
       </section>
+
+      <RouterLink
+        v-if="!order.own"
+        :to="{ path: '/report', query: { target: 'ORDER', id: order.id, title: order.title } }"
+        class="quiet-link"
+      >
+        Пожаловаться на заказ
+      </RouterLink>
+      <SupportLink
+        :label="`Вопрос по заказу #${order.id} — написать менеджеру`"
+        :about="`Вопрос по заказу #${order.id} «${order.title}»`"
+      />
 
       <p v-if="justClaimed" class="notice success" role="status">
         Заказ взят в работу. Когда видео будет готово, отправьте его в «Мои отклики».

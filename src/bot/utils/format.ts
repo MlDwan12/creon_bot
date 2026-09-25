@@ -41,6 +41,21 @@ export function formatDeadline(deadline: Date): string {
   });
 }
 
+/** «3 000 ₽ за видео» или «цена договорная». */
+export function formatPrice(price: number | null): string {
+  return price === null
+    ? 'цена договорная'
+    : `${price.toLocaleString('ru-RU')} ₽ за видео`;
+}
+
+/**
+ * Имя для другой стороны сделки — без @username: стороны общаются только через площадку,
+ * чтобы не договаривались в обход неё. creatorLabel (с username) — только модераторам и поддержке.
+ */
+export function publicName(user: User): string {
+  return user.firstName?.trim() || 'Креатор';
+}
+
 export function creatorLabel(user: User): string {
   return user.username
     ? `@${user.username}`

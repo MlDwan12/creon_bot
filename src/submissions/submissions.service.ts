@@ -141,7 +141,16 @@ export class SubmissionsService {
     return this.mustFind(submissionId);
   }
 
-  async advertiserApprove(submissionId: number, advertiserId: number) {
+  /** Приёмка видео вместе с оценкой: оценка ставится только здесь и потом не меняется. */
+  async advertiserApprove(
+    submissionId: number,
+    advertiserId: number,
+    feedback: {
+      rating: number;
+      review: string | null;
+      portfolioAllowed: boolean;
+    },
+  ) {
     const submission = await this.mustFind(submissionId);
     if (submission.order.advertiserId !== advertiserId) {
       throw new ForbiddenException('Это не ваш заказ');
@@ -149,9 +158,45 @@ export class SubmissionsService {
     await this.transitionStatus(
       submissionId,
       [SubmissionStatus.MODERATOR_APPROVED],
-      { status: SubmissionStatus.ADVERTISER_APPROVED, decidedAt: new Date() },
+      {
+        status: SubmissionStatus.ADVERTISER_APPROVED,
+        decidedAt: new Date(),
+        ...feedback,
+      },
     );
     return this.mustFind(submissionId);
+  }
+
+  /** Модератор удаляет отзыв (оскорбления и т.п.): оценка и текст пропадают, приёмка остаётся. */
+  async removeReview(submissionId: number) {
+    const { count } = await this.prisma.submission.updateMany({
+      where: { id: submissionId, rating: { not: null } },
+      data: { rating: null, review: null },
+    });
+    if (count === 0) throw new NotFoundException('Отзыв не найден');
+  }
+
+  /** Сколько видео рекламодатель принял и отклонил — креатору видно, платит ли он за работу. */
+  async advertiserStats(advertiserId: number) {
+    const rows = await this.prisma.submission.groupBy({
+      by: ['status'],
+      where: {
+        order: { advertiserId },
+        status: {
+          in: [
+            SubmissionStatus.ADVERTISER_APPROVED,
+            SubmissionStatus.ADVERTISER_REJECTED,
+          ],
+        },
+      },
+      _count: true,
+    });
+    const count = (status: SubmissionStatus) =>
+      rows.find((r) => r.status === status)?._count ?? 0;
+    return {
+      accepted: count(SubmissionStatus.ADVERTISER_APPROVED),
+      rejected: count(SubmissionStatus.ADVERTISER_REJECTED),
+    };
   }
 
   async advertiserReject(

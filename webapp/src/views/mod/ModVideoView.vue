@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { RouterLink, useRouter } from 'vue-router';
 import { ApiError, fetchModQueue, fetchModVideo, type ModVideo, moderateVideo } from '../../api';
 import ReasonPicker from '../../components/ReasonPicker.vue';
 import { timeAgo } from '../../format';
@@ -62,7 +62,7 @@ watch(() => props.id, load, { immediate: true });
     <template v-else>
       <header class="head">
         <span class="hint">
-          {{ video.creator }} · попытка {{ video.attempt }}<template v-if="video.submittedAt"> · {{ timeAgo(video.submittedAt) }}</template>
+          <RouterLink :to="`/mod/creators/${video.creatorId}`">{{ video.creator }}</RouterLink> · видео {{ video.attempt }}<template v-if="video.submittedAt"> · {{ timeAgo(video.submittedAt) }}</template>
         </span>
         <h1>{{ video.order.title }}</h1>
       </header>
@@ -98,6 +98,11 @@ watch(() => props.id, load, { immediate: true });
 </template>
 
 <style scoped>
+.head a {
+  color: var(--link);
+  font-weight: 600;
+  text-decoration: none;
+}
 .page {
   display: flex;
   flex-direction: column;

@@ -6,7 +6,7 @@ const order = (id: number): Order => ({
   advertiserId: 1,
   title: `Заказ ${id}`,
   description: 'd',
-  price: null,
+  priceKopecks: 150_000,
   category: 'OTHER',
   deadline: null,
   status: 'OPEN',
@@ -32,6 +32,9 @@ const submission = (
   moderatorId: 888n,
   moderatorComment: null,
   advertiserComment: null,
+  rating: null,
+  review: null,
+  portfolioAllowed: false,
   createdAt: new Date(id * 1000),
   submittedAt: null,
   decidedAt: null,
@@ -62,6 +65,10 @@ describe('toMySubmissions', () => {
     expect(result[0].comment).toBeNull();
     expect(result[1].comment).toBe('не то');
     expect(result[2].comment).toBe('битая ссылка');
+  });
+
+  it('цена наружу — в рублях', () => {
+    expect(result[0].order.price).toBe(1500);
   });
 
   it('наружу не уходят модераторские поля и BigInt', () => {

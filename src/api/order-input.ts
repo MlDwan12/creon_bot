@@ -5,9 +5,10 @@ import {
   MAX_COMMENT_LENGTH,
   MAX_DEADLINE_DAYS,
   MAX_DESCRIPTION_LENGTH,
-  MAX_PRICE_LENGTH,
+  MAX_PRICE,
   MAX_TITLE_LENGTH,
 } from '../common/validation';
+import { rublesToKopecks } from '../common/money';
 import { deadlineIn } from '../orders/deadline';
 
 function text(value: unknown): string {
@@ -39,10 +40,17 @@ export function parseOrderInput(body: unknown) {
     );
   }
 
-  const price = text(b.price) || undefined;
-  if (price && price.length > MAX_PRICE_LENGTH) {
+  // Пусто — «договорная». Иначе целые рубли за одно видео; в базу — копейками.
+  const price =
+    b.price === undefined || b.price === null || b.price === ''
+      ? undefined
+      : (b.price as number);
+  if (
+    price !== undefined &&
+    (!Number.isInteger(price) || price < 1 || price > MAX_PRICE)
+  ) {
     throw new BadRequestException(
-      `Бюджет длиннее ${MAX_PRICE_LENGTH} символов`,
+      `Цена — целое число рублей от 1 до ${MAX_PRICE.toLocaleString('ru-RU')}`,
     );
   }
 
@@ -56,7 +64,13 @@ export function parseOrderInput(body: unknown) {
       ? undefined
       : deadlineIn(parseDeadlineDays(b.deadlineDays));
 
-  return { title, description, price, category, deadline };
+  return {
+    title,
+    description,
+    priceKopecks: price === undefined ? undefined : rublesToKopecks(price),
+    category,
+    deadline,
+  };
 }
 
 /** Срок в днях — при создании заказа и при продлении. */

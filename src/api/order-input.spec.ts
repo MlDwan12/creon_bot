@@ -4,23 +4,32 @@ import { parseOrderInput, parseRejectComment } from './order-input';
 const valid = {
   title: '  Распаковка наушников  ',
   description: 'Снять 30 секунд',
-  price: '',
+  price: null,
   category: 'TECH',
   deadlineDays: 7,
 };
 
 describe('parseOrderInput', () => {
-  it('чистит пробелы, пустую цену превращает в «не указана», срок — в дату', () => {
+  it('чистит пробелы, без цены — «договорная», срок — в дату', () => {
     const before = Date.now();
     const r = parseOrderInput(valid);
     expect(r).toMatchObject({
       title: 'Распаковка наушников',
       description: 'Снять 30 секунд',
-      price: undefined,
+      priceKopecks: undefined,
       category: 'TECH',
     });
     const days = (r.deadline!.getTime() - before) / (24 * 60 * 60 * 1000);
     expect(Math.round(days)).toBe(7);
+  });
+
+  it('цена — целые рубли, в базу копейками; пустая строка — договорная', () => {
+    expect(parseOrderInput({ ...valid, price: 3000 }).priceKopecks).toBe(
+      300_000,
+    );
+    expect(
+      parseOrderInput({ ...valid, price: '' }).priceKopecks,
+    ).toBeUndefined();
   });
 
   it('без срока — deadline не задан', () => {
@@ -38,7 +47,10 @@ describe('parseOrderInput', () => {
     ['дробный срок', { deadlineDays: 2.5 }],
     ['срок строкой', { deadlineDays: '7' }],
     ['срок больше года', { deadlineDays: 366 }],
-    ['слишком длинный бюджет', { price: 'x'.repeat(51) }],
+    ['цена строкой', { price: '5000' }],
+    ['дробная цена', { price: 99.5 }],
+    ['нулевая цена', { price: 0 }],
+    ['цена больше максимума', { price: 1_000_001 }],
   ])('отклоняет: %s', (_name, patch) => {
     expect(() => parseOrderInput({ ...valid, ...patch })).toThrow(
       BadRequestException,

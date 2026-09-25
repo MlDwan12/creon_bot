@@ -2,11 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Order, Submission, User } from '@prisma/client';
 import { InjectBot } from 'nestjs-telegraf';
+import { kopecksToRubles } from '../common/money';
+import { PrismaService } from '../prisma/prisma.service';
 import { Context, Markup, Telegraf } from 'telegraf';
 import {
   creatorLabel,
   escapeHtml,
   formatDeadline,
+  formatPrice,
   html,
   orderCategoryLabel,
 } from './utils/format';
@@ -25,6 +28,7 @@ export class NotificationsService {
 
   constructor(
     @InjectBot() private readonly bot: Telegraf<Context>,
+    private readonly prisma: PrismaService,
     config: ConfigService,
   ) {
     this.moderatorIds = Array.from(
@@ -41,7 +45,7 @@ export class NotificationsService {
       `#${order.id}: <b>${escapeHtml(order.title)}</b>`,
       escapeHtml(order.description),
       orderCategoryLabel(order.category),
-      order.price ? `💰 ${escapeHtml(order.price)}` : '💰 цена не указана',
+      `💰 ${formatPrice(kopecksToRubles(order.priceKopecks))}`,
       order.deadline ? `⏰ Дедлайн: ${formatDeadline(order.deadline)}` : '',
       `Рекламодатель: ${escapeHtml(creatorLabel(order.advertiser))}`,
     ]
@@ -118,6 +122,38 @@ export class NotificationsService {
     );
   }
 
+  /** Модератор закрыл заказ по жалобе: рекламодателю и креаторам с откликами. */
+  async orderClosedByModerator(
+    order: Order & { advertiser: User } & OrderWithCreators,
+  ) {
+    await this.send(
+      order.advertiser.telegramId,
+      `🚫 Ваш заказ «${escapeHtml(order.title)}» закрыт модератором: он нарушает правила площадки. Если это ошибка — напишите в поддержку.`,
+      '/my-orders',
+      true,
+    );
+    await this.toCreators(
+      order,
+      `🔒 Заказ «${escapeHtml(order.title)}» закрыт модератором за нарушение правил площадки — не продолжайте работу по нему.`,
+    );
+  }
+
+  /** Модераторам: новая жалоба. */
+  async reportCreated(what: string) {
+    await this.toModerators(
+      `🚩 Новая жалоба: ${escapeHtml(what)}`,
+      '/mod?tab=reports',
+    );
+  }
+
+  /** Тем, кто жаловался: модератор рассмотрел жалобу. */
+  async reportResolved(telegramIds: bigint[], actioned: boolean) {
+    const text = actioned
+      ? '✅ Мы рассмотрели вашу жалобу и приняли меры. Спасибо, что помогаете площадке.'
+      : '👌 Мы рассмотрели вашу жалобу — нарушений не нашли. Спасибо, что сообщили.';
+    for (const id of telegramIds) await this.send(id, text, '/');
+  }
+
   /** Креаторам с откликами на заказ: рекламодатель его удалил. */
   async orderRemoved(order: OrderWithCreators) {
     await this.toCreators(
@@ -164,7 +200,10 @@ export class NotificationsService {
   async videoAccepted(submission: SubmissionWithParties) {
     await this.send(
       submission.creator.telegramId,
-      `🎉 Рекламодатель подтвердил ваше видео по заказу «${submission.order.title}»!`,
+      `🎉 Рекламодатель подтвердил ваше видео по заказу «${submission.order.title}»!` +
+        (submission.rating
+          ? `\nОценка: ${'★'.repeat(submission.rating)}${'☆'.repeat(5 - submission.rating)}`
+          : ''),
       '/submissions',
     );
   }
@@ -208,6 +247,12 @@ export class NotificationsService {
     path: string,
     asHtml = false,
   ) {
+    // Заблокированным бот не пишет.
+    const user = await this.prisma.user.findUnique({
+      where: { telegramId },
+      select: { bannedAt: true },
+    });
+    if (user?.bannedAt) return;
     const kb = this.openButton(path);
     try {
       await this.bot.telegram.sendMessage(
