@@ -6,6 +6,7 @@ import { SubmissionsModule } from '../submissions/submissions.module';
 import { UsersModule } from '../users/users.module';
 import { AnalyticsService } from './analytics.service';
 import { BansService } from './bans.service';
+import { HealthController } from './health.controller';
 import { InitDataGuard } from './init-data.guard';
 import { MeController } from './me.controller';
 import { ModerationController } from './moderation.controller';
@@ -37,6 +38,7 @@ import { SubmissionsController } from './submissions.controller';
     }),
   ],
   controllers: [
+    HealthController,
     OrdersController,
     SubmissionsController,
     MyOrdersController,

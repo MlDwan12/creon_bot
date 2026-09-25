@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { RouterLink } from 'vue-router';
+import { RouterLink, useRouter } from 'vue-router';
 import { ApiError, closeOrder, deleteOrder, extendOrder, type MyOrder } from '../api';
 import { formatDate, formatPrice } from '../format';
 import { confirmAction } from '../telegram';
@@ -8,6 +8,7 @@ import { confirmAction } from '../telegram';
 const props = defineProps<{ order: MyOrder }>();
 // emit — сообщить родителю (MyOrdersView), что список надо перезагрузить.
 const emit = defineEmits<{ changed: [] }>();
+const router = useRouter();
 
 const STATUS: Record<MyOrder['status'], { label: string; tone: string }> = {
   PENDING_MODERATION: { label: 'На проверке', tone: 'warn' },
@@ -94,6 +95,14 @@ const remove = () =>
       </button>
     </div>
     <div class="buttons">
+      <button
+        v-if="order.status === 'PENDING_MODERATION' || order.status === 'OPEN'"
+        type="button"
+        :disabled="busy"
+        @click="router.push(`/my-orders/${order.id}/edit`)"
+      >
+        Изменить
+      </button>
       <button v-if="canExtend" type="button" :disabled="busy" @click="extending = !extending">
         {{ extending ? 'Отмена' : 'Продлить срок' }}
       </button>

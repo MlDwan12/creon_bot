@@ -52,6 +52,13 @@ export const router = createRouter({
     { path: '/my-orders', component: MyOrdersView },
     // ?from=<id> — «Исправить и отправить снова»: форма заполнена данными отклонённого заказа.
     { path: '/my-orders/new', component: CreateOrderView, meta: { back: true } },
+    // Правка своего заказа — та же форма, что и создание.
+    {
+      path: '/my-orders/:id/edit',
+      component: CreateOrderView,
+      props: true,
+      meta: { back: true },
+    },
     {
       path: '/my-orders/:id/review',
       component: ReviewVideosView,

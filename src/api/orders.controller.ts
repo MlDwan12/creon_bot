@@ -44,12 +44,18 @@ export class OrdersController {
     category: OrderCategory | undefined,
     @Query('page', new DefaultValuePipe(0), ParseIntPipe) page: number,
   ) {
-    const { items, total } = await this.ordersService.listOpen(
+    const { items, hasMore, total } = await this.ordersService.listOpen(
       category,
       Math.max(0, page) * PAGE_SIZE,
       PAGE_SIZE,
     );
-    return { items: items.map(toPublic), total, page, pageSize: PAGE_SIZE };
+    return {
+      items: items.map(toPublic),
+      hasMore,
+      total,
+      page,
+      pageSize: PAGE_SIZE,
+    };
   }
 
   /** Карточка открытого заказа; `claimed` — есть ли у текущего пользователя отклик «в работе», `own` — заказ его. */

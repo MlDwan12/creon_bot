@@ -47,8 +47,34 @@ export class NotificationsService implements OnModuleDestroy {
 
   /** Модераторам: новый заказ ждёт проверки. */
   async orderCreated(order: Order & { advertiser: User }) {
-    const text = [
-      '🆕 <b>Новый заказ на проверку</b>',
+    await this.toModerators(
+      this.orderCard('🆕 <b>Новый заказ на проверку</b>', order),
+      `/mod/orders/${order.id}`,
+    );
+  }
+
+  /**
+   * Рекламодатель изменил заказ: модераторам — на повторную проверку; если заказ был открыт —
+   * креаторам, которые уже работают по нему, что условия изменились.
+   */
+  async orderEdited(
+    order: Order & { advertiser: User } & OrderWithCreators,
+    wasOpen: boolean,
+  ) {
+    await this.toModerators(
+      this.orderCard('✏️ <b>Заказ изменён — снова на проверку</b>', order),
+      `/mod/orders/${order.id}`,
+    );
+    if (wasOpen)
+      await this.toCreators(
+        order,
+        `✏️ Рекламодатель изменил условия заказа «${escapeHtml(order.title)}». Заказ снова на проверке у модератора — после одобрения новые условия будут в карточке заказа.`,
+      );
+  }
+
+  private orderCard(title: string, order: Order & { advertiser: User }) {
+    return [
+      title,
       '',
       `#${order.id}: <b>${escapeHtml(order.title)}</b>`,
       escapeHtml(order.description),
@@ -59,7 +85,6 @@ export class NotificationsService implements OnModuleDestroy {
     ]
       .filter(Boolean)
       .join('\n');
-    await this.toModerators(text, `/mod/orders/${order.id}`);
   }
 
   /** Модераторам: креатор прислал видео. */

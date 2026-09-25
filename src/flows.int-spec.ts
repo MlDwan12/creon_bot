@@ -182,7 +182,7 @@ describe('срок от публикации и напоминания', () => {
     // заказ провисел на модерации двое суток
     await prisma.order.update({
       where: { id: order.id },
-      data: { createdAt: new Date(Date.now() - 2 * DAY) },
+      data: { moderationRequestedAt: new Date(Date.now() - 2 * DAY) },
     });
 
     const published = await orders.moderatorApprove(order.id, 1n);
@@ -216,6 +216,85 @@ describe('срок от публикации и напоминания', () => {
       data: { deadline: new Date(Date.now() + DAY / 2) },
     });
     expect(await orders.listDeadlineSoon()).toEqual([{ id: order.id }]);
+  });
+});
+
+describe('каталог', () => {
+  it('hasMore — есть ли следующая страница; total — число открытых', async () => {
+    const adv = await user();
+    for (let i = 0; i < 3; i++) await openOrder(adv.id);
+    await pendingOrder(adv.id); // на модерации — не в каталоге
+
+    const first = await orders.listOpen(undefined, 0, 2);
+    expect(first).toMatchObject({ hasMore: true, total: 3 });
+    expect(first.items).toHaveLength(2);
+
+    const last = await orders.listOpen(undefined, 2, 2);
+    expect(last.hasMore).toBe(false);
+    expect(last.items).toHaveLength(1);
+  });
+});
+
+describe('правка заказа', () => {
+  const edit = {
+    title: 'Новое название',
+    description: 'Новое описание',
+    priceKopecks: 50_000,
+    category: 'FOOD' as const,
+  };
+
+  it('открытый — снова на проверку; работающие креаторы — в ответе для уведомления', async () => {
+    const adv = await user();
+    const creator = await user();
+    const order = await openOrder(adv.id);
+    await submissions.claim(order.id, creator.id);
+
+    const { order: updated, wasOpen } = await orders.update(
+      order.id,
+      adv.id,
+      edit,
+    );
+    expect(wasOpen).toBe(true);
+    expect(updated).toMatchObject({
+      ...edit,
+      status: 'PENDING_MODERATION',
+      decidedAt: null,
+    });
+    expect(updated.submissions.map((s) => s.creatorId)).toEqual([creator.id]);
+  });
+
+  it('чужой и закрытый — нельзя', async () => {
+    const adv = await user();
+    const other = await user();
+    const order = await openOrder(adv.id);
+    await expect(orders.update(order.id, other.id, edit)).rejects.toThrow(
+      'Это не ваш заказ',
+    );
+    await orders.close(order.id, adv.id);
+    await expect(orders.update(order.id, adv.id, edit)).rejects.toThrow(
+      'Изменить можно только',
+    );
+  });
+
+  it('срок после повторной проверки сдвигается на время проверки, а не на возраст заказа', async () => {
+    const adv = await user();
+    const order = await openOrder(adv.id, new Date(Date.now() + 7 * DAY));
+    // заказу 10 дней, правка ушла на проверку 2 часа назад, срок при правке не меняли
+    await orders.update(order.id, adv.id, edit);
+    await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        createdAt: new Date(Date.now() - 10 * DAY),
+        moderationRequestedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      },
+    });
+    const before = (
+      await prisma.order.findUniqueOrThrow({ where: { id: order.id } })
+    ).deadline!.getTime();
+    const approved = await orders.moderatorApprove(order.id, 1n);
+    const shiftHours =
+      (approved.deadline!.getTime() - before) / (60 * 60 * 1000);
+    expect(shiftHours).toBeCloseTo(2, 1);
   });
 });
 

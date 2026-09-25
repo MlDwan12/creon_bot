@@ -291,7 +291,8 @@ async function request<T>(
 export function fetchOpenOrders(page: number, category?: OrderCategory) {
   const query = new URLSearchParams({ page: String(page) });
   if (category) query.set('category', category);
-  return request<Page<OrderSummary>>('GET', `/api/orders?${query}`);
+  // hasMore — есть ли следующая страница; total — для заголовка, может отставать на полминуты
+  return request<Page<OrderSummary> & { hasMore: boolean }>('GET', `/api/orders?${query}`);
 }
 
 export function fetchOrder(id: number) {
@@ -318,6 +319,14 @@ export function fetchMyOrders() {
 
 export function createOrder(input: NewOrderInput) {
   return request<{ id: number }>('POST', '/api/my-orders', input);
+}
+
+/** Правка заказа. `deadlineDays` не передан — срок не меняется, null — без срока. */
+export function updateOrder(
+  id: number,
+  input: Omit<NewOrderInput, 'deadlineDays'> & { deadlineDays?: number | null },
+) {
+  return request<{ ok: true }>('PUT', `/api/my-orders/${id}`, input);
 }
 
 export function closeOrder(id: number) {

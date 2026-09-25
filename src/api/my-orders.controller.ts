@@ -6,6 +6,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  Put,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -20,7 +21,11 @@ import { SubmissionsService } from '../submissions/submissions.service';
 import { attemptNumbers } from './attempts';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { UserThrottlerGuard } from './user-throttler.guard';
-import { parseDeadlineDays, parseOrderInput } from './order-input';
+import {
+  parseDeadlineDays,
+  parseOrderEdit,
+  parseOrderInput,
+} from './order-input';
 
 /** Заказы текущего пользователя как рекламодателя. Права проверяют сервисы. */
 @Controller('api/my-orders')
@@ -68,6 +73,23 @@ export class MyOrdersController {
     );
     await this.notifications.orderCreated(order);
     return { id: order.id };
+  }
+
+  /** Правка заказа: снова на проверку; креаторам, уже работающим по открытому заказу, — уведомление. */
+  @Put(':id')
+  @Throttle({ default: { limit: 30, ttl: 60 * 60_000 } })
+  async update(
+    @Param('id', ParseIdPipe) id: number,
+    @Body() body: unknown,
+    @Req() req: ApiRequest,
+  ) {
+    const { order, wasOpen } = await this.ordersService.update(
+      id,
+      req.user.id,
+      parseOrderEdit(body),
+    );
+    await this.notifications.orderEdited(order, wasOpen);
+    return { ok: true };
   }
 
   @Post(':id/close')
