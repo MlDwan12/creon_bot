@@ -94,9 +94,10 @@ export class ProfilesService {
         orderTitle: s.order.title,
         decidedAt: s.decidedAt,
       })),
+      // ссылка на видео обычно ведёт на аккаунт креатора — рекламодателю только название работы
       portfolio: portfolio.map((s) => ({
         submissionId: s.id,
-        videoUrl: s.videoUrl,
+        videoUrl: full ? s.videoUrl : null,
         orderTitle: s.order.title,
       })),
     };

@@ -369,9 +369,13 @@ describe('профиль креатора', () => {
         tiktokUrl: 'https://www.tiktok.com/@secret_creator',
       },
     });
+    await acceptedVideo((await user()).id, creator.id, 5, true);
 
     const forAdvertiser = await profiles.profile(creator.id, false);
     expect(forAdvertiser.name).toBe('Аня');
+    // портфолио — только названия работ: ссылка обычно ведёт на аккаунт креатора
+    expect(forAdvertiser.portfolio).toHaveLength(1);
+    expect(forAdvertiser.portfolio[0].videoUrl).toBeNull();
     expect(forAdvertiser.links).toEqual({
       tiktokUrl: null,
       youtubeUrl: null,
@@ -382,6 +386,7 @@ describe('профиль креатора', () => {
     const full = await profiles.profile(creator.id, true);
     expect(full.name).toBe('@secret_creator');
     expect(full.links.tiktokUrl).toContain('secret_creator');
+    expect(full.portfolio[0].videoUrl).not.toBeNull();
   });
 
   it('модератор удаляет отзыв — приёмка и счётчик выполненных остаются', async () => {
