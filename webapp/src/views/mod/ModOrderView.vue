@@ -49,7 +49,7 @@ async function decide(decision: 'approve' | 'reject') {
   busy.value = true;
   error.value = '';
   try {
-    await moderateOrder(Number(props.id), decision, decision === 'reject' ? comment.value : undefined);
+    await moderateOrder(Number(props.id), decision, order.value!.version, decision === 'reject' ? comment.value : undefined);
     await goNext();
   } catch (err) {
     // Например, другой модератор успел раньше: «Этот заказ уже обработан».

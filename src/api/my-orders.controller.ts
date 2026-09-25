@@ -71,7 +71,7 @@ export class MyOrdersController {
       req.user.id,
       parseOrderInput(body),
     );
-    await this.notifications.orderCreated(order);
+    this.notifications.orderCreated(order);
     return { id: order.id };
   }
 
@@ -83,19 +83,19 @@ export class MyOrdersController {
     @Body() body: unknown,
     @Req() req: ApiRequest,
   ) {
-    const { order, wasOpen } = await this.ordersService.update(
+    const order = await this.ordersService.update(
       id,
       req.user.id,
       parseOrderEdit(body),
     );
-    await this.notifications.orderEdited(order, wasOpen);
+    this.notifications.orderEdited(order);
     return { ok: true };
   }
 
   @Post(':id/close')
   async close(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
     const order = await this.ordersService.close(id, req.user.id);
-    await this.notifications.orderClosed(order);
+    this.notifications.orderClosed(order);
     return { ok: true };
   }
 
@@ -113,7 +113,7 @@ export class MyOrdersController {
   @Delete(':id')
   async remove(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
     const order = await this.ordersService.remove(id, req.user.id);
-    await this.notifications.orderRemoved(order);
+    this.notifications.orderRemoved(order);
     return { ok: true };
   }
 

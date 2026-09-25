@@ -26,6 +26,13 @@ const PUBLIC_ORDER_FIELDS = {
 /** Сколько заказов у рекламодателя может быть одновременно на модерации и открытыми. */
 export const MAX_ACTIVE_ORDERS = 10;
 
+/**
+ * Решение модератора — только по той версии заказа, которую он видел: рекламодатель мог изменить
+ * заказ, пока модератор его читал.
+ */
+const CHANGED_WHILE_VIEWED =
+  'Заказ уже обработан или изменён, пока вы его смотрели — откройте его заново';
+
 /** Сколько живёт число «N открытых заказов» в заголовке каталога. */
 const OPEN_COUNT_TTL_MS = 30_000;
 
@@ -75,13 +82,15 @@ export class OrdersService {
   }
 
   /**
-   * Страница открытых заказов для каталога Mini App. `hasMore` — есть ли следующая страница
-   * (берём на один больше). `total` — только для заголовка, из кэша: каталог открывают чаще всего,
-   * а под нагрузкой каждый лишний запрос к базе — это CPU.
+   * Страница открытых заказов для каталога Mini App, новые первыми. `after` — последний показанный
+   * заказ: следующая страница — то, что старше него (курсор, а не смещение: закрылся или появился
+   * заказ, пока листали, — страницы не съезжают). `hasMore` — есть ли ещё (берём на один больше).
+   * `total` — только для заголовка, из кэша: каталог открывают чаще всего, а под нагрузкой каждый
+   * лишний запрос к базе — это CPU.
    */
   async listOpen(
     category: OrderCategory | undefined,
-    skip: number,
+    after: { createdAt: Date; id: number } | undefined,
     take: number,
   ) {
     const where = {
@@ -90,9 +99,16 @@ export class OrdersService {
     };
     const [rows, total] = await Promise.all([
       this.prisma.order.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
+        where: after
+          ? {
+              ...where,
+              OR: [
+                { createdAt: { lt: after.createdAt } },
+                { createdAt: after.createdAt, id: { lt: after.id } },
+              ],
+            }
+          : where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: take + 1,
         select: PUBLIC_ORDER_FIELDS,
       }),
@@ -118,11 +134,12 @@ export class OrdersService {
     });
   }
 
-  /** Очередь модератора в Mini App: все заказы на проверке, старые первыми. */
+  /** Очередь модератора в Mini App: все заказы на проверке, дольше ждущие первыми. */
   listPending() {
     return this.prisma.order.findMany({
       where: { status: OrderStatus.PENDING_MODERATION },
-      orderBy: { createdAt: 'asc' },
+      // после правки заказ встаёт в очередь заново — ждёт с момента отправки, а не создания
+      orderBy: { moderationRequestedAt: 'asc' },
       include: { advertiser: true },
     });
   }
@@ -324,7 +341,7 @@ export class OrdersService {
    * Правка своего заказа: на проверке — остаётся на проверке, открытый — уходит на повторную
    * (пропадает из каталога до одобрения: новые условия видит модератор, в том числе контакты).
    * `deadline`: undefined — не менять, null — без срока. Возвращает заказ с рекламодателем и
-   * откликами в работе — для уведомлений; `wasOpen` — был ли опубликован.
+   * креаторами, которые уже работают по нему (отклики бывают, только если заказ публиковали).
    */
   async update(
     orderId: number,
@@ -340,20 +357,57 @@ export class OrdersService {
     const order = await this.mustFind(orderId);
     if (order.advertiserId !== advertiserId)
       throw new ForbiddenException('Это не ваш заказ');
+    // Цена — то, за что креаторы уже сняли видео: пока есть сданные работы, её не меняем.
+    if (data.priceKopecks !== order.priceKopecks) {
+      const delivered = await this.prisma.submission.count({
+        where: {
+          orderId,
+          status: {
+            in: [
+              SubmissionStatus.SUBMITTED,
+              SubmissionStatus.MODERATOR_APPROVED,
+            ],
+          },
+        },
+      });
+      if (delivered)
+        throw new ForbiddenException(
+          'Цену нельзя менять, пока есть видео на проверке — сначала примите или отклоните их',
+        );
+    }
+    const now = new Date();
+    // Срок «как было» у заказа на проверке — это ещё «N дней от отправки на проверку»: переносим его
+    // вместе с моментом отправки, иначе время до правки съело бы дни креаторов.
+    let deadline = data.deadline;
+    if (
+      deadline === undefined &&
+      order.deadline &&
+      order.status === OrderStatus.PENDING_MODERATION
+    )
+      deadline = new Date(
+        order.deadline.getTime() +
+          (now.getTime() - order.moderationRequestedAt.getTime()),
+      );
     await this.transitionStatus(
       orderId,
       [OrderStatus.PENDING_MODERATION, OrderStatus.OPEN],
       {
         ...data,
+        deadline,
         status: OrderStatus.PENDING_MODERATION,
-        moderationRequestedAt: new Date(),
+        moderationRequestedAt: now,
         moderatorId: null,
         decidedAt: null,
         deadlineReminderSentAt: null,
       },
       'Изменить можно только заказ на проверке или открытый',
     );
-    const updated = await this.prisma.order.findUniqueOrThrow({
+    return this.withActiveCreators(orderId);
+  }
+
+  /** Заказ с рекламодателем и креаторами, чья работа по нему ещё не решена, — для уведомлений. */
+  private withActiveCreators(orderId: number) {
+    return this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
       include: {
         advertiser: true,
@@ -371,48 +425,65 @@ export class OrdersService {
         },
       },
     });
-    return { order: updated, wasOpen: order.status === OrderStatus.OPEN };
   }
 
   /**
    * Публикация. Срок в форме — «N дней» от отправки на проверку: сдвигаем его на время модерации,
    * чтобы у креаторов было ровно N дней с момента публикации (после правки — сколько оставалось).
    */
-  async moderatorApprove(orderId: number, moderatorTelegramId: bigint) {
+  async moderatorApprove(
+    orderId: number,
+    moderatorTelegramId: bigint,
+    version: Date,
+  ) {
     const order = await this.mustFind(orderId);
     const now = new Date();
-    await this.transitionStatus(orderId, [OrderStatus.PENDING_MODERATION], {
-      status: OrderStatus.OPEN,
-      moderatorId: moderatorTelegramId,
-      decidedAt: now,
-      deadline: order.deadline
-        ? new Date(
-            order.deadline.getTime() +
-              (now.getTime() - order.moderationRequestedAt.getTime()),
-          )
-        : null,
-    });
+    await this.transitionStatus(
+      orderId,
+      [OrderStatus.PENDING_MODERATION],
+      {
+        status: OrderStatus.OPEN,
+        moderatorId: moderatorTelegramId,
+        decidedAt: now,
+        deadline: order.deadline
+          ? new Date(
+              order.deadline.getTime() +
+                (now.getTime() - order.moderationRequestedAt.getTime()),
+            )
+          : null,
+      },
+      CHANGED_WHILE_VIEWED,
+      { moderationRequestedAt: version },
+    );
     return this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
       include: { advertiser: true },
     });
   }
 
+  /**
+   * Возвращает заказ с креаторами в работе: отклонить можно и изменённый открытый заказ —
+   * тогда им надо сказать, что работа по нему больше не нужна.
+   */
   async moderatorReject(
     orderId: number,
     moderatorTelegramId: bigint,
     comment: string,
+    version: Date,
   ) {
-    await this.transitionStatus(orderId, [OrderStatus.PENDING_MODERATION], {
-      status: OrderStatus.REJECTED,
-      moderatorId: moderatorTelegramId,
-      moderatorComment: comment,
-      decidedAt: new Date(),
-    });
-    return this.prisma.order.findUniqueOrThrow({
-      where: { id: orderId },
-      include: { advertiser: true },
-    });
+    await this.transitionStatus(
+      orderId,
+      [OrderStatus.PENDING_MODERATION],
+      {
+        status: OrderStatus.REJECTED,
+        moderatorId: moderatorTelegramId,
+        moderatorComment: comment,
+        decidedAt: new Date(),
+      },
+      CHANGED_WHILE_VIEWED,
+      { moderationRequestedAt: version },
+    );
+    return this.withActiveCreators(orderId);
   }
 
   async stats() {
@@ -448,9 +519,11 @@ export class OrdersService {
     fromStatuses: OrderStatus[],
     data: Prisma.OrderUpdateManyMutationInput,
     conflictMessage = 'Этот заказ уже обработан',
+    /** Доп. условие в том же запросе — например, версия, которую видел модератор. */
+    also?: Prisma.OrderWhereInput,
   ) {
     const result = await this.prisma.order.updateMany({
-      where: { id: orderId, status: { in: fromStatuses } },
+      where: { ...also, id: orderId, status: { in: fromStatuses } },
       data,
     });
     if (result.count === 0) {
