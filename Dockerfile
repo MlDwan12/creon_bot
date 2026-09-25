@@ -30,13 +30,14 @@ ENV NODE_ENV=production
 RUN addgroup -S app && adduser -S app -G app
 # from `build`, not `deps` — only `build` ran `prisma generate`, which writes the
 # generated client into node_modules (.prisma/client, @prisma/client/default.js)
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
-COPY --from=webapp /webapp/dist ./public
-COPY prisma ./prisma
-COPY prisma.config.ts package.json ./
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh && chown -R app:app /app
+# --chown сразу при копировании: отдельный `chown -R` по node_modules копирует каждый файл в новый
+# слой — сборка висит минутами, а образ раздувается вдвое.
+COPY --chown=app:app --from=build /app/node_modules ./node_modules
+COPY --chown=app:app --from=build /app/dist ./dist
+COPY --chown=app:app --from=webapp /webapp/dist ./public
+COPY --chown=app:app prisma ./prisma
+COPY --chown=app:app prisma.config.ts package.json ./
+COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 USER app
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "dist/main"]
