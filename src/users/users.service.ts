@@ -18,7 +18,12 @@ export class UsersService {
   findOrCreate(input: TelegramUserInput) {
     return this.prisma.user.upsert({
       where: { telegramId: input.telegramId },
-      update: { username: input.username, firstName: input.firstName },
+      // Telegram не присылает username, если его нет. undefined Prisma поняла бы как «не трогать»,
+      // и в базе остался бы старый ник — поэтому явно null.
+      update: {
+        username: input.username ?? null,
+        firstName: input.firstName ?? null,
+      },
       create: input,
     });
   }

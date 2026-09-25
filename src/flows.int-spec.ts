@@ -6,6 +6,7 @@ import { ReportsService } from './api/reports.service';
 import { MAX_ACTIVE_ORDERS, OrdersService } from './orders/orders.service';
 import { PrismaService } from './prisma/prisma.service';
 import { SubmissionsService } from './submissions/submissions.service';
+import { UsersService } from './users/users.service';
 
 /**
  * Интеграционные тесты сервисов на настоящем Postgres: статусы, гонки и права, которые держатся
@@ -28,6 +29,7 @@ const analytics = new AnalyticsService(prisma);
 const bans = new BansService(prisma);
 const profiles = new ProfilesService(prisma);
 const reports = new ReportsService(prisma, orders, profiles);
+const users = new UsersService(prisma);
 
 const DAY = 24 * 60 * 60 * 1000;
 let nextTelegramId = 1n;
@@ -62,6 +64,21 @@ beforeEach(() =>
   ),
 );
 afterAll(() => prisma.$disconnect());
+
+describe('пользователь из initData', () => {
+  it('убрал username в Telegram — он стирается и в базе', async () => {
+    await users.findOrCreate({
+      telegramId: 500n,
+      username: 'old_nick',
+      firstName: 'Аня',
+    });
+    const updated = await users.findOrCreate({
+      telegramId: 500n,
+      firstName: 'Аня',
+    });
+    expect(updated.username).toBeNull();
+  });
+});
 
 describe('отклик', () => {
   it('на свой заказ — нельзя', async () => {
