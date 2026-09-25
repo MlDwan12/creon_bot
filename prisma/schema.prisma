@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -113,6 +114,8 @@ model Submission {
 
   /// Отклики по заказу; внешний ключ Postgres сам не индексирует.
   @@index([orderId])
+  /// Один отклик «в работе» на креатора и заказ — дубль (двойной тап) отсекает сама база.
+  @@unique([orderId, creatorId], map: "Submission_one_in_progress", where: { status: "IN_PROGRESS" })
   /// «Мои отклики», профиль креатора, рейтинг.
   @@index([creatorId])
   /// Очередь модерации видео (SUBMITTED, старые первыми) и счётчики по статусам.

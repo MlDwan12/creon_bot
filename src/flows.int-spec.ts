@@ -378,6 +378,37 @@ describe('правка заказа — защита', () => {
   });
 });
 
+describe('гонки и снятые заказы', () => {
+  it('разные креаторы откликаются одновременно — все отклики проходят', async () => {
+    const adv = await user();
+    const order = await openOrder(adv.id);
+    const creators = await Promise.all([1, 2, 3, 4, 5].map(() => user()));
+    const results = await Promise.allSettled(
+      creators.map((c) => submissions.claim(order.id, c.id)),
+    );
+    expect(results.map((r) => r.status)).toEqual(Array(5).fill('fulfilled'));
+  });
+
+  it('отклонили изменённый заказ — видео по нему сняты с очередей и не одобряются', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, 'https://example.com/v');
+    await orders.update(order.id, adv.id, {
+      title: 'Новое',
+      description: 'Описание',
+      priceKopecks: order.priceKopecks,
+      category: 'OTHER',
+    });
+    await rejectOrder(order.id, 1n, 'контакты в названии');
+    const after = await prisma.submission.findUniqueOrThrow({
+      where: { id: s.id },
+    });
+    expect(after.status).toBe('MODERATOR_REJECTED');
+    await expect(submissions.moderatorApprove(s.id, 1n)).rejects.toThrow();
+  });
+});
+
 describe('лимит активных заказов', () => {
   it('больше MAX_ACTIVE_ORDERS на модерации и открытых — нельзя, закрытые не считаются', async () => {
     const advertiser = await user();
@@ -728,9 +759,13 @@ describe('блокировка', () => {
 
     const closed = await bans.ban(banned.id, 'мошенничество');
 
-    expect(closed.map((o) => o.id)).toEqual([open.id]);
+    // и открытый, и отклонённый (на проверке мог быть изменённый открытый — с креаторами в работе)
+    expect(closed.map((o) => o.id).sort()).toEqual(
+      [open.id, pending.id].sort(),
+    );
     // креатору закрытого заказа придёт уведомление
-    expect(closed[0].submissions.map((s) => s.creator.id)).toEqual([
+    const openClosed = closed.find((o) => o.id === open.id)!;
+    expect(openClosed.submissions.map((s) => s.creator.id)).toEqual([
       creator.id,
     ]);
     expect(await statusOf(open.id)).toBe('CLOSED');

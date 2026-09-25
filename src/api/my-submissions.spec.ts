@@ -78,3 +78,17 @@ describe('toMySubmissions', () => {
     expect(json).not.toContain('внутреннее');
   });
 });
+
+describe('toMySubmissions — изменённый заказ на проверке', () => {
+  it('новое название не показываем, пока его не проверил модератор', () => {
+    const pending = {
+      ...order(3),
+      status: 'PENDING_MODERATION' as const,
+      title: 'Пишите @adv',
+    };
+    const [row] = toMySubmissions([
+      { ...submission(1, 3, 'IN_PROGRESS'), order: pending },
+    ]);
+    expect(row.order.title).toBe('Заказ #3 — на проверке у модератора');
+  });
+});

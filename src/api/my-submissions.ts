@@ -1,4 +1,9 @@
-import { type Order, type Submission, SubmissionStatus } from '@prisma/client';
+import {
+  type Order,
+  OrderStatus,
+  type Submission,
+  SubmissionStatus,
+} from '@prisma/client';
 import { kopecksToRubles } from '../common/money';
 
 /**
@@ -32,7 +37,13 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
       createdAt: row.createdAt,
       order: {
         id: row.order.id,
-        title: row.order.title,
+        // Изменённый заказ на проверке (или отклонённый после правки): новое название модератор ещё
+        // не видел — в нём может быть контакт. Креатору — только номер.
+        title:
+          row.order.status === OrderStatus.PENDING_MODERATION ||
+          row.order.status === OrderStatus.REJECTED
+            ? `Заказ #${row.order.id} — на проверке у модератора`
+            : row.order.title,
         price: kopecksToRubles(row.order.priceKopecks),
         deadline: row.order.deadline,
         status: row.order.status,

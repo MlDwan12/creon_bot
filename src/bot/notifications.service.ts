@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Order, Submission, User } from '@prisma/client';
 import { InjectBot } from 'nestjs-telegraf';
@@ -28,7 +28,7 @@ type SubmissionWithParties = Submission & { order: Order; creator: User };
  * дожидаемся её). Станет важно — таблица-очередь в Postgres.
  */
 @Injectable()
-export class NotificationsService implements OnModuleDestroy {
+export class NotificationsService implements OnApplicationShutdown {
   private readonly logger = new Logger(NotificationsService.name);
   private readonly moderatorIds: string[];
   private readonly webAppUrl: string;
@@ -65,7 +65,8 @@ export class NotificationsService implements OnModuleDestroy {
     if (order.submissions.length)
       this.toCreators(
         order,
-        `✏️ Рекламодатель изменил условия заказа «${escapeHtml(order.title)}». Заказ снова на проверке у модератора — после одобрения новые условия будут в карточке заказа.`,
+        // по номеру, не по названию: новое название ещё не проверено модератором — в нём может быть контакт
+        `✏️ Рекламодатель изменил условия заказа #${order.id}. Заказ снова на проверке у модератора — после одобрения новые условия будут в карточке заказа.`,
       );
   }
 
@@ -120,7 +121,8 @@ export class NotificationsService implements OnModuleDestroy {
     );
     this.toCreators(
       order,
-      `🔒 Заказ «${escapeHtml(order.title)}» после изменений не прошёл модерацию и снят — не продолжайте работу по нему.`,
+      // название — непроверенное (его и отклонили), поэтому по номеру
+      `🔒 Заказ #${order.id} после изменений не прошёл модерацию и снят — не продолжайте работу по нему.`,
     );
   }
 
@@ -257,8 +259,11 @@ export class NotificationsService implements OnModuleDestroy {
     );
   }
 
-  /** Штатная остановка (редеплой) — сначала дослать то, что уже в очереди. */
-  async onModuleDestroy() {
+  /**
+   * Штатная остановка (редеплой) — дослать очередь. Последний этап остановки: HTTP-сервер уже
+   * закрыт и дождался запросов в работе, так что новых уведомлений после этого не появится.
+   */
+  async onApplicationShutdown() {
     await this.queue;
   }
 

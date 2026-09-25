@@ -401,6 +401,21 @@ export class OrdersService {
         deadlineReminderSentAt: null,
       },
       'Изменить можно только заказ на проверке или открытый',
+      // повтор проверки цены в самом updateMany: видео могли сдать между подсчётом выше и записью
+      data.priceKopecks === order.priceKopecks
+        ? undefined
+        : {
+            submissions: {
+              none: {
+                status: {
+                  in: [
+                    SubmissionStatus.SUBMITTED,
+                    SubmissionStatus.MODERATOR_APPROVED,
+                  ],
+                },
+              },
+            },
+          },
     );
     return this.withActiveCreators(orderId);
   }
@@ -483,7 +498,22 @@ export class OrdersService {
       CHANGED_WHILE_VIEWED,
       { moderationRequestedAt: version },
     );
-    return this.withActiveCreators(orderId);
+    const order = await this.withActiveCreators(orderId);
+    // Изменённый открытый заказ сняли — видео по нему не ждут ни модератора, ни рекламодателя.
+    await this.prisma.submission.updateMany({
+      where: {
+        orderId,
+        status: {
+          in: [SubmissionStatus.SUBMITTED, SubmissionStatus.MODERATOR_APPROVED],
+        },
+      },
+      data: {
+        status: SubmissionStatus.MODERATOR_REJECTED,
+        moderatorComment: 'Заказ снят модератором',
+        decidedAt: new Date(),
+      },
+    });
+    return order;
   }
 
   async stats() {

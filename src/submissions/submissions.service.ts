@@ -6,6 +6,11 @@ import {
 import { Prisma, OrderStatus, SubmissionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
+/** Заказ не снят модератором: по снятому видео не одобряют и не оплачивают. */
+const NOT_TAKEN_DOWN: Prisma.OrderWhereInput = {
+  status: { not: OrderStatus.REJECTED },
+};
+
 const ALREADY_CLAIMED_MESSAGE =
   'По этому заказу у вас уже есть отклик в работе — отправьте по нему видео в «Мои отклики»';
 
@@ -26,38 +31,29 @@ export class SubmissionsService {
   }
 
   async claim(orderId: number, creatorId: number) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+    if (!order) throw new NotFoundException('Заказ не найден');
+    if (order.status !== OrderStatus.OPEN)
+      throw new ForbiddenException('Заказ сейчас недоступен');
+    if (order.advertiserId === creatorId)
+      throw new ForbiddenException('Нельзя откликнуться на свой заказ');
+    // ponytail: заказ могут закрыть между проверкой и вставкой — отклик на только что закрытый
+    // заказ безвреден (видео по закрытому принимаются), блокировать ради этого незачем.
     try {
-      return await this.prisma.$transaction(
-        async (tx) => {
-          const order = await tx.order.findUnique({ where: { id: orderId } });
-          if (!order) throw new NotFoundException('Заказ не найден');
-          if (order.status !== OrderStatus.OPEN)
-            throw new ForbiddenException('Заказ сейчас недоступен');
-          if (order.advertiserId === creatorId)
-            throw new ForbiddenException('Нельзя откликнуться на свой заказ');
-
-          const existing = await tx.submission.findFirst({
-            where: { orderId, creatorId, status: SubmissionStatus.IN_PROGRESS },
-          });
-          if (existing) throw new ForbiddenException(ALREADY_CLAIMED_MESSAGE);
-
-          return tx.submission.create({
-            data: { orderId, creatorId },
-            include: { order: true, creator: true },
-          });
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-      );
+      return await this.prisma.submission.create({
+        data: { orderId, creatorId },
+        include: { order: true, creator: true },
+      });
     } catch (err) {
-      // Два одновременных отклика (например, двойной тап по кнопке) оба проходят
-      // проверку выше и гонятся за вставкой — Postgres прерывает проигравшего с ошибкой
-      // сериализации (код Prisma P2034), не давая создать дублирующий активный отклик.
+      // Второй отклик «в работе» (двойной тап) не пустит частичный уникальный индекс
+      // Submission_one_in_progress — отклики разных креаторов друг другу не мешают.
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === 'P2034'
-      ) {
+        err.code === 'P2002'
+      )
         throw new ForbiddenException(ALREADY_CLAIMED_MESSAGE);
-      }
       throw err;
     }
   }
@@ -121,11 +117,16 @@ export class SubmissionsService {
   }
 
   async moderatorApprove(submissionId: number, moderatorTelegramId: bigint) {
-    await this.transitionStatus(submissionId, [SubmissionStatus.SUBMITTED], {
-      status: SubmissionStatus.MODERATOR_APPROVED,
-      moderatorId: moderatorTelegramId,
-      decidedAt: new Date(),
-    });
+    await this.transitionStatus(
+      submissionId,
+      [SubmissionStatus.SUBMITTED],
+      {
+        status: SubmissionStatus.MODERATOR_APPROVED,
+        moderatorId: moderatorTelegramId,
+        decidedAt: new Date(),
+      },
+      NOT_TAKEN_DOWN,
+    );
     return this.prisma.submission.findUniqueOrThrow({
       where: { id: submissionId },
       include: { order: { include: { advertiser: true } }, creator: true },
@@ -168,6 +169,7 @@ export class SubmissionsService {
         decidedAt: new Date(),
         ...feedback,
       },
+      NOT_TAKEN_DOWN,
     );
     return this.mustFind(submissionId);
   }
