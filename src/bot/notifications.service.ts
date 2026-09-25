@@ -46,27 +46,24 @@ export class NotificationsService implements OnModuleDestroy {
   }
 
   /** Модераторам: новый заказ ждёт проверки. */
-  async orderCreated(order: Order & { advertiser: User }) {
-    await this.toModerators(
+  orderCreated(order: Order & { advertiser: User }) {
+    this.toModerators(
       this.orderCard('🆕 <b>Новый заказ на проверку</b>', order),
       `/mod/orders/${order.id}`,
     );
   }
 
   /**
-   * Рекламодатель изменил заказ: модераторам — на повторную проверку; если заказ был открыт —
-   * креаторам, которые уже работают по нему, что условия изменились.
+   * Рекламодатель изменил заказ: модераторам — на повторную проверку; креаторам, которые уже
+   * работают по нему, — что условия изменились.
    */
-  async orderEdited(
-    order: Order & { advertiser: User } & OrderWithCreators,
-    wasOpen: boolean,
-  ) {
-    await this.toModerators(
+  orderEdited(order: Order & { advertiser: User } & OrderWithCreators) {
+    this.toModerators(
       this.orderCard('✏️ <b>Заказ изменён — снова на проверку</b>', order),
       `/mod/orders/${order.id}`,
     );
-    if (wasOpen)
-      await this.toCreators(
+    if (order.submissions.length)
+      this.toCreators(
         order,
         `✏️ Рекламодатель изменил условия заказа «${escapeHtml(order.title)}». Заказ снова на проверке у модератора — после одобрения новые условия будут в карточке заказа.`,
       );
@@ -88,7 +85,7 @@ export class NotificationsService implements OnModuleDestroy {
   }
 
   /** Модераторам: креатор прислал видео. */
-  async videoSubmitted(submission: SubmissionWithParties) {
+  videoSubmitted(submission: SubmissionWithParties) {
     const text = [
       '🆕 <b>Новый отклик на модерацию</b>',
       '',
@@ -96,29 +93,39 @@ export class NotificationsService implements OnModuleDestroy {
       `Креатор: ${escapeHtml(creatorLabel(submission.creator))}`,
       `Видео: ${escapeHtml(submission.videoUrl ?? '')}`,
     ].join('\n');
-    await this.toModerators(text, `/mod/videos/${submission.id}`);
+    this.toModerators(text, `/mod/videos/${submission.id}`);
   }
 
   /** Рекламодателю: модератор опубликовал заказ. */
-  async orderApproved(order: Order & { advertiser: User }) {
-    await this.send(
+  orderApproved(order: Order & { advertiser: User }) {
+    this.send(
       order.advertiser.telegramId,
       `✅ Ваш заказ «${order.title}» прошёл модерацию и опубликован — креаторы уже видят его в каталоге.`,
       '/my-orders',
     );
   }
 
-  /** Рекламодателю: модератор отклонил заказ. */
-  async orderRejected(order: Order & { advertiser: User }, comment: string) {
-    await this.send(
+  /**
+   * Рекламодателю: модератор отклонил заказ. Если это изменённый открытый заказ — креаторам,
+   * которые по нему работали: он снят, продолжать не нужно.
+   */
+  orderRejected(
+    order: Order & { advertiser: User } & OrderWithCreators,
+    comment: string,
+  ) {
+    this.send(
       order.advertiser.telegramId,
       `❌ Ваш заказ «${order.title}» отклонён модератором.\nПричина: ${comment}\n\nВы можете разместить заказ заново, учтя замечания.`,
       `/my-orders/new?from=${order.id}`,
     );
+    this.toCreators(
+      order,
+      `🔒 Заказ «${escapeHtml(order.title)}» после изменений не прошёл модерацию и снят — не продолжайте работу по нему.`,
+    );
   }
 
   /** Рекламодателю: модератор одобрил видео — теперь решение за ним. */
-  async videoApprovedByModerator(
+  videoApprovedByModerator(
     submission: Submission & { order: Order & { advertiser: User } },
   ) {
     const text = [
@@ -127,7 +134,7 @@ export class NotificationsService implements OnModuleDestroy {
       `Заказ: ${escapeHtml(submission.order.title)}`,
       `Видео: ${escapeHtml(submission.videoUrl ?? '')}`,
     ].join('\n');
-    await this.send(
+    this.send(
       submission.order.advertiser.telegramId,
       text,
       `/my-orders/${submission.order.id}/review`,
@@ -136,11 +143,8 @@ export class NotificationsService implements OnModuleDestroy {
   }
 
   /** Креатору: модератор отклонил видео. */
-  async videoRejectedByModerator(
-    submission: SubmissionWithParties,
-    comment: string,
-  ) {
-    await this.send(
+  videoRejectedByModerator(submission: SubmissionWithParties, comment: string) {
+    this.send(
       submission.creator.telegramId,
       `❌ Ваш отклик на заказ «${submission.order.title}» отклонён модератором.\nПричина: ${comment}\n\nВы можете отправить новый отклик на этот заказ.`,
       '/submissions',
@@ -148,90 +152,90 @@ export class NotificationsService implements OnModuleDestroy {
   }
 
   /** Креаторам с откликами на заказ: рекламодатель его закрыл. */
-  async orderClosed(order: OrderWithCreators) {
-    await this.toCreators(
+  orderClosed(order: OrderWithCreators) {
+    this.toCreators(
       order,
       `🔒 Заказ «${escapeHtml(order.title)}» закрыт рекламодателем. Новые отклики по нему больше не принимаются.`,
     );
   }
 
   /** Модератор закрыл заказ по жалобе: рекламодателю и креаторам с откликами. */
-  async orderClosedByModerator(
+  orderClosedByModerator(
     order: Order & { advertiser: User } & OrderWithCreators,
   ) {
-    await this.send(
+    this.send(
       order.advertiser.telegramId,
       `🚫 Ваш заказ «${escapeHtml(order.title)}» закрыт модератором: он нарушает правила площадки. Если это ошибка — напишите в поддержку.`,
       '/my-orders',
       true,
     );
-    await this.toCreators(
+    this.toCreators(
       order,
       `🔒 Заказ «${escapeHtml(order.title)}» закрыт модератором за нарушение правил площадки — не продолжайте работу по нему.`,
     );
   }
 
   /** Модераторам: новая жалоба. */
-  async reportCreated(what: string) {
-    await this.toModerators(
+  reportCreated(what: string) {
+    this.toModerators(
       `🚩 Новая жалоба: ${escapeHtml(what)}`,
       '/mod?tab=reports',
     );
   }
 
   /** Тем, кто жаловался: модератор рассмотрел жалобу. */
-  async reportResolved(telegramIds: bigint[], actioned: boolean) {
+  reportResolved(telegramIds: bigint[], actioned: boolean) {
     const text = actioned
       ? '✅ Мы рассмотрели вашу жалобу и приняли меры. Спасибо, что помогаете площадке.'
       : '👌 Мы рассмотрели вашу жалобу — нарушений не нашли. Спасибо, что сообщили.';
-    for (const id of telegramIds) await this.send(id, text, '/');
+    for (const id of telegramIds) this.send(id, text, '/');
   }
 
   /** Креаторам с откликами на заказ: рекламодатель его удалил. */
-  async orderRemoved(order: OrderWithCreators) {
-    await this.toCreators(
+  orderRemoved(order: OrderWithCreators) {
+    this.toCreators(
       order,
       `🗑 Заказ «${escapeHtml(order.title)}» удалён рекламодателем. Отклик по нему больше не актуален.`,
     );
   }
 
   /** Срок заказа истёк: рекламодателю — что можно продлить, креаторам с откликом «в работе» — что видео уже не примут. */
-  async orderExpired(order: Order & { advertiser: User } & OrderWithCreators) {
-    await this.send(
+  orderExpired(order: Order & { advertiser: User } & OrderWithCreators) {
+    this.send(
       order.advertiser.telegramId,
       `⏰ Срок заказа «${escapeHtml(order.title)}» истёк — заказ закрыт, новые видео не принимаются.\n\nУже присланные видео можно принять или отклонить. Чтобы собрать ещё, продлите срок в «Мои заказы».`,
       '/my-orders',
       true,
     );
-    await this.toCreators(
+    this.toCreators(
       order,
       `⏰ Срок заказа «${escapeHtml(order.title)}» истёк — видео по нему больше не принимаются.`,
     );
   }
 
   /** Креаторам с откликом «в работе»: срок заказа истекает меньше чем через сутки. */
-  async deadlineSoon(order: OrderWithCreators & Order) {
-    await this.toCreators(
+  deadlineSoon(order: OrderWithCreators & Order) {
+    this.toCreators(
       order,
       `⏳ Меньше чем через сутки истекает срок заказа «${escapeHtml(order.title)}» — успейте отправить видео. После срока его не примут.`,
     );
   }
 
   /** Модераторам: в очереди есть то, что ждёт дольше положенного. */
-  async moderationQueueStale(orders: number, videos: number, hours: number) {
+  moderationQueueStale(orders: number, videos: number, hours: number) {
     const parts = [
       orders ? `заказов: ${orders}` : '',
       videos ? `видео: ${videos}` : '',
     ].filter(Boolean);
-    await this.toModerators(
+    this.toModerators(
       `🕓 Дольше ${hours} ч ждут проверки — ${parts.join(', ')}.`,
       '/mod',
     );
   }
 
   /** Креатору: рекламодатель принял видео. */
-  async videoAccepted(submission: SubmissionWithParties) {
-    await this.send(
+  videoAccepted(submission: SubmissionWithParties) {
+    this.send(
       submission.creator.telegramId,
       `🎉 Рекламодатель подтвердил ваше видео по заказу «${submission.order.title}»!` +
         (submission.rating
@@ -242,11 +246,11 @@ export class NotificationsService implements OnModuleDestroy {
   }
 
   /** Креатору: рекламодатель отклонил видео. */
-  async videoRejectedByAdvertiser(
+  videoRejectedByAdvertiser(
     submission: SubmissionWithParties,
     comment: string,
   ) {
-    await this.send(
+    this.send(
       submission.creator.telegramId,
       `❌ Рекламодатель отклонил ваше видео по заказу «${submission.order.title}».\nПричина: ${comment}\n\nВы можете отправить новый отклик на этот заказ.`,
       '/submissions',
@@ -277,16 +281,15 @@ export class NotificationsService implements OnModuleDestroy {
         }
       });
     }
-    return Promise.resolve();
   }
 
   /** Каждому креатору один раз, даже если у него несколько попыток по заказу. */
-  private async toCreators(order: OrderWithCreators, text: string) {
+  private toCreators(order: OrderWithCreators, text: string) {
     const seen = new Set<bigint>();
     for (const s of order.submissions) {
       if (seen.has(s.creator.telegramId)) continue;
       seen.add(s.creator.telegramId);
-      await this.send(s.creator.telegramId, text, '/submissions', true);
+      this.send(s.creator.telegramId, text, '/submissions', true);
     }
   }
 
@@ -310,7 +313,6 @@ export class NotificationsService implements OnModuleDestroy {
         // получатель мог заблокировать бота
       }
     });
-    return Promise.resolve();
   }
 
   /** Кнопка web_app работает только в личных чатах — все уведомления как раз туда. */

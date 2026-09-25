@@ -131,7 +131,8 @@ export interface ModQueue {
     title: string;
     price: number | null;
     advertiser: string;
-    createdAt: string;
+    /** С какого момента ждёт проверки: после правки заказ встаёт в очередь заново. */
+    queuedAt: string;
     /** В тексте похоже на контакты для связи в обход площадки. */
     hasContacts: boolean;
   }[];
@@ -189,6 +190,8 @@ export interface ModOrder {
   createdAt: string;
   /** Фрагменты, похожие на контакты (@ник, t.me, телефон…) — см. src/common/contacts.ts. */
   contacts: string[];
+  /** Версия, которую видит модератор: решение по устаревшей версии бэкенд отклонит. */
+  version: string;
 }
 
 export interface ModVideo {
@@ -288,11 +291,18 @@ async function request<T>(
   return (await res.json()) as T;
 }
 
-export function fetchOpenOrders(page: number, category?: OrderCategory) {
-  const query = new URLSearchParams({ page: String(page) });
+/**
+ * Страница каталога. `after` — последний показанный заказ (без него — первая страница).
+ * hasMore — есть ли следующая; total — для заголовка, может отставать на полминуты.
+ */
+export function fetchOpenOrders(after?: OrderSummary, category?: OrderCategory) {
+  const query = new URLSearchParams();
+  if (after) {
+    query.set('afterId', String(after.id));
+    query.set('afterCreatedAt', after.createdAt);
+  }
   if (category) query.set('category', category);
-  // hasMore — есть ли следующая страница; total — для заголовка, может отставать на полминуты
-  return request<Page<OrderSummary> & { hasMore: boolean }>('GET', `/api/orders?${query}`);
+  return request<{ items: OrderSummary[]; hasMore: boolean; total: number }>('GET', `/api/orders?${query}`);
 }
 
 export function fetchOrder(id: number) {
@@ -425,8 +435,9 @@ export function fetchModOrder(id: number) {
   return request<ModOrder>('GET', `/api/mod/orders/${id}`);
 }
 
-export function moderateOrder(id: number, decision: 'approve' | 'reject', comment?: string) {
-  return request<{ ok: true }>('POST', `/api/mod/orders/${id}/${decision}`, comment === undefined ? undefined : { comment });
+/** `version` — из fetchModOrder: если рекламодатель успел изменить заказ, решение не пройдёт. */
+export function moderateOrder(id: number, decision: 'approve' | 'reject', version: string, comment?: string) {
+  return request<{ ok: true }>('POST', `/api/mod/orders/${id}/${decision}`, { version, comment });
 }
 
 export function fetchModVideo(id: number) {

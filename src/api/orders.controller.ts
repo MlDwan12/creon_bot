@@ -1,6 +1,6 @@
 import {
+  BadRequestException,
   Controller,
-  DefaultValuePipe,
   Get,
   HttpCode,
   NotFoundException,
@@ -37,25 +37,30 @@ export class OrdersController {
     private readonly submissionsService: SubmissionsService,
   ) {}
 
-  /** Каталог открытых заказов для креатора. `page` с нуля. */
+  /**
+   * Каталог открытых заказов для креатора. Следующая страница — `afterId` и `afterCreatedAt`
+   * последнего показанного заказа; без них — первая.
+   */
   @Get()
   async listOpen(
     @Query('category', new ParseEnumPipe(OrderCategory, { optional: true }))
     category: OrderCategory | undefined,
-    @Query('page', new DefaultValuePipe(0), ParseIntPipe) page: number,
+    @Query('afterId', new ParseIntPipe({ optional: true })) afterId?: number,
+    @Query('afterCreatedAt') afterCreatedAt?: string,
   ) {
+    let after: { createdAt: Date; id: number } | undefined;
+    if (afterId !== undefined) {
+      const createdAt = new Date(afterCreatedAt ?? '');
+      if (Number.isNaN(createdAt.getTime()))
+        throw new BadRequestException('Некорректная страница');
+      after = { createdAt, id: afterId };
+    }
     const { items, hasMore, total } = await this.ordersService.listOpen(
       category,
-      Math.max(0, page) * PAGE_SIZE,
+      after,
       PAGE_SIZE,
     );
-    return {
-      items: items.map(toPublic),
-      hasMore,
-      total,
-      page,
-      pageSize: PAGE_SIZE,
-    };
+    return { items: items.map(toPublic), hasMore, total };
   }
 
   /** Карточка открытого заказа; `claimed` — есть ли у текущего пользователя отклик «в работе», `own` — заказ его. */

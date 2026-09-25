@@ -71,6 +71,11 @@ export class SubmissionsService {
       throw new ForbiddenException(
         'Срок заказа истёк — видео больше не принимаются',
       );
+    // Изменённый открытый заказ модератор отклонил — он снят с площадки.
+    if (submission.order.status === OrderStatus.REJECTED)
+      throw new ForbiddenException(
+        'Заказ снят модератором — видео по нему не принимаются',
+      );
     await this.transitionStatus(
       submissionId,
       [SubmissionStatus.IN_PROGRESS],
@@ -79,7 +84,7 @@ export class SubmissionsService {
         status: SubmissionStatus.SUBMITTED,
         submittedAt: new Date(),
       },
-      { status: { not: OrderStatus.EXPIRED } },
+      { status: { notIn: [OrderStatus.EXPIRED, OrderStatus.REJECTED] } },
     );
     return this.mustFind(submissionId);
   }

@@ -36,6 +36,15 @@ import { parseRejectComment } from './order-input';
 
 const PAGE_SIZE = 20;
 
+/** Версия заказа, которую модератор видел (`version` из GET /api/mod/orders/:id). */
+function parseVersion(body: unknown): Date {
+  const raw = (body as { version?: unknown } | null)?.version;
+  const version = typeof raw === 'string' ? new Date(raw) : null;
+  if (!version || Number.isNaN(version.getTime()))
+    throw new BadRequestException('Откройте заказ заново');
+  return version;
+}
+
 /**
  * Окно модератора в Mini App. Гонки двух модераторов над одним пунктом отсекает transitionStatus.
  */
@@ -66,7 +75,8 @@ export class ModerationController {
         title: o.title,
         price: kopecksToRubles(o.priceKopecks),
         advertiser: creatorLabel(o.advertiser),
-        createdAt: o.createdAt,
+        // ждёт с момента отправки на проверку: после правки — заново
+        queuedAt: o.moderationRequestedAt,
         // похоже на контакты в обход площадки — модератору пометка в списке
         hasContacts: findContacts(o.title, o.description).length > 0,
       })),
@@ -139,19 +149,23 @@ export class ModerationController {
       advertiser: creatorLabel(o.advertiser),
       createdAt: o.createdAt,
       contacts: findContacts(o.title, o.description),
+      // решение принимается по этой версии — см. OrdersService.moderatorApprove
+      version: o.moderationRequestedAt,
     };
   }
 
   @Post('orders/:id/approve')
   async approveOrder(
     @Param('id', ParseIdPipe) id: number,
+    @Body() body: unknown,
     @Req() req: ApiRequest,
   ) {
     const order = await this.ordersService.moderatorApprove(
       id,
       req.user.telegramId,
+      parseVersion(body),
     );
-    await this.notifications.orderApproved(order);
+    this.notifications.orderApproved(order);
     return { ok: true };
   }
 
@@ -166,8 +180,9 @@ export class ModerationController {
       id,
       req.user.telegramId,
       comment,
+      parseVersion(body),
     );
-    await this.notifications.orderRejected(order, comment);
+    this.notifications.orderRejected(order, comment);
     return { ok: true };
   }
 
@@ -230,10 +245,9 @@ export class ModerationController {
       actioned,
       req.user.telegramId,
     );
-    if (closedOrder)
-      await this.notifications.orderClosedByModerator(closedOrder);
+    if (closedOrder) this.notifications.orderClosedByModerator(closedOrder);
     if (toBan) await this.banAndNotify(toBan, banReason!);
-    await this.notifications.reportResolved(reporters, actioned);
+    this.notifications.reportResolved(reporters, actioned);
     return { ok: true };
   }
 
@@ -255,7 +269,7 @@ export class ModerationController {
 
   private async banAndNotify(userId: number, reason: string) {
     for (const order of await this.bans.ban(userId, reason))
-      await this.notifications.orderClosedByModerator(order);
+      this.notifications.orderClosedByModerator(order);
   }
 
   /** Модераторы задаются в env — их не блокируют. Возвращает пользователя. */
@@ -283,7 +297,7 @@ export class ModerationController {
       id,
       req.user.telegramId,
     );
-    await this.notifications.videoApprovedByModerator(submission);
+    this.notifications.videoApprovedByModerator(submission);
     return { ok: true };
   }
 
@@ -299,7 +313,7 @@ export class ModerationController {
       req.user.telegramId,
       comment,
     );
-    await this.notifications.videoRejectedByModerator(submission, comment);
+    this.notifications.videoRejectedByModerator(submission, comment);
     return { ok: true };
   }
 }

@@ -44,7 +44,7 @@ describe('NotificationsService — очередь отправки', () => {
     const { service, sent, release, sendMessage } = setup([12n]);
 
     // метод вернулся, хотя Telegram ещё не ответил ни на одно сообщение
-    await service.orderClosed(order([11, 12, 13, 14]));
+    service.orderClosed(order([11, 12, 13, 14]));
     expect(sent).toEqual([]);
 
     release();

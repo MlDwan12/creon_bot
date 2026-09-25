@@ -18,7 +18,7 @@ export class ReportsController {
   @Throttle({ default: { limit: 20, ttl: 60 * 60_000 } })
   async create(@Body() body: unknown, @Req() req: ApiRequest) {
     const what = await this.reports.create(req.user, this.reports.parse(body));
-    await this.notifications.reportCreated(what);
+    this.notifications.reportCreated(what);
     return { ok: true };
   }
 }

@@ -60,14 +60,14 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
     for (const { id } of await this.ordersService.listOverdue()) {
       // expire вернёт null, если заказ успели продлить
       const order = await this.ordersService.expire(id);
-      if (order) await this.notifications.orderExpired(order);
+      if (order) this.notifications.orderExpired(order);
     }
   }
 
   private async remindDeadlines() {
     for (const { id } of await this.ordersService.listDeadlineSoon()) {
       const order = await this.ordersService.markDeadlineReminded(id);
-      if (order) await this.notifications.deadlineSoon(order);
+      if (order) this.notifications.deadlineSoon(order);
     }
   }
 
@@ -79,13 +79,13 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
       this.submissionsService.listPendingModeration(),
     ]);
     const staleOrders = orders.filter(
-      (o) => o.createdAt.getTime() < staleBefore,
+      (o) => o.moderationRequestedAt.getTime() < staleBefore,
     ).length;
     const staleVideos = videos.filter(
       (s) => s.submittedAt && s.submittedAt.getTime() < staleBefore,
     ).length;
     if (!staleOrders && !staleVideos) return;
-    await this.notifications.moderationQueueStale(
+    this.notifications.moderationQueueStale(
       staleOrders,
       staleVideos,
       STALE_HOURS,

@@ -62,7 +62,7 @@ export class SubmissionsController {
       req.user.id,
       url,
     );
-    await this.notifications.videoSubmitted(submission);
+    this.notifications.videoSubmitted(submission);
     return { ok: true };
   }
 
@@ -78,7 +78,7 @@ export class SubmissionsController {
       req.user.id,
       parseFeedback(body),
     );
-    await this.notifications.videoAccepted(submission);
+    this.notifications.videoAccepted(submission);
     // оплата пока вне бота: менеджеру — кому и сколько перевести
     const price = submission.order.priceKopecks;
     await this.support.paymentDue(
@@ -108,7 +108,7 @@ export class SubmissionsController {
       req.user.id,
       comment,
     );
-    await this.notifications.videoRejectedByAdvertiser(submission, comment);
+    this.notifications.videoRejectedByAdvertiser(submission, comment);
     return { ok: true };
   }
 }
