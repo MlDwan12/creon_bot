@@ -39,5 +39,9 @@ COPY --chown=app:app prisma ./prisma
 COPY --chown=app:app prisma.config.ts package.json ./
 COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 USER app
+# healthy/unhealthy в `docker ps`: процесс отвечает и база доступна (src/api/health.controller.ts).
+# start-period — запас на миграции при старте.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:${PORT:-3000}/api/health >/dev/null || exit 1
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "dist/main"]

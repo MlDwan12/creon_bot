@@ -14,6 +14,7 @@ import SupportLink from '../components/SupportLink.vue';
 const category = ref<OrderCategory>();
 const orders = ref<OrderSummary[]>([]);
 const total = ref(0);
+const hasMore = ref(false);
 const page = ref(0);
 const loading = ref(false);
 const error = ref('');
@@ -36,6 +37,7 @@ async function load(reset: boolean) {
     const shown = new Set(orders.value.map((o) => o.id));
     orders.value = reset ? res.items : [...orders.value, ...res.items.filter((o) => !shown.has(o.id))];
     total.value = res.total;
+    hasMore.value = res.hasMore;
     page.value = nextPage;
   } catch {
     if (requestId === lastRequest) error.value = 'Не удалось загрузить заказы';
@@ -77,7 +79,7 @@ watch(category, () => load(true), { immediate: true });
     <OrderCard v-for="o in orders" :key="o.id" :order="o" />
 
     <button
-      v-if="orders.length < total"
+      v-if="hasMore"
       type="button"
       class="more"
       :disabled="loading"

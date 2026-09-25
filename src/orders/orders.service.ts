@@ -26,9 +26,18 @@ const PUBLIC_ORDER_FIELDS = {
 /** Сколько заказов у рекламодателя может быть одновременно на модерации и открытыми. */
 export const MAX_ACTIVE_ORDERS = 10;
 
+/** Сколько живёт число «N открытых заказов» в заголовке каталога. */
+const OPEN_COUNT_TTL_MS = 30_000;
+
 @Injectable()
 export class OrdersService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // ponytail: кэш в памяти процесса — пока инстанс один; заголовок может отставать на 30 с.
+  private readonly openCounts = new Map<
+    string,
+    { value: number; at: number }
+  >();
 
   // ponytail: count и create не атомарны — два одновременных запроса могут дать 11-й заказ.
   // Спам этим не сделать: создание ещё и ограничено по частоте (@Throttle в контроллере).
@@ -65,7 +74,11 @@ export class OrdersService {
     });
   }
 
-  /** Страница открытых заказов для каталога Mini App. */
+  /**
+   * Страница открытых заказов для каталога Mini App. `hasMore` — есть ли следующая страница
+   * (берём на один больше). `total` — только для заголовка, из кэша: каталог открывают чаще всего,
+   * а под нагрузкой каждый лишний запрос к базе — это CPU.
+   */
   async listOpen(
     category: OrderCategory | undefined,
     skip: number,
@@ -75,17 +88,26 @@ export class OrdersService {
       status: OrderStatus.OPEN,
       ...(category ? { category } : {}),
     };
-    const [items, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       this.prisma.order.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip,
-        take,
+        take: take + 1,
         select: PUBLIC_ORDER_FIELDS,
       }),
-      this.prisma.order.count({ where }),
+      this.countOpen(category ?? 'ALL', where),
     ]);
-    return { items, total };
+    return { items: rows.slice(0, take), hasMore: rows.length > take, total };
+  }
+
+  private async countOpen(key: string, where: Prisma.OrderWhereInput) {
+    const cached = this.openCounts.get(key);
+    if (cached && Date.now() - cached.at < OPEN_COUNT_TTL_MS)
+      return cached.value;
+    const value = await this.prisma.order.count({ where });
+    this.openCounts.set(key, { value, at: Date.now() });
+    return value;
   }
 
   /** Открытый заказ для карточки в Mini App; `advertiserId` — только чтобы узнать «свой ли», наружу не отдавать. */
@@ -299,8 +321,62 @@ export class OrdersService {
   }
 
   /**
-   * Публикация. Срок в форме — «N дней», а считался от создания: сдвигаем его на время модерации,
-   * чтобы у креаторов было ровно N дней с момента публикации.
+   * Правка своего заказа: на проверке — остаётся на проверке, открытый — уходит на повторную
+   * (пропадает из каталога до одобрения: новые условия видит модератор, в том числе контакты).
+   * `deadline`: undefined — не менять, null — без срока. Возвращает заказ с рекламодателем и
+   * откликами в работе — для уведомлений; `wasOpen` — был ли опубликован.
+   */
+  async update(
+    orderId: number,
+    advertiserId: number,
+    data: {
+      title: string;
+      description: string;
+      priceKopecks: number | null;
+      category: OrderCategory;
+      deadline?: Date | null;
+    },
+  ) {
+    const order = await this.mustFind(orderId);
+    if (order.advertiserId !== advertiserId)
+      throw new ForbiddenException('Это не ваш заказ');
+    await this.transitionStatus(
+      orderId,
+      [OrderStatus.PENDING_MODERATION, OrderStatus.OPEN],
+      {
+        ...data,
+        status: OrderStatus.PENDING_MODERATION,
+        moderationRequestedAt: new Date(),
+        moderatorId: null,
+        decidedAt: null,
+        deadlineReminderSentAt: null,
+      },
+      'Изменить можно только заказ на проверке или открытый',
+    );
+    const updated = await this.prisma.order.findUniqueOrThrow({
+      where: { id: orderId },
+      include: {
+        advertiser: true,
+        submissions: {
+          where: {
+            status: {
+              in: [
+                SubmissionStatus.IN_PROGRESS,
+                SubmissionStatus.SUBMITTED,
+                SubmissionStatus.MODERATOR_APPROVED,
+              ],
+            },
+          },
+          include: { creator: true },
+        },
+      },
+    });
+    return { order: updated, wasOpen: order.status === OrderStatus.OPEN };
+  }
+
+  /**
+   * Публикация. Срок в форме — «N дней» от отправки на проверку: сдвигаем его на время модерации,
+   * чтобы у креаторов было ровно N дней с момента публикации (после правки — сколько оставалось).
    */
   async moderatorApprove(orderId: number, moderatorTelegramId: bigint) {
     const order = await this.mustFind(orderId);
@@ -312,7 +388,7 @@ export class OrdersService {
       deadline: order.deadline
         ? new Date(
             order.deadline.getTime() +
-              (now.getTime() - order.createdAt.getTime()),
+              (now.getTime() - order.moderationRequestedAt.getTime()),
           )
         : null,
     });

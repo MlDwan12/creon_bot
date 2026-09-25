@@ -1,5 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
-import { parseOrderInput, parseRejectComment } from './order-input';
+import {
+  parseOrderEdit,
+  parseOrderInput,
+  parseRejectComment,
+} from './order-input';
 
 const valid = {
   title: '  Распаковка наушников  ',
@@ -75,5 +79,22 @@ describe('parseRejectComment', () => {
       BadRequestException,
     );
     expect(() => parseRejectComment(null)).toThrow(BadRequestException);
+  });
+});
+
+describe('parseOrderEdit', () => {
+  const base = { title: 'Название', description: 'Описание', category: 'FOOD' };
+
+  it('срок: не передан — не менять, null — без срока, число — через N дней', () => {
+    expect(parseOrderEdit(base).deadline).toBeUndefined();
+    expect(parseOrderEdit({ ...base, deadlineDays: null }).deadline).toBeNull();
+    expect(
+      parseOrderEdit({ ...base, deadlineDays: 7 }).deadline,
+    ).toBeInstanceOf(Date);
+  });
+
+  it('пустая цена — договорная (null, а не «не менять»)', () => {
+    expect(parseOrderEdit({ ...base, price: null }).priceKopecks).toBeNull();
+    expect(parseOrderEdit({ ...base, price: 500 }).priceKopecks).toBe(50_000);
   });
 });

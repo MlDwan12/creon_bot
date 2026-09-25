@@ -66,6 +66,9 @@ model Order {
   moderatorId      BigInt?
   moderatorComment String?
   createdAt        DateTime      @default(now())
+  /// Когда последний раз отправлен на проверку: при создании и при каждой правке. От него считаются
+  /// сдвиг срока при публикации и время модерации (createdAt после правки уже не подходит).
+  moderationRequestedAt DateTime @default(now())
   decidedAt        DateTime?
   closedAt         DateTime?
   /// Креаторам напомнили, что срок истекает меньше чем через сутки. Сбрасывается при продлении.

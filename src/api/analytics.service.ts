@@ -79,7 +79,7 @@ export class AnalyticsService {
       // Медиана, а не среднее: один заказ, забытый на неделю, не должен искажать картину.
       this.prisma.$queryRaw<{ hours: number | null }[]>(Prisma.sql`
         SELECT percentile_cont(0.5) WITHIN GROUP (
-          ORDER BY extract(epoch FROM "decidedAt" - "createdAt")
+          ORDER BY extract(epoch FROM "decidedAt" - "moderationRequestedAt")
         ) / 3600 AS hours
         FROM "Order"
         WHERE "decidedAt" IS NOT NULL AND "createdAt" >= ${epoch}`),
