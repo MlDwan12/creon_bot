@@ -15,6 +15,14 @@ ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholde
 RUN yarn prisma:generate
 RUN yarn build
 
+# --- webapp: собрать Mini App (Vue) в статику, её раздаёт Nest (src/main.ts) ---
+FROM node:22-alpine AS webapp
+WORKDIR /webapp
+COPY webapp/package.json webapp/yarn.lock ./
+RUN yarn install --frozen-lockfile
+COPY webapp ./
+RUN yarn build
+
 # --- runtime: run pending migrations, then start the compiled app ---
 FROM node:22-alpine AS runtime
 WORKDIR /app
@@ -24,6 +32,7 @@ RUN addgroup -S app && adduser -S app -G app
 # generated client into node_modules (.prisma/client, @prisma/client/default.js)
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+COPY --from=webapp /webapp/dist ./public
 COPY prisma ./prisma
 COPY prisma.config.ts package.json ./
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
