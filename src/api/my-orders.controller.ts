@@ -18,11 +18,7 @@ import { Throttle } from '@nestjs/throttler';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
 import { attemptNumbers } from './attempts';
-import {
-  type ApiRequest,
-  InitDataGuard,
-  requireUsername,
-} from './init-data.guard';
+import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { UserThrottlerGuard } from './user-throttler.guard';
 import { parseDeadlineDays, parseOrderInput } from './order-input';
 
@@ -66,7 +62,6 @@ export class MyOrdersController {
   @Post()
   @Throttle({ default: { limit: 10, ttl: 60 * 60_000 } })
   async create(@Body() body: unknown, @Req() req: ApiRequest) {
-    requireUsername(req.user);
     const order = await this.ordersService.create(
       req.user.id,
       parseOrderInput(body),

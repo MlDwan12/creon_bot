@@ -383,7 +383,7 @@ export function rejectVideo(submissionId: number, comment: string) {
   });
 }
 
-type Me = { isModerator: boolean; hasUsername: boolean; supportUrl: string | null };
+type Me = { isModerator: boolean; supportUrl: string | null };
 let me: Promise<Me> | undefined;
 
 /** Один запрос на запуск: initData, а с ним и ответ, до перезапуска Mini App не меняется. */

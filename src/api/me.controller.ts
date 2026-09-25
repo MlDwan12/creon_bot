@@ -5,8 +5,7 @@ import { UserThrottlerGuard } from './user-throttler.guard';
 import { ModeratorGuard } from './moderator.guard';
 
 /**
- * Кто открыл Mini App: модератору — его отдельное окно, без username — предупреждение до заполнения
- * формы заказа; supportUrl — ссылка на чат с ботом (null — поддержка выключена). Права проверяет каждый эндпоинт.
+ * Кто открыл Mini App: модератору — его отдельное окно; supportUrl — ссылка на чат с ботом (null — поддержка выключена). Права проверяет каждый эндпоинт.
  */
 @Controller('api/me')
 @UseGuards(InitDataGuard, UserThrottlerGuard)
@@ -20,7 +19,6 @@ export class MeController {
   async me(@Req() req: ApiRequest) {
     return {
       isModerator: this.moderatorGuard.isModerator(req.user),
-      hasUsername: Boolean(req.user.username),
       supportUrl: await this.support.url(),
     };
   }

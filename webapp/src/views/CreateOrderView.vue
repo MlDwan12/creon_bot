@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ApiError, createOrder, fetchMe, fetchMyOrders, ORDER_CATEGORIES, type NewOrderInput } from '../api';
+import { ApiError, createOrder, fetchMyOrders, ORDER_CATEGORIES, type NewOrderInput } from '../api';
 
 // Лимиты — те же, что проверяет бэкенд (src/common/validation.ts); здесь только подсказка браузеру.
 const MAX_TITLE = 100;
@@ -29,11 +29,6 @@ const form = reactive<Omit<NewOrderInput, 'price'> & { price: number | '' }>({
 });
 const sending = ref(false);
 const error = ref('');
-// Без username бэкенд заказ не примет — предупреждаем, пока форма не заполнена.
-const noUsername = ref(false);
-fetchMe()
-  .then((me) => (noUsername.value = !me.hasUsername))
-  .catch(() => {});
 
 /** «Исправить и отправить снова»: /my-orders/new?from=<id> — подставляем данные отклонённого заказа. */
 async function prefill() {
@@ -67,10 +62,6 @@ void prefill();
 <template>
   <main class="page">
     <h1>Новый заказ</h1>
-    <p v-if="noUsername" class="error" role="alert">
-      Чтобы креаторы могли с вами связаться, укажите имя пользователя (username) в настройках Telegram
-      и откройте приложение заново — без него заказ не отправится.
-    </p>
 
     <form id="order-form" class="form" @submit.prevent="submit">
       <div class="field">

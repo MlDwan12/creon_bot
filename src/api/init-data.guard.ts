@@ -19,18 +19,6 @@ const INIT_DATA_MAX_AGE_SECONDS = 24 * 60 * 60;
 export type ApiRequest = Request & { user: User };
 
 /**
- * Заказ и отклик — только с @username: по нему модераторы и поддержка узнают человека
- * (другой стороне сделки username не показывается).
- * initData фиксируется при запуске Mini App, поэтому после настройки username его надо перезапустить.
- */
-export function requireUsername(user: User) {
-  if (!user.username)
-    throw new ForbiddenException(
-      'Укажите имя пользователя (username) в настройках Telegram — так модераторы и поддержка смогут вас узнать. Потом откройте приложение заново',
-    );
-}
-
-/**
  * Авторизация Mini App: заголовок `Authorization: tma <initData>`.
  * Пользователь берётся только из проверенной подписи — никогда из тела/параметров запроса.
  */
