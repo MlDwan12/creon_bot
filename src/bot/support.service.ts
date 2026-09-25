@@ -55,7 +55,8 @@ export class SupportService {
     const from = ctx.from!;
     const user = await this.prisma.user.upsert({
       where: { telegramId: BigInt(from.id) },
-      update: { username: from.username, firstName: from.first_name },
+      // null, а не undefined: убранный в Telegram username должен стереться и здесь
+      update: { username: from.username ?? null, firstName: from.first_name },
       create: {
         telegramId: BigInt(from.id),
         username: from.username,
@@ -136,8 +137,13 @@ export class SupportService {
         await reply(
           'Пользователю можно отправить текст, фото, видео, файл или голосовое.',
         );
-    } catch {
-      await reply('Не доставлено: пользователь заблокировал бота.');
+    } catch (err) {
+      if (/bot was blocked|user is deactivated/i.test(String(err))) {
+        await reply('Не доставлено: пользователь заблокировал бота.');
+        return;
+      }
+      this.logger.error(err);
+      await reply('Не доставлено — сбой Telegram, попробуйте ещё раз.');
     }
   }
 

@@ -31,7 +31,10 @@ async function load(reset: boolean) {
   try {
     const res = await fetchOpenOrders(nextPage, category.value);
     if (requestId !== lastRequest) return;
-    orders.value = reset ? res.items : [...orders.value, ...res.items];
+    // Страницы — по смещению: опубликовали новый заказ, пока листали, — следующая страница
+    // сдвинулась и повторяет последний показанный. Уже показанные отбрасываем.
+    const shown = new Set(orders.value.map((o) => o.id));
+    orders.value = reset ? res.items : [...orders.value, ...res.items.filter((o) => !shown.has(o.id))];
     total.value = res.total;
     page.value = nextPage;
   } catch {

@@ -18,11 +18,7 @@ import { Throttle } from '@nestjs/throttler';
 import { kopecksToRubles } from '../common/money';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
-import {
-  type ApiRequest,
-  InitDataGuard,
-  requireUsername,
-} from './init-data.guard';
+import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { UserThrottlerGuard } from './user-throttler.guard';
 
 const PAGE_SIZE = 20;
@@ -80,7 +76,6 @@ export class OrdersController {
   @Throttle({ default: { limit: 30, ttl: 60 * 60_000 } })
   @HttpCode(201)
   async claim(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
-    requireUsername(req.user);
     const submission = await this.submissionsService.claim(id, req.user.id);
     return { submissionId: submission.id };
   }

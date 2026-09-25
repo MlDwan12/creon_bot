@@ -383,11 +383,16 @@ export function rejectVideo(submissionId: number, comment: string) {
   });
 }
 
-let me: Promise<{ isModerator: boolean; hasUsername: boolean; supportUrl: string | null }> | undefined;
+type Me = { isModerator: boolean; supportUrl: string | null };
+let me: Promise<Me> | undefined;
 
 /** Один запрос на запуск: initData, а с ним и ответ, до перезапуска Mini App не меняется. */
 export function fetchMe() {
-  return (me ??= request('GET', '/api/me'));
+  // неудачный запрос не запоминаем — иначе сбой сети считался бы ответом до перезапуска
+  return (me ??= request<Me>('GET', '/api/me').catch((err) => {
+    me = undefined;
+    throw err;
+  }));
 }
 
 export function fetchModQueue() {
