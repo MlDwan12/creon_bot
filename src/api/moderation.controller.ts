@@ -14,8 +14,10 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { ParseIdPipe } from './parse-id.pipe';
 import { ReportTarget } from '@prisma/client';
 import { findContacts } from '../common/contacts';
+import { isDbId } from '../common/validation';
 import { kopecksToRubles } from '../common/money';
 import { NotificationsService } from '../bot/notifications.service';
 import { creatorLabel } from '../bot/utils/format';
@@ -33,6 +35,15 @@ import { ModeratorGuard } from './moderator.guard';
 import { parseRejectComment } from './order-input';
 
 const PAGE_SIZE = 20;
+
+/** Версия заказа, которую модератор видел (`version` из GET /api/mod/orders/:id). */
+function parseVersion(body: unknown): Date {
+  const raw = (body as { version?: unknown } | null)?.version;
+  const version = typeof raw === 'string' ? new Date(raw) : null;
+  if (!version || Number.isNaN(version.getTime()))
+    throw new BadRequestException('Откройте заказ заново');
+  return version;
+}
 
 /**
  * Окно модератора в Mini App. Гонки двух модераторов над одним пунктом отсекает transitionStatus.
@@ -64,7 +75,8 @@ export class ModerationController {
         title: o.title,
         price: kopecksToRubles(o.priceKopecks),
         advertiser: creatorLabel(o.advertiser),
-        createdAt: o.createdAt,
+        // ждёт с момента отправки на проверку: после правки — заново
+        queuedAt: o.moderationRequestedAt,
         // похоже на контакты в обход площадки — модератору пометка в списке
         hasContacts: findContacts(o.title, o.description).length > 0,
       })),
@@ -122,7 +134,7 @@ export class ModerationController {
   }
 
   @Get('orders/:id')
-  async order(@Param('id', ParseIntPipe) id: number) {
+  async order(@Param('id', ParseIdPipe) id: number) {
     const o = await this.ordersService.findWithAdvertiser(id);
     if (!o) throw new NotFoundException('Заказ не найден');
     return {
@@ -137,25 +149,29 @@ export class ModerationController {
       advertiser: creatorLabel(o.advertiser),
       createdAt: o.createdAt,
       contacts: findContacts(o.title, o.description),
+      // решение принимается по этой версии — см. OrdersService.moderatorApprove
+      version: o.moderationRequestedAt,
     };
   }
 
   @Post('orders/:id/approve')
   async approveOrder(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseIdPipe) id: number,
+    @Body() body: unknown,
     @Req() req: ApiRequest,
   ) {
     const order = await this.ordersService.moderatorApprove(
       id,
       req.user.telegramId,
+      parseVersion(body),
     );
-    await this.notifications.orderApproved(order);
+    this.notifications.orderApproved(order);
     return { ok: true };
   }
 
   @Post('orders/:id/reject')
   async rejectOrder(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseIdPipe) id: number,
     @Body() body: unknown,
     @Req() req: ApiRequest,
   ) {
@@ -164,13 +180,14 @@ export class ModerationController {
       id,
       req.user.telegramId,
       comment,
+      parseVersion(body),
     );
-    await this.notifications.orderRejected(order, comment);
+    this.notifications.orderRejected(order, comment);
     return { ok: true };
   }
 
   @Get('videos/:id')
-  async video(@Param('id', ParseIntPipe) id: number) {
+  async video(@Param('id', ParseIdPipe) id: number) {
     const s = await this.submissionsService.findById(id);
     if (!s) throw new NotFoundException('Отклик не найден');
     const attempts = attemptNumbers(
@@ -205,11 +222,11 @@ export class ModerationController {
     const target = b.target as ReportTarget;
     if (
       !Object.values(ReportTarget).includes(target) ||
-      !Number.isInteger(b.targetId) ||
+      !isDbId(b.targetId) ||
       typeof b.actioned !== 'boolean'
     )
       throw new BadRequestException('Некорректное решение');
-    const group = { target, targetId: b.targetId as number };
+    const group = { target, targetId: b.targetId };
     // banReason — заодно заблокировать автора объекта (мера применяется в любом случае)
     const banReason =
       b.banReason === undefined ? null : parseBanReason(b.banReason);
@@ -228,15 +245,14 @@ export class ModerationController {
       actioned,
       req.user.telegramId,
     );
-    if (closedOrder)
-      await this.notifications.orderClosedByModerator(closedOrder);
+    if (closedOrder) this.notifications.orderClosedByModerator(closedOrder);
     if (toBan) await this.banAndNotify(toBan, banReason!);
-    await this.notifications.reportResolved(reporters, actioned);
+    this.notifications.reportResolved(reporters, actioned);
     return { ok: true };
   }
 
   @Post('users/:id/ban')
-  async ban(@Param('id', ParseIntPipe) id: number, @Body() body: unknown) {
+  async ban(@Param('id', ParseIdPipe) id: number, @Body() body: unknown) {
     const reason = parseBanReason(
       (body as { reason?: unknown } | null)?.reason,
     );
@@ -246,14 +262,14 @@ export class ModerationController {
   }
 
   @Post('users/:id/unban')
-  async unban(@Param('id', ParseIntPipe) id: number) {
+  async unban(@Param('id', ParseIdPipe) id: number) {
     await this.bans.unban(id);
     return { ok: true };
   }
 
   private async banAndNotify(userId: number, reason: string) {
     for (const order of await this.bans.ban(userId, reason))
-      await this.notifications.orderClosedByModerator(order);
+      this.notifications.orderClosedByModerator(order);
   }
 
   /** Модераторы задаются в env — их не блокируют. Возвращает пользователя. */
@@ -267,29 +283,27 @@ export class ModerationController {
 
   /** Удалить отзыв креатору (оскорбления и т.п.); приёмка видео остаётся. */
   @Delete('reviews/:submissionId')
-  async removeReview(
-    @Param('submissionId', ParseIntPipe) submissionId: number,
-  ) {
+  async removeReview(@Param('submissionId', ParseIdPipe) submissionId: number) {
     await this.submissionsService.removeReview(submissionId);
     return { ok: true };
   }
 
   @Post('videos/:id/approve')
   async approveVideo(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseIdPipe) id: number,
     @Req() req: ApiRequest,
   ) {
     const submission = await this.submissionsService.moderatorApprove(
       id,
       req.user.telegramId,
     );
-    await this.notifications.videoApprovedByModerator(submission);
+    this.notifications.videoApprovedByModerator(submission);
     return { ok: true };
   }
 
   @Post('videos/:id/reject')
   async rejectVideo(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseIdPipe) id: number,
     @Body() body: unknown,
     @Req() req: ApiRequest,
   ) {
@@ -299,7 +313,7 @@ export class ModerationController {
       req.user.telegramId,
       comment,
     );
-    await this.notifications.videoRejectedByModerator(submission, comment);
+    this.notifications.videoRejectedByModerator(submission, comment);
     return { ok: true };
   }
 }

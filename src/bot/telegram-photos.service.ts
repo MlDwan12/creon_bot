@@ -24,7 +24,8 @@ export class TelegramPhotosService {
       // размеры идут по возрастанию: 160, 320, 640 — для аватара хватает среднего
       const size = sizes[1] ?? sizes[0];
       const link = await this.bot.telegram.getFileLink(size.file_id);
-      const res = await fetch(link);
+      // без таймаута медленный ответ Telegram держал бы запрос к API сколько угодно
+      const res = await fetch(link, { signal: AbortSignal.timeout(5000) });
       return res.ok ? Buffer.from(await res.arrayBuffer()) : null;
     } catch {
       return null;

@@ -5,11 +5,12 @@ import {
   Get,
   NotFoundException,
   Param,
-  ParseIntPipe,
   Post,
+  Put,
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { ParseIdPipe } from './parse-id.pipe';
 import { OrderStatus, SubmissionStatus } from '@prisma/client';
 import { kopecksToRubles } from '../common/money';
 import { NotificationsService } from '../bot/notifications.service';
@@ -18,13 +19,13 @@ import { Throttle } from '@nestjs/throttler';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
 import { attemptNumbers } from './attempts';
-import {
-  type ApiRequest,
-  InitDataGuard,
-  requireUsername,
-} from './init-data.guard';
+import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { UserThrottlerGuard } from './user-throttler.guard';
-import { parseDeadlineDays, parseOrderInput } from './order-input';
+import {
+  parseDeadlineDays,
+  parseOrderEdit,
+  parseOrderInput,
+} from './order-input';
 
 /** Заказы текущего пользователя как рекламодателя. Права проверяют сервисы. */
 @Controller('api/my-orders')
@@ -66,26 +67,42 @@ export class MyOrdersController {
   @Post()
   @Throttle({ default: { limit: 10, ttl: 60 * 60_000 } })
   async create(@Body() body: unknown, @Req() req: ApiRequest) {
-    requireUsername(req.user);
     const order = await this.ordersService.create(
       req.user.id,
       parseOrderInput(body),
     );
-    await this.notifications.orderCreated(order);
+    this.notifications.orderCreated(order);
     return { id: order.id };
   }
 
+  /** Правка заказа: снова на проверку; креаторам, уже работающим по открытому заказу, — уведомление. */
+  @Put(':id')
+  @Throttle({ default: { limit: 30, ttl: 60 * 60_000 } })
+  async update(
+    @Param('id', ParseIdPipe) id: number,
+    @Body() body: unknown,
+    @Req() req: ApiRequest,
+  ) {
+    const order = await this.ordersService.update(
+      id,
+      req.user.id,
+      parseOrderEdit(body),
+    );
+    this.notifications.orderEdited(order);
+    return { ok: true };
+  }
+
   @Post(':id/close')
-  async close(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {
+  async close(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
     const order = await this.ordersService.close(id, req.user.id);
-    await this.notifications.orderClosed(order);
+    this.notifications.orderClosed(order);
     return { ok: true };
   }
 
   /** Продлить срок на `days` дней; заказ с истёкшим сроком снова открывается. */
   @Post(':id/extend')
   async extend(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseIdPipe) id: number,
     @Body('days') days: unknown,
     @Req() req: ApiRequest,
   ) {
@@ -94,16 +111,16 @@ export class MyOrdersController {
   }
 
   @Delete(':id')
-  async remove(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {
+  async remove(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
     const order = await this.ordersService.remove(id, req.user.id);
-    await this.notifications.orderRemoved(order);
+    this.notifications.orderRemoved(order);
     return { ok: true };
   }
 
   /** Видео по моему заказу, одобренные модератором и ждущие моего решения. */
   @Get(':id/pending-videos')
   async pendingVideos(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseIdPipe) id: number,
     @Req() req: ApiRequest,
   ) {
     const order = await this.ordersService.findById(id);

@@ -1,6 +1,6 @@
 import {
+  BadRequestException,
   Controller,
-  DefaultValuePipe,
   Get,
   HttpCode,
   NotFoundException,
@@ -12,16 +12,13 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { ParseIdPipe } from './parse-id.pipe';
 import { OrderCategory } from '@prisma/client';
 import { Throttle } from '@nestjs/throttler';
 import { kopecksToRubles } from '../common/money';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
-import {
-  type ApiRequest,
-  InitDataGuard,
-  requireUsername,
-} from './init-data.guard';
+import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { UserThrottlerGuard } from './user-throttler.guard';
 
 const PAGE_SIZE = 20;
@@ -40,27 +37,35 @@ export class OrdersController {
     private readonly submissionsService: SubmissionsService,
   ) {}
 
-  /** Каталог открытых заказов для креатора. `page` с нуля. */
+  /**
+   * Каталог открытых заказов для креатора. Следующая страница — `afterId` и `afterCreatedAt`
+   * последнего показанного заказа; без них — первая.
+   */
   @Get()
   async listOpen(
     @Query('category', new ParseEnumPipe(OrderCategory, { optional: true }))
     category: OrderCategory | undefined,
-    @Query('page', new DefaultValuePipe(0), ParseIntPipe) page: number,
+    @Query('afterId', new ParseIntPipe({ optional: true })) afterId?: number,
+    @Query('afterCreatedAt') afterCreatedAt?: string,
   ) {
-    const { items, total } = await this.ordersService.listOpen(
+    let after: { createdAt: Date; id: number } | undefined;
+    if (afterId !== undefined) {
+      const createdAt = new Date(afterCreatedAt ?? '');
+      if (Number.isNaN(createdAt.getTime()))
+        throw new BadRequestException('Некорректная страница');
+      after = { createdAt, id: afterId };
+    }
+    const { items, hasMore, total } = await this.ordersService.listOpen(
       category,
-      Math.max(0, page) * PAGE_SIZE,
+      after,
       PAGE_SIZE,
     );
-    return { items: items.map(toPublic), total, page, pageSize: PAGE_SIZE };
+    return { items: items.map(toPublic), hasMore, total };
   }
 
   /** Карточка открытого заказа; `claimed` — есть ли у текущего пользователя отклик «в работе», `own` — заказ его. */
   @Get(':id')
-  async findOpen(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: ApiRequest,
-  ) {
+  async findOpen(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
     const order = await this.ordersService.findOpenById(id);
     if (!order) throw new NotFoundException('Заказ не найден или уже закрыт');
     const claimed = await this.submissionsService.hasInProgress(
@@ -81,8 +86,7 @@ export class OrdersController {
   @Post(':id/claim')
   @Throttle({ default: { limit: 30, ttl: 60 * 60_000 } })
   @HttpCode(201)
-  async claim(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {
-    requireUsername(req.user);
+  async claim(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
     const submission = await this.submissionsService.claim(id, req.user.id);
     return { submissionId: submission.id };
   }

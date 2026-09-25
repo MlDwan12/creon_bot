@@ -83,7 +83,7 @@ const error = ref('');
 /** Самое старое ожидание в обеих очередях — главный сигнал «пора разбирать». */
 const oldest = computed(() => {
   const dates = [
-    ...(queue.value?.orders.map((o) => o.createdAt) ?? []),
+    ...(queue.value?.orders.map((o) => o.queuedAt) ?? []),
     ...(queue.value?.videos.map((v) => v.submittedAt).filter((d): d is string => !!d) ?? []),
   ].sort();
   return dates[0];
@@ -189,7 +189,7 @@ void load();
             </span>
             <span class="sub">{{ o.advertiser }} · {{ formatPrice(o.price) }}</span>
           </span>
-          <span :class="['wait', { long: isWaitingLong(o.createdAt) }]">{{ waitingFor(o.createdAt) }}</span>
+          <span :class="['wait', { long: isWaitingLong(o.queuedAt) }]">{{ waitingFor(o.queuedAt) }}</span>
           <span class="chevron" aria-hidden="true">›</span>
         </RouterLink>
       </div>

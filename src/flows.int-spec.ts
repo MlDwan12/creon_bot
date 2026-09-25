@@ -6,6 +6,7 @@ import { ReportsService } from './api/reports.service';
 import { MAX_ACTIVE_ORDERS, OrdersService } from './orders/orders.service';
 import { PrismaService } from './prisma/prisma.service';
 import { SubmissionsService } from './submissions/submissions.service';
+import { UsersService } from './users/users.service';
 
 /**
  * Интеграционные тесты сервисов на настоящем Postgres: статусы, гонки и права, которые держатся
@@ -28,6 +29,7 @@ const analytics = new AnalyticsService(prisma);
 const bans = new BansService(prisma);
 const profiles = new ProfilesService(prisma);
 const reports = new ReportsService(prisma, orders, profiles);
+const users = new UsersService(prisma);
 
 const DAY = 24 * 60 * 60 * 1000;
 let nextTelegramId = 1n;
@@ -48,9 +50,18 @@ async function pendingOrder(advertiserId: number, deadline?: Date) {
   });
 }
 
+/** Решение модератора по текущей версии заказа — той, что он открыл бы в мини-аппе. */
+const versionOf = async (orderId: number) =>
+  (await prisma.order.findUniqueOrThrow({ where: { id: orderId } }))
+    .moderationRequestedAt;
+const approveOrder = async (orderId: number, mod: bigint) =>
+  orders.moderatorApprove(orderId, mod, await versionOf(orderId));
+const rejectOrder = async (orderId: number, mod: bigint, comment: string) =>
+  orders.moderatorReject(orderId, mod, comment, await versionOf(orderId));
+
 async function openOrder(advertiserId: number, deadline?: Date) {
   const order = await pendingOrder(advertiserId, deadline);
-  return orders.moderatorApprove(order.id, 1n);
+  return approveOrder(order.id, 1n);
 }
 
 const statusOf = async (orderId: number) =>
@@ -62,6 +73,21 @@ beforeEach(() =>
   ),
 );
 afterAll(() => prisma.$disconnect());
+
+describe('пользователь из initData', () => {
+  it('убрал username в Telegram — он стирается и в базе', async () => {
+    await users.findOrCreate({
+      telegramId: 500n,
+      username: 'old_nick',
+      firstName: 'Аня',
+    });
+    const updated = await users.findOrCreate({
+      telegramId: 500n,
+      firstName: 'Аня',
+    });
+    expect(updated.username).toBeNull();
+  });
+});
 
 describe('отклик', () => {
   it('на свой заказ — нельзя', async () => {
@@ -165,10 +191,10 @@ describe('срок от публикации и напоминания', () => {
     // заказ провисел на модерации двое суток
     await prisma.order.update({
       where: { id: order.id },
-      data: { createdAt: new Date(Date.now() - 2 * DAY) },
+      data: { moderationRequestedAt: new Date(Date.now() - 2 * DAY) },
     });
 
-    const published = await orders.moderatorApprove(order.id, 1n);
+    const published = await approveOrder(order.id, 1n);
 
     const shiftedBy = published.deadline!.getTime() - order.deadline!.getTime();
     expect(shiftedBy).toBeGreaterThanOrEqual(2 * DAY);
@@ -202,6 +228,156 @@ describe('срок от публикации и напоминания', () => {
   });
 });
 
+describe('каталог', () => {
+  it('hasMore — есть ли следующая страница; total — число открытых', async () => {
+    const adv = await user();
+    for (let i = 0; i < 3; i++) await openOrder(adv.id);
+    await pendingOrder(adv.id); // на модерации — не в каталоге
+
+    const first = await orders.listOpen(undefined, undefined, 2);
+    expect(first).toMatchObject({ hasMore: true, total: 3 });
+    expect(first.items).toHaveLength(2);
+
+    const tail = first.items[1];
+    const last = await orders.listOpen(undefined, tail, 2);
+    expect(last.hasMore).toBe(false);
+    expect(last.items).toHaveLength(1);
+  });
+
+  it('закрытый заказ, пока листали, не сдвигает следующую страницу', async () => {
+    const adv = await user();
+    const ids: number[] = [];
+    for (let i = 0; i < 4; i++) ids.push((await openOrder(adv.id)).id);
+    const first = await orders.listOpen(undefined, undefined, 2); // новые: ids[3], ids[2]
+    await orders.close(first.items[0].id, adv.id); // закрыли уже показанный
+    const next = await orders.listOpen(undefined, first.items[1], 2);
+    expect(next.items.map((o) => o.id)).toEqual([ids[1], ids[0]]);
+  });
+});
+
+describe('правка заказа', () => {
+  const edit = {
+    title: 'Новое название',
+    description: 'Новое описание',
+    priceKopecks: 50_000,
+    category: 'FOOD' as const,
+  };
+
+  it('открытый — снова на проверку; работающие креаторы — в ответе для уведомления', async () => {
+    const adv = await user();
+    const creator = await user();
+    const order = await openOrder(adv.id);
+    await submissions.claim(order.id, creator.id);
+
+    const updated = await orders.update(order.id, adv.id, edit);
+    expect(updated).toMatchObject({
+      ...edit,
+      status: 'PENDING_MODERATION',
+      decidedAt: null,
+    });
+    expect(updated.submissions.map((s) => s.creatorId)).toEqual([creator.id]);
+  });
+
+  it('чужой и закрытый — нельзя', async () => {
+    const adv = await user();
+    const other = await user();
+    const order = await openOrder(adv.id);
+    await expect(orders.update(order.id, other.id, edit)).rejects.toThrow(
+      'Это не ваш заказ',
+    );
+    await orders.close(order.id, adv.id);
+    await expect(orders.update(order.id, adv.id, edit)).rejects.toThrow(
+      'Изменить можно только',
+    );
+  });
+
+  it('срок после повторной проверки сдвигается на время проверки, а не на возраст заказа', async () => {
+    const adv = await user();
+    const order = await openOrder(adv.id, new Date(Date.now() + 7 * DAY));
+    // заказу 10 дней, правка ушла на проверку 2 часа назад, срок при правке не меняли
+    await orders.update(order.id, adv.id, edit);
+    await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        createdAt: new Date(Date.now() - 10 * DAY),
+        moderationRequestedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      },
+    });
+    const before = (
+      await prisma.order.findUniqueOrThrow({ where: { id: order.id } })
+    ).deadline!.getTime();
+    const approved = await approveOrder(order.id, 1n);
+    const shiftHours =
+      (approved.deadline!.getTime() - before) / (60 * 60 * 1000);
+    expect(shiftHours).toBeCloseTo(2, 1);
+  });
+});
+
+describe('правка заказа — защита', () => {
+  const edit = {
+    title: 'Новое',
+    description: 'Новое описание',
+    priceKopecks: null,
+    category: 'OTHER' as const,
+  };
+
+  it('модератор не может одобрить версию, которую не видел', async () => {
+    const adv = await user();
+    const order = await pendingOrder(adv.id);
+    const seen = await versionOf(order.id);
+    await new Promise((r) => setTimeout(r, 5)); // правка — позже, чем модератор открыл заказ
+    await orders.update(order.id, adv.id, { ...edit, title: 'Пишите @ivan' });
+    await expect(orders.moderatorApprove(order.id, 1n, seen)).rejects.toThrow(
+      'изменён',
+    );
+    expect(await statusOf(order.id)).toBe('PENDING_MODERATION');
+  });
+
+  it('цену нельзя менять, пока есть сданные видео', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, 'https://example.com/v');
+    await expect(
+      orders.update(order.id, adv.id, { ...edit, priceKopecks: 100 }),
+    ).rejects.toThrow('Цену нельзя менять');
+    // без смены цены — можно
+    await orders.update(order.id, adv.id, {
+      ...edit,
+      priceKopecks: order.priceKopecks,
+    });
+  });
+
+  it('срок «как было» у заказа на проверке не съедается временем до правки', async () => {
+    const adv = await user();
+    const order = await pendingOrder(adv.id, new Date(Date.now() + 7 * DAY));
+    // отправлен на проверку 2 дня назад, срок — 7 дней от отправки
+    await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        moderationRequestedAt: new Date(Date.now() - 2 * DAY),
+        deadline: new Date(Date.now() + 5 * DAY),
+      },
+    });
+    await orders.update(order.id, adv.id, edit);
+    const published = await approveOrder(order.id, 1n);
+    const daysLeft = (published.deadline!.getTime() - Date.now()) / DAY;
+    expect(daysLeft).toBeCloseTo(7, 1);
+  });
+
+  it('изменённый открытый заказ отклонён — креаторы в ответе, видео больше не принимаются', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await orders.update(order.id, adv.id, edit);
+    const rejected = await rejectOrder(order.id, 1n, 'причина');
+    expect(rejected.submissions.map((x) => x.creatorId)).toEqual([creator.id]);
+    await expect(
+      submissions.attachVideo(s.id, creator.id, 'https://example.com/v'),
+    ).rejects.toThrow('снят модератором');
+  });
+});
+
 describe('лимит активных заказов', () => {
   it('больше MAX_ACTIVE_ORDERS на модерации и открытых — нельзя, закрытые не считаются', async () => {
     const advertiser = await user();
@@ -212,7 +388,7 @@ describe('лимит активных заказов', () => {
       'активных заказов',
     );
 
-    const first = await orders.moderatorApprove(created[0].id, 1n);
+    const first = await approveOrder(created[0].id, 1n);
     await orders.close(first.id, advertiser.id);
     await expect(pendingOrder(advertiser.id)).resolves.toBeDefined();
   });
@@ -249,8 +425,8 @@ describe('модерация', () => {
     const order = await pendingOrder(advertiser.id);
 
     const results = await Promise.allSettled([
-      orders.moderatorApprove(order.id, 1n),
-      orders.moderatorReject(order.id, 2n, 'причина'),
+      approveOrder(order.id, 1n),
+      rejectOrder(order.id, 2n, 'причина'),
     ]);
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
@@ -267,7 +443,7 @@ describe('воронка', () => {
       category: 'OTHER',
       priceKopecks: 300_000,
     });
-    await orders.moderatorApprove(accepted.id, 1n);
+    await approveOrder(accepted.id, 1n);
     const s = await submissions.claim(accepted.id, creator.id);
     await submissions.attachVideo(s.id, creator.id, 'https://v.example/1');
     await submissions.moderatorApprove(s.id, 1n);
@@ -278,7 +454,7 @@ describe('воронка', () => {
     });
 
     const rejected = await pendingOrder(advertiser.id);
-    await orders.moderatorReject(rejected.id, 1n, 'причина');
+    await rejectOrder(rejected.id, 1n, 'причина');
     await pendingOrder(advertiser.id);
 
     expect(await analytics.funnel()).toMatchObject({

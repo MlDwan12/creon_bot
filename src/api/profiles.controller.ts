@@ -6,12 +6,12 @@ import {
   Header,
   NotFoundException,
   Param,
-  ParseIntPipe,
   Put,
   Req,
   StreamableFile,
   UseGuards,
 } from '@nestjs/common';
+import { ParseIdPipe } from './parse-id.pipe';
 import { TelegramPhotosService } from '../bot/telegram-photos.service';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { ModeratorGuard } from './moderator.guard';
@@ -43,7 +43,7 @@ export class ProfilesController {
 
   /** Профиль креатора — кому можно, решает ProfilesService.canView. */
   @Get('creators/:id')
-  async creator(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {
+  async creator(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
     await this.mustView(req, id);
     const moderator = this.moderatorGuard.isModerator(req.user);
     const profile = await this.profiles.profile(
@@ -60,7 +60,7 @@ export class ProfilesController {
    */
   @Get('creators/:id/photo')
   @Header('Cache-Control', 'private, max-age=3600')
-  async photo(@Param('id', ParseIntPipe) id: number, @Req() req: ApiRequest) {
+  async photo(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
     await this.mustView(req, id);
     const telegramId = await this.profiles.telegramIdOf(id);
     const photo = telegramId && (await this.photos.profilePhoto(telegramId));

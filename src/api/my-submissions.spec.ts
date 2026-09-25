@@ -13,6 +13,7 @@ const order = (id: number): Order => ({
   moderatorId: 777n,
   moderatorComment: 'внутреннее',
   createdAt: new Date(0),
+  moderationRequestedAt: new Date(0),
   decidedAt: null,
   closedAt: null,
   deadlineReminderSentAt: null,

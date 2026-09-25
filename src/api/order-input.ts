@@ -73,6 +73,27 @@ export function parseOrderInput(body: unknown) {
   };
 }
 
+/**
+ * Тело `PUT /api/my-orders/:id` — как при создании, кроме срока: `deadlineDays` не передан —
+ * срок не меняется, null — без срока. Пустая цена — договорная.
+ */
+export function parseOrderEdit(body: unknown) {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const input = parseOrderInput({ ...b, deadlineDays: undefined });
+  return {
+    title: input.title,
+    description: input.description,
+    priceKopecks: input.priceKopecks ?? null,
+    category: input.category,
+    deadline:
+      b.deadlineDays === undefined
+        ? undefined
+        : b.deadlineDays === null
+          ? null
+          : deadlineIn(parseDeadlineDays(b.deadlineDays)),
+  };
+}
+
 /** Срок в днях — при создании заказа и при продлении. */
 export function parseDeadlineDays(days: unknown): number {
   if (

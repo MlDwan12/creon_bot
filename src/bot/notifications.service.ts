@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Order, Submission, User } from '@prisma/client';
 import { InjectBot } from 'nestjs-telegraf';
@@ -20,11 +20,19 @@ type SubmissionWithParties = Submission & { order: Order; creator: User };
 /**
  * Все уведомления в чат бота о событиях из Mini App. К каждому — кнопка, открывающая нужный экран.
  * Каждая отправка глушит ошибку: получатель мог заблокировать бота или ещё не запускал его.
+ *
+ * Отправка — в фоне, через одну общую очередь: HTTP-запрос не ждёт Telegram (закрытие заказа
+ * с 50 откликами — это 50 сообщений), а сообщения уходят по одному, что заодно держит бота
+ * в лимите Telegram (~30 сообщений в секунду на бота).
+ * ponytail: очередь в памяти — при падении процесса неотправленное теряется (при штатной остановке
+ * дожидаемся её). Станет важно — таблица-очередь в Postgres.
  */
 @Injectable()
-export class NotificationsService {
+export class NotificationsService implements OnModuleDestroy {
+  private readonly logger = new Logger(NotificationsService.name);
   private readonly moderatorIds: string[];
   private readonly webAppUrl: string;
+  private queue: Promise<void> = Promise.resolve();
 
   constructor(
     @InjectBot() private readonly bot: Telegraf<Context>,
@@ -38,9 +46,32 @@ export class NotificationsService {
   }
 
   /** Модераторам: новый заказ ждёт проверки. */
-  async orderCreated(order: Order & { advertiser: User }) {
-    const text = [
-      '🆕 <b>Новый заказ на проверку</b>',
+  orderCreated(order: Order & { advertiser: User }) {
+    this.toModerators(
+      this.orderCard('🆕 <b>Новый заказ на проверку</b>', order),
+      `/mod/orders/${order.id}`,
+    );
+  }
+
+  /**
+   * Рекламодатель изменил заказ: модераторам — на повторную проверку; креаторам, которые уже
+   * работают по нему, — что условия изменились.
+   */
+  orderEdited(order: Order & { advertiser: User } & OrderWithCreators) {
+    this.toModerators(
+      this.orderCard('✏️ <b>Заказ изменён — снова на проверку</b>', order),
+      `/mod/orders/${order.id}`,
+    );
+    if (order.submissions.length)
+      this.toCreators(
+        order,
+        `✏️ Рекламодатель изменил условия заказа «${escapeHtml(order.title)}». Заказ снова на проверке у модератора — после одобрения новые условия будут в карточке заказа.`,
+      );
+  }
+
+  private orderCard(title: string, order: Order & { advertiser: User }) {
+    return [
+      title,
       '',
       `#${order.id}: <b>${escapeHtml(order.title)}</b>`,
       escapeHtml(order.description),
@@ -51,11 +82,10 @@ export class NotificationsService {
     ]
       .filter(Boolean)
       .join('\n');
-    await this.toModerators(text, `/mod/orders/${order.id}`);
   }
 
   /** Модераторам: креатор прислал видео. */
-  async videoSubmitted(submission: SubmissionWithParties) {
+  videoSubmitted(submission: SubmissionWithParties) {
     const text = [
       '🆕 <b>Новый отклик на модерацию</b>',
       '',
@@ -63,29 +93,39 @@ export class NotificationsService {
       `Креатор: ${escapeHtml(creatorLabel(submission.creator))}`,
       `Видео: ${escapeHtml(submission.videoUrl ?? '')}`,
     ].join('\n');
-    await this.toModerators(text, `/mod/videos/${submission.id}`);
+    this.toModerators(text, `/mod/videos/${submission.id}`);
   }
 
   /** Рекламодателю: модератор опубликовал заказ. */
-  async orderApproved(order: Order & { advertiser: User }) {
-    await this.send(
+  orderApproved(order: Order & { advertiser: User }) {
+    this.send(
       order.advertiser.telegramId,
       `✅ Ваш заказ «${order.title}» прошёл модерацию и опубликован — креаторы уже видят его в каталоге.`,
       '/my-orders',
     );
   }
 
-  /** Рекламодателю: модератор отклонил заказ. */
-  async orderRejected(order: Order & { advertiser: User }, comment: string) {
-    await this.send(
+  /**
+   * Рекламодателю: модератор отклонил заказ. Если это изменённый открытый заказ — креаторам,
+   * которые по нему работали: он снят, продолжать не нужно.
+   */
+  orderRejected(
+    order: Order & { advertiser: User } & OrderWithCreators,
+    comment: string,
+  ) {
+    this.send(
       order.advertiser.telegramId,
       `❌ Ваш заказ «${order.title}» отклонён модератором.\nПричина: ${comment}\n\nВы можете разместить заказ заново, учтя замечания.`,
       `/my-orders/new?from=${order.id}`,
     );
+    this.toCreators(
+      order,
+      `🔒 Заказ «${escapeHtml(order.title)}» после изменений не прошёл модерацию и снят — не продолжайте работу по нему.`,
+    );
   }
 
   /** Рекламодателю: модератор одобрил видео — теперь решение за ним. */
-  async videoApprovedByModerator(
+  videoApprovedByModerator(
     submission: Submission & { order: Order & { advertiser: User } },
   ) {
     const text = [
@@ -94,7 +134,7 @@ export class NotificationsService {
       `Заказ: ${escapeHtml(submission.order.title)}`,
       `Видео: ${escapeHtml(submission.videoUrl ?? '')}`,
     ].join('\n');
-    await this.send(
+    this.send(
       submission.order.advertiser.telegramId,
       text,
       `/my-orders/${submission.order.id}/review`,
@@ -103,11 +143,8 @@ export class NotificationsService {
   }
 
   /** Креатору: модератор отклонил видео. */
-  async videoRejectedByModerator(
-    submission: SubmissionWithParties,
-    comment: string,
-  ) {
-    await this.send(
+  videoRejectedByModerator(submission: SubmissionWithParties, comment: string) {
+    this.send(
       submission.creator.telegramId,
       `❌ Ваш отклик на заказ «${submission.order.title}» отклонён модератором.\nПричина: ${comment}\n\nВы можете отправить новый отклик на этот заказ.`,
       '/submissions',
@@ -115,90 +152,90 @@ export class NotificationsService {
   }
 
   /** Креаторам с откликами на заказ: рекламодатель его закрыл. */
-  async orderClosed(order: OrderWithCreators) {
-    await this.toCreators(
+  orderClosed(order: OrderWithCreators) {
+    this.toCreators(
       order,
       `🔒 Заказ «${escapeHtml(order.title)}» закрыт рекламодателем. Новые отклики по нему больше не принимаются.`,
     );
   }
 
   /** Модератор закрыл заказ по жалобе: рекламодателю и креаторам с откликами. */
-  async orderClosedByModerator(
+  orderClosedByModerator(
     order: Order & { advertiser: User } & OrderWithCreators,
   ) {
-    await this.send(
+    this.send(
       order.advertiser.telegramId,
       `🚫 Ваш заказ «${escapeHtml(order.title)}» закрыт модератором: он нарушает правила площадки. Если это ошибка — напишите в поддержку.`,
       '/my-orders',
       true,
     );
-    await this.toCreators(
+    this.toCreators(
       order,
       `🔒 Заказ «${escapeHtml(order.title)}» закрыт модератором за нарушение правил площадки — не продолжайте работу по нему.`,
     );
   }
 
   /** Модераторам: новая жалоба. */
-  async reportCreated(what: string) {
-    await this.toModerators(
+  reportCreated(what: string) {
+    this.toModerators(
       `🚩 Новая жалоба: ${escapeHtml(what)}`,
       '/mod?tab=reports',
     );
   }
 
   /** Тем, кто жаловался: модератор рассмотрел жалобу. */
-  async reportResolved(telegramIds: bigint[], actioned: boolean) {
+  reportResolved(telegramIds: bigint[], actioned: boolean) {
     const text = actioned
       ? '✅ Мы рассмотрели вашу жалобу и приняли меры. Спасибо, что помогаете площадке.'
       : '👌 Мы рассмотрели вашу жалобу — нарушений не нашли. Спасибо, что сообщили.';
-    for (const id of telegramIds) await this.send(id, text, '/');
+    for (const id of telegramIds) this.send(id, text, '/');
   }
 
   /** Креаторам с откликами на заказ: рекламодатель его удалил. */
-  async orderRemoved(order: OrderWithCreators) {
-    await this.toCreators(
+  orderRemoved(order: OrderWithCreators) {
+    this.toCreators(
       order,
       `🗑 Заказ «${escapeHtml(order.title)}» удалён рекламодателем. Отклик по нему больше не актуален.`,
     );
   }
 
   /** Срок заказа истёк: рекламодателю — что можно продлить, креаторам с откликом «в работе» — что видео уже не примут. */
-  async orderExpired(order: Order & { advertiser: User } & OrderWithCreators) {
-    await this.send(
+  orderExpired(order: Order & { advertiser: User } & OrderWithCreators) {
+    this.send(
       order.advertiser.telegramId,
       `⏰ Срок заказа «${escapeHtml(order.title)}» истёк — заказ закрыт, новые видео не принимаются.\n\nУже присланные видео можно принять или отклонить. Чтобы собрать ещё, продлите срок в «Мои заказы».`,
       '/my-orders',
       true,
     );
-    await this.toCreators(
+    this.toCreators(
       order,
       `⏰ Срок заказа «${escapeHtml(order.title)}» истёк — видео по нему больше не принимаются.`,
     );
   }
 
   /** Креаторам с откликом «в работе»: срок заказа истекает меньше чем через сутки. */
-  async deadlineSoon(order: OrderWithCreators & Order) {
-    await this.toCreators(
+  deadlineSoon(order: OrderWithCreators & Order) {
+    this.toCreators(
       order,
       `⏳ Меньше чем через сутки истекает срок заказа «${escapeHtml(order.title)}» — успейте отправить видео. После срока его не примут.`,
     );
   }
 
   /** Модераторам: в очереди есть то, что ждёт дольше положенного. */
-  async moderationQueueStale(orders: number, videos: number, hours: number) {
+  moderationQueueStale(orders: number, videos: number, hours: number) {
     const parts = [
       orders ? `заказов: ${orders}` : '',
       videos ? `видео: ${videos}` : '',
     ].filter(Boolean);
-    await this.toModerators(
+    this.toModerators(
       `🕓 Дольше ${hours} ч ждут проверки — ${parts.join(', ')}.`,
       '/mod',
     );
   }
 
   /** Креатору: рекламодатель принял видео. */
-  async videoAccepted(submission: SubmissionWithParties) {
-    await this.send(
+  videoAccepted(submission: SubmissionWithParties) {
+    this.send(
       submission.creator.telegramId,
       `🎉 Рекламодатель подтвердил ваше видео по заказу «${submission.order.title}»!` +
         (submission.rating
@@ -209,60 +246,73 @@ export class NotificationsService {
   }
 
   /** Креатору: рекламодатель отклонил видео. */
-  async videoRejectedByAdvertiser(
+  videoRejectedByAdvertiser(
     submission: SubmissionWithParties,
     comment: string,
   ) {
-    await this.send(
+    this.send(
       submission.creator.telegramId,
       `❌ Рекламодатель отклонил ваше видео по заказу «${submission.order.title}».\nПричина: ${comment}\n\nВы можете отправить новый отклик на этот заказ.`,
       '/submissions',
     );
   }
 
-  private async toModerators(text: string, path: string) {
+  /** Штатная остановка (редеплой) — сначала дослать то, что уже в очереди. */
+  async onModuleDestroy() {
+    await this.queue;
+  }
+
+  /** В очередь: задача выполнится после предыдущих; её сбой не останавливает следующие. */
+  private enqueue(task: () => Promise<unknown>) {
+    this.queue = this.queue.then(task).then(
+      () => undefined,
+      (err) => this.logger.error(err),
+    );
+  }
+
+  private toModerators(text: string, path: string) {
     const extra = html(this.openButton(path));
     for (const modId of this.moderatorIds) {
-      try {
-        await this.bot.telegram.sendMessage(modId, text, extra);
-      } catch {
-        // модератор ещё не запускал бота — пропускаем
-      }
+      this.enqueue(async () => {
+        try {
+          await this.bot.telegram.sendMessage(modId, text, extra);
+        } catch {
+          // модератор ещё не запускал бота — пропускаем
+        }
+      });
     }
   }
 
   /** Каждому креатору один раз, даже если у него несколько попыток по заказу. */
-  private async toCreators(order: OrderWithCreators, text: string) {
+  private toCreators(order: OrderWithCreators, text: string) {
     const seen = new Set<bigint>();
     for (const s of order.submissions) {
       if (seen.has(s.creator.telegramId)) continue;
       seen.add(s.creator.telegramId);
-      await this.send(s.creator.telegramId, text, '/submissions', true);
+      this.send(s.creator.telegramId, text, '/submissions', true);
     }
   }
 
-  private async send(
-    telegramId: bigint,
-    text: string,
-    path: string,
-    asHtml = false,
-  ) {
-    // Заблокированным бот не пишет.
-    const user = await this.prisma.user.findUnique({
-      where: { telegramId },
-      select: { bannedAt: true },
-    });
-    if (user?.bannedAt) return;
+  private send(telegramId: bigint, text: string, path: string, asHtml = false) {
     const kb = this.openButton(path);
-    try {
-      await this.bot.telegram.sendMessage(
-        telegramId.toString(),
-        text,
-        asHtml ? html(kb) : kb,
-      );
-    } catch {
-      // получатель мог заблокировать бота
-    }
+    this.enqueue(async () => {
+      // Заблокированным бот не пишет. Проверяем в момент отправки: блокировка могла случиться,
+      // пока сообщение ждало в очереди.
+      const user = await this.prisma.user.findUnique({
+        where: { telegramId },
+        select: { bannedAt: true },
+      });
+      if (user?.bannedAt) return;
+      try {
+        await this.bot.telegram.sendMessage(
+          telegramId.toString(),
+          text,
+          asHtml ? html(kb) : kb,
+        );
+      } catch {
+        // получатель мог заблокировать бота
+      }
+    });
   }
 
   /** Кнопка web_app работает только в личных чатах — все уведомления как раз туда. */

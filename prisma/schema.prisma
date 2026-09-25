@@ -25,6 +25,9 @@ model User {
   orders      Order[]
   submissions Submission[]
   reports     Report[]
+
+  /// Ответ поддержки в теме → чей это пользователь (SupportService.fromSupport).
+  @@index([supportTopicId])
 }
 
 enum OrderStatus {
@@ -63,12 +66,20 @@ model Order {
   moderatorId      BigInt?
   moderatorComment String?
   createdAt        DateTime      @default(now())
+  /// Когда последний раз отправлен на проверку: при создании и при каждой правке. От него считаются
+  /// сдвиг срока при публикации и время модерации (createdAt после правки уже не подходит).
+  moderationRequestedAt DateTime @default(now())
   decidedAt        DateTime?
   closedAt         DateTime?
   /// Креаторам напомнили, что срок истекает меньше чем через сутки. Сбрасывается при продлении.
   deadlineReminderSentAt DateTime?
 
   submissions Submission[]
+
+  /// Каталог (OPEN, новые первыми), очередь модерации (PENDING_MODERATION), сроки — всё по статусу.
+  @@index([status, createdAt])
+  /// «Мои заказы» и лимит активных заказов.
+  @@index([advertiserId])
 }
 
 enum SubmissionStatus {
@@ -99,6 +110,13 @@ model Submission {
   createdAt         DateTime         @default(now())
   submittedAt       DateTime?
   decidedAt         DateTime?
+
+  /// Отклики по заказу; внешний ключ Postgres сам не индексирует.
+  @@index([orderId])
+  /// «Мои отклики», профиль креатора, рейтинг.
+  @@index([creatorId])
+  /// Очередь модерации видео (SUBMITTED, старые первыми) и счётчики по статусам.
+  @@index([status, submittedAt])
 }
 
 /// На что жалоба. VIDEO и REVIEW — по id отклика (Submission), PROFILE — по id пользователя.

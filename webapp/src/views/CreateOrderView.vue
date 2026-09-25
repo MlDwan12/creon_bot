@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ApiError, createOrder, fetchMe, fetchMyOrders, ORDER_CATEGORIES, type NewOrderInput } from '../api';
+import { ApiError, createOrder, fetchMyOrders, type MyOrder, ORDER_CATEGORIES, type NewOrderInput, updateOrder } from '../api';
 
 // Лимиты — те же, что проверяет бэкенд (src/common/validation.ts); здесь только подсказка браузеру.
 const MAX_TITLE = 100;
 const MAX_DESCRIPTION = 1000;
 const MAX_PRICE = 1_000_000;
-const DEADLINES: { days: number | null; label: string }[] = [
+// С `id` (/my-orders/:id/edit) — правка своего заказа, без — новый.
+const props = defineProps<{ id?: string }>();
+
+/** undefined — «не менять» (только при правке), null — без срока. */
+const KEEP_DEADLINE = { days: undefined, label: 'как было' };
+const DEADLINES: { days: number | null | undefined; label: string }[] = [
   { days: 3, label: '3 дн' },
   { days: 7, label: '7 дн' },
   { days: 14, label: '14 дн' },
@@ -20,27 +25,31 @@ const router = useRouter();
 
 // reactive() — как ref(), но для объекта целиком: form.title и т.д. без `.value`.
 // price: '' — поле пустое (цена договорная); v-model.number отдаёт '' для пустого ввода.
-const form = reactive<Omit<NewOrderInput, 'price'> & { price: number | '' }>({
+const form = reactive<
+  Omit<NewOrderInput, 'price' | 'deadlineDays'> & { price: number | ''; deadlineDays: number | null | undefined }
+>({
   title: '',
   description: '',
   price: '',
   category: 'OTHER',
-  deadlineDays: 7,
+  deadlineDays: props.id ? undefined : 7,
 });
+/** Редактируемый заказ — для подсказки, что открытый уйдёт на повторную проверку. */
+const editing = ref<MyOrder>();
+const deadlines = computed(() => (props.id ? [KEEP_DEADLINE, ...DEADLINES] : DEADLINES));
 const sending = ref(false);
 const error = ref('');
-// Без username бэкенд заказ не примет — предупреждаем, пока форма не заполнена.
-const noUsername = ref(false);
-fetchMe()
-  .then((me) => (noUsername.value = !me.hasUsername))
-  .catch(() => {});
 
-/** «Исправить и отправить снова»: /my-orders/new?from=<id> — подставляем данные отклонённого заказа. */
+/**
+ * Правка (/my-orders/:id/edit) или «Исправить и отправить снова» (/my-orders/new?from=<id>) —
+ * подставляем данные заказа в форму.
+ */
 async function prefill() {
-  const fromId = Number(route.query.from);
+  const fromId = Number(props.id ?? route.query.from);
   if (!fromId) return;
   const source = (await fetchMyOrders().catch(() => [])).find((o) => o.id === fromId);
   if (!source) return;
+  if (props.id) editing.value = source;
   form.title = source.title;
   form.description = source.description;
   form.price = source.price ?? '';
@@ -51,7 +60,10 @@ async function submit() {
   sending.value = true;
   error.value = '';
   try {
-    await createOrder({ ...form, price: form.price === '' ? null : form.price });
+    const price = form.price === '' ? null : form.price;
+    if (props.id) await updateOrder(Number(props.id), { ...form, price });
+    // при создании «как было» не бывает — срок всегда выбран
+    else await createOrder({ ...form, price, deadlineDays: form.deadlineDays ?? null });
     await router.replace('/my-orders');
   } catch (err) {
     // Тексты ошибок проверки пишет бэкенд.
@@ -66,11 +78,7 @@ void prefill();
 
 <template>
   <main class="page">
-    <h1>Новый заказ</h1>
-    <p v-if="noUsername" class="error" role="alert">
-      Чтобы креаторы могли с вами связаться, укажите имя пользователя (username) в настройках Telegram
-      и откройте приложение заново — без него заказ не отправится.
-    </p>
+    <h1>{{ props.id ? 'Изменить заказ' : 'Новый заказ' }}</h1>
 
     <form id="order-form" class="form" @submit.prevent="submit">
       <div class="field">
@@ -126,7 +134,7 @@ void prefill();
           <span id="deadline-label">Срок сдачи</span>
           <div class="segmented" role="radiogroup" aria-labelledby="deadline-label">
             <button
-              v-for="d in DEADLINES"
+              v-for="d in deadlines"
               :key="d.label"
               type="button"
               role="radio"
@@ -143,9 +151,12 @@ void prefill();
     </form>
 
     <div class="bottom-bar">
-      <p class="note">Заказ увидят креаторы после проверки модератором</p>
+      <p v-if="editing?.status === 'OPEN'" class="note">
+        Заказ снова уйдёт на проверку и пропадёт из каталога до одобрения. Креаторы, которые уже взялись за него, получат уведомление.
+      </p>
+      <p v-else class="note">Заказ увидят креаторы после проверки модератором</p>
       <button type="submit" form="order-form" class="main-button" :disabled="sending">
-        {{ sending ? 'Отправляем…' : 'Отправить на модерацию' }}
+        {{ sending ? 'Отправляем…' : props.id ? 'Сохранить и отправить на проверку' : 'Отправить на модерацию' }}
       </button>
     </div>
   </main>
