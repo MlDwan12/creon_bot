@@ -1,4 +1,4 @@
-import { findContacts } from './contacts';
+import { findContacts, findExactContacts, stripContacts } from './contacts';
 
 describe('findContacts', () => {
   it.each([
@@ -28,5 +28,28 @@ describe('findContacts', () => {
     expect(findContacts('ivan@mail.ru', 'снова ivan@mail.ru')).toEqual([
       'ivan@mail.ru',
     ]);
+  });
+});
+
+describe('findExactContacts', () => {
+  it('только явные контакты, без намёков', () => {
+    expect(findExactContacts('пишите @ivan_petrov в тг')).toEqual([
+      '@ivan_petrov',
+    ]);
+    expect(findExactContacts('Видео не для телеграма, переснимите')).toEqual(
+      [],
+    );
+  });
+});
+
+describe('stripContacts', () => {
+  it.each([
+    ['Аня @anya_ugc', 'Аня'],
+    ['Иван +7 999 123-45-67', 'Иван'],
+    ['t.me/ivan Иван', 'Иван'],
+    ['@anya_ugc', ''],
+    ['Анна-Мария', 'Анна-Мария'],
+  ])('%s → «%s»', (name, expected) => {
+    expect(stripContacts(name)).toBe(expected);
   });
 });

@@ -26,6 +26,8 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: new RedactingLogger(),
   });
+  // не подсказываем снаружи, на чём сервер
+  app.disable('x-powered-by');
   serveWebapp(app);
   // На SIGTERM (docker stop / редеплой) останавливает polling и закрывает соединение Prisma.
   app.enableShutdownHooks();
