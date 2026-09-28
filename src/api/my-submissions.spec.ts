@@ -8,6 +8,7 @@ const order = (id: number): Order => ({
   description: 'd',
   priceKopecks: 150_000,
   videosNeeded: null,
+  referenceUrl: null,
   category: 'OTHER',
   deadline: null,
   status: 'OPEN',

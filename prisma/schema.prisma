@@ -59,6 +59,8 @@ model Order {
   advertiserId     Int
   title            String
   description      String
+  /// Ссылка на референс или материалы (бриф, пример ролика). Контакты в ней не пропускает order-input.
+  referenceUrl     String?
   /// Цена за одно принятое видео в копейках (в API — рубли, см. src/common/money.ts); null — договорная.
   priceKopecks     Int?
   /// Сколько видео нужно рекламодателю; null — без лимита. Набрано — заказ закрывается сам

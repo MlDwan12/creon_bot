@@ -38,6 +38,8 @@ export interface OrderSummary {
   id: number;
   title: string;
   description: string;
+  /** Ссылка на референс или материалы к заданию. */
+  referenceUrl: string | null;
   price: number | null;
   /** Сколько видео нужно рекламодателю; null — без лимита. */
   videosNeeded: number | null;
@@ -93,6 +95,7 @@ export interface MyOrder {
   id: number;
   title: string;
   description: string;
+  referenceUrl: string | null;
   price: number | null;
   category: OrderCategory;
   deadline: string | null;
@@ -110,6 +113,8 @@ export interface MyOrder {
 export interface NewOrderInput {
   title: string;
   description: string;
+  /** Ссылка на референс или материалы; null — без ссылки. */
+  referenceUrl: string | null;
   /** Цена за видео, ₽; null — договорная. */
   price: number | null;
   /** Сколько видео нужно; null — без лимита. Набрали — заказ закроется сам. */
@@ -189,6 +194,7 @@ export interface ModOrder {
   id: number;
   title: string;
   description: string;
+  referenceUrl: string | null;
   price: number | null;
   category: OrderCategory;
   deadline: string | null;

@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router';
 import { ApiError, categoryLabel, claimOrder, fetchOrder, type OrderDetail } from '../api';
 import SupportLink from '../components/SupportLink.vue';
 import { formatDeadline, formatPrice } from '../format';
+import { safeUrl } from '../telegram';
 
 // `id` приходит из адреса /orders/:id (в router.ts у маршрута `props: true`).
 const props = defineProps<{ id: string }>();
@@ -82,6 +83,9 @@ void load();
       <section class="block">
         <h2 class="section-title">Задание</h2>
         <div class="text">{{ order.description }}</div>
+        <a v-if="safeUrl(order.referenceUrl)" :href="safeUrl(order.referenceUrl)" target="_blank" rel="noopener noreferrer" class="reference">
+          Референс и материалы ›
+        </a>
       </section>
 
       <section class="block">
@@ -180,6 +184,14 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+.reference {
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--link);
+  font-size: 16px;
+  text-decoration: none;
 }
 .text {
   padding: 14px 16px;

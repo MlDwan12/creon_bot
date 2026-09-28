@@ -17,6 +17,7 @@ const PUBLIC_ORDER_FIELDS = {
   id: true,
   title: true,
   description: true,
+  referenceUrl: true,
   priceKopecks: true,
   videosNeeded: true,
   category: true,
@@ -62,6 +63,7 @@ export class OrdersService {
     data: {
       title: string;
       description: string;
+      referenceUrl?: string;
       priceKopecks?: number;
       videosNeeded?: number;
       category: OrderCategory;
@@ -83,6 +85,7 @@ export class OrdersService {
         advertiserId,
         title: data.title,
         description: data.description,
+        referenceUrl: data.referenceUrl,
         priceKopecks: data.priceKopecks,
         videosNeeded: data.videosNeeded,
         category: data.category,
@@ -360,6 +363,7 @@ export class OrdersService {
     data: {
       title: string;
       description: string;
+      referenceUrl?: string | null;
       priceKopecks: number | null;
       /** undefined — не менять, null — без лимита. */
       videosNeeded?: number | null;

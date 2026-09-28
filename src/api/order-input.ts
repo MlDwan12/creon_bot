@@ -7,8 +7,11 @@ import {
   MAX_DESCRIPTION_LENGTH,
   MAX_PRICE,
   MAX_TITLE_LENGTH,
+  MAX_URL_LENGTH,
   MAX_VIDEOS_NEEDED,
+  VIDEO_URL_RE,
 } from '../common/validation';
+import { findExactContacts } from '../common/contacts';
 import { rublesToKopecks } from '../common/money';
 import { deadlineIn } from '../orders/deadline';
 
@@ -39,6 +42,22 @@ export function parseOrderInput(body: unknown) {
     throw new BadRequestException(
       `Описание длиннее ${MAX_DESCRIPTION_LENGTH} символов`,
     );
+  }
+
+  // Пусто — без ссылки. Ссылка на мессенджер или соцсеть — это контакт в обход площадки.
+  const referenceUrl = text(b.referenceUrl) || undefined;
+  if (referenceUrl !== undefined) {
+    if (
+      !VIDEO_URL_RE.test(referenceUrl) ||
+      referenceUrl.length > MAX_URL_LENGTH
+    )
+      throw new BadRequestException(
+        'Ссылка на референс должна начинаться с http:// или https://',
+      );
+    if (findExactContacts(referenceUrl).length)
+      throw new BadRequestException(
+        'Ссылка на мессенджер или соцсеть — это контакт: общение идёт через бота. Дайте ссылку на файл или видео',
+      );
   }
 
   // Пусто — «договорная». Иначе целые рубли за одно видео; в базу — копейками.
@@ -86,6 +105,7 @@ export function parseOrderInput(body: unknown) {
   return {
     title,
     description,
+    referenceUrl,
     priceKopecks: price === undefined ? undefined : rublesToKopecks(price),
     videosNeeded,
     category,
@@ -103,6 +123,7 @@ export function parseOrderEdit(body: unknown) {
   return {
     title: input.title,
     description: input.description,
+    referenceUrl: input.referenceUrl ?? null,
     priceKopecks: input.priceKopecks ?? null,
     videosNeeded: input.videosNeeded ?? null,
     category: input.category,
