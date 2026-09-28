@@ -72,7 +72,7 @@ watch(() => props.id, load, { immediate: true });
       <header class="head">
         <span :class="['badge', { pending: order.status === 'PENDING_MODERATION' }]">
           Заказ #{{ order.id }} · {{ STATUS_LABELS[order.status] }}
-          <template v-if="order.status === 'PENDING_MODERATION'"> · ждёт {{ waitingFor(order.createdAt) }}</template>
+          <template v-if="order.status === 'PENDING_MODERATION'"> · ждёт {{ waitingFor(order.version) }}</template>
         </span>
         <h1>{{ order.title }}</h1>
       </header>

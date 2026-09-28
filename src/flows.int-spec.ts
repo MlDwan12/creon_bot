@@ -378,8 +378,6 @@ describe('правка заказа — защита', () => {
   });
 });
 
-<<<<<<< Updated upstream
-=======
 describe('гонки и снятые заказы', () => {
   it('разные креаторы откликаются одновременно — все отклики проходят', async () => {
     const adv = await user();
@@ -501,7 +499,6 @@ describe('сколько видео нужно', () => {
   });
 });
 
->>>>>>> Stashed changes
 describe('лимит активных заказов', () => {
   it('больше MAX_ACTIVE_ORDERS на модерации и открытых — нельзя, закрытые не считаются', async () => {
     const advertiser = await user();
@@ -852,9 +849,13 @@ describe('блокировка', () => {
 
     const closed = await bans.ban(banned.id, 'мошенничество');
 
-    expect(closed.map((o) => o.id)).toEqual([open.id]);
+    // и открытый, и отклонённый (на проверке мог быть изменённый открытый — с креаторами в работе)
+    expect(closed.map((o) => o.id).sort()).toEqual(
+      [open.id, pending.id].sort(),
+    );
     // креатору закрытого заказа придёт уведомление
-    expect(closed[0].submissions.map((s) => s.creator.id)).toEqual([
+    const openClosed = closed.find((o) => o.id === open.id)!;
+    expect(openClosed.submissions.map((s) => s.creator.id)).toEqual([
       creator.id,
     ]);
     expect(await statusOf(open.id)).toBe('CLOSED');

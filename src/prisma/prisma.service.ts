@@ -1,17 +1,10 @@
-import {
-  Injectable,
-  OnApplicationShutdown,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
 @Injectable()
-export class PrismaService
-  extends PrismaClient
-  implements OnModuleInit, OnApplicationShutdown
-{
+export class PrismaService extends PrismaClient implements OnModuleInit {
   constructor(config: ConfigService) {
     super({
       adapter: new PrismaPg({
@@ -29,9 +22,6 @@ export class PrismaService
     await this.$connect();
   }
 
-  // Не onModuleDestroy: модуль глобальный, и Nest мог бы закрыть базу раньше, чем очередь
-  // уведомлений (NotificationsService.onModuleDestroy) дошлёт сообщения — им нужна проверка бана.
-  async onApplicationShutdown() {
-    await this.$disconnect();
-  }
+  // Отключаться при остановке не нужно: после хуков Nest завершает процесс сам (повторно шлёт себе
+  // сигнал), а отключение раньше времени оборвало бы досылку уведомлений — им нужна база.
 }

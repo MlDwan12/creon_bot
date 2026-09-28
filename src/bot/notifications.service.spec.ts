@@ -48,7 +48,7 @@ describe('NotificationsService — очередь отправки', () => {
     expect(sent).toEqual([]);
 
     release();
-    await service.onModuleDestroy(); // дождаться очереди
+    await service.onApplicationShutdown(); // дождаться очереди
 
     // 12 заблокирован — ему не отправляли; 13 заблокировал бота — ошибка не остановила 14
     expect(sendMessage.mock.calls.map(([id]) => id)).toEqual([

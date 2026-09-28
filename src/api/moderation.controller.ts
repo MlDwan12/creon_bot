@@ -111,10 +111,11 @@ export class ModerationController {
   /** Все заказы любого статуса — страница, новые первыми. */
   @Get('orders')
   async allOrders(
-    @Query('page', new DefaultValuePipe(0), ParseIntPipe) page: number,
+    @Query('page', new DefaultValuePipe(0), ParseIntPipe) rawPage: number,
   ) {
+    const page = Math.max(0, rawPage);
     const { items, total } = await this.ordersService.listAll(
-      Math.max(0, page) * PAGE_SIZE,
+      page * PAGE_SIZE,
       PAGE_SIZE,
     );
     return {
@@ -246,7 +247,7 @@ export class ModerationController {
       req.user.telegramId,
     );
     if (closedOrder) this.notifications.orderClosedByModerator(closedOrder);
-    if (toBan) await this.banAndNotify(toBan, banReason!);
+    if (toBan) await this.banIfNotYet(toBan, banReason!);
     this.notifications.reportResolved(reporters, actioned);
     return { ok: true };
   }
@@ -270,6 +271,15 @@ export class ModerationController {
   private async banAndNotify(userId: number, reason: string) {
     for (const order of await this.bans.ban(userId, reason))
       this.notifications.orderClosedByModerator(order);
+  }
+
+  /** То же, но другой модератор мог заблокировать автора раньше — тогда блокировать уже нечего. */
+  private async banIfNotYet(userId: number, reason: string) {
+    try {
+      await this.banAndNotify(userId, reason);
+    } catch (err) {
+      if (!(err instanceof ForbiddenException)) throw err;
+    }
   }
 
   /** Модераторы задаются в env — их не блокируют. Возвращает пользователя. */

@@ -31,7 +31,7 @@ const BANNED_COMMENT = 'Автор заблокирован за нарушен�
 export class BansService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Возвращает закрытые заказы с креаторами — им уведомление. */
+  /** Возвращает закрытые и отклонённые заказы с креаторами — им уведомление. */
   async ban(userId: number, reason: string) {
     return this.prisma.$transaction(async (tx) => {
       const { count } = await tx.user.updateMany({
@@ -46,6 +46,11 @@ export class BansService {
 
       const open = await tx.order.findMany({
         where: { advertiserId: userId, status: OrderStatus.OPEN },
+        select: { id: true },
+      });
+      // на проверке может быть и изменённый открытый заказ — у него есть креаторы в работе
+      const pending = await tx.order.findMany({
+        where: { advertiserId: userId, status: OrderStatus.PENDING_MODERATION },
         select: { id: true },
       });
       await tx.order.updateMany({
@@ -73,7 +78,7 @@ export class BansService {
       });
 
       return tx.order.findMany({
-        where: { id: { in: open.map((o) => o.id) } },
+        where: { id: { in: [...open, ...pending].map((o) => o.id) } },
         include: {
           advertiser: true,
           submissions: { include: { creator: true } },
