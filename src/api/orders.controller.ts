@@ -23,10 +23,16 @@ import { UserThrottlerGuard } from './user-throttler.guard';
 
 const PAGE_SIZE = 20;
 
-/** Цена наружу — в рублях. */
-function toPublic<T extends { priceKopecks: number | null }>(order: T) {
-  const { priceKopecks, ...rest } = order;
-  return { ...rest, price: kopecksToRubles(priceKopecks) };
+/** Цена наружу — в рублях; `accepted` — сколько видео уже принято. */
+function toPublic<
+  T extends { priceKopecks: number | null; _count: { submissions: number } },
+>(order: T) {
+  const { priceKopecks, _count, ...rest } = order;
+  return {
+    ...rest,
+    price: kopecksToRubles(priceKopecks),
+    accepted: _count.submissions,
+  };
 }
 
 @Controller('api/orders')

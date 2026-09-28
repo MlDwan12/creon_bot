@@ -55,6 +55,10 @@ void load();
           <span>Оплата</span>
           <strong>{{ formatPrice(order.price) }}</strong>
         </div>
+        <div v-if="order.videosNeeded" class="row">
+          <span>Нужно видео</span>
+          <span class="value">{{ order.videosNeeded }}, принято {{ order.accepted }}</span>
+        </div>
         <div v-if="order.deadline" class="row">
           <span>Сдать до</span>
           <span class="value">{{ formatDeadline(order.deadline) }}</span>

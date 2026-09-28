@@ -161,6 +161,14 @@ export class NotificationsService implements OnApplicationShutdown {
     );
   }
 
+  /** Заказ набрал нужное число видео: креаторам, чьи видео ещё не приняты. */
+  orderFilled(order: OrderWithCreators) {
+    this.toCreators(
+      order,
+      `🔒 Заказ «${escapeHtml(order.title)}» набрал нужное количество видео и закрыт. Видео по нему больше не принимаются.`,
+    );
+  }
+
   /** Модератор закрыл заказ по жалобе: рекламодателю и креаторам с откликами. */
   orderClosedByModerator(
     order: Order & { advertiser: User } & OrderWithCreators,

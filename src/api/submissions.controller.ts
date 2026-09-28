@@ -73,12 +73,14 @@ export class SubmissionsController {
     @Body() body: unknown,
     @Req() req: ApiRequest,
   ) {
-    const submission = await this.submissionsService.advertiserApprove(
-      id,
-      req.user.id,
-      parseFeedback(body),
-    );
+    const { submission, filled } =
+      await this.submissionsService.advertiserApprove(
+        id,
+        req.user.id,
+        parseFeedback(body),
+      );
     this.notifications.videoAccepted(submission);
+    if (filled) this.notifications.orderFilled(filled);
     // оплата пока вне бота: менеджеру — кому и сколько перевести
     const price = submission.order.priceKopecks;
     await this.support.paymentDue(

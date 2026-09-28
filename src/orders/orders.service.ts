@@ -18,9 +18,18 @@ const PUBLIC_ORDER_FIELDS = {
   title: true,
   description: true,
   priceKopecks: true,
+  videosNeeded: true,
   category: true,
   deadline: true,
   createdAt: true,
+  /** Сколько видео уже принято — «принято 2 из 5». */
+  _count: {
+    select: {
+      submissions: {
+        where: { status: SubmissionStatus.ADVERTISER_APPROVED },
+      },
+    },
+  },
 } satisfies Prisma.OrderSelect;
 
 /** Сколько заказов у рекламодателя может быть одновременно на модерации и открытыми. */
@@ -54,6 +63,7 @@ export class OrdersService {
       title: string;
       description: string;
       priceKopecks?: number;
+      videosNeeded?: number;
       category: OrderCategory;
       deadline?: Date;
     },
@@ -74,6 +84,7 @@ export class OrdersService {
         title: data.title,
         description: data.description,
         priceKopecks: data.priceKopecks,
+        videosNeeded: data.videosNeeded,
         category: data.category,
         deadline: data.deadline,
       },
@@ -350,6 +361,8 @@ export class OrdersService {
       title: string;
       description: string;
       priceKopecks: number | null;
+      /** undefined — не менять, null — без лимита. */
+      videosNeeded?: number | null;
       category: OrderCategory;
       deadline?: Date | null;
     },
@@ -357,6 +370,17 @@ export class OrdersService {
     const order = await this.mustFind(orderId);
     if (order.advertiserId !== advertiserId)
       throw new ForbiddenException('Это не ваш заказ');
+    // ponytail: проверка и запись не атомарны — приёмка между ними может сравнять счёт с лимитом;
+    // тогда заказ просто не примет больше, а закроет его рекламодатель.
+    if (typeof data.videosNeeded === 'number') {
+      const accepted = await this.prisma.submission.count({
+        where: { orderId, status: SubmissionStatus.ADVERTISER_APPROVED },
+      });
+      if (data.videosNeeded <= accepted)
+        throw new ForbiddenException(
+          `Уже принято видео: ${accepted} — укажите больше или оставьте поле пустым`,
+        );
+    }
     // Цена — то, за что креаторы уже сняли видео: пока есть сданные работы, её не меняем.
     if (data.priceKopecks !== order.priceKopecks) {
       const delivered = await this.prisma.submission.count({

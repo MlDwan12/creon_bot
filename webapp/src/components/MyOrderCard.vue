@@ -66,6 +66,7 @@ const remove = () =>
     <div class="hint">
       {{ formatPrice(order.price) }}
       <template v-if="order.deadline"> · до {{ formatDate(order.deadline) }}</template>
+      <template v-if="order.videosNeeded"> · принято {{ order.accepted }} из {{ order.videosNeeded }}</template>
       <template v-if="order.status === 'PENDING_MODERATION'"> · модератор проверит заказ перед публикацией</template>
     </div>
 
