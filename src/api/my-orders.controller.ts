@@ -51,6 +51,10 @@ export class MyOrdersController {
       status: o.status,
       rejectReason:
         o.status === OrderStatus.REJECTED ? o.moderatorComment : null,
+      videosNeeded: o.videosNeeded,
+      accepted: o.submissions.filter(
+        (s) => s.status === SubmissionStatus.ADVERTISER_APPROVED,
+      ).length,
       submissionsCount: o.submissions.length,
       // Та же проверка, что в OrdersService.remove.
       deletable: o.submissions.every(

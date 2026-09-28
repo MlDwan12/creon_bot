@@ -60,6 +60,9 @@ model Order {
   description      String
   /// Цена за одно принятое видео в копейках (в API — рубли, см. src/common/money.ts); null — договорная.
   priceKopecks     Int?
+  /// Сколько видео нужно рекламодателю; null — без лимита. Набрано — заказ закрывается сам
+  /// (SubmissionsService.advertiserApprove), принять больше нельзя.
+  videosNeeded     Int?
   category         OrderCategory @default(OTHER)
   deadline         DateTime?
   status           OrderStatus   @default(PENDING_MODERATION)

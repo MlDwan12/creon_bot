@@ -36,6 +36,14 @@ describe('parseOrderInput', () => {
     ).toBeUndefined();
   });
 
+  it('сколько видео нужно: число или пусто — без лимита', () => {
+    expect(parseOrderInput({ ...valid, videosNeeded: 5 }).videosNeeded).toBe(5);
+    expect(parseOrderInput(valid).videosNeeded).toBeUndefined();
+    expect(
+      parseOrderInput({ ...valid, videosNeeded: '' }).videosNeeded,
+    ).toBeUndefined();
+  });
+
   it('без срока — deadline не задан', () => {
     expect(
       parseOrderInput({ ...valid, deadlineDays: null }).deadline,
@@ -55,6 +63,10 @@ describe('parseOrderInput', () => {
     ['дробная цена', { price: 99.5 }],
     ['нулевая цена', { price: 0 }],
     ['цена больше максимума', { price: 1_000_001 }],
+    ['ноль видео', { videosNeeded: 0 }],
+    ['дробное число видео', { videosNeeded: 1.5 }],
+    ['число видео строкой', { videosNeeded: '5' }],
+    ['видео больше максимума', { videosNeeded: 101 }],
   ])('отклоняет: %s', (_name, patch) => {
     expect(() => parseOrderInput({ ...valid, ...patch })).toThrow(
       BadRequestException,
@@ -96,5 +108,10 @@ describe('parseOrderEdit', () => {
   it('пустая цена — договорная (null, а не «не менять»)', () => {
     expect(parseOrderEdit({ ...base, price: null }).priceKopecks).toBeNull();
     expect(parseOrderEdit({ ...base, price: 500 }).priceKopecks).toBe(50_000);
+  });
+
+  it('пустое число видео — без лимита (null)', () => {
+    expect(parseOrderEdit(base).videosNeeded).toBeNull();
+    expect(parseOrderEdit({ ...base, videosNeeded: 3 }).videosNeeded).toBe(3);
   });
 });

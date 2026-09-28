@@ -7,6 +7,7 @@ import { ApiError, createOrder, fetchMyOrders, type MyOrder, ORDER_CATEGORIES, t
 const MAX_TITLE = 100;
 const MAX_DESCRIPTION = 1000;
 const MAX_PRICE = 1_000_000;
+const MAX_VIDEOS = 100;
 // С `id` (/my-orders/:id/edit) — правка своего заказа, без — новый.
 const props = defineProps<{ id?: string }>();
 
@@ -25,17 +26,27 @@ const router = useRouter();
 
 // reactive() — как ref(), но для объекта целиком: form.title и т.д. без `.value`.
 // price: '' — поле пустое (цена договорная); v-model.number отдаёт '' для пустого ввода.
+// videosNeeded: '' — без лимита.
 const form = reactive<
-  Omit<NewOrderInput, 'price' | 'deadlineDays'> & { price: number | ''; deadlineDays: number | null | undefined }
+  Omit<NewOrderInput, 'price' | 'videosNeeded' | 'deadlineDays'> & {
+    price: number | '';
+    videosNeeded: number | '';
+    deadlineDays: number | null | undefined;
+  }
 >({
   title: '',
   description: '',
   price: '',
+  videosNeeded: '',
   category: 'OTHER',
   deadlineDays: props.id ? undefined : 7,
 });
 /** Редактируемый заказ — для подсказки, что открытый уйдёт на повторную проверку. */
 const editing = ref<MyOrder>();
+/** Сколько рекламодатель заплатит максимум — когда заданы и цена, и число видео. */
+const budget = computed(() =>
+  form.price && form.videosNeeded ? (form.price * form.videosNeeded).toLocaleString('ru-RU') : '',
+);
 const deadlines = computed(() => (props.id ? [KEEP_DEADLINE, ...DEADLINES] : DEADLINES));
 const sending = ref(false);
 const error = ref('');
@@ -53,6 +64,7 @@ async function prefill() {
   form.title = source.title;
   form.description = source.description;
   form.price = source.price ?? '';
+  form.videosNeeded = source.videosNeeded ?? '';
   form.category = source.category;
 }
 
@@ -61,9 +73,10 @@ async function submit() {
   error.value = '';
   try {
     const price = form.price === '' ? null : form.price;
-    if (props.id) await updateOrder(Number(props.id), { ...form, price });
+    const videosNeeded = form.videosNeeded === '' ? null : form.videosNeeded;
+    if (props.id) await updateOrder(Number(props.id), { ...form, price, videosNeeded });
     // при создании «как было» не бывает — срок всегда выбран
-    else await createOrder({ ...form, price, deadlineDays: form.deadlineDays ?? null });
+    else await createOrder({ ...form, price, videosNeeded, deadlineDays: form.deadlineDays ?? null });
     await router.replace('/my-orders');
   } catch (err) {
     // Тексты ошибок проверки пишет бэкенд.
@@ -130,6 +143,18 @@ void prefill();
             placeholder="договорная"
           />
         </label>
+        <label class="row bordered">
+          Сколько нужно видео
+          <input
+            v-model.number="form.videosNeeded"
+            type="number"
+            inputmode="numeric"
+            min="1"
+            :max="MAX_VIDEOS"
+            step="1"
+            placeholder="без лимита"
+          />
+        </label>
         <div class="row column">
           <span id="deadline-label">Срок сдачи</span>
           <div class="segmented" role="radiogroup" aria-labelledby="deadline-label">
@@ -147,6 +172,9 @@ void prefill();
         </div>
       </div>
 
+      <p v-if="form.videosNeeded" class="hint">
+        Примете {{ form.videosNeeded }} видео — заказ закроется сам<template v-if="budget">. Бюджет — не больше {{ budget }} ₽</template>
+      </p>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </form>
 
@@ -267,6 +295,9 @@ legend {
   background: none;
   text-align: right;
 }
+.row.bordered {
+  border-top: 1px solid var(--separator);
+}
 .row.column {
   flex-direction: column;
   align-items: stretch;
@@ -297,6 +328,12 @@ legend {
   margin: 0 0 8px;
   font-size: 13px;
   text-align: center;
+  color: var(--hint);
+}
+.hint {
+  margin: -8px 0 0;
+  padding: 0 16px;
+  font-size: 13px;
   color: var(--hint);
 }
 .error {

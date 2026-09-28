@@ -378,6 +378,130 @@ describe('правка заказа — защита', () => {
   });
 });
 
+<<<<<<< Updated upstream
+=======
+describe('гонки и снятые заказы', () => {
+  it('разные креаторы откликаются одновременно — все отклики проходят', async () => {
+    const adv = await user();
+    const order = await openOrder(adv.id);
+    const creators = await Promise.all([1, 2, 3, 4, 5].map(() => user()));
+    const results = await Promise.allSettled(
+      creators.map((c) => submissions.claim(order.id, c.id)),
+    );
+    expect(results.map((r) => r.status)).toEqual(Array(5).fill('fulfilled'));
+  });
+
+  it('отклонили изменённый заказ — видео по нему сняты с очередей и не одобряются', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, 'https://example.com/v');
+    await orders.update(order.id, adv.id, {
+      title: 'Новое',
+      description: 'Описание',
+      priceKopecks: order.priceKopecks,
+      category: 'OTHER',
+    });
+    await rejectOrder(order.id, 1n, 'контакты в названии');
+    const after = await prisma.submission.findUniqueOrThrow({
+      where: { id: s.id },
+    });
+    expect(after.status).toBe('MODERATOR_REJECTED');
+    await expect(submissions.moderatorApprove(s.id, 1n)).rejects.toThrow();
+  });
+});
+
+describe('сколько видео нужно', () => {
+  const feedback = { rating: 5, review: null, portfolioAllowed: false };
+
+  async function orderFor(advertiserId: number, videosNeeded: number) {
+    const order = await orders.create(advertiserId, {
+      title: 'Заказ',
+      description: 'Описание',
+      category: 'OTHER',
+      videosNeeded,
+    });
+    return approveOrder(order.id, 1n);
+  }
+
+  /** Видео креатора, одобренное модератором и ждущее рекламодателя. */
+  async function approvedVideo(orderId: number, creatorId: number) {
+    const s = await submissions.claim(orderId, creatorId);
+    await submissions.attachVideo(s.id, creatorId, 'https://example.com/v');
+    await submissions.moderatorApprove(s.id, 1n);
+    return s;
+  }
+
+  it('набрали — заказ закрыт, сданные видео сняты, начатое не отправить', async () => {
+    const [adv, a, b, c, d] = await Promise.all(
+      [1, 2, 3, 4, 5].map(() => user()),
+    );
+    const order = await orderFor(adv.id, 2);
+    const first = await approvedVideo(order.id, a.id);
+    const second = await approvedVideo(order.id, b.id);
+    const waiting = await approvedVideo(order.id, c.id);
+    const started = await submissions.claim(order.id, d.id);
+
+    const r1 = await submissions.advertiserApprove(first.id, adv.id, feedback);
+    expect(r1.filled).toBeNull();
+    expect(await statusOf(order.id)).toBe('OPEN');
+
+    const r2 = await submissions.advertiserApprove(second.id, adv.id, feedback);
+    expect(await statusOf(order.id)).toBe('CLOSED');
+    expect(r2.filled!.submissions.map((s) => s.creatorId).sort()).toEqual(
+      [c.id, d.id].sort(),
+    );
+    const after = await prisma.submission.findUniqueOrThrow({
+      where: { id: waiting.id },
+    });
+    expect(after.status).toBe('MODERATOR_REJECTED');
+    await expect(
+      submissions.attachVideo(started.id, d.id, 'https://example.com/v'),
+    ).rejects.toThrow('набрали');
+  });
+
+  it('две приёмки одновременно на последнее место — проходит одна', async () => {
+    const [adv, a, b] = [await user(), await user(), await user()];
+    const order = await orderFor(adv.id, 1);
+    const [s1, s2] = [
+      await approvedVideo(order.id, a.id),
+      await approvedVideo(order.id, b.id),
+    ];
+    const results = await Promise.allSettled([
+      submissions.advertiserApprove(s1.id, adv.id, feedback),
+      submissions.advertiserApprove(s2.id, adv.id, feedback),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(
+      await prisma.submission.count({
+        where: { orderId: order.id, status: 'ADVERTISER_APPROVED' },
+      }),
+    ).toBe(1);
+  });
+
+  it('при правке — не меньше уже принятых; пусто — без лимита', async () => {
+    const [adv, a] = [await user(), await user()];
+    const order = await orderFor(adv.id, 3);
+    const s = await approvedVideo(order.id, a.id);
+    await submissions.advertiserApprove(s.id, adv.id, feedback);
+    const edit = {
+      title: 'Заказ',
+      description: 'Описание',
+      priceKopecks: null,
+      category: 'OTHER' as const,
+    };
+    await expect(
+      orders.update(order.id, adv.id, { ...edit, videosNeeded: 1 }),
+    ).rejects.toThrow('Уже принято');
+    await orders.update(order.id, adv.id, { ...edit, videosNeeded: null });
+    expect(
+      (await prisma.order.findUniqueOrThrow({ where: { id: order.id } }))
+        .videosNeeded,
+    ).toBeNull();
+  });
+});
+
+>>>>>>> Stashed changes
 describe('лимит активных заказов', () => {
   it('больше MAX_ACTIVE_ORDERS на модерации и открытых — нельзя, закрытые не считаются', async () => {
     const advertiser = await user();
