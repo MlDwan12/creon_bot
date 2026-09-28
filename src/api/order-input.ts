@@ -7,6 +7,7 @@ import {
   MAX_DESCRIPTION_LENGTH,
   MAX_PRICE,
   MAX_TITLE_LENGTH,
+  MAX_VIDEOS_NEEDED,
 } from '../common/validation';
 import { rublesToKopecks } from '../common/money';
 import { deadlineIn } from '../orders/deadline';
@@ -54,6 +55,24 @@ export function parseOrderInput(body: unknown) {
     );
   }
 
+  // Пусто — без лимита.
+  const videosNeeded =
+    b.videosNeeded === undefined ||
+    b.videosNeeded === null ||
+    b.videosNeeded === ''
+      ? undefined
+      : (b.videosNeeded as number);
+  if (
+    videosNeeded !== undefined &&
+    (!Number.isInteger(videosNeeded) ||
+      videosNeeded < 1 ||
+      videosNeeded > MAX_VIDEOS_NEEDED)
+  ) {
+    throw new BadRequestException(
+      `Сколько видео нужно — целое число от 1 до ${MAX_VIDEOS_NEEDED}`,
+    );
+  }
+
   const category = b.category as OrderCategory;
   if (!Object.values(OrderCategory).includes(category)) {
     throw new BadRequestException('Выберите категорию');
@@ -68,6 +87,7 @@ export function parseOrderInput(body: unknown) {
     title,
     description,
     priceKopecks: price === undefined ? undefined : rublesToKopecks(price),
+    videosNeeded,
     category,
     deadline,
   };
@@ -75,7 +95,7 @@ export function parseOrderInput(body: unknown) {
 
 /**
  * Тело `PUT /api/my-orders/:id` — как при создании, кроме срока: `deadlineDays` не передан —
- * срок не меняется, null — без срока. Пустая цена — договорная.
+ * срок не меняется, null — без срока. Пустая цена — договорная, пустое число видео — без лимита.
  */
 export function parseOrderEdit(body: unknown) {
   const b = (body ?? {}) as Record<string, unknown>;
@@ -84,6 +104,7 @@ export function parseOrderEdit(body: unknown) {
     title: input.title,
     description: input.description,
     priceKopecks: input.priceKopecks ?? null,
+    videosNeeded: input.videosNeeded ?? null,
     category: input.category,
     deadline:
       b.deadlineDays === undefined

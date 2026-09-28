@@ -24,6 +24,7 @@ defineProps<{ order: OrderSummary }>();
         </svg>
         до {{ formatDate(order.deadline) }}
       </span>
+      <span v-if="order.videosNeeded">принято {{ order.accepted }} из {{ order.videosNeeded }}</span>
       <span>размещён {{ timeAgo(order.createdAt) }}</span>
     </div>
   </RouterLink>
@@ -76,8 +77,9 @@ defineProps<{ order: OrderSummary }>();
 }
 .meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
+  gap: 4px 14px;
   font-size: 13px;
   color: var(--hint);
 }

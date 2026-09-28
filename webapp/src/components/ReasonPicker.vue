@@ -3,7 +3,7 @@ import { ref } from 'vue';
 
 // defineModel — значение, которое родитель связывает через v-model="comment" (двусторонняя связь).
 const comment = defineModel<string>({ required: true });
-defineProps<{ presets: string[] }>();
+withDefaults(defineProps<{ presets: string[]; title?: string }>(), { title: 'Если отклоняете — причина' });
 
 const textarea = ref<HTMLTextAreaElement>();
 
@@ -16,7 +16,7 @@ function pick(preset: string | null) {
 
 <template>
   <section class="reasons">
-    <h2 class="section-title">Если отклоняете — причина</h2>
+    <h2 class="section-title">{{ title }}</h2>
     <div class="chips">
       <button
         v-for="p in presets"

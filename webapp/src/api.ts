@@ -39,6 +39,10 @@ export interface OrderSummary {
   title: string;
   description: string;
   price: number | null;
+  /** Сколько видео нужно рекламодателю; null — без лимита. */
+  videosNeeded: number | null;
+  /** Сколько видео уже принято. */
+  accepted: number;
   category: OrderCategory;
   deadline: string | null;
   createdAt: string;
@@ -94,6 +98,8 @@ export interface MyOrder {
   deadline: string | null;
   status: OrderStatus;
   rejectReason: string | null;
+  videosNeeded: number | null;
+  accepted: number;
   submissionsCount: number;
   pendingDecision: number;
   /** Никто ещё не сдал видео — заказ можно удалить. */
@@ -106,6 +112,8 @@ export interface NewOrderInput {
   description: string;
   /** Цена за видео, ₽; null — договорная. */
   price: number | null;
+  /** Сколько видео нужно; null — без лимита. Набрали — заказ закроется сам. */
+  videosNeeded: number | null;
   category: OrderCategory;
   deadlineDays: number | null;
 }

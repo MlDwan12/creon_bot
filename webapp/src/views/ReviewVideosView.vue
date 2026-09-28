@@ -2,6 +2,7 @@
 import { computed, reactive, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { acceptVideo, ApiError, type Feedback, fetchPendingVideos, type PendingVideos, rejectVideo } from '../api';
+import ReasonPicker from '../components/ReasonPicker.vue';
 import SupportLink from '../components/SupportLink.vue';
 import UserAvatar from '../components/UserAvatar.vue';
 import { timeAgo } from '../format';
@@ -9,6 +10,12 @@ import { safeUrl } from '../telegram';
 
 // `id` заказа из адреса /my-orders/:id/review.
 const props = defineProps<{ id: string }>();
+
+const REJECT_PRESETS = [
+  'Не соответствует заданию',
+  'Продукт показан мельком или плохо',
+  'Плохо видно или слышно',
+];
 
 const data = ref<PendingVideos>();
 const loadError = ref('');
@@ -137,10 +144,7 @@ void load();
         </label>
       </fieldset>
 
-      <div v-if="rejecting" class="field">
-        <label for="reason" class="section-title">Причина отклонения</label>
-        <textarea id="reason" v-model="comment" rows="3" maxlength="500" placeholder="Что нужно исправить — креатор увидит этот текст" />
-      </div>
+      <ReasonPicker v-if="rejecting" v-model="comment" :presets="REJECT_PRESETS" title="Причина отклонения" />
       <p v-if="error" class="error" role="alert">{{ error }}</p>
 
       <div class="bottom-bar two">
@@ -308,11 +312,6 @@ h1 {
   border-radius: 14px;
   background: var(--success-soft);
   font-size: 15px;
-}
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
 }
 textarea {
   box-sizing: border-box;

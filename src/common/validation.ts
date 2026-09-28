@@ -4,6 +4,8 @@ export const MAX_TITLE_LENGTH = 100;
 export const MAX_DESCRIPTION_LENGTH = 1000;
 /** Цена за видео в рублях. */
 export const MAX_PRICE = 1_000_000;
+/** Сколько видео нужно по заказу. */
+export const MAX_VIDEOS_NEEDED = 100;
 export const MAX_COMMENT_LENGTH = 500;
 export const MAX_URL_LENGTH = 500;
 export const MAX_DEADLINE_DAYS = 365;
