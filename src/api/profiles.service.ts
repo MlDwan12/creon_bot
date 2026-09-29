@@ -22,13 +22,7 @@ export class ProfilesService {
       where: {
         creatorId,
         order: { advertiserId: viewer.id },
-        status: {
-          in: [
-            SubmissionStatus.MODERATOR_APPROVED,
-            SubmissionStatus.ADVERTISER_APPROVED,
-            SubmissionStatus.ADVERTISER_REJECTED,
-          ],
-        },
+        status: SubmissionStatus.MODERATOR_APPROVED,
       },
       select: { id: true },
     });
@@ -47,7 +41,7 @@ export class ProfilesService {
 
     const accepted = {
       creatorId,
-      status: SubmissionStatus.ADVERTISER_APPROVED,
+      status: SubmissionStatus.MODERATOR_APPROVED,
     };
     const [ratings, completed, reviews, portfolio] = await Promise.all([
       this.prisma.submission.aggregate({

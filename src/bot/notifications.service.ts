@@ -4,13 +4,14 @@ import type { Order, Submission, User } from '@prisma/client';
 import { InjectBot } from 'nestjs-telegraf';
 import { kopecksToRubles } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
+import { VIEWS_TOPUP_DAYS } from '../orders/budget';
 import { SLOT_DAYS } from '../submissions/submissions.service';
 import { Context, Markup, Telegraf } from 'telegraf';
 import {
   creatorLabel,
   escapeHtml,
   formatDeadline,
-  formatPrice,
+  formatRubles,
   html,
   orderCategoryLabel,
 } from './utils/format';
@@ -78,7 +79,7 @@ export class NotificationsService implements OnApplicationShutdown {
       `#${order.id}: <b>${escapeHtml(order.title)}</b>`,
       escapeHtml(order.description),
       orderCategoryLabel(order.category),
-      `💰 ${formatPrice(kopecksToRubles(order.priceKopecks))}`,
+      `💰 Бюджет: ${formatRubles(kopecksToRubles(order.budgetMinor))} · порог ${order.minViews.toLocaleString('ru-RU')} просмотров`,
       order.deadline ? `⏰ Дедлайн: ${formatDeadline(order.deadline)}` : '',
       `Рекламодатель: ${escapeHtml(creatorLabel(order.advertiser))}`,
     ]
@@ -127,20 +128,43 @@ export class NotificationsService implements OnApplicationShutdown {
     );
   }
 
-  /** Рекламодателю: модератор одобрил видео — теперь решение за ним. */
+  /**
+   * Модератор одобрил ролик: креатору — сколько начислено, рекламодателю — новый ролик по заказу
+   * (оценить по желанию).
+   */
   videoApprovedByModerator(
-    submission: Submission & { order: Order & { advertiser: User } },
+    submission: SubmissionWithParties & { order: { advertiser: User } },
   ) {
-    const text = [
-      '🎬 Новое видео на проверку',
-      '',
-      `Заказ: ${escapeHtml(submission.order.title)}`,
-      `Видео: ${escapeHtml(submission.videoUrl ?? '')}`,
-    ].join('\n');
+    const views = (submission.views ?? 0).toLocaleString('ru-RU');
+    this.send(
+      submission.creator.telegramId,
+      `✅ Ролик по заказу «${escapeHtml(submission.order.title)}» одобрен: ${views} просмотров, начислено ${formatRubles(kopecksToRubles(submission.payoutMinor))}.\n\nЧерез ${VIEWS_TOPUP_DAYS} дня зафиксируем итог просмотров и доплатим за новые, пока в заказе есть бюджет.`,
+      '/submissions',
+      true,
+    );
     this.send(
       submission.order.advertiser.telegramId,
-      text,
+      [
+        '🎬 Новый ролик по вашему заказу',
+        '',
+        `Заказ: ${escapeHtml(submission.order.title)}`,
+        `Просмотров: ${views}`,
+        `Видео: ${escapeHtml(submission.videoUrl ?? '')}`,
+      ].join('\n'),
       `/my-orders/${submission.order.id}/review`,
+      true,
+    );
+  }
+
+  /** Креатору: итог просмотров после добора и доплата. */
+  viewsFinalized(submission: SubmissionWithParties, extraMinor: number) {
+    const views = (submission.views ?? 0).toLocaleString('ru-RU');
+    this.send(
+      submission.creator.telegramId,
+      extraMinor > 0
+        ? `📈 Итог по ролику «${escapeHtml(submission.order.title)}»: ${views} просмотров, доплачено ${formatRubles(kopecksToRubles(extraMinor))}.`
+        : `📈 Итог по ролику «${escapeHtml(submission.order.title)}»: ${views} просмотров. Доплаты нет — новых просмотров нет или бюджет заказа исчерпан.`,
+      '/submissions',
       true,
     );
   }
@@ -162,11 +186,19 @@ export class NotificationsService implements OnApplicationShutdown {
     );
   }
 
-  /** Заказ набрал нужное число видео: креаторам, чьи видео ещё не приняты. */
-  orderFilled(order: OrderWithCreators) {
+  /** Бюджет заказа исчерпан, заказ закрыт: рекламодателю и креаторам «в работе». */
+  orderBudgetExhausted(
+    order: Order & { advertiser: User } & OrderWithCreators,
+  ) {
+    this.send(
+      order.advertiser.telegramId,
+      `💸 Бюджет заказа «${escapeHtml(order.title)}» израсходован — заказ закрыт. Отчёт по роликам — в «Мои заказы».`,
+      '/my-orders',
+      true,
+    );
     this.toCreators(
       order,
-      `🔒 Заказ «${escapeHtml(order.title)}» набрал нужное количество видео и закрыт. Видео по нему больше не принимаются.`,
+      `🔒 Бюджет заказа «${escapeHtml(order.title)}» исчерпан — новые ролики по нему не принимаются.`,
     );
   }
 
@@ -214,7 +246,7 @@ export class NotificationsService implements OnApplicationShutdown {
   orderExpired(order: Order & { advertiser: User } & OrderWithCreators) {
     this.send(
       order.advertiser.telegramId,
-      `⏰ Срок заказа «${escapeHtml(order.title)}» истёк — заказ закрыт, новые видео не принимаются.\n\nУже присланные видео можно принять или отклонить. Чтобы собрать ещё, продлите срок в «Мои заказы».`,
+      `⏰ Срок заказа «${escapeHtml(order.title)}» истёк — заказ закрыт, новые видео не принимаются.\n\nУже присланные ролики модератор проверит и оплатит из бюджета. Чтобы собрать ещё, продлите срок в «Мои заказы».`,
       '/my-orders',
       true,
     );
@@ -253,10 +285,16 @@ export class NotificationsService implements OnApplicationShutdown {
   }
 
   /** Модераторам: в очереди есть то, что ждёт дольше положенного. */
-  moderationQueueStale(orders: number, videos: number, hours: number) {
+  moderationQueueStale(
+    orders: number,
+    videos: number,
+    topups: number,
+    hours: number,
+  ) {
     const parts = [
       orders ? `заказов: ${orders}` : '',
       videos ? `видео: ${videos}` : '',
+      topups ? `итогов просмотров: ${topups}` : '',
     ].filter(Boolean);
     this.toModerators(
       `🕓 Дольше ${hours} ч ждут проверки — ${parts.join(', ')}.`,
@@ -264,27 +302,13 @@ export class NotificationsService implements OnApplicationShutdown {
     );
   }
 
-  /** Креатору: рекламодатель принял видео. */
-  videoAccepted(submission: SubmissionWithParties) {
+  /** Креатору: рекламодатель оценил ролик. */
+  videoRated(submission: SubmissionWithParties & { rating: number | null }) {
+    if (!submission.rating) return;
     this.send(
       submission.creator.telegramId,
-      `🎉 Рекламодатель подтвердил ваше видео по заказу «${submission.order.title}»!` +
-        (submission.rating
-          ? `\nОценка: ${'★'.repeat(submission.rating)}${'☆'.repeat(5 - submission.rating)}`
-          : ''),
-      '/submissions',
-    );
-  }
-
-  /** Креатору: рекламодатель отклонил видео. */
-  videoRejectedByAdvertiser(
-    submission: SubmissionWithParties,
-    comment: string,
-  ) {
-    this.send(
-      submission.creator.telegramId,
-      `❌ Рекламодатель отклонил ваше видео по заказу «${submission.order.title}».\nПричина: ${comment}\n\nВы можете отправить новый отклик на этот заказ.`,
-      '/submissions',
+      `⭐ Рекламодатель оценил ваш ролик по заказу «${submission.order.title}»: ${'★'.repeat(submission.rating)}${'☆'.repeat(5 - submission.rating)}`,
+      '/profile',
     );
   }
 

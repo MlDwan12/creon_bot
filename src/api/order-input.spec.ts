@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import {
+  parseCpm,
   parseOrderEdit,
   parseOrderInput,
   parseRejectComment,
@@ -8,7 +9,7 @@ import {
 const valid = {
   title: '  Распаковка наушников  ',
   description: 'Снять 30 секунд',
-  price: null,
+  budget: 50_000,
   category: 'TECH',
   deadlineDays: 7,
 };
@@ -20,7 +21,8 @@ describe('parseOrderInput', () => {
     expect(r).toMatchObject({
       title: 'Распаковка наушников',
       description: 'Снять 30 секунд',
-      priceKopecks: undefined,
+      budgetMinor: 5_000_000,
+      minViews: 250,
       category: 'TECH',
     });
     const days = (r.deadline!.getTime() - before) / (24 * 60 * 60 * 1000);
@@ -58,21 +60,21 @@ describe('parseOrderInput', () => {
     );
   });
 
-  it('цена — целые рубли, в базу копейками; пустая строка — договорная', () => {
-    expect(parseOrderInput({ ...valid, price: 3000 }).priceKopecks).toBe(
-      300_000,
+  it.each([
+    ['без бюджета', { budget: undefined }],
+    ['меньше минимума', { budget: 999 }],
+    ['дробный', { budget: 1000.5 }],
+    ['строкой', { budget: '5000' }],
+    ['порог просмотров — ноль', { minViews: 0 }],
+  ])('бюджет и порог — отклоняет: %s', (_name, extra) => {
+    expect(() => parseOrderInput({ ...valid, ...extra })).toThrow(
+      BadRequestException,
     );
-    expect(
-      parseOrderInput({ ...valid, price: '' }).priceKopecks,
-    ).toBeUndefined();
   });
 
-  it('сколько видео нужно: число или пусто — без лимита', () => {
-    expect(parseOrderInput({ ...valid, videosNeeded: 5 }).videosNeeded).toBe(5);
-    expect(parseOrderInput(valid).videosNeeded).toBeUndefined();
-    expect(
-      parseOrderInput({ ...valid, videosNeeded: '' }).videosNeeded,
-    ).toBeUndefined();
+  it('порог просмотров: пусто — 250, иначе своё число', () => {
+    expect(parseOrderInput({ ...valid, minViews: '' }).minViews).toBe(250);
+    expect(parseOrderInput({ ...valid, minViews: 1000 }).minViews).toBe(1000);
   });
 
   it('референс: ссылка без пробелов по краям, пусто — без ссылки', () => {
@@ -101,14 +103,7 @@ describe('parseOrderInput', () => {
     ['дробный срок', { deadlineDays: 2.5 }],
     ['срок строкой', { deadlineDays: '7' }],
     ['срок больше года', { deadlineDays: 366 }],
-    ['цена строкой', { price: '5000' }],
-    ['дробная цена', { price: 99.5 }],
-    ['нулевая цена', { price: 0 }],
-    ['цена больше максимума', { price: 1_000_001 }],
-    ['ноль видео', { videosNeeded: 0 }],
-    ['дробное число видео', { videosNeeded: 1.5 }],
-    ['число видео строкой', { videosNeeded: '5' }],
-    ['видео больше максимума', { videosNeeded: 101 }],
+    ['бюджет больше максимума', { budget: 10_000_001 }],
     ['референс не ссылка', { referenceUrl: 'мой диск' }],
     ['референс — телеграм', { referenceUrl: 'https://t.me/brand' }],
   ])('отклоняет: %s', (_name, patch) => {
@@ -138,8 +133,24 @@ describe('parseRejectComment', () => {
   });
 });
 
+describe('parseCpm', () => {
+  it('рубли до копеек — в копейки', () => {
+    expect(parseCpm({ cpm: 120 })).toBe(12_000);
+    expect(parseCpm({ cpm: 12.5 })).toBe(1_250);
+  });
+
+  it.each([[0], [-5], ['100'], [null], [10_001]])('отклоняет %p', (cpm) => {
+    expect(() => parseCpm({ cpm })).toThrow(BadRequestException);
+  });
+});
+
 describe('parseOrderEdit', () => {
-  const base = { title: 'Название', description: 'Описание', category: 'FOOD' };
+  const base = {
+    title: 'Название',
+    description: 'Описание',
+    category: 'FOOD',
+    budget: 10_000,
+  };
 
   it('срок: не передан — не менять, null — без срока, число — через N дней', () => {
     expect(parseOrderEdit(base).deadline).toBeUndefined();
@@ -149,13 +160,7 @@ describe('parseOrderEdit', () => {
     ).toBeInstanceOf(Date);
   });
 
-  it('пустая цена — договорная (null, а не «не менять»)', () => {
-    expect(parseOrderEdit({ ...base, price: null }).priceKopecks).toBeNull();
-    expect(parseOrderEdit({ ...base, price: 500 }).priceKopecks).toBe(50_000);
-  });
-
-  it('пустое число видео — без лимита (null)', () => {
-    expect(parseOrderEdit(base).videosNeeded).toBeNull();
-    expect(parseOrderEdit({ ...base, videosNeeded: 3 }).videosNeeded).toBe(3);
+  it('бюджет — в копейки', () => {
+    expect(parseOrderEdit(base).budgetMinor).toBe(1_000_000);
   });
 });

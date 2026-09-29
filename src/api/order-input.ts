@@ -6,14 +6,17 @@ import {
   MAX_DEADLINE_DAYS,
   MAX_DESCRIPTION_LENGTH,
   MAX_DURATION_SEC,
-  MAX_PRICE,
+  MAX_BUDGET,
+  MAX_CPM,
+  MIN_BUDGET,
+  MAX_VIEWS,
   MAX_TITLE_LENGTH,
   MAX_URL_LENGTH,
-  MAX_VIDEOS_NEEDED,
   VIDEO_URL_RE,
 } from '../common/validation';
 import { findExactContacts } from '../common/contacts';
 import { rublesToKopecks } from '../common/money';
+import { DEFAULT_MIN_VIEWS } from '../orders/budget';
 import { deadlineIn } from '../orders/deadline';
 
 function text(value: unknown): string {
@@ -61,37 +64,22 @@ export function parseOrderInput(body: unknown) {
       );
   }
 
-  // Пусто — «договорная». Иначе целые рубли за одно видео; в базу — копейками.
-  const price =
-    b.price === undefined || b.price === null || b.price === ''
-      ? undefined
-      : (b.price as number);
+  // Бюджет — всё, что платит рекламодатель, целыми рублями; в базу — копейками.
+  const budget = b.budget;
   if (
-    price !== undefined &&
-    (!Number.isInteger(price) || price < 1 || price > MAX_PRICE)
-  ) {
+    !Number.isInteger(budget) ||
+    (budget as number) < MIN_BUDGET ||
+    (budget as number) > MAX_BUDGET
+  )
     throw new BadRequestException(
-      `Цена — целое число рублей от 1 до ${MAX_PRICE.toLocaleString('ru-RU')}`,
+      `Бюджет — целое число рублей от ${MIN_BUDGET.toLocaleString('ru-RU')} до ${MAX_BUDGET.toLocaleString('ru-RU')}`,
     );
-  }
 
-  // Пусто — без лимита.
-  const videosNeeded =
-    b.videosNeeded === undefined ||
-    b.videosNeeded === null ||
-    b.videosNeeded === ''
-      ? undefined
-      : (b.videosNeeded as number);
-  if (
-    videosNeeded !== undefined &&
-    (!Number.isInteger(videosNeeded) ||
-      videosNeeded < 1 ||
-      videosNeeded > MAX_VIDEOS_NEEDED)
-  ) {
-    throw new BadRequestException(
-      `Сколько видео нужно — целое число от 1 до ${MAX_VIDEOS_NEEDED}`,
-    );
-  }
+  // Пусто — порог по умолчанию.
+  const minViews =
+    b.minViews === undefined || b.minViews === null || b.minViews === ''
+      ? DEFAULT_MIN_VIEWS
+      : parseViews(b.minViews, 'Порог просмотров');
 
   const minDurationSec = durationSec(b.minDurationSec);
   const maxDurationSec = durationSec(b.maxDurationSec);
@@ -122,8 +110,8 @@ export function parseOrderInput(body: unknown) {
     title,
     description,
     referenceUrl,
-    priceKopecks: price === undefined ? undefined : rublesToKopecks(price),
-    videosNeeded,
+    budgetMinor: rublesToKopecks(budget as number),
+    minViews,
     minDurationSec,
     maxDurationSec,
     orientation,
@@ -145,6 +133,31 @@ export function videoFormat(o: {
   };
 }
 
+/** Ставка креатору за 1000 просмотров (решает модератор): рубли, до копеек; в базу — копейками. */
+export function parseCpm(body: unknown): number {
+  const cpm = (body as { cpm?: unknown } | null)?.cpm;
+  const kopecks =
+    typeof cpm === 'number' && Number.isFinite(cpm) ? rublesToKopecks(cpm) : 0;
+  if (kopecks < 1 || kopecks > MAX_CPM * 100)
+    throw new BadRequestException(
+      `Ставка за 1000 просмотров — от 0,01 до ${MAX_CPM.toLocaleString('ru-RU')} ₽`,
+    );
+  return kopecks;
+}
+
+/** Число просмотров: целое от 1 до MAX_VIEWS. `what` — для текста ошибки. */
+export function parseViews(value: unknown, what = 'Просмотры'): number {
+  if (
+    !Number.isInteger(value) ||
+    (value as number) < 1 ||
+    (value as number) > MAX_VIEWS
+  )
+    throw new BadRequestException(
+      `${what} — целое число от 1 до ${MAX_VIEWS.toLocaleString('ru-RU')}`,
+    );
+  return value as number;
+}
+
 /** Длительность в секундах из требований; пусто — любая (null). */
 function durationSec(value: unknown): number | null {
   if (value === undefined || value === null || value === '') return null;
@@ -161,7 +174,7 @@ function durationSec(value: unknown): number | null {
 
 /**
  * Тело `PUT /api/my-orders/:id` — как при создании, кроме срока: `deadlineDays` не передан —
- * срок не меняется, null — без срока. Пустая цена — договорная, пустое число видео — без лимита.
+ * срок не меняется, null — без срока.
  */
 export function parseOrderEdit(body: unknown) {
   const b = (body ?? {}) as Record<string, unknown>;
@@ -170,8 +183,8 @@ export function parseOrderEdit(body: unknown) {
     title: input.title,
     description: input.description,
     referenceUrl: input.referenceUrl ?? null,
-    priceKopecks: input.priceKopecks ?? null,
-    videosNeeded: input.videosNeeded ?? null,
+    budgetMinor: input.budgetMinor,
+    minViews: input.minViews,
     minDurationSec: input.minDurationSec,
     maxDurationSec: input.maxDurationSec,
     orientation: input.orientation,

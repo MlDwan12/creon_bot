@@ -10,7 +10,15 @@ import {
   SubmissionStatus,
   VideoOrientation,
 } from '@prisma/client';
+import { kopecksToRubles } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  budgetState,
+  ORDER_CURRENCY,
+  payoutPool,
+  platformFeePercent,
+  spentByOrder,
+} from './budget';
 import { DAY_MS, extendedDeadline } from './deadline';
 
 /** Поля заказа, которые видит любой пользователь Mini App: без модераторских данных и без BigInt. */
@@ -19,22 +27,16 @@ const PUBLIC_ORDER_FIELDS = {
   title: true,
   description: true,
   referenceUrl: true,
-  priceKopecks: true,
-  videosNeeded: true,
+  budgetMinor: true,
+  feePercent: true,
+  cpmMinor: true,
+  minViews: true,
   minDurationSec: true,
   maxDurationSec: true,
   orientation: true,
   category: true,
   deadline: true,
   createdAt: true,
-  /** Сколько видео уже принято — «принято 2 из 5». */
-  _count: {
-    select: {
-      submissions: {
-        where: { status: SubmissionStatus.ADVERTISER_APPROVED },
-      },
-    },
-  },
 } satisfies Prisma.OrderSelect;
 
 /** Сколько заказов у рекламодателя может быть одновременно на модерации и открытыми. */
@@ -68,8 +70,8 @@ export class OrdersService {
       title: string;
       description: string;
       referenceUrl?: string;
-      priceKopecks?: number;
-      videosNeeded?: number;
+      budgetMinor: number;
+      minViews: number;
       minDurationSec?: number | null;
       maxDurationSec?: number | null;
       orientation?: VideoOrientation | null;
@@ -93,8 +95,10 @@ export class OrdersService {
         title: data.title,
         description: data.description,
         referenceUrl: data.referenceUrl,
-        priceKopecks: data.priceKopecks,
-        videosNeeded: data.videosNeeded,
+        currency: ORDER_CURRENCY,
+        budgetMinor: data.budgetMinor,
+        feePercent: platformFeePercent(),
+        minViews: data.minViews,
         minDurationSec: data.minDurationSec,
         maxDurationSec: data.maxDurationSec,
         orientation: data.orientation,
@@ -138,7 +142,25 @@ export class OrdersService {
       }),
       this.countOpen(category ?? 'ALL', where),
     ]);
-    return { items: rows.slice(0, take), hasMore: rows.length > take, total };
+    return {
+      items: await this.withFree(rows.slice(0, take)),
+      hasMore: rows.length > take,
+      total,
+    };
+  }
+
+  /** Свободный остаток фонда выплат к каждому заказу — креаторы видят его в каталоге. */
+  private async withFree<
+    T extends { id: number } & Parameters<typeof budgetState>[0],
+  >(orders: T[]) {
+    const spent = await spentByOrder(
+      this.prisma,
+      orders.map((o) => o.id),
+    );
+    return orders.map((o) => ({
+      ...o,
+      freeMinor: budgetState(o, spent.get(o.id) ?? 0).free,
+    }));
   }
 
   private async countOpen(key: string, where: Prisma.OrderWhereInput) {
@@ -151,11 +173,12 @@ export class OrdersService {
   }
 
   /** Открытый заказ для карточки в Mini App; `advertiserId` — только чтобы узнать «свой ли», наружу не отдавать. */
-  findOpenById(id: number) {
-    return this.prisma.order.findFirst({
+  async findOpenById(id: number) {
+    const order = await this.prisma.order.findFirst({
       where: { id, status: OrderStatus.OPEN },
       select: { ...PUBLIC_ORDER_FIELDS, advertiserId: true },
     });
+    return order && (await this.withFree([order]))[0];
   }
 
   /** Очередь модератора в Mini App: все заказы на проверке, дольше ждущие первыми. */
@@ -374,9 +397,8 @@ export class OrdersService {
       title: string;
       description: string;
       referenceUrl?: string | null;
-      priceKopecks: number | null;
-      /** undefined — не менять, null — без лимита. */
-      videosNeeded?: number | null;
+      budgetMinor: number;
+      minViews: number;
       minDurationSec?: number | null;
       maxDurationSec?: number | null;
       orientation?: VideoOrientation | null;
@@ -387,35 +409,6 @@ export class OrdersService {
     const order = await this.mustFind(orderId);
     if (order.advertiserId !== advertiserId)
       throw new ForbiddenException('Это не ваш заказ');
-    // ponytail: проверка и запись не атомарны — приёмка между ними может сравнять счёт с лимитом;
-    // тогда заказ просто не примет больше, а закроет его рекламодатель.
-    if (typeof data.videosNeeded === 'number') {
-      const accepted = await this.prisma.submission.count({
-        where: { orderId, status: SubmissionStatus.ADVERTISER_APPROVED },
-      });
-      if (data.videosNeeded <= accepted)
-        throw new ForbiddenException(
-          `Уже принято видео: ${accepted} — укажите больше или оставьте поле пустым`,
-        );
-    }
-    // Цена — то, за что креаторы уже сняли видео: пока есть сданные работы, её не меняем.
-    if (data.priceKopecks !== order.priceKopecks) {
-      const delivered = await this.prisma.submission.count({
-        where: {
-          orderId,
-          status: {
-            in: [
-              SubmissionStatus.SUBMITTED,
-              SubmissionStatus.MODERATOR_APPROVED,
-            ],
-          },
-        },
-      });
-      if (delivered)
-        throw new ForbiddenException(
-          'Цену нельзя менять, пока есть видео на проверке — сначала примите или отклоните их',
-        );
-    }
     const now = new Date();
     // Срок «как было» у заказа на проверке — это ещё «N дней от отправки на проверку»: переносим его
     // вместе с моментом отправки, иначе время до правки съело бы дни креаторов.
@@ -429,35 +422,31 @@ export class OrdersService {
         order.deadline.getTime() +
           (now.getTime() - order.moderationRequestedAt.getTime()),
       );
-    await this.transitionStatus(
-      orderId,
-      [OrderStatus.PENDING_MODERATION, OrderStatus.OPEN],
-      {
-        ...data,
-        deadline,
-        status: OrderStatus.PENDING_MODERATION,
-        moderationRequestedAt: now,
-        moderatorId: null,
-        decidedAt: null,
-        deadlineReminderSentAt: null,
-      },
-      'Изменить можно только заказ на проверке или открытый',
-      // повтор проверки цены в самом updateMany: видео могли сдать между подсчётом выше и записью
-      data.priceKopecks === order.priceKopecks
-        ? undefined
-        : {
-            submissions: {
-              none: {
-                status: {
-                  in: [
-                    SubmissionStatus.SUBMITTED,
-                    SubmissionStatus.MODERATOR_APPROVED,
-                  ],
-                },
-              },
-            },
-          },
-    );
+    await this.prisma.$transaction(async (tx) => {
+      // Резерв при сдаче ролика берёт ту же блокировку — занятое не вырастет между проверкой и записью.
+      await tx.$queryRaw`SELECT 1 FROM "Order" WHERE id = ${orderId} FOR UPDATE`;
+      const spent = (await spentByOrder(tx, [orderId])).get(orderId) ?? 0;
+      if (payoutPool({ ...order, budgetMinor: data.budgetMinor }) < spent)
+        throw new ForbiddenException(
+          `Из бюджета уже потрачено или зарезервировано ${kopecksToRubles(spent).toLocaleString('ru-RU')} ₽ выплат креаторам — бюджет нельзя сделать меньше`,
+        );
+      await this.transitionStatus(
+        orderId,
+        [OrderStatus.PENDING_MODERATION, OrderStatus.OPEN],
+        {
+          ...data,
+          deadline,
+          status: OrderStatus.PENDING_MODERATION,
+          moderationRequestedAt: now,
+          moderatorId: null,
+          decidedAt: null,
+          deadlineReminderSentAt: null,
+        },
+        'Изменить можно только заказ на проверке или открытый',
+        undefined,
+        tx,
+      );
+    });
     return this.withActiveCreators(orderId);
   }
 
@@ -491,8 +480,14 @@ export class OrdersService {
     orderId: number,
     moderatorTelegramId: bigint,
     version: Date,
+    cpmMinor: number,
   ) {
     const order = await this.mustFind(orderId);
+    // Ставка, при которой фонд не покрывает даже один ролик с порогом, — заказ сразу исчерпан.
+    if (budgetState({ ...order, cpmMinor }, 0).exhausted)
+      throw new ForbiddenException(
+        'Фонда выплат не хватит даже на один ролик с порогом просмотров — уменьшите ставку',
+      );
     const now = new Date();
     await this.transitionStatus(
       orderId,
@@ -500,6 +495,7 @@ export class OrdersService {
       {
         status: OrderStatus.OPEN,
         moderatorId: moderatorTelegramId,
+        cpmMinor,
         decidedAt: now,
         deadline: order.deadline
           ? new Date(
@@ -540,17 +536,14 @@ export class OrdersService {
       { moderationRequestedAt: version },
     );
     const order = await this.withActiveCreators(orderId);
-    // Изменённый открытый заказ сняли — видео по нему не ждут ни модератора, ни рекламодателя.
+    // Изменённый открытый заказ сняли — ролики на проверке не ждут модератора, резерв освобождается.
+    // Одобренные остаются: деньги за них уже начислены.
     await this.prisma.submission.updateMany({
-      where: {
-        orderId,
-        status: {
-          in: [SubmissionStatus.SUBMITTED, SubmissionStatus.MODERATOR_APPROVED],
-        },
-      },
+      where: { orderId, status: SubmissionStatus.SUBMITTED },
       data: {
         status: SubmissionStatus.MODERATOR_REJECTED,
         moderatorComment: 'Заказ снят модератором',
+        payoutMinor: 0,
         decidedAt: new Date(),
       },
     });
@@ -592,8 +585,9 @@ export class OrdersService {
     conflictMessage = 'Этот заказ уже обработан',
     /** Доп. условие в том же запросе — например, версия, которую видел модератор. */
     also?: Prisma.OrderWhereInput,
+    db: Prisma.TransactionClient = this.prisma,
   ) {
-    const result = await this.prisma.order.updateMany({
+    const result = await db.order.updateMany({
       where: { ...also, id: orderId, status: { in: fromStatuses } },
       data,
     });

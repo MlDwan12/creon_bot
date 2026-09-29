@@ -8,5 +8,12 @@ export function validateEnv(config: Record<string, unknown>) {
       `Отсутствуют обязательные переменные окружения: ${missing.join(', ')}`,
     );
   }
+  // Комиссия площадки для новых заказов, % (src/orders/budget.ts); не задана — 20.
+  const fee = config.PLATFORM_FEE_PERCENT;
+  if (fee !== undefined && fee !== '') {
+    const n = Number(fee);
+    if (!Number.isInteger(n) || n < 0 || n > 90)
+      throw new Error('PLATFORM_FEE_PERCENT — целое число от 0 до 90');
+  }
   return config;
 }

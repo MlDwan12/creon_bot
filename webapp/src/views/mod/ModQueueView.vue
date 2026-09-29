@@ -11,17 +11,18 @@ import {
   type ReportTarget,
   resolveReports,
 } from '../../api';
-import { formatPrice, isWaitingLong, timeAgo, waitingFor } from '../../format';
+import { formatRubles, isWaitingLong, timeAgo, waitingFor } from '../../format';
 import SupportLink from '../../components/SupportLink.vue';
 import { confirmAction } from '../../telegram';
 
 const route = useRoute();
 const router = useRouter();
 
-type Tab = 'orders' | 'videos' | 'reports';
+type Tab = 'orders' | 'videos' | 'topups' | 'reports';
+const TABS: Tab[] = ['orders', 'videos', 'topups', 'reports'];
 // Вкладка — в адресе (?tab=videos), чтобы «Назад» из карточки вернул на ту же вкладку.
 const tab = computed<Tab>(() =>
-  route.query.tab === 'videos' || route.query.tab === 'reports' ? route.query.tab : 'orders',
+  TABS.includes(route.query.tab as Tab) ? (route.query.tab as Tab) : 'orders',
 );
 const setTab = (t: Tab) => router.replace({ query: t === 'orders' ? {} : { tab: t } });
 
@@ -123,6 +124,9 @@ void load();
         <button type="button" role="tab" :aria-selected="tab === 'videos'" @click="setTab('videos')">
           Видео · {{ queue.videos.length }}
         </button>
+        <button type="button" role="tab" :aria-selected="tab === 'topups'" @click="setTab('topups')">
+          Итоги · {{ queue.topups.length }}
+        </button>
         <button type="button" role="tab" :aria-selected="tab === 'reports'" @click="setTab('reports')">
           Жалобы · {{ reports.length }}
         </button>
@@ -187,9 +191,20 @@ void load();
             <span class="title">
               <span v-if="o.hasContacts" class="flag" title="Похоже на контакты в обход площадки">⚠ </span>{{ o.title }}
             </span>
-            <span class="sub">{{ o.advertiser }} · {{ formatPrice(o.price) }}</span>
+            <span class="sub">{{ o.advertiser }} · бюджет {{ formatRubles(o.budget) }}</span>
           </span>
           <span :class="['wait', { long: isWaitingLong(o.queuedAt) }]">{{ waitingFor(o.queuedAt) }}</span>
+          <span class="chevron" aria-hidden="true">›</span>
+        </RouterLink>
+      </div>
+
+      <div v-else-if="tab === 'topups'" class="list">
+        <p v-if="queue.topups.length === 0" class="empty">Роликов с законченным добором нет.</p>
+        <RouterLink v-for="v in queue.topups" :key="v.id" :to="`/mod/videos/${v.id}`" class="row">
+          <span class="main">
+            <span class="title">{{ v.orderTitle }}</span>
+            <span class="sub">{{ v.creator }} · зафиксировать итог просмотров</span>
+          </span>
           <span class="chevron" aria-hidden="true">›</span>
         </RouterLink>
       </div>
@@ -256,7 +271,7 @@ h1 {
 }
 .segmented {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   padding: 2px;
   border-radius: 9px;
   background: var(--fill);
@@ -267,7 +282,7 @@ h1 {
   border-radius: 7px;
   background: none;
   color: var(--text);
-  font-size: 14px;
+  font-size: 13px;
 }
 .segmented button[aria-selected='true'] {
   background: var(--surface);

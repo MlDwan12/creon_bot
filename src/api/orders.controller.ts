@@ -20,18 +20,29 @@ import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { UserThrottlerGuard } from './user-throttler.guard';
+import { videoFormat } from './order-input';
 
 const PAGE_SIZE = 20;
 
-/** Цена наружу — в рублях; `accepted` — сколько видео уже принято. */
-function toPublic<
-  T extends { priceKopecks: number | null; _count: { submissions: number } },
->(order: T) {
-  const { priceKopecks, _count, ...rest } = order;
+/**
+ * Креатору — ставка и свободный остаток фонда выплат в рублях. Бюджет рекламодателя и комиссию
+ * площадки не показываем.
+ */
+function toPublic(
+  order: Awaited<ReturnType<OrdersService['listOpen']>>['items'][number],
+) {
   return {
-    ...rest,
-    price: kopecksToRubles(priceKopecks),
-    accepted: _count.submissions,
+    id: order.id,
+    title: order.title,
+    description: order.description,
+    referenceUrl: order.referenceUrl,
+    ...videoFormat(order),
+    minViews: order.minViews,
+    cpm: kopecksToRubles(order.cpmMinor),
+    free: kopecksToRubles(order.freeMinor),
+    category: order.category,
+    deadline: order.deadline,
+    createdAt: order.createdAt,
   };
 }
 
@@ -83,8 +94,6 @@ export class OrdersController {
       ...toPublic(pub),
       claimed,
       own: advertiserId === req.user.id,
-      // сколько видео рекламодатель принял и отклонил — платит ли он за работу
-      advertiser: await this.submissionsService.advertiserStats(advertiserId),
     };
   }
 

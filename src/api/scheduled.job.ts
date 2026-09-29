@@ -5,6 +5,8 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { NotificationsService } from '../bot/notifications.service';
+import { VIEWS_TOPUP_DAYS } from '../orders/budget';
+import { DAY_MS } from '../orders/deadline';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
 
@@ -90,9 +92,10 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
   private async remindModerators() {
     if (Date.now() - this.lastQueueReminder < STALE_MS) return;
     const staleBefore = Date.now() - STALE_MS;
-    const [orders, videos] = await Promise.all([
+    const [orders, videos, topups] = await Promise.all([
       this.ordersService.listPending(),
       this.submissionsService.listPendingModeration(),
+      this.submissionsService.listTopupDue(),
     ]);
     const staleOrders = orders.filter(
       (o) => o.moderationRequestedAt.getTime() < staleBefore,
@@ -100,10 +103,17 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
     const staleVideos = videos.filter(
       (s) => s.submittedAt && s.submittedAt.getTime() < staleBefore,
     ).length;
-    if (!staleOrders && !staleVideos) return;
+    // итог добора ждёт с конца добора — тоже не дольше STALE_HOURS
+    const staleTopups = topups.filter(
+      (s) =>
+        s.decidedAt &&
+        s.decidedAt.getTime() + VIEWS_TOPUP_DAYS * DAY_MS < staleBefore,
+    ).length;
+    if (!staleOrders && !staleVideos && !staleTopups) return;
     this.notifications.moderationQueueStale(
       staleOrders,
       staleVideos,
+      staleTopups,
       STALE_HOURS,
     );
     this.lastQueueReminder = Date.now();

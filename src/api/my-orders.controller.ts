@@ -13,6 +13,7 @@ import {
 import { ParseIdPipe } from './parse-id.pipe';
 import { OrderStatus, SubmissionStatus } from '@prisma/client';
 import { kopecksToRubles } from '../common/money';
+import { HOLDS_MONEY, payoutPool } from '../orders/budget';
 import { NotificationsService } from '../bot/notifications.service';
 import { publicName } from '../bot/utils/format';
 import { Throttle } from '@nestjs/throttler';
@@ -42,32 +43,43 @@ export class MyOrdersController {
   async list(@Req() req: ApiRequest) {
     const orders = await this.ordersService.listByAdvertiser(req.user.id);
     // Поля явно: без модераторского id (BigInt) и без чужих данных из откликов.
-    return orders.map((o) => ({
-      id: o.id,
-      title: o.title,
-      description: o.description,
-      referenceUrl: o.referenceUrl,
-      ...videoFormat(o),
-      price: kopecksToRubles(o.priceKopecks),
-      category: o.category,
-      deadline: o.deadline,
-      status: o.status,
-      rejectReason:
-        o.status === OrderStatus.REJECTED ? o.moderatorComment : null,
-      videosNeeded: o.videosNeeded,
-      accepted: o.submissions.filter(
-        (s) => s.status === SubmissionStatus.ADVERTISER_APPROVED,
-      ).length,
-      submissionsCount: o.submissions.length,
-      // Та же проверка, что в OrdersService.remove.
-      deletable: o.submissions.every(
-        (s) => s.status === SubmissionStatus.IN_PROGRESS,
-      ),
-      pendingDecision: o.submissions.filter(
+    return orders.map((o) => {
+      const approved = o.submissions.filter(
         (s) => s.status === SubmissionStatus.MODERATOR_APPROVED,
-      ).length,
-      createdAt: o.createdAt,
-    }));
+      );
+      // резерв роликов на проверке тоже занимает фонд — как в src/orders/budget.ts
+      const spent = o.submissions
+        .filter((s) => HOLDS_MONEY.includes(s.status))
+        .reduce((sum, s) => sum + s.payoutMinor, 0);
+      return {
+        id: o.id,
+        title: o.title,
+        description: o.description,
+        referenceUrl: o.referenceUrl,
+        ...videoFormat(o),
+        budget: kopecksToRubles(o.budgetMinor),
+        minViews: o.minViews,
+        category: o.category,
+        deadline: o.deadline,
+        status: o.status,
+        rejectReason:
+          o.status === OrderStatus.REJECTED ? o.moderatorComment : null,
+        // Фонд креаторам — бюджет без комиссии; рекламодателю — доля израсходованного бюджета.
+        usedPercent: Math.min(
+          100,
+          Math.round((spent / Math.max(1, payoutPool(o))) * 100),
+        ),
+        approved: approved.length,
+        views: approved.reduce((sum, s) => sum + (s.views ?? 0), 0),
+        toRate: approved.filter((s) => s.rating === null).length,
+        submissionsCount: o.submissions.length,
+        // Та же проверка, что в OrdersService.remove.
+        deletable: o.submissions.every(
+          (s) => s.status === SubmissionStatus.IN_PROGRESS,
+        ),
+        createdAt: o.createdAt,
+      };
+    });
   }
 
   /** Новый заказ → на модерацию, модераторам уведомление. */
@@ -124,7 +136,7 @@ export class MyOrdersController {
     return { ok: true };
   }
 
-  /** Видео по моему заказу, одобренные модератором и ждущие моего решения. */
+  /** Одобренные ролики по моему заказу с просмотрами — отчёт и оценка по желанию. */
   @Get(':id/pending-videos')
   async pendingVideos(
     @Param('id', ParseIdPipe) id: number,
@@ -140,7 +152,7 @@ export class MyOrdersController {
       order: { id: order.id, title: order.title },
       items: all
         .filter((s) => s.status === SubmissionStatus.MODERATOR_APPROVED)
-        .reverse() // старые — первыми: кто раньше прислал, того раньше и смотрим
+        .reverse() // старые — первыми
         .map((s) => ({
           id: s.id,
           videoUrl: s.videoUrl,
@@ -148,6 +160,8 @@ export class MyOrdersController {
           creatorId: s.creatorId,
           attempt: attempts.get(s.id)!,
           submittedAt: s.submittedAt,
+          views: s.views,
+          rating: s.rating,
         })),
     };
   }

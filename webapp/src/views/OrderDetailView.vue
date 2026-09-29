@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { ApiError, categoryLabel, claimOrder, fetchOrder, type OrderDetail } from '../api';
 import SupportLink from '../components/SupportLink.vue';
-import { formatDeadline, formatPrice, formatVideoFormat } from '../format';
+import { formatCpm, formatDeadline, formatRubles, formatVideoFormat, formatViews } from '../format';
 import { safeUrl } from '../telegram';
 
 // `id` приходит из адреса /orders/:id (в router.ts у маршрута `props: true`).
@@ -54,29 +54,23 @@ void load();
       <section class="rows">
         <div class="row">
           <span>Оплата</span>
-          <strong>{{ formatPrice(order.price) }}</strong>
+          <strong>{{ formatCpm(order.cpm) }}</strong>
         </div>
-        <div v-if="order.videosNeeded" class="row">
-          <span>Нужно видео</span>
-          <span class="value">{{ order.videosNeeded }}, принято {{ order.accepted }}</span>
+        <div class="row">
+          <span>Осталось в бюджете</span>
+          <span class="value">{{ formatRubles(order.free) }}</span>
+        </div>
+        <div class="row">
+          <span>Сдать можно</span>
+          <span class="value">от {{ formatViews(order.minViews) }} просмотров</span>
         </div>
         <div v-if="order.deadline" class="row">
           <span>Сдать до</span>
           <span class="value">{{ formatDeadline(order.deadline) }}</span>
         </div>
         <div class="row">
-          <span>Рекламодатель</span>
-          <span class="value">
-            {{
-              order.advertiser.accepted + order.advertiser.rejected
-                ? `принял видео: ${order.advertiser.accepted}, отклонил: ${order.advertiser.rejected}`
-                : 'ещё не принимал видео'
-            }}
-          </span>
-        </div>
-        <div class="row">
-          <span>Оплата</span>
-          <span class="value">через CreON, после приёмки видео</span>
+          <span>Выплата</span>
+          <span class="value">через CreON, после проверки модератором</span>
         </div>
       </section>
 
@@ -93,9 +87,10 @@ void load();
         <h2 class="section-title">Как это работает</h2>
         <ol class="steps">
           <li>Откликаетесь — заказ появляется в «Мои отклики»</li>
-          <li>Снимаете видео и присылаете ссылку — на это 5 дней, потом слот сгорает</li>
-          <li>Модератор проверяет ролик</li>
-          <li>Рекламодатель подтверждает работу</li>
+          <li>Публикуете ролик у себя в соцсети — на это 5 дней, потом слот сгорает</li>
+          <li>Когда ролик наберёт {{ formatViews(order.minViews) }} просмотров, присылаете ссылку и число просмотров</li>
+          <li>Модератор проверяет ролик и фиксирует просмотры — начисляется оплата</li>
+          <li>Через 3 дня фиксируем итог и доплачиваем за новые просмотры, пока есть бюджет</li>
         </ol>
       </section>
 

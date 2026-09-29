@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ApiError, categoryLabel, fetchModOrder, fetchModQueue, type ModOrder, moderateOrder } from '../../api';
 import ReasonPicker from '../../components/ReasonPicker.vue';
-import { formatDate, formatPrice, formatVideoFormat, waitingFor } from '../../format';
+import { formatCpm, formatDate, formatRubles, formatVideoFormat, formatViews, waitingFor } from '../../format';
 import { safeUrl } from '../../telegram';
 
 const props = defineProps<{ id: string }>();
@@ -28,6 +28,12 @@ const loadError = ref('');
 const comment = ref('');
 const busy = ref(false);
 const error = ref('');
+/** Ставка креатору за 1000 просмотров, ₽; '' — ещё не введена. После правки — прежняя. */
+const cpm = ref<number | ''>('');
+/** Сколько просмотров оплатит фонд при этой ставке — чтобы ставка была разумной. */
+const coveredViews = computed(() =>
+  order.value && cpm.value ? Math.floor((order.value.pool / cpm.value) * 1000) : 0,
+);
 
 async function load() {
   order.value = undefined;
@@ -35,6 +41,7 @@ async function load() {
   comment.value = '';
   try {
     order.value = await fetchModOrder(Number(props.id));
+    cpm.value = order.value.cpm ?? '';
   } catch (err) {
     loadError.value = err instanceof ApiError ? err.userMessage : 'Не удалось загрузить заказ';
   }
@@ -50,7 +57,12 @@ async function decide(decision: 'approve' | 'reject') {
   busy.value = true;
   error.value = '';
   try {
-    await moderateOrder(Number(props.id), decision, order.value!.version, decision === 'reject' ? comment.value : undefined);
+    await moderateOrder(
+      Number(props.id),
+      decision,
+      order.value!.version,
+      decision === 'reject' ? { comment: comment.value } : { cpm: Number(cpm.value) },
+    );
     await goNext();
   } catch (err) {
     // Например, другой модератор успел раньше: «Этот заказ уже обработан».
@@ -81,9 +93,12 @@ watch(() => props.id, load, { immediate: true });
       <section class="rows">
         <div class="row"><span>Рекламодатель</span><span>{{ order.advertiser }}</span></div>
         <div class="row">
-          <span>Цена · срок</span>
-          <span>{{ formatPrice(order.price) }}<template v-if="order.deadline"> · до {{ formatDate(order.deadline) }}</template></span>
+          <span>Бюджет</span>
+          <span>{{ formatRubles(order.budget) }}, креаторам {{ formatRubles(order.pool) }} (комиссия {{ order.feePercent }}%)</span>
         </div>
+        <div class="row"><span>Порог</span><span>от {{ formatViews(order.minViews) }} просмотров</span></div>
+        <div v-if="order.cpm !== null" class="row"><span>Ставка</span><span>{{ formatCpm(order.cpm) }}</span></div>
+        <div v-if="order.deadline" class="row"><span>Срок</span><span>до {{ formatDate(order.deadline) }}</span></div>
         <div class="row"><span>Категория</span><span>{{ categoryLabel(order.category) }}</span></div>
       </section>
 
@@ -103,6 +118,13 @@ watch(() => props.id, load, { immediate: true });
       <p v-if="order.moderatorComment" class="hint">Комментарий модератора: «{{ order.moderatorComment }}»</p>
 
       <template v-if="order.status === 'PENDING_MODERATION'">
+        <label class="cpm">
+          <span class="section-title">Ставка креатору за 1000 просмотров, ₽</span>
+          <input v-model.number="cpm" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="например, 100" />
+          <span v-if="coveredViews" class="hint">
+            Фонда хватит примерно на {{ formatViews(coveredViews) }} просмотров
+          </span>
+        </label>
         <ReasonPicker v-model="comment" :presets="PRESETS" />
         <p v-if="error" class="error" role="alert">{{ error }}</p>
 
@@ -110,7 +132,7 @@ watch(() => props.id, load, { immediate: true });
           <button type="button" class="reject" :disabled="busy || !comment.trim()" @click="decide('reject')">
             Отклонить
           </button>
-          <button type="button" class="approve" :disabled="busy" @click="decide('approve')">Опубликовать</button>
+          <button type="button" class="approve" :disabled="busy || !cpm" @click="decide('approve')">Опубликовать</button>
         </div>
       </template>
     </template>
@@ -118,6 +140,26 @@ watch(() => props.id, load, { immediate: true });
 </template>
 
 <style scoped>
+.cpm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cpm input {
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+.cpm input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
 .page {
   display: flex;
   flex-direction: column;
