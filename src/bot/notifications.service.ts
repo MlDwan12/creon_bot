@@ -4,6 +4,7 @@ import type { Order, Submission, User } from '@prisma/client';
 import { InjectBot } from 'nestjs-telegraf';
 import { kopecksToRubles } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
+import { SLOT_DAYS } from '../submissions/submissions.service';
 import { Context, Markup, Telegraf } from 'telegraf';
 import {
   creatorLabel,
@@ -228,6 +229,26 @@ export class NotificationsService implements OnApplicationShutdown {
     this.toCreators(
       order,
       `⏳ Меньше чем через сутки истекает срок заказа «${escapeHtml(order.title)}» — успейте отправить видео. После срока его не примут.`,
+    );
+  }
+
+  /** Креатору: слот по отклику сгорит меньше чем через сутки. */
+  slotEndingSoon(submission: SubmissionWithParties) {
+    this.send(
+      submission.creator.telegramId,
+      `⏳ Меньше чем через сутки сгорит ваш слот по заказу «${escapeHtml(submission.order.title)}» — успейте отправить видео.`,
+      `/submissions/${submission.id}/video`,
+      true,
+    );
+  }
+
+  /** Креатору: видео не прислали вовремя, слот сгорел. */
+  slotExpired(submission: SubmissionWithParties) {
+    this.send(
+      submission.creator.telegramId,
+      `⌛ Слот по заказу «${escapeHtml(submission.order.title)}» сгорел: видео не прислали за ${SLOT_DAYS} дней. Если заказ ещё открыт, можно откликнуться снова.`,
+      '/submissions',
+      true,
     );
   }
 

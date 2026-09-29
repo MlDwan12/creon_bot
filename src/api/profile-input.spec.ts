@@ -42,11 +42,15 @@ describe('parseLinks', () => {
         tiktokUrl: 'https://www.tiktok.com/@creator',
         youtubeUrl: ' https://youtu.be/abc ',
         vkUrl: '',
+        instagramUrl: 'https://www.instagram.com/creator',
+        xUrl: 'https://twitter.com/creator',
       }),
     ).toEqual({
       tiktokUrl: 'https://www.tiktok.com/@creator',
       youtubeUrl: 'https://youtu.be/abc',
       vkUrl: null,
+      instagramUrl: 'https://www.instagram.com/creator',
+      xUrl: 'https://twitter.com/creator',
     });
   });
 
@@ -54,6 +58,7 @@ describe('parseLinks', () => {
     ['http вместо https', { vkUrl: 'http://vk.com/id1' }],
     ['чужой домен', { tiktokUrl: 'https://evil.com/tiktok.com' }],
     ['похожий домен', { vkUrl: 'https://notvk.com/id1' }],
+    ['X на чужом домене', { xUrl: 'https://box.com/creator' }],
     ['javascript-ссылка', { youtubeUrl: 'javascript:alert(1)' }],
     ['не ссылка', { vkUrl: 'vk.com/id1' }],
   ])('отклоняет: %s', (_name, body) => {

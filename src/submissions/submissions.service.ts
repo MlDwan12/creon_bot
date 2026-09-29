@@ -17,6 +17,20 @@ const UNDECIDED = [
   SubmissionStatus.MODERATOR_APPROVED,
 ];
 
+/** Сколько дней у креатора на видео после отклика — потом слот сгорает (SLOT_EXPIRED). */
+export const SLOT_DAYS = 5;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** До какого момента креатор должен прислать видео по отклику «в работе». */
+export function slotDueAt(createdAt: Date) {
+  return new Date(createdAt.getTime() + SLOT_DAYS * DAY_MS);
+}
+
+/** По таким заказам видео ещё принимают (как в attachVideo) — только тогда слот может сгореть. */
+const ACCEPTS_VIDEOS: Prisma.OrderWhereInput = {
+  status: { notIn: [OrderStatus.EXPIRED, OrderStatus.REJECTED] },
+};
+
 const FILLED_MESSAGE = 'По заказу уже набрали нужное количество видео';
 
 const ALREADY_CLAIMED_MESSAGE =
@@ -124,6 +138,60 @@ export class SubmissionsService {
       orderBy: { createdAt: 'desc' },
       include: { creator: true, order: true },
     });
+  }
+
+  /** Отклики «в работе», у которых слот уже сгорел. */
+  listSlotOverdue() {
+    return this.prisma.submission.findMany({
+      where: {
+        status: SubmissionStatus.IN_PROGRESS,
+        createdAt: { lt: new Date(Date.now() - SLOT_DAYS * DAY_MS) },
+        order: ACCEPTS_VIDEOS,
+      },
+      select: { id: true },
+    });
+  }
+
+  /** Слот сгорел. `null` — креатор успел прислать видео, пока шла задача. */
+  async expireSlot(submissionId: number) {
+    try {
+      await this.transitionStatus(
+        submissionId,
+        [SubmissionStatus.IN_PROGRESS],
+        { status: SubmissionStatus.SLOT_EXPIRED, decidedAt: new Date() },
+        ACCEPTS_VIDEOS,
+      );
+    } catch (err) {
+      if (err instanceof ForbiddenException) return null;
+      throw err;
+    }
+    return this.mustFind(submissionId);
+  }
+
+  /** Отклики «в работе», у которых слот сгорит меньше чем через сутки, — ещё без напоминания. */
+  listSlotEndingSoon() {
+    return this.prisma.submission.findMany({
+      where: {
+        status: SubmissionStatus.IN_PROGRESS,
+        slotReminderSentAt: null,
+        createdAt: { lt: new Date(Date.now() - (SLOT_DAYS - 1) * DAY_MS) },
+        order: ACCEPTS_VIDEOS,
+      },
+      select: { id: true },
+    });
+  }
+
+  /** Отмечает напоминание; `null` — уже отмечено или видео прислали. */
+  async markSlotReminded(submissionId: number) {
+    const { count } = await this.prisma.submission.updateMany({
+      where: {
+        id: submissionId,
+        status: SubmissionStatus.IN_PROGRESS,
+        slotReminderSentAt: null,
+      },
+      data: { slotReminderSentAt: new Date() },
+    });
+    return count === 0 ? null : this.mustFind(submissionId);
   }
 
   async moderatorApprove(submissionId: number, moderatorTelegramId: bigint) {

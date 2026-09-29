@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { ApiError, claimOrder, type MySubmission, type SubmissionStatus } from '../api';
-import { formatDate, formatPrice } from '../format';
+import { formatDeadline, formatPrice } from '../format';
 
 const props = defineProps<{ submission: MySubmission }>();
 const router = useRouter();
@@ -15,6 +15,7 @@ const STEPS: Record<SubmissionStatus, number> = {
   ADVERTISER_APPROVED: 4,
   MODERATOR_REJECTED: 0,
   ADVERTISER_REJECTED: 0,
+  SLOT_EXPIRED: 0,
 };
 
 const STATUS: Record<SubmissionStatus, { label: string; tone: string }> = {
@@ -24,6 +25,7 @@ const STATUS: Record<SubmissionStatus, { label: string; tone: string }> = {
   ADVERTISER_APPROVED: { label: 'Принято рекламодателем', tone: 'success' },
   MODERATOR_REJECTED: { label: 'Отклонено модератором', tone: 'danger' },
   ADVERTISER_REJECTED: { label: 'Отклонено рекламодателем', tone: 'danger' },
+  SLOT_EXPIRED: { label: 'Слот сгорел — видео не прислали за 5 дней', tone: 'danger' },
 };
 
 // computed — значение, которое пересчитывается само, когда меняются props.
@@ -66,8 +68,8 @@ async function resubmit() {
 
     <div class="status">
       <span :class="['label', status.tone]">{{ status.label }}</span>
-      <span v-if="submission.status === 'IN_PROGRESS' && submission.order.deadline" class="hint">
-        сдать до {{ formatDate(submission.order.deadline) }}
+      <span v-if="submission.dueAt" class="hint">
+        сдать до {{ formatDeadline(submission.dueAt) }}
       </span>
       <span v-else-if="submission.attempt > 1" class="hint">видео {{ submission.attempt }}</span>
     </div>

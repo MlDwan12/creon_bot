@@ -39,8 +39,16 @@ const NETWORKS: { field: keyof ProfileLinks; name: string; placeholder: string }
   { field: 'tiktokUrl', name: 'TikTok', placeholder: 'https://www.tiktok.com/@…' },
   { field: 'youtubeUrl', name: 'YouTube', placeholder: 'https://www.youtube.com/@…' },
   { field: 'vkUrl', name: 'VK', placeholder: 'https://vk.com/…' },
+  { field: 'instagramUrl', name: 'Instagram', placeholder: 'https://www.instagram.com/…' },
+  { field: 'xUrl', name: 'X', placeholder: 'https://x.com/…' },
 ];
-const links = reactive<ProfileLinks>({ tiktokUrl: null, youtubeUrl: null, vkUrl: null });
+const links = reactive<ProfileLinks>({
+  tiktokUrl: null,
+  youtubeUrl: null,
+  vkUrl: null,
+  instagramUrl: null,
+  xUrl: null,
+});
 const filledLinks = computed(() =>
   NETWORKS.filter((n) => safeUrl(profile.value?.links[n.field] ?? null)),
 );

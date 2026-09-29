@@ -7,6 +7,7 @@ import ProfileView from './views/ProfileView.vue';
 import ReportView from './views/ReportView.vue';
 import SupportView from './views/SupportView.vue';
 import CreateOrderView from './views/CreateOrderView.vue';
+import LearnView from './views/LearnView.vue';
 import ModAllOrdersView from './views/mod/ModAllOrdersView.vue';
 import ModOrderView from './views/mod/ModOrderView.vue';
 import ModQueueView from './views/mod/ModQueueView.vue';
@@ -50,6 +51,7 @@ export const router = createRouter({
     // ?about=… — тема, например «Вопрос по заказу #12»
     { path: '/support', component: SupportView, meta: { back: true } },
     { path: '/my-orders', component: MyOrdersView },
+    { path: '/learn', component: LearnView },
     // ?from=<id> — «Исправить и отправить снова»: форма заполнена данными отклонённого заказа.
     { path: '/my-orders/new', component: CreateOrderView, meta: { back: true } },
     // Правка своего заказа — та же форма, что и создание.

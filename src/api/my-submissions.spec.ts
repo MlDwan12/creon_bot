@@ -8,6 +8,9 @@ const order = (id: number): Order => ({
   description: 'd',
   priceKopecks: 150_000,
   videosNeeded: null,
+  minDurationSec: null,
+  maxDurationSec: null,
+  orientation: null,
   referenceUrl: null,
   category: 'OTHER',
   deadline: null,
@@ -41,11 +44,28 @@ const submission = (
   createdAt: new Date(id * 1000),
   submittedAt: null,
   decidedAt: null,
+  slotReminderSentAt: null,
   order: order(orderId),
   ...extra,
 });
 
 describe('toMySubmissions', () => {
+  it('срок сдачи — конец слота, но не позже срока заказа; у сданных его нет', () => {
+    const created = new Date('2026-10-01T00:00:00Z');
+    const early = new Date('2026-10-03T00:00:00Z');
+    const [slot, deadline, sent] = toMySubmissions([
+      submission(1, 1, 'IN_PROGRESS', { createdAt: created }),
+      {
+        ...submission(2, 2, 'IN_PROGRESS', { createdAt: created }),
+        order: { ...order(2), deadline: early },
+      },
+      submission(3, 3, 'SUBMITTED', { createdAt: created }),
+    ]);
+    expect(slot.dueAt).toEqual(new Date('2026-10-06T00:00:00Z'));
+    expect(deadline.dueAt).toEqual(early);
+    expect(sent.dueAt).toBeNull();
+  });
+
   // от новых к старым, как listByCreator
   const rows = [
     submission(3, 10, 'IN_PROGRESS'),

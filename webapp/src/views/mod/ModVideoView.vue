@@ -3,7 +3,7 @@ import { ref, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { ApiError, fetchModQueue, fetchModVideo, type ModVideo, moderateVideo } from '../../api';
 import ReasonPicker from '../../components/ReasonPicker.vue';
-import { timeAgo } from '../../format';
+import { formatVideoFormat, timeAgo } from '../../format';
 import { safeUrl } from '../../telegram';
 
 const props = defineProps<{ id: string }>();
@@ -11,6 +11,8 @@ const router = useRouter();
 
 const PRESETS = [
   'Не соответствует заданию',
+  'Не та длительность ролика',
+  'Не та ориентация (вертикаль / горизонталь)',
   'Ссылка не открывается — проверьте доступ',
   'Низкое качество видео',
   'Водяной знак или чужой логотип',
@@ -81,6 +83,7 @@ watch(() => props.id, load, { immediate: true });
       <section class="block">
         <h2 class="section-title">Сверьте с заданием</h2>
         <div class="text">{{ video.order.description }}</div>
+        <p v-if="formatVideoFormat(video.order)" class="text">Ролик: {{ formatVideoFormat(video.order) }}</p>
       </section>
 
       <template v-if="video.status === 'SUBMITTED'">

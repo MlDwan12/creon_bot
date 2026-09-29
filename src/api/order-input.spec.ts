@@ -27,6 +27,37 @@ describe('parseOrderInput', () => {
     expect(Math.round(days)).toBe(7);
   });
 
+  it('требования к ролику: пусто — любые, иначе секунды и ориентация', () => {
+    expect(parseOrderInput(valid)).toMatchObject({
+      minDurationSec: null,
+      maxDurationSec: null,
+      orientation: null,
+    });
+    expect(
+      parseOrderInput({
+        ...valid,
+        minDurationSec: 15,
+        maxDurationSec: 60,
+        orientation: 'VERTICAL',
+      }),
+    ).toMatchObject({
+      minDurationSec: 15,
+      maxDurationSec: 60,
+      orientation: 'VERTICAL',
+    });
+  });
+
+  it.each([
+    ['минимум больше максимума', { minDurationSec: 60, maxDurationSec: 15 }],
+    ['дробные секунды', { maxDurationSec: 1.5 }],
+    ['больше 10 минут', { maxDurationSec: 601 }],
+    ['неизвестная ориентация', { orientation: 'SQUARE' }],
+  ])('требования к ролику — отклоняет: %s', (_name, extra) => {
+    expect(() => parseOrderInput({ ...valid, ...extra })).toThrow(
+      BadRequestException,
+    );
+  });
+
   it('цена — целые рубли, в базу копейками; пустая строка — договорная', () => {
     expect(parseOrderInput({ ...valid, price: 3000 }).priceKopecks).toBe(
       300_000,

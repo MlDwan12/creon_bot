@@ -8,6 +8,7 @@ import {
   OrderStatus,
   Prisma,
   SubmissionStatus,
+  VideoOrientation,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { DAY_MS, extendedDeadline } from './deadline';
@@ -20,6 +21,9 @@ const PUBLIC_ORDER_FIELDS = {
   referenceUrl: true,
   priceKopecks: true,
   videosNeeded: true,
+  minDurationSec: true,
+  maxDurationSec: true,
+  orientation: true,
   category: true,
   deadline: true,
   createdAt: true,
@@ -66,6 +70,9 @@ export class OrdersService {
       referenceUrl?: string;
       priceKopecks?: number;
       videosNeeded?: number;
+      minDurationSec?: number | null;
+      maxDurationSec?: number | null;
+      orientation?: VideoOrientation | null;
       category: OrderCategory;
       deadline?: Date;
     },
@@ -88,6 +95,9 @@ export class OrdersService {
         referenceUrl: data.referenceUrl,
         priceKopecks: data.priceKopecks,
         videosNeeded: data.videosNeeded,
+        minDurationSec: data.minDurationSec,
+        maxDurationSec: data.maxDurationSec,
+        orientation: data.orientation,
         category: data.category,
         deadline: data.deadline,
       },
@@ -367,6 +377,9 @@ export class OrdersService {
       priceKopecks: number | null;
       /** undefined — не менять, null — без лимита. */
       videosNeeded?: number | null;
+      minDurationSec?: number | null;
+      maxDurationSec?: number | null;
+      orientation?: VideoOrientation | null;
       category: OrderCategory;
       deadline?: Date | null;
     },

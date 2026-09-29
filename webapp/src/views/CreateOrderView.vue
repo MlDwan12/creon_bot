@@ -8,6 +8,12 @@ const MAX_TITLE = 100;
 const MAX_DESCRIPTION = 1000;
 const MAX_PRICE = 1_000_000;
 const MAX_VIDEOS = 100;
+const MAX_DURATION = 600;
+const ORIENTATIONS: { value: NewOrderInput['orientation']; label: string }[] = [
+  { value: 'VERTICAL', label: 'Вертикальное' },
+  { value: 'HORIZONTAL', label: 'Горизонтальное' },
+  { value: null, label: 'Любое' },
+];
 // С `id` (/my-orders/:id/edit) — правка своего заказа, без — новый.
 const props = defineProps<{ id?: string }>();
 
@@ -28,10 +34,15 @@ const router = useRouter();
 // price: '' — поле пустое (цена договорная); v-model.number отдаёт '' для пустого ввода.
 // videosNeeded: '' — без лимита.
 const form = reactive<
-  Omit<NewOrderInput, 'referenceUrl' | 'price' | 'videosNeeded' | 'deadlineDays'> & {
+  Omit<
+    NewOrderInput,
+    'referenceUrl' | 'price' | 'videosNeeded' | 'minDurationSec' | 'maxDurationSec' | 'deadlineDays'
+  > & {
     referenceUrl: string;
     price: number | '';
     videosNeeded: number | '';
+    minDurationSec: number | '';
+    maxDurationSec: number | '';
     deadlineDays: number | null | undefined;
   }
 >({
@@ -40,6 +51,10 @@ const form = reactive<
   referenceUrl: '',
   price: '',
   videosNeeded: '',
+  // Короткие вертикальные ролики — самый частый заказ; рекламодатель может поменять.
+  minDurationSec: 15,
+  maxDurationSec: 60,
+  orientation: 'VERTICAL',
   category: 'OTHER',
   deadlineDays: props.id ? undefined : 7,
 });
@@ -68,6 +83,9 @@ async function prefill() {
   form.referenceUrl = source.referenceUrl ?? '';
   form.price = source.price ?? '';
   form.videosNeeded = source.videosNeeded ?? '';
+  form.minDurationSec = source.minDurationSec ?? '';
+  form.maxDurationSec = source.maxDurationSec ?? '';
+  form.orientation = source.orientation;
   form.category = source.category;
 }
 
@@ -78,9 +96,12 @@ async function submit() {
     const price = form.price === '' ? null : form.price;
     const videosNeeded = form.videosNeeded === '' ? null : form.videosNeeded;
     const referenceUrl = form.referenceUrl.trim() || null;
-    if (props.id) await updateOrder(Number(props.id), { ...form, referenceUrl, price, videosNeeded });
+    const minDurationSec = form.minDurationSec === '' ? null : form.minDurationSec;
+    const maxDurationSec = form.maxDurationSec === '' ? null : form.maxDurationSec;
+    const input = { ...form, referenceUrl, price, videosNeeded, minDurationSec, maxDurationSec };
+    if (props.id) await updateOrder(Number(props.id), input);
     // при создании «как было» не бывает — срок всегда выбран
-    else await createOrder({ ...form, referenceUrl, price, videosNeeded, deadlineDays: form.deadlineDays ?? null });
+    else await createOrder({ ...input, deadlineDays: form.deadlineDays ?? null });
     await router.replace('/my-orders');
   } catch (err) {
     // Тексты ошибок проверки пишет бэкенд.
@@ -115,7 +136,7 @@ void prefill();
           rows="5"
           :maxlength="MAX_DESCRIPTION"
           required
-          placeholder="Формат, длительность, что обязательно показать или сказать"
+          placeholder="Что обязательно показать или сказать, стиль, чего избегать"
         />
       </div>
 
@@ -129,6 +150,51 @@ void prefill();
           maxlength="500"
           placeholder="Ссылка на пример ролика или файлы — по желанию"
         />
+      </div>
+
+      <div class="field">
+        <span class="section-title">Требования к ролику</span>
+        <div class="group">
+          <div class="row column">
+            <span id="orientation-label">Ориентация</span>
+            <div class="segmented" role="radiogroup" aria-labelledby="orientation-label">
+              <button
+                v-for="o in ORIENTATIONS"
+                :key="o.label"
+                type="button"
+                role="radio"
+                :aria-checked="form.orientation === o.value"
+                @click="form.orientation = o.value"
+              >
+                {{ o.label }}
+              </button>
+            </div>
+          </div>
+          <label class="row bordered">
+            Длительность от, сек
+            <input
+              v-model.number="form.minDurationSec"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              :max="MAX_DURATION"
+              step="1"
+              placeholder="любая"
+            />
+          </label>
+          <label class="row bordered">
+            до, сек
+            <input
+              v-model.number="form.maxDurationSec"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              :max="MAX_DURATION"
+              step="1"
+              placeholder="любая"
+            />
+          </label>
+        </div>
       </div>
 
       <fieldset class="field">
@@ -321,9 +387,14 @@ legend {
   padding: 12px 16px;
   border-top: 1px solid var(--separator);
 }
+.row.column:first-child {
+  border-top: none;
+}
 .segmented {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  /* Сколько вариантов, столько колонок: 3 ориентации, 5–6 сроков. */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   padding: 2px;
   border-radius: 9px;
   background: var(--fill);

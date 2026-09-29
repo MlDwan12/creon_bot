@@ -33,8 +33,15 @@ export function categoryLabel(code: OrderCategory): string {
   return ORDER_CATEGORIES.find((c) => c.code === code)?.label ?? code;
 }
 
+/** Требования к ролику в заказе; null — любая длительность или ориентация. */
+export interface VideoFormat {
+  minDurationSec: number | null;
+  maxDurationSec: number | null;
+  orientation: 'VERTICAL' | 'HORIZONTAL' | null;
+}
+
 /** Ответ `GET /api/orders` — см. OrdersController и OrdersService на бэкенде. */
-export interface OrderSummary {
+export interface OrderSummary extends VideoFormat {
   id: number;
   title: string;
   description: string;
@@ -65,7 +72,9 @@ export type SubmissionStatus =
   | 'MODERATOR_APPROVED'
   | 'MODERATOR_REJECTED'
   | 'ADVERTISER_APPROVED'
-  | 'ADVERTISER_REJECTED';
+  | 'ADVERTISER_REJECTED'
+  /** Видео не прислали за 5 дней после отклика. */
+  | 'SLOT_EXPIRED';
 
 /** EXPIRED — закрыт по сроку (рекламодатель может продлить), CLOSED — закрыт им вручную. */
 export type OrderStatus = 'PENDING_MODERATION' | 'OPEN' | 'REJECTED' | 'CLOSED' | 'EXPIRED';
@@ -81,6 +90,8 @@ export interface MySubmission {
   videoUrl: string | null;
   comment: string | null;
   createdAt: string;
+  /** До когда прислать видео (только «в работе»): конец слота или срок заказа, что раньше. */
+  dueAt: string | null;
   order: {
     id: number;
     title: string;
@@ -91,7 +102,7 @@ export interface MySubmission {
 }
 
 /** Ответ `GET /api/my-orders` — см. src/api/my-orders.controller.ts. */
-export interface MyOrder {
+export interface MyOrder extends VideoFormat {
   id: number;
   title: string;
   description: string;
@@ -110,7 +121,7 @@ export interface MyOrder {
   createdAt: string;
 }
 
-export interface NewOrderInput {
+export interface NewOrderInput extends VideoFormat {
   title: string;
   description: string;
   /** Ссылка на референс или материалы; null — без ссылки. */
@@ -190,7 +201,7 @@ export interface ModOrderRow {
   createdAt: string;
 }
 
-export interface ModOrder {
+export interface ModOrder extends VideoFormat {
   id: number;
   title: string;
   description: string;
@@ -216,7 +227,7 @@ export interface ModVideo {
   creator: string;
   creatorId: number;
   attempt: number;
-  order: { id: number; title: string; description: string };
+  order: { id: number; title: string; description: string } & VideoFormat;
 }
 
 /** Ссылки креатора на соцсети; null — не указана. */
@@ -224,6 +235,8 @@ export interface ProfileLinks {
   tiktokUrl: string | null;
   youtubeUrl: string | null;
   vkUrl: string | null;
+  instagramUrl: string | null;
+  xUrl: string | null;
 }
 
 /** Профиль креатора — см. src/api/profiles.service.ts. */

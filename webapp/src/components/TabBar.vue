@@ -55,6 +55,12 @@ const moderator = computed(() => route.path.startsWith('/mod'));
         </svg>
         Мои заказы
       </RouterLink>
+      <RouterLink to="/learn" class="tab" active-class="active">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z" />
+        </svg>
+        Обучение
+      </RouterLink>
     </template>
   </nav>
 </template>
@@ -66,7 +72,9 @@ const moderator = computed(() => route.path.startsWith('/mod'));
   right: 0;
   bottom: 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* 3 вкладки у модератора, 4 у остальных. */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   padding: 6px 0 var(--safe-bottom);
   background: var(--surface);
   border-top: 1px solid var(--separator);
