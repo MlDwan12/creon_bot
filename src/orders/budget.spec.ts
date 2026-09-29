@@ -1,4 +1,4 @@
-import { budgetState, payoutFor, payoutPool } from './budget';
+import { budgetSpent, budgetState, payoutFor, payoutPool } from './budget';
 
 describe('бюджет заказа', () => {
   const order = {
@@ -23,6 +23,13 @@ describe('бюджет заказа', () => {
     expect(budgetState(order, 4_000_000 - 2_500).exhausted).toBe(false);
     expect(budgetState(order, 4_000_000 - 2_499).exhausted).toBe(true);
     expect(budgetState(order, 5_000_000).free).toBe(0);
+  });
+
+  it('расход бюджета — выплаты вместе с комиссией, обратно к фонду', () => {
+    expect(budgetSpent(order, 4_000_000)).toBe(5_000_000);
+    expect(budgetSpent(order, 8_000)).toBe(10_000);
+    expect(budgetSpent(order, 1)).toBe(2); // вверх
+    expect(budgetSpent({ ...order, feePercent: 0 }, 700)).toBe(700);
   });
 
   it('без ставки (не одобрен) — брать ролики нельзя', () => {

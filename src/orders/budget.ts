@@ -22,6 +22,20 @@ export function payoutPool(order: { budgetMinor: number; feePercent: number }) {
   return Math.floor((order.budgetMinor * (100 - order.feePercent)) / 100);
 }
 
+/**
+ * Сколько бюджета рекламодателя ушло на выплаты креаторам вместе с комиссией площадки —
+ * обратное к payoutPool. Вверх, чтобы в отчёте не занизить расход; не больше бюджета.
+ */
+export function budgetSpent(
+  order: { budgetMinor: number; feePercent: number },
+  payoutsMinor: number,
+) {
+  return Math.min(
+    order.budgetMinor,
+    Math.ceil((payoutsMinor * 100) / (100 - order.feePercent)),
+  );
+}
+
 /** Выплата за просмотры по ставке за 1000. */
 export function payoutFor(views: number, cpmMinor: number) {
   return Math.floor((views * cpmMinor) / 1000);
