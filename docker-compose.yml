@@ -10,6 +10,29 @@ services:
       - '5432:5432'
     volumes:
       - db_data:/var/lib/postgresql/data
+    # api ждёт готовности базы: иначе миграции при старте падают на ещё не поднявшемся Postgres
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U creon -d creon_bot']
+      interval: 2s
+      retries: 15
+
+  # Весь бот в одном контейнере, как в проде: API + мини-апп (Nest раздаёт собранный webapp).
+  # По умолчанию не поднимается — только с профилем: docker compose --profile app up --build
+  api:
+    profiles: ['app']
+    build: .
+    env_file: .env
+    environment:
+      # внутри сети compose база — это сервис db, а не localhost из .env
+      DATABASE_URL: postgresql://creon:creon@db:5432/creon_bot
+    # DNS хоста (его подменяет VPN) Docker Desktop не видит — без этого api.telegram.org
+    # не резолвится: не работают бот, аватарки и /api/me
+    dns: [1.1.1.1, 8.8.8.8]
+    ports:
+      - '3000:3000'
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   db_data:

@@ -38,7 +38,14 @@ export class SupportService {
   async url(): Promise<string | null> {
     if (!this.chatId) return null;
     this.botUsername ??= this.bot.telegram.getMe().then((me) => me.username);
-    return `https://t.me/${await this.botUsername}`;
+    try {
+      return `https://t.me/${await this.botUsername}`;
+    } catch {
+      // Telegram недоступен: без ссылки, но /api/me не должен падать (иначе модератор
+      // не попадёт в своё окно). Кеш сбрасываем, чтобы следующий запрос попробовал снова.
+      this.botUsername = undefined;
+      return null;
+    }
   }
 
   isSupportChat(chatId: number) {
