@@ -110,6 +110,15 @@ const remove = () =>
       <button v-if="order.status === 'OPEN'" type="button" :disabled="busy" @click="close">
         Закрыть набор
       </button>
+      <!-- та же форма, что «Исправить и отправить снова»: поля подставятся из этого заказа -->
+      <button
+        v-if="order.status !== 'REJECTED' && order.status !== 'PENDING_MODERATION'"
+        type="button"
+        :disabled="busy"
+        @click="router.push(`/my-orders/new?from=${order.id}`)"
+      >
+        Создать похожий
+      </button>
       <button v-if="order.deletable" type="button" class="danger" :disabled="busy" @click="remove">Удалить</button>
     </div>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -209,11 +218,13 @@ const remove = () =>
 }
 .buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 .buttons button {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 40px;
+  padding: 0 12px;
   border: none;
   border-radius: 10px;
   background: var(--fill);

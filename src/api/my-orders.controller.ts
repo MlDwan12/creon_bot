@@ -45,6 +45,7 @@ export class MyOrdersController {
       id: o.id,
       title: o.title,
       description: o.description,
+      referenceUrl: o.referenceUrl,
       price: kopecksToRubles(o.priceKopecks),
       category: o.category,
       deadline: o.deadline,

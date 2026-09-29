@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { ApiError, categoryLabel, fetchModOrder, fetchModQueue, type ModOrder, moderateOrder } from '../../api';
 import ReasonPicker from '../../components/ReasonPicker.vue';
 import { formatDate, formatPrice, waitingFor } from '../../format';
+import { safeUrl } from '../../telegram';
 
 const props = defineProps<{ id: string }>();
 const router = useRouter();
@@ -87,6 +88,11 @@ watch(() => props.id, load, { immediate: true });
       </section>
 
       <div class="text">{{ order.description }}</div>
+      <p v-if="order.referenceUrl" class="reference">
+        Референс:
+        <a v-if="safeUrl(order.referenceUrl)" :href="safeUrl(order.referenceUrl)" target="_blank" rel="noopener noreferrer">{{ order.referenceUrl }}</a>
+        <template v-else>{{ order.referenceUrl }}</template>
+      </p>
 
       <div v-if="order.contacts.length" class="contacts" role="alert">
         <strong>⚠ Похоже на контакты для связи в обход площадки</strong>
@@ -209,5 +215,13 @@ h1 {
 .approve {
   background: #1e7b34;
   color: #fff;
+}
+.reference {
+  margin: 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.reference a {
+  color: var(--link);
 }
 </style>

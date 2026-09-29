@@ -78,7 +78,8 @@ export class ModerationController {
         // ждёт с момента отправки на проверку: после правки — заново
         queuedAt: o.moderationRequestedAt,
         // похоже на контакты в обход площадки — модератору пометка в списке
-        hasContacts: findContacts(o.title, o.description).length > 0,
+        hasContacts:
+          findContacts(o.title, o.description, o.referenceUrl).length > 0,
       })),
       videos: videos.map((s) => ({
         id: s.id,
@@ -142,6 +143,7 @@ export class ModerationController {
       id: o.id,
       title: o.title,
       description: o.description,
+      referenceUrl: o.referenceUrl,
       price: kopecksToRubles(o.priceKopecks),
       category: o.category,
       deadline: o.deadline,
@@ -149,7 +151,7 @@ export class ModerationController {
       moderatorComment: o.moderatorComment,
       advertiser: creatorLabel(o.advertiser),
       createdAt: o.createdAt,
-      contacts: findContacts(o.title, o.description),
+      contacts: findContacts(o.title, o.description, o.referenceUrl),
       // решение принимается по этой версии — см. OrdersService.moderatorApprove
       version: o.moderationRequestedAt,
     };

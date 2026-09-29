@@ -28,7 +28,8 @@ const router = useRouter();
 // price: '' — поле пустое (цена договорная); v-model.number отдаёт '' для пустого ввода.
 // videosNeeded: '' — без лимита.
 const form = reactive<
-  Omit<NewOrderInput, 'price' | 'videosNeeded' | 'deadlineDays'> & {
+  Omit<NewOrderInput, 'referenceUrl' | 'price' | 'videosNeeded' | 'deadlineDays'> & {
+    referenceUrl: string;
     price: number | '';
     videosNeeded: number | '';
     deadlineDays: number | null | undefined;
@@ -36,6 +37,7 @@ const form = reactive<
 >({
   title: '',
   description: '',
+  referenceUrl: '',
   price: '',
   videosNeeded: '',
   category: 'OTHER',
@@ -63,6 +65,7 @@ async function prefill() {
   if (props.id) editing.value = source;
   form.title = source.title;
   form.description = source.description;
+  form.referenceUrl = source.referenceUrl ?? '';
   form.price = source.price ?? '';
   form.videosNeeded = source.videosNeeded ?? '';
   form.category = source.category;
@@ -74,9 +77,10 @@ async function submit() {
   try {
     const price = form.price === '' ? null : form.price;
     const videosNeeded = form.videosNeeded === '' ? null : form.videosNeeded;
-    if (props.id) await updateOrder(Number(props.id), { ...form, price, videosNeeded });
+    const referenceUrl = form.referenceUrl.trim() || null;
+    if (props.id) await updateOrder(Number(props.id), { ...form, referenceUrl, price, videosNeeded });
     // при создании «как было» не бывает — срок всегда выбран
-    else await createOrder({ ...form, price, videosNeeded, deadlineDays: form.deadlineDays ?? null });
+    else await createOrder({ ...form, referenceUrl, price, videosNeeded, deadlineDays: form.deadlineDays ?? null });
     await router.replace('/my-orders');
   } catch (err) {
     // Тексты ошибок проверки пишет бэкенд.
@@ -112,6 +116,18 @@ void prefill();
           :maxlength="MAX_DESCRIPTION"
           required
           placeholder="Формат, длительность, что обязательно показать или сказать"
+        />
+      </div>
+
+      <div class="field">
+        <label for="reference" class="section-title">Референс или материалы</label>
+        <input
+          id="reference"
+          v-model="form.referenceUrl"
+          type="url"
+          inputmode="url"
+          maxlength="500"
+          placeholder="Ссылка на пример ролика или файлы — по желанию"
         />
       </div>
 

@@ -44,6 +44,17 @@ describe('parseOrderInput', () => {
     ).toBeUndefined();
   });
 
+  it('референс: ссылка без пробелов по краям, пусто — без ссылки', () => {
+    expect(
+      parseOrderInput({ ...valid, referenceUrl: ' https://disk.yandex.ru/x ' })
+        .referenceUrl,
+    ).toBe('https://disk.yandex.ru/x');
+    expect(
+      parseOrderInput({ ...valid, referenceUrl: '' }).referenceUrl,
+    ).toBeUndefined();
+    expect(parseOrderEdit({ ...valid }).referenceUrl).toBeNull();
+  });
+
   it('без срока — deadline не задан', () => {
     expect(
       parseOrderInput({ ...valid, deadlineDays: null }).deadline,
@@ -67,6 +78,8 @@ describe('parseOrderInput', () => {
     ['дробное число видео', { videosNeeded: 1.5 }],
     ['число видео строкой', { videosNeeded: '5' }],
     ['видео больше максимума', { videosNeeded: 101 }],
+    ['референс не ссылка', { referenceUrl: 'мой диск' }],
+    ['референс — телеграм', { referenceUrl: 'https://t.me/brand' }],
   ])('отклоняет: %s', (_name, patch) => {
     expect(() => parseOrderInput({ ...valid, ...patch })).toThrow(
       BadRequestException,
