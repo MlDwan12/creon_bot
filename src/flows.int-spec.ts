@@ -44,11 +44,23 @@ function user() {
   });
 }
 
-async function pendingOrder(advertiserId: number, deadline?: Date) {
+/** Бюджет 50 000 ₽ при комиссии 20% — фонд креаторам 40 000 ₽. */
+const BUDGET = 5_000_000;
+/** Ставка 100 ₽ за 1000 просмотров: ролик с 1000 просмотров — 100 ₽. */
+const CPM = 10_000;
+const VIEWS = 1000;
+
+async function pendingOrder(
+  advertiserId: number,
+  deadline?: Date,
+  budgetMinor = BUDGET,
+) {
   return orders.create(advertiserId, {
     title: 'Заказ',
     description: 'Описание',
     category: 'OTHER',
+    budgetMinor,
+    minViews: 250,
     deadline,
   });
 }
@@ -57,8 +69,8 @@ async function pendingOrder(advertiserId: number, deadline?: Date) {
 const versionOf = async (orderId: number) =>
   (await prisma.order.findUniqueOrThrow({ where: { id: orderId } }))
     .moderationRequestedAt;
-const approveOrder = async (orderId: number, mod: bigint) =>
-  orders.moderatorApprove(orderId, mod, await versionOf(orderId));
+const approveOrder = async (orderId: number, mod: bigint, cpm = CPM) =>
+  orders.moderatorApprove(orderId, mod, await versionOf(orderId), cpm);
 const rejectOrder = async (orderId: number, mod: bigint, comment: string) =>
   orders.moderatorReject(orderId, mod, comment, await versionOf(orderId));
 
@@ -110,7 +122,12 @@ describe('отклик', () => {
       'в работе',
     );
 
-    await submissions.attachVideo(first.id, creator.id, 'https://v.example/1');
+    await submissions.attachVideo(
+      first.id,
+      creator.id,
+      'https://v.example/1',
+      VIEWS,
+    );
     await expect(
       submissions.claim(order.id, creator.id),
     ).resolves.toBeDefined();
@@ -155,7 +172,7 @@ describe('слот на видео', () => {
     expect((await submissions.expireSlot(old.id))?.status).toBe('SLOT_EXPIRED');
     expect(await submissions.expireSlot(old.id)).toBeNull();
     await expect(
-      submissions.attachVideo(old.id, creator.id, 'https://youtu.be/x'),
+      submissions.attachVideo(old.id, creator.id, 'https://youtu.be/x', VIEWS),
     ).rejects.toThrow();
     await expect(
       submissions.claim(old.orderId, creator.id),
@@ -178,7 +195,12 @@ describe('срок заказа', () => {
     expect(await orders.listOverdue()).toEqual([]);
 
     await expect(
-      submissions.attachVideo(inProgress.id, creator.id, 'https://v.example/1'),
+      submissions.attachVideo(
+        inProgress.id,
+        creator.id,
+        'https://v.example/1',
+        VIEWS,
+      ),
     ).rejects.toThrow('Срок');
   });
 
@@ -208,8 +230,13 @@ describe('срок заказа', () => {
       'Продлить',
     );
     await expect(
-      submissions.attachVideo(inProgress.id, creator.id, 'https://v.example/1'),
-    ).resolves.toMatchObject({ status: 'SUBMITTED' });
+      submissions.attachVideo(
+        inProgress.id,
+        creator.id,
+        'https://v.example/1',
+        VIEWS,
+      ),
+    ).resolves.toMatchObject({ submission: { status: 'SUBMITTED' } });
   });
 
   it('продлить может только рекламодатель заказа', async () => {
@@ -296,7 +323,8 @@ describe('правка заказа', () => {
   const edit = {
     title: 'Новое название',
     description: 'Новое описание',
-    priceKopecks: 50_000,
+    budgetMinor: BUDGET,
+    minViews: 250,
     category: 'FOOD' as const,
   };
 
@@ -354,7 +382,8 @@ describe('правка заказа — защита', () => {
   const edit = {
     title: 'Новое',
     description: 'Новое описание',
-    priceKopecks: null,
+    budgetMinor: BUDGET,
+    minViews: 250,
     category: 'OTHER' as const,
   };
 
@@ -364,25 +393,28 @@ describe('правка заказа — защита', () => {
     const seen = await versionOf(order.id);
     await new Promise((r) => setTimeout(r, 5)); // правка — позже, чем модератор открыл заказ
     await orders.update(order.id, adv.id, { ...edit, title: 'Пишите @ivan' });
-    await expect(orders.moderatorApprove(order.id, 1n, seen)).rejects.toThrow(
-      'изменён',
-    );
+    await expect(
+      orders.moderatorApprove(order.id, 1n, seen, CPM),
+    ).rejects.toThrow('изменён');
     expect(await statusOf(order.id)).toBe('PENDING_MODERATION');
   });
 
-  it('цену нельзя менять, пока есть сданные видео', async () => {
+  it('бюджет нельзя уменьшить ниже потраченного и зарезервированного', async () => {
     const [adv, creator] = [await user(), await user()];
     const order = await openOrder(adv.id);
     const s = await submissions.claim(order.id, creator.id);
-    await submissions.attachVideo(s.id, creator.id, 'https://example.com/v');
+    // 100 000 просмотров × 100 ₽ за 1000 = 10 000 ₽ в резерве
+    await submissions.attachVideo(
+      s.id,
+      creator.id,
+      'https://example.com/v',
+      100_000,
+    );
+    // бюджет 12 000 ₽ → фонд 9 600 ₽ < 10 000 ₽
     await expect(
-      orders.update(order.id, adv.id, { ...edit, priceKopecks: 100 }),
-    ).rejects.toThrow('Цену нельзя менять');
-    // без смены цены — можно
-    await orders.update(order.id, adv.id, {
-      ...edit,
-      priceKopecks: order.priceKopecks,
-    });
+      orders.update(order.id, adv.id, { ...edit, budgetMinor: 1_200_000 }),
+    ).rejects.toThrow('нельзя сделать меньше');
+    await orders.update(order.id, adv.id, { ...edit, budgetMinor: 1_300_000 });
   });
 
   it('срок «как было» у заказа на проверке не съедается временем до правки', async () => {
@@ -410,7 +442,7 @@ describe('правка заказа — защита', () => {
     const rejected = await rejectOrder(order.id, 1n, 'причина');
     expect(rejected.submissions.map((x) => x.creatorId)).toEqual([creator.id]);
     await expect(
-      submissions.attachVideo(s.id, creator.id, 'https://example.com/v'),
+      submissions.attachVideo(s.id, creator.id, 'https://example.com/v', VIEWS),
     ).rejects.toThrow('снят модератором');
   });
 });
@@ -430,109 +462,193 @@ describe('гонки и снятые заказы', () => {
     const [adv, creator] = [await user(), await user()];
     const order = await openOrder(adv.id);
     const s = await submissions.claim(order.id, creator.id);
-    await submissions.attachVideo(s.id, creator.id, 'https://example.com/v');
+    await submissions.attachVideo(
+      s.id,
+      creator.id,
+      'https://example.com/v',
+      VIEWS,
+    );
     await orders.update(order.id, adv.id, {
       title: 'Новое',
       description: 'Описание',
-      priceKopecks: order.priceKopecks,
+      budgetMinor: BUDGET,
+      minViews: 250,
       category: 'OTHER',
     });
     await rejectOrder(order.id, 1n, 'контакты в названии');
     const after = await prisma.submission.findUniqueOrThrow({
       where: { id: s.id },
     });
-    expect(after.status).toBe('MODERATOR_REJECTED');
-    await expect(submissions.moderatorApprove(s.id, 1n)).rejects.toThrow();
+    expect(after).toMatchObject({
+      status: 'MODERATOR_REJECTED',
+      payoutMinor: 0,
+    });
+    await expect(
+      submissions.moderatorApprove(s.id, 1n, VIEWS),
+    ).rejects.toThrow();
   });
 });
 
-describe('сколько видео нужно', () => {
-  const feedback = { rating: 5, review: null, portfolioAllowed: false };
-
-  async function orderFor(advertiserId: number, videosNeeded: number) {
-    const order = await orders.create(advertiserId, {
-      title: 'Заказ',
-      description: 'Описание',
-      category: 'OTHER',
-      videosNeeded,
-    });
+describe('бюджет и просмотры', () => {
+  /** Заказ с бюджетом `rubles` при ставке 100 ₽ за 1000 просмотров. */
+  async function orderWith(advertiserId: number, rubles: number) {
+    const order = await pendingOrder(advertiserId, undefined, rubles * 100);
     return approveOrder(order.id, 1n);
   }
-
-  /** Видео креатора, одобренное модератором и ждущее рекламодателя. */
-  async function approvedVideo(orderId: number, creatorId: number) {
+  const free = async (orderId: number) =>
+    (
+      await submissions.orderBudget(
+        await prisma.order.findUniqueOrThrow({ where: { id: orderId } }),
+      )
+    ).free;
+  const sent = async (orderId: number, creatorId: number, views: number) => {
     const s = await submissions.claim(orderId, creatorId);
-    await submissions.attachVideo(s.id, creatorId, 'https://example.com/v');
-    await submissions.moderatorApprove(s.id, 1n);
-    return s;
-  }
+    return (
+      await submissions.attachVideo(
+        s.id,
+        creatorId,
+        'https://v.example/x',
+        views,
+      )
+    ).submission;
+  };
 
-  it('набрали — заказ закрыт, сданные видео сняты, начатое не отправить', async () => {
-    const [adv, a, b, c, d] = await Promise.all(
-      [1, 2, 3, 4, 5].map(() => user()),
+  it('ставку, при которой фонда не хватит на порог, модератор не поставит', async () => {
+    const adv = await user();
+    // бюджет 1 000 ₽ → фонд 800 ₽; порог 250 просмотров × 4 000 ₽ = 1 000 ₽
+    const order = await pendingOrder(adv.id, undefined, 100_000);
+    await expect(approveOrder(order.id, 1n, 400_000)).rejects.toThrow(
+      'уменьшите ставку',
     );
-    const order = await orderFor(adv.id, 2);
-    const first = await approvedVideo(order.id, a.id);
-    const second = await approvedVideo(order.id, b.id);
-    const waiting = await approvedVideo(order.id, c.id);
-    const started = await submissions.claim(order.id, d.id);
-
-    const r1 = await submissions.advertiserApprove(first.id, adv.id, feedback);
-    expect(r1.filled).toBeNull();
-    expect(await statusOf(order.id)).toBe('OPEN');
-
-    const r2 = await submissions.advertiserApprove(second.id, adv.id, feedback);
-    expect(await statusOf(order.id)).toBe('CLOSED');
-    expect(r2.filled!.submissions.map((s) => s.creatorId).sort()).toEqual(
-      [c.id, d.id].sort(),
-    );
-    const after = await prisma.submission.findUniqueOrThrow({
-      where: { id: waiting.id },
-    });
-    expect(after.status).toBe('MODERATOR_REJECTED');
-    await expect(
-      submissions.attachVideo(started.id, d.id, 'https://example.com/v'),
-    ).rejects.toThrow('набрали');
   });
 
-  it('две приёмки одновременно на последнее место — проходит одна', async () => {
+  it('меньше порога — не сдать и не одобрить', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await expect(
+      submissions.attachVideo(s.id, creator.id, 'https://v.example/x', 249),
+    ).rejects.toThrow('наберёт 250');
+    await submissions.attachVideo(s.id, creator.id, 'https://v.example/x', 300);
+    await expect(submissions.moderatorApprove(s.id, 1n, 200)).rejects.toThrow(
+      'Меньше порога',
+    );
+  });
+
+  it('резерв при сдаче, начисление по просмотрам модератора, отказ возвращает резерв', async () => {
     const [adv, a, b] = [await user(), await user(), await user()];
-    const order = await orderFor(adv.id, 1);
-    const [s1, s2] = [
-      await approvedVideo(order.id, a.id),
-      await approvedVideo(order.id, b.id),
-    ];
-    const results = await Promise.allSettled([
-      submissions.advertiserApprove(s1.id, adv.id, feedback),
-      submissions.advertiserApprove(s2.id, adv.id, feedback),
-    ]);
-    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
-    expect(
-      await prisma.submission.count({
-        where: { orderId: order.id, status: 'ADVERTISER_APPROVED' },
-      }),
-    ).toBe(1);
+    const order = await orderWith(adv.id, 10_000); // фонд 8 000 ₽
+    const s1 = await sent(order.id, a.id, 2000); // резерв 200 ₽
+    expect(s1.payoutMinor).toBe(20_000);
+    expect(await free(order.id)).toBe(780_000);
+
+    // модератор насчитал меньше — начисляется по его цифре
+    const { submission } = await submissions.moderatorApprove(s1.id, 1n, 1500);
+    expect(submission).toMatchObject({ payoutMinor: 15_000, views: 1500 });
+    expect(await free(order.id)).toBe(785_000);
+
+    const s2 = await sent(order.id, b.id, 1000);
+    await submissions.moderatorReject(s2.id, 1n, 'чужой ролик');
+    expect(await free(order.id)).toBe(785_000);
   });
 
-  it('при правке — не меньше уже принятых; пусто — без лимита', async () => {
-    const [adv, a] = [await user(), await user()];
-    const order = await orderFor(adv.id, 3);
-    const s = await approvedVideo(order.id, a.id);
-    await submissions.advertiserApprove(s.id, adv.id, feedback);
-    const edit = {
-      title: 'Заказ',
-      description: 'Описание',
-      priceKopecks: null,
-      category: 'OTHER' as const,
-    };
+  it('фонд не уходит в минус: резерв урезается остатком, потом заказ закрывается', async () => {
+    const [adv, a, b, c] = [
+      await user(),
+      await user(),
+      await user(),
+      await user(),
+    ];
+    const order = await orderWith(adv.id, 1_000); // фонд 800 ₽; порог — 25 ₽
+    const inProgress = await submissions.claim(order.id, c.id);
+    const s1 = await sent(order.id, a.id, 7_000); // 700 ₽
+    const s = await submissions.claim(order.id, b.id);
+    // хочет 500 ₽, свободно 100 ₽ — резерв 100 ₽, фонд исчерпан, заказ закрыт
+    const res = await submissions.attachVideo(
+      s.id,
+      b.id,
+      'https://v.example/y',
+      5_000,
+    );
+    expect(res.submission.payoutMinor).toBe(10_000);
+    expect(res.closed?.submissions.map((x) => x.creatorId)).toEqual([c.id]);
+    expect(await statusOf(order.id)).toBe('CLOSED');
     await expect(
-      orders.update(order.id, adv.id, { ...edit, videosNeeded: 1 }),
-    ).rejects.toThrow('Уже принято');
-    await orders.update(order.id, adv.id, { ...edit, videosNeeded: null });
-    expect(
-      (await prisma.order.findUniqueOrThrow({ where: { id: order.id } }))
-        .videosNeeded,
-    ).toBeNull();
+      submissions.attachVideo(inProgress.id, c.id, 'https://v.example/z', 1000),
+    ).rejects.toThrow('исчерпан');
+    // одобрение не превышает резерв + свободное
+    const approved = await submissions.moderatorApprove(
+      res.submission.id,
+      1n,
+      5_000,
+    );
+    expect(approved.submission.payoutMinor).toBe(10_000);
+    expect(s1.payoutMinor).toBe(70_000);
+  });
+
+  it('одновременные сдачи на остаток — вместе не больше фонда', async () => {
+    const adv = await user();
+    const creators = await Promise.all([1, 2, 3, 4].map(() => user()));
+    const order = await orderWith(adv.id, 1_000); // фонд 800 ₽
+    const claims = await Promise.all(
+      creators.map((c) => submissions.claim(order.id, c.id)),
+    );
+    await Promise.allSettled(
+      claims.map((s, i) =>
+        submissions.attachVideo(
+          s.id,
+          creators[i].id,
+          'https://v.example/p',
+          3_000,
+        ),
+      ),
+    );
+    const total = await prisma.submission.aggregate({
+      where: { orderId: order.id, status: 'SUBMITTED' },
+      _sum: { payoutMinor: true },
+    });
+    expect(total._sum.payoutMinor).toBe(80_000);
+  });
+
+  it('итог добора: доплата за прирост через VIEWS_TOPUP_DAYS, один раз', async () => {
+    const [adv, a] = [await user(), await user()];
+    const order = await orderWith(adv.id, 10_000);
+    const s = await sent(order.id, a.id, 1000);
+    await submissions.moderatorApprove(s.id, 1n, 1000); // 100 ₽
+    await expect(submissions.finalizeViews(s.id, 3000)).rejects.toThrow(
+      'через 3 дня',
+    );
+    await prisma.submission.update({
+      where: { id: s.id },
+      data: { decidedAt: new Date(Date.now() - 3 * DAY - 1000) },
+    });
+    expect((await submissions.listTopupDue()).map((x) => x.id)).toEqual([s.id]);
+
+    const res = await submissions.finalizeViews(s.id, 3000);
+    expect(res.extraMinor).toBe(20_000);
+    expect(res.submission).toMatchObject({ views: 3000, payoutMinor: 30_000 });
+    await expect(submissions.finalizeViews(s.id, 5000)).rejects.toThrow(
+      'уже зафиксирован',
+    );
+    expect(await submissions.listTopupDue()).toEqual([]);
+  });
+
+  it('оценка — только своему одобренному ролику и один раз', async () => {
+    const [adv, other, a] = [await user(), await user(), await user()];
+    const order = await orderWith(adv.id, 10_000);
+    const s = await sent(order.id, a.id, 1000);
+    const feedback = { rating: 5, review: null, portfolioAllowed: true };
+    await expect(submissions.rate(s.id, adv.id, feedback)).rejects.toThrow(
+      'уже оценён',
+    );
+    await submissions.moderatorApprove(s.id, 1n, 1000);
+    await expect(submissions.rate(s.id, other.id, feedback)).rejects.toThrow(
+      'не ваш',
+    );
+    await submissions.rate(s.id, adv.id, feedback);
+    await expect(submissions.rate(s.id, adv.id, feedback)).rejects.toThrow(
+      'уже оценён',
+    );
   });
 });
 
@@ -568,7 +684,12 @@ describe('удаление заказа', () => {
     const [advertiser, creator] = [await user(), await user()];
     const order = await openOrder(advertiser.id);
     const s = await submissions.claim(order.id, creator.id);
-    await submissions.attachVideo(s.id, creator.id, 'https://v.example/1');
+    await submissions.attachVideo(
+      s.id,
+      creator.id,
+      'https://v.example/1',
+      VIEWS,
+    );
 
     await expect(orders.remove(order.id, advertiser.id)).rejects.toThrow(
       'удалить его нельзя',
@@ -595,21 +716,15 @@ describe('модерация', () => {
 describe('воронка', () => {
   it('считает заказы, видео, пользователей и оборот за период', async () => {
     const [advertiser, creator] = [await user(), await user()];
-    const accepted = await orders.create(advertiser.id, {
-      title: 'Заказ',
-      description: 'Описание',
-      category: 'OTHER',
-      priceKopecks: 300_000,
-    });
-    await approveOrder(accepted.id, 1n);
+    const accepted = await openOrder(advertiser.id);
     const s = await submissions.claim(accepted.id, creator.id);
-    await submissions.attachVideo(s.id, creator.id, 'https://v.example/1');
-    await submissions.moderatorApprove(s.id, 1n);
-    await submissions.advertiserApprove(s.id, advertiser.id, {
-      rating: 5,
-      review: null,
-      portfolioAllowed: false,
-    });
+    await submissions.attachVideo(
+      s.id,
+      creator.id,
+      'https://v.example/1',
+      30_000,
+    );
+    await submissions.moderatorApprove(s.id, 1n, 30_000);
 
     const rejected = await pendingOrder(advertiser.id);
     await rejectOrder(rejected.id, 1n, 'причина');
@@ -626,7 +741,7 @@ describe('воронка', () => {
       },
       videos: { submitted: 1, accepted: 1, pending: 0 },
       users: { new: 2, activeAdvertisers: 1, activeCreators: 1 },
-      turnover: { rubles: 3000, acceptedPriced: 1 },
+      turnover: { rubles: 3000 },
     });
     expect((await analytics.funnel()).orders.moderationHours).toBe(0);
 
@@ -639,7 +754,7 @@ describe('воронка', () => {
 });
 
 describe('профиль креатора', () => {
-  /** Видео креатора доходит до рекламодателя (одобрено модератором) и принимается с оценкой. */
+  /** Ролик креатора одобрен модератором, рекламодатель ставит оценку. */
   async function acceptedVideo(
     advertiserId: number,
     creatorId: number,
@@ -648,9 +763,14 @@ describe('профиль креатора', () => {
   ) {
     const order = await openOrder(advertiserId);
     const s = await submissions.claim(order.id, creatorId);
-    await submissions.attachVideo(s.id, creatorId, `https://v.example/${s.id}`);
-    await submissions.moderatorApprove(s.id, 1n);
-    await submissions.advertiserApprove(s.id, advertiserId, {
+    await submissions.attachVideo(
+      s.id,
+      creatorId,
+      `https://v.example/${s.id}`,
+      VIEWS,
+    );
+    await submissions.moderatorApprove(s.id, 1n, VIEWS);
+    await submissions.rate(s.id, advertiserId, {
       rating,
       review: `отзыв ${rating}`,
       portfolioAllowed,
@@ -682,11 +802,16 @@ describe('профиль креатора', () => {
     ];
     const order = await openOrder(advertiser.id);
     const s = await submissions.claim(order.id, creator.id);
-    await submissions.attachVideo(s.id, creator.id, 'https://v.example/1');
+    await submissions.attachVideo(
+      s.id,
+      creator.id,
+      'https://v.example/1',
+      VIEWS,
+    );
 
     // видео ещё у модератора — рекламодатель его не видел
     expect(await profiles.canView(advertiser, creator.id, false)).toBe(false);
-    await submissions.moderatorApprove(s.id, 1n);
+    await submissions.moderatorApprove(s.id, 1n, VIEWS);
     expect(await profiles.canView(advertiser, creator.id, false)).toBe(true);
 
     expect(await profiles.canView(creator, creator.id, false)).toBe(true);
@@ -721,7 +846,7 @@ describe('профиль креатора', () => {
     expect(full.portfolio[0].videoUrl).not.toBeNull();
   });
 
-  it('модератор удаляет отзыв — приёмка и счётчик выполненных остаются', async () => {
+  it('модератор удаляет отзыв — одобрение и счётчик выполненных остаются', async () => {
     const [advertiser, creator] = [await user(), await user()];
     const s = await acceptedVideo(advertiser.id, creator.id, 1);
 
@@ -734,21 +859,6 @@ describe('профиль креатора', () => {
       completed: 1,
     });
     await expect(submissions.removeReview(s.id)).rejects.toThrow('не найден');
-  });
-
-  it('статистика рекламодателя: принятые и отклонённые видео', async () => {
-    const [advertiser, creator] = [await user(), await user()];
-    await acceptedVideo(advertiser.id, creator.id, 5);
-    const order = await openOrder(advertiser.id);
-    const s = await submissions.claim(order.id, creator.id);
-    await submissions.attachVideo(s.id, creator.id, 'https://v.example/2');
-    await submissions.moderatorApprove(s.id, 1n);
-    await submissions.advertiserReject(s.id, advertiser.id, 'не то');
-
-    expect(await submissions.advertiserStats(advertiser.id)).toEqual({
-      accepted: 1,
-      rejected: 1,
-    });
   });
 });
 
@@ -795,12 +905,17 @@ describe('жалобы', () => {
     ];
     const order = await openOrder(advertiser.id);
     const s = await submissions.claim(order.id, creator.id);
-    await submissions.attachVideo(s.id, creator.id, 'https://v.example/1');
+    await submissions.attachVideo(
+      s.id,
+      creator.id,
+      'https://v.example/1',
+      VIEWS,
+    );
 
     await expect(
       reports.create(advertiser, report('VIDEO', s.id, 'STOLEN')),
     ).rejects.toThrow('Не найдено');
-    await submissions.moderatorApprove(s.id, 1n);
+    await submissions.moderatorApprove(s.id, 1n, VIEWS);
     await expect(
       reports.create(stranger, report('VIDEO', s.id, 'STOLEN')),
     ).rejects.toThrow('Не найдено');
@@ -836,9 +951,14 @@ describe('жалобы', () => {
     const [advertiser, creator] = [await user(), await user()];
     const order = await openOrder(advertiser.id);
     const s = await submissions.claim(order.id, creator.id);
-    await submissions.attachVideo(s.id, creator.id, 'https://v.example/1');
-    await submissions.moderatorApprove(s.id, 1n);
-    await submissions.advertiserApprove(s.id, advertiser.id, {
+    await submissions.attachVideo(
+      s.id,
+      creator.id,
+      'https://v.example/1',
+      VIEWS,
+    );
+    await submissions.moderatorApprove(s.id, 1n, VIEWS);
+    await submissions.rate(s.id, advertiser.id, {
       rating: 1,
       review: 'ужас',
       portfolioAllowed: false,
@@ -873,14 +993,16 @@ describe('блокировка', () => {
       atModerator.id,
       banned.id,
       'https://v.example/1',
+      VIEWS,
     );
     const atAdvertiser = await submissions.claim(o3.id, banned.id);
     await submissions.attachVideo(
       atAdvertiser.id,
       banned.id,
       'https://v.example/2',
+      VIEWS,
     );
-    await submissions.moderatorApprove(atAdvertiser.id, 1n);
+    await submissions.moderatorApprove(atAdvertiser.id, 1n, VIEWS);
 
     const closed = await bans.ban(banned.id, 'мошенничество');
 

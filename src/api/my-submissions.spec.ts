@@ -6,8 +6,11 @@ const order = (id: number): Order => ({
   advertiserId: 1,
   title: `Заказ ${id}`,
   description: 'd',
-  priceKopecks: 150_000,
-  videosNeeded: null,
+  currency: 'RUB',
+  budgetMinor: 5_000_000,
+  feePercent: 20,
+  cpmMinor: 15_000,
+  minViews: 250,
   minDurationSec: null,
   maxDurationSec: null,
   orientation: null,
@@ -37,7 +40,9 @@ const submission = (
   status,
   moderatorId: 888n,
   moderatorComment: null,
-  advertiserComment: null,
+  views: null,
+  payoutMinor: 0,
+  finalizedAt: null,
   rating: null,
   review: null,
   portfolioAllowed: false,
@@ -69,7 +74,10 @@ describe('toMySubmissions', () => {
   // от новых к старым, как listByCreator
   const rows = [
     submission(3, 10, 'IN_PROGRESS'),
-    submission(2, 20, 'ADVERTISER_REJECTED', { advertiserComment: 'не то' }),
+    submission(2, 20, 'MODERATOR_APPROVED', {
+      views: 1200,
+      payoutMinor: 18_000,
+    }),
     submission(1, 10, 'MODERATOR_REJECTED', {
       moderatorComment: 'битая ссылка',
     }),
@@ -84,14 +92,22 @@ describe('toMySubmissions', () => {
     ]);
   });
 
-  it('комментарий берётся от того, кто отклонил', () => {
+  it('комментарий — только у отклонённого', () => {
     expect(result[0].comment).toBeNull();
-    expect(result[1].comment).toBe('не то');
+    expect(result[1].comment).toBeNull();
     expect(result[2].comment).toBe('битая ссылка');
   });
 
-  it('цена наружу — в рублях', () => {
-    expect(result[0].order.price).toBe(1500);
+  it('деньги наружу — в рублях: ставка заказа и начисленное за ролик', () => {
+    expect(result[0].order.cpm).toBe(150);
+    expect(result[1].payout).toBe(180);
+    expect(result[1].views).toBe(1200);
+  });
+
+  it('бюджет рекламодателя и комиссия наружу не уходят', () => {
+    const json = JSON.stringify(result);
+    expect(json).not.toContain('budget');
+    expect(json).not.toContain('fee');
   });
 
   it('наружу не уходят модераторские поля и BigInt', () => {

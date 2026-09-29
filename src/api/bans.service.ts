@@ -73,6 +73,7 @@ export class BansService {
         data: {
           status: SubmissionStatus.MODERATOR_REJECTED,
           moderatorComment: BANNED_COMMENT,
+          payoutMinor: 0, // резерв возвращается в фонд заказа
           decidedAt: new Date(),
         },
       });

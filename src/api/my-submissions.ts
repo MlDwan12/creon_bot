@@ -32,9 +32,11 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
       comment:
         row.status === SubmissionStatus.MODERATOR_REJECTED
           ? row.moderatorComment
-          : row.status === SubmissionStatus.ADVERTISER_REJECTED
-            ? row.advertiserComment
-            : null,
+          : null,
+      views: row.views,
+      // на проверке — резерв, после одобрения — начислено, отклонён — 0
+      payout: kopecksToRubles(row.payoutMinor),
+      finalized: row.finalizedAt !== null,
       createdAt: row.createdAt,
       // Сдать видео до конца слота, но не позже срока заказа.
       dueAt:
@@ -50,7 +52,8 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
           row.order.status === OrderStatus.REJECTED
             ? `Заказ #${row.order.id} — на проверке у модератора`
             : row.order.title,
-        price: kopecksToRubles(row.order.priceKopecks),
+        cpm: kopecksToRubles(row.order.cpmMinor),
+        minViews: row.order.minViews,
         deadline: row.order.deadline,
         status: row.order.status,
       },

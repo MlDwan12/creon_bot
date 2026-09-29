@@ -2,7 +2,7 @@
 import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { fetchAllOrders, type ModOrderRow } from '../../api';
-import { formatPrice, timeAgo } from '../../format';
+import { formatRubles, timeAgo } from '../../format';
 
 const STATUS: Record<ModOrderRow['status'], { label: string; tone: string }> = {
   PENDING_MODERATION: { label: 'На проверке', tone: 'warn' },
@@ -46,7 +46,7 @@ void loadMore();
         <span class="main">
           <span class="title">{{ o.title }}</span>
           <span class="sub">
-            {{ o.advertiser }} · {{ formatPrice(o.price) }} · откликов: {{ o.submissionsCount }} · {{ timeAgo(o.createdAt) }}
+            {{ o.advertiser }} · {{ 'бюджет ' + formatRubles(o.budget) }} · откликов: {{ o.submissionsCount }} · {{ timeAgo(o.createdAt) }}
           </span>
         </span>
         <span :class="['badge', STATUS[o.status].tone]">{{ STATUS[o.status].label }}</span>

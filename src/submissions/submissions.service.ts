@@ -4,6 +4,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, OrderStatus, SubmissionStatus } from '@prisma/client';
+import {
+  budgetState,
+  payoutFor,
+  spentByOrder,
+  VIEWS_TOPUP_DAYS,
+} from '../orders/budget';
+import { DAY_MS } from '../orders/deadline';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Заказ не снят модератором: по снятому видео не одобряют и не оплачивают. */
@@ -11,15 +18,8 @@ const NOT_TAKEN_DOWN: Prisma.OrderWhereInput = {
   status: { not: OrderStatus.REJECTED },
 };
 
-/** Сданные видео, ещё не принятые: их снимаем, когда заказ набрал нужное число видео. */
-const UNDECIDED = [
-  SubmissionStatus.SUBMITTED,
-  SubmissionStatus.MODERATOR_APPROVED,
-];
-
 /** Сколько дней у креатора на видео после отклика — потом слот сгорает (SLOT_EXPIRED). */
 export const SLOT_DAYS = 5;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** До какого момента креатор должен прислать видео по отклику «в работе». */
 export function slotDueAt(createdAt: Date) {
@@ -31,7 +31,8 @@ const ACCEPTS_VIDEOS: Prisma.OrderWhereInput = {
   status: { notIn: [OrderStatus.EXPIRED, OrderStatus.REJECTED] },
 };
 
-const FILLED_MESSAGE = 'По заказу уже набрали нужное количество видео';
+const EXHAUSTED_MESSAGE =
+  'Бюджет заказа исчерпан — новые ролики по нему не принимаются';
 
 const ALREADY_CLAIMED_MESSAGE =
   'По этому заказу у вас уже есть отклик в работе — отправьте по нему видео в «Мои отклики»';
@@ -80,11 +81,21 @@ export class SubmissionsService {
     }
   }
 
-  async attachVideo(submissionId: number, creatorId: number, videoUrl: string) {
+  /**
+   * Креатор сдаёт ролик, набравший порог просмотров. Из фонда сразу резервируется выплата за
+   * заявленные просмотры (не больше свободного остатка), поэтому фонд не уходит в минус.
+   * Остатка не хватает даже на порог — сдать нельзя. `closed` — заказ этим исчерпал бюджет.
+   */
+  async attachVideo(
+    submissionId: number,
+    creatorId: number,
+    videoUrl: string,
+    views: number,
+  ) {
     const submission = await this.mustFind(submissionId);
     if (submission.creatorId !== creatorId)
       throw new ForbiddenException('Это не ваш отклик');
-    // После срока видео не принимаются. После ручного закрытия — принимаются: закрыт только набор.
+    // После срока видео не принимаются. После ручного закрытия — принимаются, пока есть бюджет.
     if (submission.order.status === OrderStatus.EXPIRED)
       throw new ForbiddenException(
         'Срок заказа истёк — видео больше не принимаются',
@@ -94,19 +105,31 @@ export class SubmissionsService {
       throw new ForbiddenException(
         'Заказ снят модератором — видео по нему не принимаются',
       );
-    if (await this.isFilled(submission.order))
-      throw new ForbiddenException(FILLED_MESSAGE);
-    await this.transitionStatus(
-      submissionId,
-      [SubmissionStatus.IN_PROGRESS],
-      {
-        videoUrl,
-        status: SubmissionStatus.SUBMITTED,
-        submittedAt: new Date(),
-      },
-      { status: { notIn: [OrderStatus.EXPIRED, OrderStatus.REJECTED] } },
-    );
-    return this.mustFind(submissionId);
+    if (views < submission.order.minViews)
+      throw new ForbiddenException(
+        `Ролик можно сдать, когда он наберёт ${submission.order.minViews.toLocaleString('ru-RU')} просмотров`,
+      );
+    return this.prisma.$transaction(async (tx) => {
+      const { order, budget } = await this.lockBudget(tx, submission.orderId);
+      if (budget.exhausted) throw new ForbiddenException(EXHAUSTED_MESSAGE);
+      await this.transitionStatus(
+        submissionId,
+        [SubmissionStatus.IN_PROGRESS],
+        {
+          videoUrl,
+          views,
+          payoutMinor: Math.min(payoutFor(views, order.cpmMinor!), budget.free),
+          status: SubmissionStatus.SUBMITTED,
+          submittedAt: new Date(),
+        },
+        ACCEPTS_VIDEOS,
+        tx,
+      );
+      return {
+        submission: await this.mustFind(submissionId, tx),
+        closed: await this.closeIfExhausted(tx, submission.orderId),
+      };
+    });
   }
 
   findById(id: number) {
@@ -194,23 +217,52 @@ export class SubmissionsService {
     return count === 0 ? null : this.mustFind(submissionId);
   }
 
-  async moderatorApprove(submissionId: number, moderatorTelegramId: bigint) {
-    await this.transitionStatus(
-      submissionId,
-      [SubmissionStatus.SUBMITTED],
-      {
-        status: SubmissionStatus.MODERATOR_APPROVED,
-        moderatorId: moderatorTelegramId,
-        decidedAt: new Date(),
-      },
-      NOT_TAKEN_DOWN,
-    );
-    return this.prisma.submission.findUniqueOrThrow({
-      where: { id: submissionId },
-      include: { order: { include: { advertiser: true } }, creator: true },
+  /**
+   * Модератор проверил ролик по правилам оффера и фиксирует просмотры — выплата начисляется
+   * окончательно: резерв заменяется суммой за `views` (не больше резерва + свободного остатка).
+   */
+  async moderatorApprove(
+    submissionId: number,
+    moderatorTelegramId: bigint,
+    views: number,
+  ) {
+    const found = await this.mustFind(submissionId);
+    if (views < found.order.minViews)
+      throw new ForbiddenException(
+        `Меньше порога (${found.order.minViews.toLocaleString('ru-RU')} просмотров) — такой ролик отклоните`,
+      );
+    return this.prisma.$transaction(async (tx) => {
+      const { order, budget } = await this.lockBudget(tx, found.orderId);
+      // свой резерв ролик может использовать целиком — он уже в `spent`
+      const current = await this.mustFind(submissionId, tx);
+      const payoutMinor = Math.min(
+        payoutFor(views, order.cpmMinor!),
+        budget.free + current.payoutMinor,
+      );
+      await this.transitionStatus(
+        submissionId,
+        [SubmissionStatus.SUBMITTED],
+        {
+          status: SubmissionStatus.MODERATOR_APPROVED,
+          moderatorId: moderatorTelegramId,
+          views,
+          payoutMinor,
+          decidedAt: new Date(),
+        },
+        NOT_TAKEN_DOWN,
+        tx,
+      );
+      return {
+        submission: await tx.submission.findUniqueOrThrow({
+          where: { id: submissionId },
+          include: { order: { include: { advertiser: true } }, creator: true },
+        }),
+        closed: await this.closeIfExhausted(tx, found.orderId),
+      };
     });
   }
 
+  /** Отклонение: резерв возвращается в фонд. */
   async moderatorReject(
     submissionId: number,
     moderatorTelegramId: bigint,
@@ -220,17 +272,81 @@ export class SubmissionsService {
       status: SubmissionStatus.MODERATOR_REJECTED,
       moderatorId: moderatorTelegramId,
       moderatorComment: comment,
+      payoutMinor: 0,
       decidedAt: new Date(),
     });
     return this.mustFind(submissionId);
   }
 
+  /** Свободный остаток фонда заказа — показать модератору при проверке ролика. */
+  async orderBudget(order: Parameters<typeof budgetState>[0] & { id: number }) {
+    const spent =
+      (await spentByOrder(this.prisma, [order.id])).get(order.id) ?? 0;
+    return budgetState(order, spent);
+  }
+
+  /** Одобренные ролики, у которых закончился добор просмотров, — модератору зафиксировать итог. */
+  listTopupDue() {
+    return this.prisma.submission.findMany({
+      where: {
+        status: SubmissionStatus.MODERATOR_APPROVED,
+        finalizedAt: null,
+        decidedAt: { lt: new Date(Date.now() - VIEWS_TOPUP_DAYS * DAY_MS) },
+      },
+      orderBy: { decidedAt: 'asc' },
+      include: { order: true, creator: true },
+    });
+  }
+
   /**
-   * Приёмка видео вместе с оценкой: оценка ставится только здесь и потом не меняется.
-   * Если этим видео заказ набрал `videosNeeded`, он закрывается, а сданные видео других креаторов
-   * снимаются — в ответе `filled` с ними и с теми, кто ещё снимает, для уведомления.
+   * Итог добора: модератор фиксирует просмотры через VIEWS_TOPUP_DAYS после одобрения. Прирост
+   * доплачивается из свободного остатка, пока он есть; начисленное не уменьшается. `extraMinor` — доплата.
    */
-  async advertiserApprove(
+  async finalizeViews(submissionId: number, views: number) {
+    const found = await this.mustFind(submissionId);
+    return this.prisma.$transaction(async (tx) => {
+      const { order, budget } = await this.lockBudget(tx, found.orderId);
+      const current = await this.mustFind(submissionId, tx);
+      const extraMinor = Math.max(
+        0,
+        Math.min(
+          payoutFor(views, order.cpmMinor!) - current.payoutMinor,
+          budget.free,
+        ),
+      );
+      const ready = new Date(
+        (current.decidedAt?.getTime() ?? Date.now()) +
+          VIEWS_TOPUP_DAYS * DAY_MS,
+      );
+      if (ready > new Date())
+        throw new ForbiddenException(
+          `Итог просмотров фиксируется через ${VIEWS_TOPUP_DAYS} дня после одобрения`,
+        );
+      // не статус, но то же условное обновление: второй модератор не доплатит повторно
+      const { count } = await tx.submission.updateMany({
+        where: {
+          id: submissionId,
+          status: SubmissionStatus.MODERATOR_APPROVED,
+          finalizedAt: null,
+        },
+        data: {
+          views,
+          payoutMinor: { increment: extraMinor },
+          finalizedAt: new Date(),
+        },
+      });
+      if (count === 0)
+        throw new ForbiddenException('Итог по этому ролику уже зафиксирован');
+      return {
+        submission: await this.mustFind(submissionId, tx),
+        extraMinor,
+        closed: await this.closeIfExhausted(tx, found.orderId),
+      };
+    });
+  }
+
+  /** Рекламодатель по желанию оценивает одобренный ролик; оценку не меняют. */
+  async rate(
     submissionId: number,
     advertiserId: number,
     feedback: {
@@ -240,88 +356,21 @@ export class SubmissionsService {
     },
   ) {
     const submission = await this.mustFind(submissionId);
-    if (submission.order.advertiserId !== advertiserId) {
+    if (submission.order.advertiserId !== advertiserId)
       throw new ForbiddenException('Это не ваш заказ');
-    }
-    const orderId = submission.orderId;
-    const filled = await this.prisma.$transaction(async (tx) => {
-      // Приёмки по одному заказу — по очереди, иначе две одновременные вместе превысят лимит.
-      await tx.$queryRaw`SELECT 1 FROM "Order" WHERE id = ${orderId} FOR UPDATE`;
-      const order = await tx.order.findUniqueOrThrow({
-        where: { id: orderId },
-      });
-      if (await this.isFilled(order, tx))
-        throw new ForbiddenException(FILLED_MESSAGE);
-      await this.transitionStatus(
-        submissionId,
-        [SubmissionStatus.MODERATOR_APPROVED],
-        {
-          status: SubmissionStatus.ADVERTISER_APPROVED,
-          decidedAt: new Date(),
-          ...feedback,
-        },
-        NOT_TAKEN_DOWN,
-        tx,
-      );
-      if (!(await this.isFilled(order, tx))) return null;
-      // Набрали: новые отклики не нужны, сданные видео снимаем, начатые не примет attachVideo.
-      // Закрываем и заказ на повторной проверке — иначе модератор опубликовал бы набранный.
-      await tx.order.updateMany({
-        where: {
-          id: orderId,
-          status: {
-            in: [
-              OrderStatus.OPEN,
-              OrderStatus.EXPIRED,
-              OrderStatus.PENDING_MODERATION,
-            ],
-          },
-        },
-        data: { status: OrderStatus.CLOSED, closedAt: new Date() },
-      });
-      const withCreators = await tx.order.findUniqueOrThrow({
-        where: { id: orderId },
-        include: {
-          submissions: {
-            where: {
-              status: { in: [SubmissionStatus.IN_PROGRESS, ...UNDECIDED] },
-            },
-            include: { creator: true },
-          },
-        },
-      });
-      await tx.submission.updateMany({
-        where: { orderId, status: { in: UNDECIDED } },
-        data: {
-          status: SubmissionStatus.MODERATOR_REJECTED,
-          moderatorComment: 'Заказ набрал нужное количество видео',
-          decidedAt: new Date(),
-        },
-      });
-      // Изменённое название на проверке модератор ещё не видел — креаторам только номер.
-      return order.status === OrderStatus.PENDING_MODERATION
-        ? { ...withCreators, title: `#${orderId}` }
-        : withCreators;
-    });
-    return { submission: await this.mustFind(submissionId), filled };
-  }
-
-  /** Заказ набрал нужное число принятых видео (без лимита — никогда). */
-  private async isFilled(
-    order: { id: number; videosNeeded: number | null },
-    db: Prisma.TransactionClient = this.prisma,
-  ) {
-    if (order.videosNeeded === null) return false;
-    const accepted = await db.submission.count({
+    const { count } = await this.prisma.submission.updateMany({
       where: {
-        orderId: order.id,
-        status: SubmissionStatus.ADVERTISER_APPROVED,
+        id: submissionId,
+        status: SubmissionStatus.MODERATOR_APPROVED,
+        rating: null,
       },
+      data: feedback,
     });
-    return accepted >= order.videosNeeded;
+    if (count === 0) throw new ForbiddenException('Этот ролик уже оценён');
+    return this.mustFind(submissionId);
   }
 
-  /** Модератор удаляет отзыв (оскорбления и т.п.): оценка и текст пропадают, приёмка остаётся. */
+  /** Модератор удаляет отзыв (оскорбления и т.п.): оценка и текст пропадают, ролик остаётся одобренным. */
   async removeReview(submissionId: number) {
     const { count } = await this.prisma.submission.updateMany({
       where: { id: submissionId, rating: { not: null } },
@@ -330,69 +379,52 @@ export class SubmissionsService {
     if (count === 0) throw new NotFoundException('Отзыв не найден');
   }
 
-  /** Сколько видео рекламодатель принял и отклонил — креатору видно, платит ли он за работу. */
-  async advertiserStats(advertiserId: number) {
-    const rows = await this.prisma.submission.groupBy({
-      by: ['status'],
-      where: {
-        order: { advertiserId },
-        status: {
-          in: [
-            SubmissionStatus.ADVERTISER_APPROVED,
-            SubmissionStatus.ADVERTISER_REJECTED,
-          ],
-        },
-      },
-      _count: true,
-    });
-    const count = (status: SubmissionStatus) =>
-      rows.find((r) => r.status === status)?._count ?? 0;
-    return {
-      accepted: count(SubmissionStatus.ADVERTISER_APPROVED),
-      rejected: count(SubmissionStatus.ADVERTISER_REJECTED),
-    };
+  /**
+   * Бюджет заказа под блокировкой строки: резерв, начисление и доплата по одному заказу идут по
+   * очереди, иначе две одновременные операции вместе вышли бы за фонд.
+   */
+  private async lockBudget(tx: Prisma.TransactionClient, orderId: number) {
+    await tx.$queryRaw`SELECT 1 FROM "Order" WHERE id = ${orderId} FOR UPDATE`;
+    const order = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
+    const spent = (await spentByOrder(tx, [orderId])).get(orderId) ?? 0;
+    return { order, budget: budgetState(order, spent) };
   }
 
-  async advertiserReject(
-    submissionId: number,
-    advertiserId: number,
-    comment: string,
+  /**
+   * Остатка не хватает на ролик с порогом — открытый заказ закрывается. Возвращает его
+   * с рекламодателем и креаторами «в работе» для уведомления; `null` — закрывать не нужно.
+   */
+  private async closeIfExhausted(
+    tx: Prisma.TransactionClient,
+    orderId: number,
   ) {
-    const submission = await this.mustFind(submissionId);
-    if (submission.order.advertiserId !== advertiserId) {
-      throw new ForbiddenException('Это не ваш заказ');
-    }
-    await this.transitionStatus(
-      submissionId,
-      [SubmissionStatus.MODERATOR_APPROVED],
-      {
-        status: SubmissionStatus.ADVERTISER_REJECTED,
-        advertiserComment: comment,
-        decidedAt: new Date(),
+    const { budget } = await this.lockBudget(tx, orderId);
+    if (!budget.exhausted) return null;
+    const { count } = await tx.order.updateMany({
+      where: { id: orderId, status: OrderStatus.OPEN },
+      data: { status: OrderStatus.CLOSED, closedAt: new Date() },
+    });
+    if (count === 0) return null;
+    return tx.order.findUniqueOrThrow({
+      where: { id: orderId },
+      include: {
+        advertiser: true,
+        submissions: {
+          where: { status: SubmissionStatus.IN_PROGRESS },
+          include: { creator: true },
+        },
       },
-    );
-    return this.mustFind(submissionId);
+    });
   }
 
   async stats() {
-    const [pending, approved, rejected] = await Promise.all([
-      this.prisma.submission.count({
-        where: { status: SubmissionStatus.SUBMITTED },
-      }),
-      this.prisma.submission.count({
-        where: { status: SubmissionStatus.ADVERTISER_APPROVED },
-      }),
-      this.prisma.submission.count({
-        where: {
-          status: {
-            in: [
-              SubmissionStatus.MODERATOR_REJECTED,
-              SubmissionStatus.ADVERTISER_REJECTED,
-            ],
-          },
-        },
-      }),
-    ]);
+    const [pending, approved, rejected] = await Promise.all(
+      [
+        SubmissionStatus.SUBMITTED,
+        SubmissionStatus.MODERATOR_APPROVED,
+        SubmissionStatus.MODERATOR_REJECTED,
+      ].map((status) => this.prisma.submission.count({ where: { status } })),
+    );
     return { pending, approved, rejected };
   }
 

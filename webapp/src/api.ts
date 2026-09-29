@@ -47,11 +47,12 @@ export interface OrderSummary extends VideoFormat {
   description: string;
   /** Ссылка на референс или материалы к заданию. */
   referenceUrl: string | null;
-  price: number | null;
-  /** Сколько видео нужно рекламодателю; null — без лимита. */
-  videosNeeded: number | null;
-  /** Сколько видео уже принято. */
-  accepted: number;
+  /** Выплата креатору за 1000 просмотров, ₽. */
+  cpm: number | null;
+  /** Ролик можно сдать, когда он наберёт столько просмотров. */
+  minViews: number;
+  /** Сколько ещё осталось на выплаты креаторам, ₽. */
+  free: number;
   category: OrderCategory;
   deadline: string | null;
   createdAt: string;
@@ -62,8 +63,6 @@ export interface OrderDetail extends OrderSummary {
   claimed: boolean;
   /** Заказ текущего пользователя — откликнуться нельзя. */
   own: boolean;
-  /** Сколько видео рекламодатель уже принял и отклонил. */
-  advertiser: { accepted: number; rejected: number };
 }
 
 export type SubmissionStatus =
@@ -71,8 +70,6 @@ export type SubmissionStatus =
   | 'SUBMITTED'
   | 'MODERATOR_APPROVED'
   | 'MODERATOR_REJECTED'
-  | 'ADVERTISER_APPROVED'
-  | 'ADVERTISER_REJECTED'
   /** Видео не прислали за 5 дней после отклика. */
   | 'SLOT_EXPIRED';
 
@@ -92,10 +89,17 @@ export interface MySubmission {
   createdAt: string;
   /** До когда прислать видео (только «в работе»): конец слота или срок заказа, что раньше. */
   dueAt: string | null;
+  /** На проверке — заявлено креатором, после одобрения — зафиксировано модератором. */
+  views: number | null;
+  /** ₽: на проверке — зарезервировано, после одобрения — начислено. */
+  payout: number;
+  /** Итог просмотров после добора зафиксирован. */
+  finalized: boolean;
   order: {
     id: number;
     title: string;
-    price: number | null;
+    cpm: number | null;
+    minViews: number;
     deadline: string | null;
     status: OrderStatus;
   };
@@ -107,15 +111,21 @@ export interface MyOrder extends VideoFormat {
   title: string;
   description: string;
   referenceUrl: string | null;
-  price: number | null;
+  /** Весь бюджет, ₽. */
+  budget: number;
+  minViews: number;
   category: OrderCategory;
   deadline: string | null;
   status: OrderStatus;
   rejectReason: string | null;
-  videosNeeded: number | null;
-  accepted: number;
+  /** Сколько бюджета израсходовано и зарезервировано, %. */
+  usedPercent: number;
+  /** Одобренных роликов и сумма их просмотров. */
+  approved: number;
+  views: number;
+  /** Одобренные ролики без оценки. */
+  toRate: number;
   submissionsCount: number;
-  pendingDecision: number;
   /** Никто ещё не сдал видео — заказ можно удалить. */
   deletable: boolean;
   createdAt: string;
@@ -126,15 +136,15 @@ export interface NewOrderInput extends VideoFormat {
   description: string;
   /** Ссылка на референс или материалы; null — без ссылки. */
   referenceUrl: string | null;
-  /** Цена за видео, ₽; null — договорная. */
-  price: number | null;
-  /** Сколько видео нужно; null — без лимита. Набрали — заказ закроется сам. */
-  videosNeeded: number | null;
+  /** Весь бюджет, ₽, включая комиссию площадки. */
+  budget: number;
+  /** Порог просмотров для сдачи; null — по умолчанию (250). */
+  minViews: number | null;
   category: OrderCategory;
   deadlineDays: number | null;
 }
 
-/** Ответ `GET /api/my-orders/:id/pending-videos`. */
+/** Ответ `GET /api/my-orders/:id/pending-videos`: одобренные ролики — отчёт и оценка. */
 export interface PendingVideos {
   order: { id: number; title: string };
   items: {
@@ -144,6 +154,8 @@ export interface PendingVideos {
     creatorId: number;
     attempt: number;
     submittedAt: string | null;
+    views: number | null;
+    rating: number | null;
   }[];
 }
 
@@ -153,7 +165,7 @@ export interface ModQueue {
   orders: {
     id: number;
     title: string;
-    price: number | null;
+    budget: number;
     advertiser: string;
     /** С какого момента ждёт проверки: после правки заказ встаёт в очередь заново. */
     queuedAt: string;
@@ -161,6 +173,8 @@ export interface ModQueue {
     hasContacts: boolean;
   }[];
   videos: { id: number; orderTitle: string; creator: string; submittedAt: string | null }[];
+  /** Добор закончился — зафиксировать итог просмотров. */
+  topups: { id: number; orderTitle: string; creator: string; decidedAt: string | null }[];
 }
 
 export interface ModStats {
@@ -184,17 +198,16 @@ export interface ModFunnel {
     pending: number;
     moderatorRejected: number;
     accepted: number;
-    advertiserRejected: number;
   };
   users: { new: number; activeAdvertisers: number; activeCreators: number };
-  /** Сумма цен принятых видео, ₽ (договорные не считаются) и сколько таких видео. */
-  turnover: { rubles: number; acceptedPriced: number };
+  /** Начислено креаторам за одобренные ролики, ₽. */
+  turnover: { rubles: number };
 }
 
 export interface ModOrderRow {
   id: number;
   title: string;
-  price: number | null;
+  budget: number;
   status: OrderStatus;
   advertiser: string;
   submissionsCount: number;
@@ -206,7 +219,13 @@ export interface ModOrder extends VideoFormat {
   title: string;
   description: string;
   referenceUrl: string | null;
-  price: number | null;
+  budget: number;
+  feePercent: number;
+  /** Фонд выплат креаторам (бюджет без комиссии), ₽ — от него считается ставка. */
+  pool: number;
+  minViews: number;
+  /** Ставка за 1000 просмотров, ₽; null — ещё не назначена. */
+  cpm: number | null;
   category: OrderCategory;
   deadline: string | null;
   status: OrderStatus;
@@ -227,7 +246,23 @@ export interface ModVideo {
   creator: string;
   creatorId: number;
   attempt: number;
-  order: { id: number; title: string; description: string } & VideoFormat;
+  /** На проверке — заявлено креатором, после одобрения — зафиксировано. */
+  views: number | null;
+  /** ₽: резерв или начислено. */
+  payout: number;
+  decidedAt: string | null;
+  finalizedAt: string | null;
+  /** Через сколько дней после одобрения фиксируется итог просмотров. */
+  topupDays: number;
+  order: {
+    id: number;
+    title: string;
+    description: string;
+    cpm: number | null;
+    minViews: number;
+    /** Свободный остаток фонда, ₽. */
+    free: number;
+  } & VideoFormat;
 }
 
 /** Ссылки креатора на соцсети; null — не указана. */
@@ -260,7 +295,7 @@ export interface CreatorProfile {
   portfolio: { submissionId: number; videoUrl: string | null; orderTitle: string }[];
 }
 
-/** Оценка при приёмке видео. */
+/** Оценка рекламодателя одобренному ролику. */
 export interface Feedback {
   rating: number;
   review: string;
@@ -344,9 +379,10 @@ export function fetchMySubmissions() {
   return request<MySubmission[]>('GET', '/api/submissions');
 }
 
-export function submitVideo(submissionId: number, videoUrl: string) {
+export function submitVideo(submissionId: number, videoUrl: string, views: number) {
   return request<{ ok: true }>('POST', `/api/submissions/${submissionId}/video`, {
     videoUrl,
+    views,
   });
 }
 
@@ -383,8 +419,8 @@ export function fetchPendingVideos(orderId: number) {
   return request<PendingVideos>('GET', `/api/my-orders/${orderId}/pending-videos`);
 }
 
-export function acceptVideo(submissionId: number, feedback: Feedback) {
-  return request<{ ok: true }>('POST', `/api/submissions/${submissionId}/accept`, feedback);
+export function rateVideo(submissionId: number, feedback: Feedback) {
+  return request<{ ok: true }>('POST', `/api/submissions/${submissionId}/rate`, feedback);
 }
 
 export function fetchMyProfile() {
@@ -423,12 +459,6 @@ export function removeReview(submissionId: number) {
   return request<{ ok: true }>('DELETE', `/api/mod/reviews/${submissionId}`);
 }
 
-export function rejectVideo(submissionId: number, comment: string) {
-  return request<{ ok: true }>('POST', `/api/submissions/${submissionId}/reject`, {
-    comment,
-  });
-}
-
 type Me = { isModerator: boolean; supportUrl: string | null };
 let me: Promise<Me> | undefined;
 
@@ -462,17 +492,31 @@ export function fetchModOrder(id: number) {
   return request<ModOrder>('GET', `/api/mod/orders/${id}`);
 }
 
-/** `version` — из fetchModOrder: если рекламодатель успел изменить заказ, решение не пройдёт. */
-export function moderateOrder(id: number, decision: 'approve' | 'reject', version: string, comment?: string) {
-  return request<{ ok: true }>('POST', `/api/mod/orders/${id}/${decision}`, { version, comment });
+/**
+ * `version` — из fetchModOrder: если рекламодатель успел изменить заказ, решение не пройдёт.
+ * `cpm` — ставка за 1000 просмотров, ₽ (только при одобрении).
+ */
+export function moderateOrder(
+  id: number,
+  decision: 'approve' | 'reject',
+  version: string,
+  extra: { comment?: string; cpm?: number } = {},
+) {
+  return request<{ ok: true }>('POST', `/api/mod/orders/${id}/${decision}`, { version, ...extra });
 }
 
 export function fetchModVideo(id: number) {
   return request<ModVideo>('GET', `/api/mod/videos/${id}`);
 }
 
-export function moderateVideo(id: number, decision: 'approve' | 'reject', comment?: string) {
-  return request<{ ok: true }>('POST', `/api/mod/videos/${id}/${decision}`, comment === undefined ? undefined : { comment });
+/** Одобрить с просмотрами (`views`) или отклонить с причиной (`comment`). */
+export function moderateVideo(id: number, decision: 'approve' | 'reject', body: { views?: number; comment?: string }) {
+  return request<{ ok: true }>('POST', `/api/mod/videos/${id}/${decision}`, body);
+}
+
+/** Итог просмотров после добора. */
+export function finalizeVideo(id: number, views: number) {
+  return request<{ ok: true }>('POST', `/api/mod/videos/${id}/finalize`, { views });
 }
 
 /** На что жалоба: VIDEO и REVIEW — по id отклика, PROFILE — по id пользователя. */

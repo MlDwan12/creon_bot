@@ -53,7 +53,7 @@ export class AnalyticsService {
         where: {
           ...order,
           submissions: {
-            some: { status: SubmissionStatus.ADVERTISER_APPROVED },
+            some: { status: SubmissionStatus.MODERATOR_APPROVED },
           },
         },
       }),
@@ -83,12 +83,11 @@ export class AnalyticsService {
         ) / 3600 AS hours
         FROM "Order"
         WHERE "decidedAt" IS NOT NULL AND "createdAt" >= ${epoch}`),
-      // Оборот — сумма цен принятых видео (договорные не считаются): база для будущей комиссии.
-      this.prisma.$queryRaw<{ kopecks: bigint | null; priced: bigint }[]>(
+      // Оборот — сколько начислено креаторам за одобренные ролики.
+      this.prisma.$queryRaw<{ kopecks: bigint | null }[]>(
         Prisma.sql`
-        SELECT sum(o."priceKopecks") AS kopecks, count(o."priceKopecks") AS priced
-        FROM "Submission" s JOIN "Order" o ON o.id = s."orderId"
-        WHERE s.status = 'ADVERTISER_APPROVED' AND s."submittedAt" >= ${epoch}`,
+        SELECT sum("payoutMinor") AS kopecks FROM "Submission"
+        WHERE status = 'MODERATOR_APPROVED' AND "submittedAt" >= ${epoch}`,
       ),
     ]);
 
@@ -108,12 +107,9 @@ export class AnalyticsService {
       },
       videos: {
         submitted: videosSubmitted,
-        pending:
-          videos(SubmissionStatus.SUBMITTED) +
-          videos(SubmissionStatus.MODERATOR_APPROVED),
+        pending: videos(SubmissionStatus.SUBMITTED),
         moderatorRejected: videos(SubmissionStatus.MODERATOR_REJECTED),
-        accepted: videos(SubmissionStatus.ADVERTISER_APPROVED),
-        advertiserRejected: videos(SubmissionStatus.ADVERTISER_REJECTED),
+        accepted: videos(SubmissionStatus.MODERATOR_APPROVED),
       },
       users: {
         new: newUsers,
@@ -122,7 +118,6 @@ export class AnalyticsService {
       },
       turnover: {
         rubles: kopecksToRubles(Number(turnover.kopecks ?? 0)),
-        acceptedPriced: Number(turnover.priced),
       },
     };
   }

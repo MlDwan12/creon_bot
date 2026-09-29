@@ -152,7 +152,7 @@ void load();
         </div>
         <div class="tile">
           <strong>{{ profile.completed }}</strong>
-          <span>видео принято</span>
+          <span>роликов одобрено</span>
         </div>
       </div>
 

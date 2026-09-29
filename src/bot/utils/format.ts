@@ -42,11 +42,9 @@ export function formatDeadline(deadline: Date): string {
   });
 }
 
-/** «3 000 ₽ за видео» или «цена договорная». */
-export function formatPrice(price: number | null): string {
-  return price === null
-    ? 'цена договорная'
-    : `${price.toLocaleString('ru-RU')} ₽ за видео`;
+/** «3 000 ₽». */
+export function formatRubles(rubles: number): string {
+  return `${rubles.toLocaleString('ru-RU')} ₽`;
 }
 
 /**

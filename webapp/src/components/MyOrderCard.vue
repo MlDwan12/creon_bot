@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { ApiError, closeOrder, deleteOrder, extendOrder, type MyOrder } from '../api';
-import { formatDate, formatPrice } from '../format';
+import { formatDate, formatRubles, formatViews } from '../format';
 import { confirmAction } from '../telegram';
 
 const props = defineProps<{ order: MyOrder }>();
@@ -45,7 +45,9 @@ async function run(question: string | null, action: () => Promise<unknown>) {
 }
 
 const close = () =>
-  run('Закрыть заказ? Новые отклики перестанут приниматься.', () => closeOrder(props.order.id));
+  run('Закрыть заказ? Новые отклики перестанут приниматься, уже сданные ролики будут оплачены из бюджета.', () =>
+    closeOrder(props.order.id),
+  );
 const extend = (days: number) =>
   run(null, async () => {
     await extendOrder(props.order.id, days);
@@ -64,16 +66,23 @@ const remove = () =>
       <span :class="['badge', STATUS[order.status].tone]">{{ STATUS[order.status].label }}</span>
     </div>
     <div class="hint">
-      {{ formatPrice(order.price) }}
+      Бюджет {{ formatRubles(order.budget) }}
       <template v-if="order.deadline"> · до {{ formatDate(order.deadline) }}</template>
-      <template v-if="order.videosNeeded"> · принято {{ order.accepted }} из {{ order.videosNeeded }}</template>
       <template v-if="order.status === 'PENDING_MODERATION'"> · модератор проверит заказ перед публикацией</template>
     </div>
 
-    <RouterLink v-if="order.pendingDecision > 0" :to="`/my-orders/${order.id}/review`" class="pending">
+    <div v-if="order.approved > 0 || order.usedPercent > 0" class="usage">
+      <div class="bar" aria-hidden="true"><span :style="{ width: `${order.usedPercent}%` }" /></div>
+      <div class="hint">
+        Израсходовано {{ order.usedPercent }}% бюджета · роликов: {{ order.approved }} · просмотров: {{ formatViews(order.views) }}
+      </div>
+    </div>
+
+    <RouterLink v-if="order.approved > 0" :to="`/my-orders/${order.id}/review`" class="pending">
       <span>
-        <strong>Видео ждут вашего решения: {{ order.pendingDecision }}</strong>
-        <small>всего откликов: {{ order.submissionsCount }}</small>
+        <strong>Ролики по заказу: {{ order.approved }}</strong>
+        <small v-if="order.toRate > 0">можно оценить: {{ order.toRate }}</small>
+        <small v-else>откликов всего: {{ order.submissionsCount }}</small>
       </span>
       <span aria-hidden="true">›</span>
     </RouterLink>
@@ -126,6 +135,22 @@ const remove = () =>
 </template>
 
 <style scoped>
+.usage {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--fill);
+  overflow: hidden;
+}
+.bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
 .card {
   display: flex;
   flex-direction: column;

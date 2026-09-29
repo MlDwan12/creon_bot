@@ -50,8 +50,6 @@ export const REPORT_REASONS: Record<ReportTarget, string[]> = {
 /** Видео, которые уже дошли до рекламодателя. */
 const SEEN_BY_ADVERTISER: SubmissionStatus[] = [
   SubmissionStatus.MODERATOR_APPROVED,
-  SubmissionStatus.ADVERTISER_APPROVED,
-  SubmissionStatus.ADVERTISER_REJECTED,
 ];
 
 type Group = { target: ReportTarget; targetId: number };

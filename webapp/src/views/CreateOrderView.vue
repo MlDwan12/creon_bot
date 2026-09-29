@@ -6,8 +6,9 @@ import { ApiError, createOrder, fetchMyOrders, type MyOrder, ORDER_CATEGORIES, t
 // Лимиты — те же, что проверяет бэкенд (src/common/validation.ts); здесь только подсказка браузеру.
 const MAX_TITLE = 100;
 const MAX_DESCRIPTION = 1000;
-const MAX_PRICE = 1_000_000;
-const MAX_VIDEOS = 100;
+const MIN_BUDGET = 1_000;
+const MAX_BUDGET = 10_000_000;
+const DEFAULT_MIN_VIEWS = 250;
 const MAX_DURATION = 600;
 const ORIENTATIONS: { value: NewOrderInput['orientation']; label: string }[] = [
   { value: 'VERTICAL', label: 'Вертикальное' },
@@ -31,16 +32,15 @@ const route = useRoute();
 const router = useRouter();
 
 // reactive() — как ref(), но для объекта целиком: form.title и т.д. без `.value`.
-// price: '' — поле пустое (цена договорная); v-model.number отдаёт '' для пустого ввода.
-// videosNeeded: '' — без лимита.
+// v-model.number отдаёт '' для пустого ввода: budget '' — ещё не введён, minViews '' — порог по умолчанию.
 const form = reactive<
   Omit<
     NewOrderInput,
-    'referenceUrl' | 'price' | 'videosNeeded' | 'minDurationSec' | 'maxDurationSec' | 'deadlineDays'
+    'referenceUrl' | 'budget' | 'minViews' | 'minDurationSec' | 'maxDurationSec' | 'deadlineDays'
   > & {
     referenceUrl: string;
-    price: number | '';
-    videosNeeded: number | '';
+    budget: number | '';
+    minViews: number | '';
     minDurationSec: number | '';
     maxDurationSec: number | '';
     deadlineDays: number | null | undefined;
@@ -49,8 +49,8 @@ const form = reactive<
   title: '',
   description: '',
   referenceUrl: '',
-  price: '',
-  videosNeeded: '',
+  budget: '',
+  minViews: DEFAULT_MIN_VIEWS,
   // Короткие вертикальные ролики — самый частый заказ; рекламодатель может поменять.
   minDurationSec: 15,
   maxDurationSec: 60,
@@ -60,10 +60,6 @@ const form = reactive<
 });
 /** Редактируемый заказ — для подсказки, что открытый уйдёт на повторную проверку. */
 const editing = ref<MyOrder>();
-/** Сколько рекламодатель заплатит максимум — когда заданы и цена, и число видео. */
-const budget = computed(() =>
-  form.price && form.videosNeeded ? (form.price * form.videosNeeded).toLocaleString('ru-RU') : '',
-);
 const deadlines = computed(() => (props.id ? [KEEP_DEADLINE, ...DEADLINES] : DEADLINES));
 const sending = ref(false);
 const error = ref('');
@@ -81,8 +77,8 @@ async function prefill() {
   form.title = source.title;
   form.description = source.description;
   form.referenceUrl = source.referenceUrl ?? '';
-  form.price = source.price ?? '';
-  form.videosNeeded = source.videosNeeded ?? '';
+  form.budget = source.budget;
+  form.minViews = source.minViews;
   form.minDurationSec = source.minDurationSec ?? '';
   form.maxDurationSec = source.maxDurationSec ?? '';
   form.orientation = source.orientation;
@@ -93,12 +89,12 @@ async function submit() {
   sending.value = true;
   error.value = '';
   try {
-    const price = form.price === '' ? null : form.price;
-    const videosNeeded = form.videosNeeded === '' ? null : form.videosNeeded;
+    const budget = Number(form.budget);
+    const minViews = form.minViews === '' ? null : form.minViews;
     const referenceUrl = form.referenceUrl.trim() || null;
     const minDurationSec = form.minDurationSec === '' ? null : form.minDurationSec;
     const maxDurationSec = form.maxDurationSec === '' ? null : form.maxDurationSec;
-    const input = { ...form, referenceUrl, price, videosNeeded, minDurationSec, maxDurationSec };
+    const input = { ...form, referenceUrl, budget, minViews, minDurationSec, maxDurationSec };
     if (props.id) await updateOrder(Number(props.id), input);
     // при создании «как было» не бывает — срок всегда выбран
     else await createOrder({ ...input, deadlineDays: form.deadlineDays ?? null });
@@ -214,27 +210,27 @@ void prefill();
 
       <div class="group">
         <label class="row">
-          Цена за видео, ₽
+          Бюджет, ₽
           <input
-            v-model.number="form.price"
+            v-model.number="form.budget"
             type="number"
             inputmode="numeric"
-            min="1"
-            :max="MAX_PRICE"
+            :min="MIN_BUDGET"
+            :max="MAX_BUDGET"
             step="1"
-            placeholder="договорная"
+            required
+            :placeholder="`от ${MIN_BUDGET.toLocaleString('ru-RU')}`"
           />
         </label>
         <label class="row bordered">
-          Сколько нужно видео
+          Сдать ролик можно от, просмотров
           <input
-            v-model.number="form.videosNeeded"
+            v-model.number="form.minViews"
             type="number"
             inputmode="numeric"
             min="1"
-            :max="MAX_VIDEOS"
             step="1"
-            placeholder="без лимита"
+            :placeholder="String(DEFAULT_MIN_VIEWS)"
           />
         </label>
         <div class="row column">
@@ -254,8 +250,10 @@ void prefill();
         </div>
       </div>
 
-      <p v-if="form.videosNeeded" class="hint">
-        Примете {{ form.videosNeeded }} видео — заказ закроется сам<template v-if="budget">. Бюджет — не больше {{ budget }} ₽</template>
+      <p class="hint">
+        Вы платите за просмотры: креаторы публикуют ролики у себя, модератор проверяет их и фиксирует просмотры.
+        Ставку за 1000 просмотров назначит модератор. Бюджет закончится — заказ закроется сам, больше бюджета вы не
+        потратите.
       </p>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </form>

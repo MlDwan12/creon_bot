@@ -15,12 +15,19 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ParseIdPipe } from './parse-id.pipe';
-import { ReportTarget } from '@prisma/client';
+import {
+  type Order,
+  ReportTarget,
+  type Submission,
+  type User,
+} from '@prisma/client';
 import { findContacts } from '../common/contacts';
 import { isDbId } from '../common/validation';
 import { kopecksToRubles } from '../common/money';
 import { NotificationsService } from '../bot/notifications.service';
-import { creatorLabel } from '../bot/utils/format';
+import { SupportService } from '../bot/support.service';
+import { creatorLabel, escapeHtml, formatRubles } from '../bot/utils/format';
+import { payoutPool, VIEWS_TOPUP_DAYS } from '../orders/budget';
 import { OrdersService } from '../orders/orders.service';
 import { DAY_MS } from '../orders/deadline';
 import { SubmissionsService } from '../submissions/submissions.service';
@@ -32,7 +39,12 @@ import { attemptNumbers } from './attempts';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { UserThrottlerGuard } from './user-throttler.guard';
 import { ModeratorGuard } from './moderator.guard';
-import { parseRejectComment, videoFormat } from './order-input';
+import {
+  parseCpm,
+  parseRejectComment,
+  parseViews,
+  videoFormat,
+} from './order-input';
 
 const PAGE_SIZE = 20;
 
@@ -60,20 +72,22 @@ export class ModerationController {
     private readonly bans: BansService,
     private readonly usersService: UsersService,
     private readonly moderatorGuard: ModeratorGuard,
+    private readonly support: SupportService,
   ) {}
 
   /** Обе очереди сразу: заказы и видео на проверке, старые первыми. */
   @Get('queue')
   async queue() {
-    const [orders, videos] = await Promise.all([
+    const [orders, videos, topups] = await Promise.all([
       this.ordersService.listPending(),
       this.submissionsService.listPendingModeration(),
+      this.submissionsService.listTopupDue(),
     ]);
     return {
       orders: orders.map((o) => ({
         id: o.id,
         title: o.title,
-        price: kopecksToRubles(o.priceKopecks),
+        budget: kopecksToRubles(o.budgetMinor),
         advertiser: creatorLabel(o.advertiser),
         // ждёт с момента отправки на проверку: после правки — заново
         queuedAt: o.moderationRequestedAt,
@@ -86,6 +100,13 @@ export class ModerationController {
         orderTitle: s.order.title,
         creator: creatorLabel(s.creator),
         submittedAt: s.submittedAt,
+      })),
+      // добор закончился — зафиксировать итог просмотров
+      topups: topups.map((s) => ({
+        id: s.id,
+        orderTitle: s.order.title,
+        creator: creatorLabel(s.creator),
+        decidedAt: s.decidedAt,
       })),
     };
   }
@@ -123,7 +144,7 @@ export class ModerationController {
       items: items.map((o) => ({
         id: o.id,
         title: o.title,
-        price: kopecksToRubles(o.priceKopecks),
+        budget: kopecksToRubles(o.budgetMinor),
         status: o.status,
         advertiser: creatorLabel(o.advertiser),
         submissionsCount: o._count.submissions,
@@ -145,7 +166,12 @@ export class ModerationController {
       description: o.description,
       referenceUrl: o.referenceUrl,
       ...videoFormat(o),
-      price: kopecksToRubles(o.priceKopecks),
+      budget: kopecksToRubles(o.budgetMinor),
+      feePercent: o.feePercent,
+      // фонд выплат креаторам — от него модератор считает ставку
+      pool: kopecksToRubles(payoutPool(o)),
+      minViews: o.minViews,
+      cpm: kopecksToRubles(o.cpmMinor),
       category: o.category,
       deadline: o.deadline,
       status: o.status,
@@ -168,6 +194,7 @@ export class ModerationController {
       id,
       req.user.telegramId,
       parseVersion(body),
+      parseCpm(body),
     );
     this.notifications.orderApproved(order);
     return { ok: true };
@@ -194,9 +221,10 @@ export class ModerationController {
   async video(@Param('id', ParseIdPipe) id: number) {
     const s = await this.submissionsService.findById(id);
     if (!s) throw new NotFoundException('Отклик не найден');
-    const attempts = attemptNumbers(
-      await this.submissionsService.listByOrder(s.orderId),
-    );
+    const [attempts, budget] = await Promise.all([
+      this.submissionsService.listByOrder(s.orderId).then(attemptNumbers),
+      this.submissionsService.orderBudget(s.order),
+    ]);
     return {
       id: s.id,
       status: s.status,
@@ -205,11 +233,20 @@ export class ModerationController {
       creator: creatorLabel(s.creator),
       creatorId: s.creatorId,
       attempt: attempts.get(s.id)!,
+      // на проверке — заявлено креатором, после одобрения — зафиксировано
+      views: s.views,
+      payout: kopecksToRubles(s.payoutMinor),
+      decidedAt: s.decidedAt,
+      finalizedAt: s.finalizedAt,
+      topupDays: VIEWS_TOPUP_DAYS,
       order: {
         id: s.order.id,
         title: s.order.title,
         description: s.order.description,
         ...videoFormat(s.order),
+        cpm: kopecksToRubles(s.order.cpmMinor),
+        minViews: s.order.minViews,
+        free: kopecksToRubles(budget.free),
       },
     };
   }
@@ -302,17 +339,61 @@ export class ModerationController {
     return { ok: true };
   }
 
+  /** Одобрить ролик и зафиксировать просмотры (`views`) — выплата начисляется окончательно. */
   @Post('videos/:id/approve')
   async approveVideo(
     @Param('id', ParseIdPipe) id: number,
+    @Body('views') views: unknown,
     @Req() req: ApiRequest,
   ) {
-    const submission = await this.submissionsService.moderatorApprove(
-      id,
-      req.user.telegramId,
-    );
+    const { submission, closed } =
+      await this.submissionsService.moderatorApprove(
+        id,
+        req.user.telegramId,
+        parseViews(views),
+      );
     this.notifications.videoApprovedByModerator(submission);
+    if (closed) this.notifications.orderBudgetExhausted(closed);
+    await this.paymentDue(submission, submission.payoutMinor, 'ролик одобрен');
     return { ok: true };
+  }
+
+  /** Итог просмотров после добора: доплата за прирост, пока есть бюджет. */
+  @Post('videos/:id/finalize')
+  async finalizeVideo(
+    @Param('id', ParseIdPipe) id: number,
+    @Body('views') views: unknown,
+  ) {
+    const { submission, extraMinor, closed } =
+      await this.submissionsService.finalizeViews(id, parseViews(views));
+    this.notifications.viewsFinalized(submission, extraMinor);
+    if (closed) this.notifications.orderBudgetExhausted(closed);
+    if (extraMinor > 0)
+      await this.paymentDue(
+        submission,
+        extraMinor,
+        'доплата за добор просмотров',
+      );
+    return { ok: true };
+  }
+
+  /** Менеджеру в поддержку: кому и сколько перевести (оплата пока вне бота). */
+  private paymentDue(
+    s: Submission & { order: Order; creator: User },
+    amountMinor: number,
+    why: string,
+  ) {
+    if (amountMinor <= 0) return;
+    return this.support.paymentDue(
+      [
+        `💸 <b>К оплате</b> — ${why}`,
+        `Заказ #${s.order.id}: ${escapeHtml(s.order.title)}`,
+        `Креатор: ${escapeHtml(creatorLabel(s.creator))} (#u${s.creator.telegramId})`,
+        `Просмотров: ${(s.views ?? 0).toLocaleString('ru-RU')}`,
+        `Сумма: ${formatRubles(kopecksToRubles(amountMinor))}`,
+        `Видео: ${escapeHtml(s.videoUrl ?? '')}`,
+      ].join('\n'),
+    );
   }
 
   @Post('videos/:id/reject')

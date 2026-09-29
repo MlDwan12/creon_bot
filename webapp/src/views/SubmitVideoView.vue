@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { ApiError, fetchMySubmissions, type MySubmission, submitVideo } from '../api';
-import { formatDate, formatPrice } from '../format';
+import { formatCpm, formatDeadline, formatRubles, formatViews } from '../format';
 
 // `id` отклика приходит из адреса /submissions/:id/video.
 const props = defineProps<{ id: string }>();
@@ -10,6 +10,13 @@ const props = defineProps<{ id: string }>();
 const submission = ref<MySubmission>();
 const loadError = ref('');
 const url = ref('');
+// '' — поле пустое; v-model.number отдаёт '' для пустого ввода.
+const views = ref<number | ''>('');
+/** Сколько примерно начислят за указанные просмотры — если ставка уже есть. */
+const estimate = computed(() => {
+  const cpm = submission.value?.order.cpm;
+  return cpm && views.value ? formatRubles(Math.floor((views.value * cpm) / 10) / 100) : '';
+});
 const sending = ref(false);
 const sendError = ref('');
 const sent = ref(false);
@@ -28,7 +35,7 @@ async function send() {
   sending.value = true;
   sendError.value = '';
   try {
-    await submitVideo(Number(props.id), url.value);
+    await submitVideo(Number(props.id), url.value, Number(views.value));
     sent.value = true;
   } catch (err) {
     // Проверку ссылки делает бэкенд — те же правила и тексты ошибок, что в боте.
@@ -52,7 +59,7 @@ void load();
 
     <template v-else-if="sent">
       <p class="notice" role="status">
-        Работа отправлена на модерацию. Когда модератор и рекламодатель примут решение, бот пришлёт уведомление.
+        Ролик отправлен на проверку, оплата за просмотры зарезервирована. Когда модератор проверит ролик и зафиксирует просмотры, бот пришлёт уведомление.
       </p>
       <div class="bottom-bar">
         <RouterLink to="/submissions" class="main-button">К моим откликам</RouterLink>
@@ -63,16 +70,14 @@ void load();
       <div class="order">
         <div class="title">{{ submission.order.title }}</div>
         <div class="hint">
-          {{ formatPrice(submission.order.price) }}
-          <template v-if="submission.order.deadline">
-            · сдать до {{ formatDate(submission.order.deadline) }}
-          </template>
+          {{ formatCpm(submission.order.cpm) }}
+          <template v-if="submission.dueAt"> · сдать до {{ formatDeadline(submission.dueAt) }}</template>
         </div>
       </div>
 
       <!-- @submit.prevent — отправка формы без перезагрузки страницы (Enter на клавиатуре тоже работает). -->
       <form id="video-form" class="field" @submit.prevent="send">
-        <label for="video-url" class="section-title">Ссылка на видео</label>
+        <label for="video-url" class="section-title">Ссылка на публикацию</label>
         <input
           id="video-url"
           v-model="url"
@@ -83,7 +88,22 @@ void load();
           required
         />
         <p class="hint help">
-          Ролик в облаке или соцсети. Откройте доступ по ссылке, иначе модератор не сможет его посмотреть.
+          Ролик, опубликованный у вас в соцсети. Публикация должна быть открыта для всех — по ней модератор сверит просмотры.
+        </p>
+        <label for="views" class="section-title">Просмотров сейчас</label>
+        <input
+          id="views"
+          v-model.number="views"
+          type="number"
+          inputmode="numeric"
+          :min="submission.order.minViews"
+          step="1"
+          :placeholder="`не меньше ${formatViews(submission.order.minViews)}`"
+          required
+        />
+        <p class="hint help">
+          Сдать можно от {{ formatViews(submission.order.minViews) }} просмотров.
+          <template v-if="estimate">Примерно к начислению: {{ estimate }} — точную сумму посчитает модератор.</template>
         </p>
         <p v-if="sendError" class="error" role="alert">{{ sendError }}</p>
       </form>
@@ -91,14 +111,14 @@ void load();
       <section class="tips">
         <h2 class="section-title">Проверьте перед отправкой</h2>
         <ul>
-          <li>Видео соответствует заданию</li>
-          <li>Все пункты задания выполнены</li>
-          <li>Доступ по ссылке открыт</li>
+          <li>Ролик соответствует заданию и требованиям к формату</li>
+          <li>Публикация открыта для всех</li>
+          <li>Число просмотров — как сейчас в публикации: модератор его сверит</li>
         </ul>
       </section>
 
       <div class="bottom-bar">
-        <button type="submit" form="video-form" class="main-button" :disabled="sending || !url.trim()">
+        <button type="submit" form="video-form" class="main-button" :disabled="sending || !url.trim() || !views">
           {{ sending ? 'Отправляем…' : 'Отправить на проверку' }}
         </button>
       </div>

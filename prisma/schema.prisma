@@ -43,6 +43,13 @@ enum OrderStatus {
   EXPIRED
 }
 
+/// Валюта заказа. Клиент её не показывает: пока принимаются только рубли (src/orders/budget.ts).
+enum Currency {
+  RUB
+  USD
+  USDT
+}
+
 /// Ориентация ролика в требованиях заказа; null в заказе — любая.
 enum VideoOrientation {
   VERTICAL
@@ -69,11 +76,16 @@ model Order {
   description      String
   /// Ссылка на референс или материалы (бриф, пример ролика). Контакты в ней не пропускает order-input.
   referenceUrl     String?
-  /// Цена за одно принятое видео в копейках (в API — рубли, см. src/common/money.ts); null — договорная.
-  priceKopecks     Int?
-  /// Сколько видео нужно рекламодателю; null — без лимита. Набрано — заказ закрывается сам
-  /// (SubmissionsService.advertiserApprove), принять больше нельзя.
-  videosNeeded     Int?
+  /// Деньги — в сотых долях валюты (копейки, центы); в API — целые единицы, см. src/common/money.ts.
+  currency         Currency      @default(RUB)
+  /// Всё, что платит рекламодатель, включая комиссию площадки.
+  budgetMinor      Int
+  /// Комиссия площадки в процентах на момент создания: креаторам — budget × (100 − fee) / 100.
+  feePercent       Int
+  /// Выплата креатору за 1000 просмотров. Ставит модератор при одобрении; до этого null.
+  cpmMinor         Int?
+  /// Ролик можно сдать, только когда он набрал столько просмотров.
+  minViews         Int           @default(250)
   category         OrderCategory @default(OTHER)
   /// Требования к ролику: длительность в секундах и ориентация; null — любая.
   minDurationSec   Int?
@@ -103,10 +115,9 @@ model Order {
 enum SubmissionStatus {
   IN_PROGRESS
   SUBMITTED
+  /// Одобрен модератором: просмотры зафиксированы, деньги начислены. Решение окончательное.
   MODERATOR_APPROVED
   MODERATOR_REJECTED
-  ADVERTISER_APPROVED
-  ADVERTISER_REJECTED
   /// Креатор не прислал видео за SLOT_DAYS дней после отклика — слот сгорел (ScheduledJob).
   SLOT_EXPIRED
 }
@@ -121,8 +132,14 @@ model Submission {
   status            SubmissionStatus @default(IN_PROGRESS)
   moderatorId       BigInt?
   moderatorComment  String?
-  advertiserComment String?
-  /// Оценка рекламодателя 1–5 при приёмке видео (ADVERTISER_APPROVED); менять нельзя, модератор может удалить.
+  /// Просмотры: при сдаче — сколько указал креатор, после одобрения — сколько зафиксировал модератор.
+  views             Int?
+  /// Деньги креатору за ролик: на проверке — резерв из бюджета, после одобрения — начислено.
+  /// Отклонили — 0. Вместе по заказу не больше фонда выплат (src/orders/budget.ts).
+  payoutMinor       Int              @default(0)
+  /// Добор завершён: итоговые просмотры зафиксированы через VIEWS_TOPUP_DAYS после одобрения.
+  finalizedAt       DateTime?
+  /// Оценка рекламодателя 1–5 одобренному ролику, по желанию; менять нельзя, модератор может удалить.
   rating            Int?
   review            String?
   /// Рекламодатель разрешил показывать видео в портфолио креатора.
