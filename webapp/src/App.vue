@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { watch } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
+import OnboardingOverlay from './components/OnboardingOverlay.vue';
 import TabBar from './components/TabBar.vue';
 import { banned, fetchMe } from './api';
 import { inTelegram, openTelegramLink, webApp } from './telegram';
@@ -51,6 +52,10 @@ if (inTelegram) {
   </main>
   <RouterView v-else />
   <TabBar v-if="!banned" />
+  <!-- matched пуст, пока роутер не решил, куда вести: иначе модератор мельком увидит онбординг. -->
+  <OnboardingOverlay
+    v-if="!banned && route.matched.length && !route.path.startsWith('/mod') && route.path !== '/privacy'"
+  />
 </template>
 
 <style scoped>
