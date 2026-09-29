@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
-import { ApiError, fetchModQueue, fetchModVideo, finalizeVideo, type ModVideo, moderateVideo } from '../../api';
+import {
+  ApiError,
+  fetchModQueue,
+  fetchModVideo,
+  finalizeVideo,
+  type ModVideo,
+  moderateVideo,
+  PLATFORM_NAMES,
+} from '../../api';
 import ReasonPicker from '../../components/ReasonPicker.vue';
 import { formatCpm, formatDate, formatRubles, formatVideoFormat, formatViews, timeAgo } from '../../format';
 import { safeUrl } from '../../telegram';
@@ -33,7 +41,8 @@ async function load() {
   comment.value = '';
   try {
     video.value = await fetchModVideo(Number(props.id));
-    views.value = video.value.views ?? '';
+    // Просмотры из API площадки точнее заявленных — подставляем их.
+    views.value = video.value.autoViews ?? video.value.views ?? '';
   } catch (err) {
     loadError.value = err instanceof ApiError ? err.userMessage : 'Не удалось загрузить видео';
   }
@@ -119,6 +128,10 @@ watch(() => props.id, load, { immediate: true });
         <div class="row"><span>Ставка</span><span>{{ formatCpm(video.order.cpm) }}</span></div>
         <div class="row"><span>Порог</span><span>от {{ formatViews(video.order.minViews) }} просмотров</span></div>
         <div class="row"><span>Свободно в бюджете</span><span>{{ formatRubles(video.order.free) }}</span></div>
+        <div v-if="video.autoViews !== null" class="row">
+          <span>Сейчас по данным {{ PLATFORM_NAMES[video.platform] }}</span>
+          <span>{{ formatViews(video.autoViews) }} просмотров</span>
+        </div>
         <div v-if="video.views !== null" class="row">
           <span>{{ video.status === 'SUBMITTED' ? 'Креатор указал' : 'Зафиксировано' }}</span>
           <span>{{ formatViews(video.views) }} просмотров · {{ formatRubles(video.payout) }}</span>

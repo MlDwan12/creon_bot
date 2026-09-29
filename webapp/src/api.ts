@@ -274,6 +274,9 @@ export interface ModVideo {
   attempt: number;
   /** На проверке — заявлено креатором, после одобрения — зафиксировано. */
   views: number | null;
+  /** Сейчас по данным API площадки (YouTube, VK); null — вводится вручную по ссылке. */
+  autoViews: number | null;
+  platform: Platform;
   /** ₽: резерв или начислено. */
   payout: number;
   decidedAt: string | null;
