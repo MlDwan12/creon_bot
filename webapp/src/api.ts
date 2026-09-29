@@ -265,6 +265,33 @@ export interface ModVideo {
   } & VideoFormat;
 }
 
+/** Ответ `GET /api/balance` — см. src/api/balance.controller.ts. Суммы в ₽. */
+export interface Balance {
+  earned: number;
+  paid: number;
+  /** В открытой заявке на вывод. */
+  requested: number;
+  available: number;
+  minPayout: number;
+  payouts: {
+    id: number;
+    amount: number;
+    status: 'REQUESTED' | 'PAID' | 'REJECTED';
+    /** Причина отказа. */
+    comment: string | null;
+    createdAt: string;
+    decidedAt: string | null;
+  }[];
+}
+
+export interface ModPayout {
+  id: number;
+  amount: number;
+  creator: string;
+  creatorId: number;
+  createdAt: string;
+}
+
 /** Ссылки креатора на соцсети; null — не указана. */
 export interface ProfileLinks {
   tiktokUrl: string | null;
@@ -512,6 +539,23 @@ export function fetchModVideo(id: number) {
 /** Одобрить с просмотрами (`views`) или отклонить с причиной (`comment`). */
 export function moderateVideo(id: number, decision: 'approve' | 'reject', body: { views?: number; comment?: string }) {
   return request<{ ok: true }>('POST', `/api/mod/videos/${id}/${decision}`, body);
+}
+
+export function fetchBalance() {
+  return request<Balance>('GET', '/api/balance');
+}
+
+export function requestPayout(amount: number) {
+  return request<{ ok: true }>('POST', '/api/balance/withdraw', { amount });
+}
+
+export function fetchModPayouts() {
+  return request<ModPayout[]>('GET', '/api/mod/payouts');
+}
+
+/** Отметить заявку выплаченной или отклонить с причиной — сумма вернётся на баланс. */
+export function decidePayout(id: number, decision: 'paid' | 'reject', comment?: string) {
+  return request<{ ok: true }>('POST', `/api/mod/payouts/${id}/${decision}`, comment === undefined ? undefined : { comment });
 }
 
 /** Итог просмотров после добора. */

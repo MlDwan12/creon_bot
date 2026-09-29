@@ -103,7 +103,10 @@ void load();
 
 <template>
   <main class="page">
-    <h1>Модерация</h1>
+    <div class="title-row">
+      <h1>Модерация</h1>
+      <RouterLink to="/mod/payouts" class="payouts-link">Выплаты ›</RouterLink>
+    </div>
 
     <p v-if="error" class="hint">{{ error }}</p>
     <p v-else-if="!queue" class="hint">Загрузка…</p>
@@ -229,6 +232,16 @@ void load();
 </template>
 
 <style scoped>
+.title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.payouts-link {
+  color: var(--link);
+  font-weight: 600;
+  text-decoration: none;
+}
 .page {
   display: flex;
   flex-direction: column;

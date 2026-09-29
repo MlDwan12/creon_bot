@@ -1,6 +1,12 @@
 import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Order, Submission, User } from '@prisma/client';
+import {
+  type Order,
+  type Payout,
+  PayoutStatus,
+  type Submission,
+  type User,
+} from '@prisma/client';
 import { InjectBot } from 'nestjs-telegraf';
 import { kopecksToRubles } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
@@ -138,7 +144,7 @@ export class NotificationsService implements OnApplicationShutdown {
     const views = (submission.views ?? 0).toLocaleString('ru-RU');
     this.send(
       submission.creator.telegramId,
-      `✅ Ролик по заказу «${escapeHtml(submission.order.title)}» одобрен: ${views} просмотров, начислено ${formatRubles(kopecksToRubles(submission.payoutMinor))}.\n\nЧерез ${VIEWS_TOPUP_DAYS} дня зафиксируем итог просмотров и доплатим за новые, пока в заказе есть бюджет.`,
+      `✅ Ролик по заказу «${escapeHtml(submission.order.title)}» одобрен: ${views} просмотров, начислено ${formatRubles(kopecksToRubles(submission.payoutMinor))}.\n\nЧерез ${VIEWS_TOPUP_DAYS} дня зафиксируем итог просмотров и доплатим за новые, пока в заказе есть бюджет. Вывести деньги — «Мои отклики» → «Баланс».`,
       '/submissions',
       true,
     );
@@ -286,19 +292,31 @@ export class NotificationsService implements OnApplicationShutdown {
 
   /** Модераторам: в очереди есть то, что ждёт дольше положенного. */
   moderationQueueStale(
-    orders: number,
-    videos: number,
-    topups: number,
+    stale: { orders: number; videos: number; topups: number; payouts: number },
     hours: number,
   ) {
     const parts = [
-      orders ? `заказов: ${orders}` : '',
-      videos ? `видео: ${videos}` : '',
-      topups ? `итогов просмотров: ${topups}` : '',
+      stale.orders ? `заказов: ${stale.orders}` : '',
+      stale.videos ? `видео: ${stale.videos}` : '',
+      stale.topups ? `итогов просмотров: ${stale.topups}` : '',
+      stale.payouts ? `заявок на вывод: ${stale.payouts}` : '',
     ].filter(Boolean);
     this.toModerators(
       `🕓 Дольше ${hours} ч ждут проверки — ${parts.join(', ')}.`,
       '/mod',
+    );
+  }
+
+  /** Креатору: заявку на вывод выполнили или отклонили. */
+  payoutDecided(payout: Payout & { creator: User }) {
+    const amount = formatRubles(kopecksToRubles(payout.amountMinor));
+    this.send(
+      payout.creator.telegramId,
+      payout.status === PayoutStatus.PAID
+        ? `💸 Выплата ${amount} отправлена. Если деньги не пришли — напишите в поддержку.`
+        : `❌ Заявка на вывод ${amount} отклонена.\nПричина: ${escapeHtml(payout.comment ?? '')}\n\nСумма вернулась на баланс.`,
+      '/balance',
+      true,
     );
   }
 

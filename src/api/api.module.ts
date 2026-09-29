@@ -5,6 +5,7 @@ import { OrdersModule } from '../orders/orders.module';
 import { SubmissionsModule } from '../submissions/submissions.module';
 import { UsersModule } from '../users/users.module';
 import { AnalyticsService } from './analytics.service';
+import { BalanceController } from './balance.controller';
 import { BansService } from './bans.service';
 import { HealthController } from './health.controller';
 import { InitDataGuard } from './init-data.guard';
@@ -15,6 +16,7 @@ import { MyOrdersController } from './my-orders.controller';
 import { ScheduledJob } from './scheduled.job';
 import { UserThrottlerGuard } from './user-throttler.guard';
 import { OrdersController } from './orders.controller';
+import { PayoutsService } from './payouts.service';
 import { ProfilesController } from './profiles.controller';
 import { ProfilesService } from './profiles.service';
 import { ReportsController } from './reports.controller';
@@ -47,10 +49,12 @@ import { SubmissionsController } from './submissions.controller';
     ProfilesController,
     ReportsController,
     SupportController,
+    BalanceController,
   ],
   providers: [
     AnalyticsService,
     BansService,
+    PayoutsService,
     ProfilesService,
     ReportsService,
     InitDataGuard,

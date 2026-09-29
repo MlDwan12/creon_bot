@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { RouterLink } from 'vue-router';
-import { fetchMySubmissions, type MySubmission } from '../api';
+import { type Balance, fetchBalance, fetchMySubmissions, type MySubmission } from '../api';
+import { formatRubles } from '../format';
 import SubmissionCard from '../components/SubmissionCard.vue';
 
 const items = ref<MySubmission[]>([]);
 const loading = ref(true);
 const error = ref('');
 const tab = ref<'active' | 'done'>('active');
+const balance = ref<Balance>();
+// баланс — второстепенное: не загрузился — просто не показываем
+void fetchBalance().then((b) => (balance.value = b), () => {});
 
 const ACTIVE = ['IN_PROGRESS', 'SUBMITTED', 'MODERATOR_APPROVED'];
 
@@ -44,6 +48,14 @@ void load();
       <h1>Мои отклики</h1>
       <RouterLink to="/profile" class="profile-link">Мой профиль</RouterLink>
     </header>
+
+    <RouterLink v-if="balance" to="/balance" class="balance">
+      <span>
+        <small>Баланс</small>
+        <strong>{{ formatRubles(balance.available) }}</strong>
+      </span>
+      <span class="balance-action">Вывести ›</span>
+    </RouterLink>
 
     <div class="segmented" role="tablist" aria-label="Фильтр откликов">
       <button type="button" role="tab" :aria-selected="tab === 'active'" @click="tab = 'active'">
@@ -127,6 +139,31 @@ h1 {
 .hint {
   margin: 0;
   color: var(--hint);
+}
+.balance {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+.balance span:first-child {
+  display: flex;
+  flex-direction: column;
+}
+.balance small {
+  font-size: 13px;
+  color: var(--hint);
+}
+.balance strong {
+  font-size: 20px;
+}
+.balance-action {
+  color: var(--link);
+  font-weight: 600;
 }
 .hint a {
   color: var(--link);
