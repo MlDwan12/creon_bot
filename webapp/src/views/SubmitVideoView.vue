@@ -89,7 +89,7 @@ void load();
         />
         <p class="hint help">
           Ролик, опубликованный у вас в TikTok, YouTube, VK, Instagram или X. Публикация должна быть открыта для всех.
-          По YouTube и VK просмотры посчитаем сами, по остальным — сверит модератор.
+          По YouTube просмотры посчитаем сами, по остальным площадкам — сверит модератор.
         </p>
         <label for="views" class="section-title">Просмотров сейчас</label>
         <input

@@ -95,7 +95,7 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   /**
-   * Итог добора по роликам, чьи просмотры отдаёт API площадки (YouTube, VK), — без модератора.
+   * Итог добора по роликам, чьи просмотры отдаёт API площадки (YouTube), — без модератора.
    * API не ответило — ролик остаётся в очереди «Итоги», итог введёт модератор.
    */
   private async finalizeAutomatic() {

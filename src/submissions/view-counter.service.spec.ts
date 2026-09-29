@@ -1,4 +1,4 @@
-import { vkVideoId, youtubeId } from './view-counter.service';
+import { youtubeId } from './view-counter.service';
 
 describe('youtubeId', () => {
   it.each([
@@ -10,17 +10,5 @@ describe('youtubeId', () => {
     ['не ссылка', null],
   ])('%s → %s', (url, id) => {
     expect(youtubeId(url)).toBe(id);
-  });
-});
-
-describe('vkVideoId', () => {
-  it.each([
-    ['https://vk.com/video-22822305_456241864', '-22822305_456241864'],
-    ['https://vk.com/clip123_456', '123_456'],
-    ['https://vk.com/feed?z=video-1_2%2Fabc', '-1_2'],
-    ['https://vkvideo.ru/video-1_2', '-1_2'],
-    ['https://vk.com/id1', null],
-  ])('%s → %s', (url, id) => {
-    expect(vkVideoId(url)).toBe(id);
   });
 });
