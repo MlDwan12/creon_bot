@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { fetchMe } from './api';
+import BalanceView from './views/BalanceView.vue';
 import CatalogView from './views/CatalogView.vue';
 import OrderDetailView from './views/OrderDetailView.vue';
 import PrivacyView from './views/PrivacyView.vue';
@@ -10,6 +11,7 @@ import CreateOrderView from './views/CreateOrderView.vue';
 import LearnView from './views/LearnView.vue';
 import ModAllOrdersView from './views/mod/ModAllOrdersView.vue';
 import ModOrderView from './views/mod/ModOrderView.vue';
+import ModPayoutsView from './views/mod/ModPayoutsView.vue';
 import ModQueueView from './views/mod/ModQueueView.vue';
 import ModStatsView from './views/mod/ModStatsView.vue';
 import ModVideoView from './views/mod/ModVideoView.vue';
@@ -37,6 +39,7 @@ export const router = createRouter({
       meta: { back: true },
     },
     { path: '/submissions', component: MySubmissionsView },
+    { path: '/balance', component: BalanceView, meta: { back: true } },
     {
       path: '/submissions/:id/video',
       component: SubmitVideoView,
@@ -71,6 +74,7 @@ export const router = createRouter({
     { path: '/mod', component: ModQueueView },
     { path: '/mod/orders', component: ModAllOrdersView },
     { path: '/mod/stats', component: ModStatsView },
+    { path: '/mod/payouts', component: ModPayoutsView, meta: { back: true } },
     {
       path: '/mod/orders/:id',
       component: ModOrderView,

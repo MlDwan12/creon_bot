@@ -9,6 +9,7 @@ import { VIEWS_TOPUP_DAYS } from '../orders/budget';
 import { DAY_MS } from '../orders/deadline';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
+import { PayoutsService } from './payouts.service';
 
 const INTERVAL_MS = 5 * 60 * 1000;
 /** Сколько заказ или видео может ждать модератора, прежде чем напомним. И не чаще, чем раз в столько же. */
@@ -32,6 +33,7 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly ordersService: OrdersService,
     private readonly submissionsService: SubmissionsService,
     private readonly notifications: NotificationsService,
+    private readonly payouts: PayoutsService,
   ) {}
 
   onApplicationBootstrap() {
@@ -92,10 +94,11 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
   private async remindModerators() {
     if (Date.now() - this.lastQueueReminder < STALE_MS) return;
     const staleBefore = Date.now() - STALE_MS;
-    const [orders, videos, topups] = await Promise.all([
+    const [orders, videos, topups, payouts] = await Promise.all([
       this.ordersService.listPending(),
       this.submissionsService.listPendingModeration(),
       this.submissionsService.listTopupDue(),
+      this.payouts.listRequested(),
     ]);
     const staleOrders = orders.filter(
       (o) => o.moderationRequestedAt.getTime() < staleBefore,
@@ -109,11 +112,17 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
         s.decidedAt &&
         s.decidedAt.getTime() + VIEWS_TOPUP_DAYS * DAY_MS < staleBefore,
     ).length;
-    if (!staleOrders && !staleVideos && !staleTopups) return;
+    const stalePayouts = payouts.filter(
+      (p) => p.createdAt.getTime() < staleBefore,
+    ).length;
+    if (!staleOrders && !staleVideos && !staleTopups && !stalePayouts) return;
     this.notifications.moderationQueueStale(
-      staleOrders,
-      staleVideos,
-      staleTopups,
+      {
+        orders: staleOrders,
+        videos: staleVideos,
+        topups: staleTopups,
+        payouts: stalePayouts,
+      },
       STALE_HOURS,
     );
     this.lastQueueReminder = Date.now();

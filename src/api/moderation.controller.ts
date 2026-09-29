@@ -15,18 +15,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ParseIdPipe } from './parse-id.pipe';
-import {
-  type Order,
-  ReportTarget,
-  type Submission,
-  type User,
-} from '@prisma/client';
+import { ReportTarget } from '@prisma/client';
 import { findContacts } from '../common/contacts';
 import { isDbId } from '../common/validation';
 import { kopecksToRubles } from '../common/money';
 import { NotificationsService } from '../bot/notifications.service';
-import { SupportService } from '../bot/support.service';
-import { creatorLabel, escapeHtml, formatRubles } from '../bot/utils/format';
+import { creatorLabel } from '../bot/utils/format';
 import { payoutPool, VIEWS_TOPUP_DAYS } from '../orders/budget';
 import { OrdersService } from '../orders/orders.service';
 import { DAY_MS } from '../orders/deadline';
@@ -34,6 +28,7 @@ import { SubmissionsService } from '../submissions/submissions.service';
 import { UsersService } from '../users/users.service';
 import { AnalyticsService } from './analytics.service';
 import { BansService, parseBanReason } from './bans.service';
+import { PayoutsService } from './payouts.service';
 import { ReportsService } from './reports.service';
 import { attemptNumbers } from './attempts';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
@@ -72,7 +67,7 @@ export class ModerationController {
     private readonly bans: BansService,
     private readonly usersService: UsersService,
     private readonly moderatorGuard: ModeratorGuard,
-    private readonly support: SupportService,
+    private readonly payouts: PayoutsService,
   ) {}
 
   /** Обе очереди сразу: заказы и видео на проверке, старые первыми. */
@@ -354,7 +349,6 @@ export class ModerationController {
       );
     this.notifications.videoApprovedByModerator(submission);
     if (closed) this.notifications.orderBudgetExhausted(closed);
-    await this.paymentDue(submission, submission.payoutMinor, 'ролик одобрен');
     return { ok: true };
   }
 
@@ -368,32 +362,46 @@ export class ModerationController {
       await this.submissionsService.finalizeViews(id, parseViews(views));
     this.notifications.viewsFinalized(submission, extraMinor);
     if (closed) this.notifications.orderBudgetExhausted(closed);
-    if (extraMinor > 0)
-      await this.paymentDue(
-        submission,
-        extraMinor,
-        'доплата за добор просмотров',
-      );
     return { ok: true };
   }
 
-  /** Менеджеру в поддержку: кому и сколько перевести (оплата пока вне бота). */
-  private paymentDue(
-    s: Submission & { order: Order; creator: User },
-    amountMinor: number,
-    why: string,
+  /** Открытые заявки на вывод, старые первыми. */
+  @Get('payouts')
+  async payoutsList() {
+    return (await this.payouts.listRequested()).map((p) => ({
+      id: p.id,
+      amount: kopecksToRubles(p.amountMinor),
+      creator: creatorLabel(p.creator),
+      creatorId: p.creatorId,
+      createdAt: p.createdAt,
+    }));
+  }
+
+  /** Деньги переведены — креатору уведомление. */
+  @Post('payouts/:id/paid')
+  async payoutPaid(
+    @Param('id', ParseIdPipe) id: number,
+    @Req() req: ApiRequest,
   ) {
-    if (amountMinor <= 0) return;
-    return this.support.paymentDue(
-      [
-        `💸 <b>К оплате</b> — ${why}`,
-        `Заказ #${s.order.id}: ${escapeHtml(s.order.title)}`,
-        `Креатор: ${escapeHtml(creatorLabel(s.creator))} (#u${s.creator.telegramId})`,
-        `Просмотров: ${(s.views ?? 0).toLocaleString('ru-RU')}`,
-        `Сумма: ${formatRubles(kopecksToRubles(amountMinor))}`,
-        `Видео: ${escapeHtml(s.videoUrl ?? '')}`,
-      ].join('\n'),
+    const payout = await this.payouts.markPaid(id, req.user.telegramId);
+    this.notifications.payoutDecided(payout);
+    return { ok: true };
+  }
+
+  /** Отказ с причиной — сумма возвращается на баланс креатора. */
+  @Post('payouts/:id/reject')
+  async payoutReject(
+    @Param('id', ParseIdPipe) id: number,
+    @Body() body: unknown,
+    @Req() req: ApiRequest,
+  ) {
+    const payout = await this.payouts.reject(
+      id,
+      req.user.telegramId,
+      parseRejectComment(body),
     );
+    this.notifications.payoutDecided(payout);
+    return { ok: true };
   }
 
   @Post('videos/:id/reject')

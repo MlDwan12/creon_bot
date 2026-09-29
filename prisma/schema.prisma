@@ -28,6 +28,7 @@ model User {
   orders      Order[]
   submissions Submission[]
   reports     Report[]
+  payouts     Payout[]
 
   /// Ответ поддержки в теме → чей это пользователь (SupportService.fromSupport).
   @@index([supportTopicId])
@@ -193,4 +194,36 @@ model Report {
   /// Одна жалоба от человека на один объект.
   @@unique([reporterId, target, targetId])
   @@index([status])
+}
+
+enum PayoutStatus {
+  /// Креатор запросил вывод — ждёт менеджера.
+  REQUESTED
+  /// Менеджер перевёл деньги.
+  PAID
+  /// Отклонена с причиной — сумма вернулась на баланс.
+  REJECTED
+}
+
+/// Заявка креатора на вывод начисленного. Сами переводы — вручную, реквизиты — в чате поддержки.
+/// Баланс = начислено за одобренные ролики − заявки REQUESTED и PAID (src/api/payouts.service.ts).
+model Payout {
+  id          Int          @id @default(autoincrement())
+  creator     User         @relation(fields: [creatorId], references: [id])
+  creatorId   Int
+  currency    Currency     @default(RUB)
+  amountMinor Int
+  status      PayoutStatus @default(REQUESTED)
+  /// Причина отказа — её увидит креатор.
+  comment     String?
+  moderatorId BigInt?
+  createdAt   DateTime     @default(now())
+  decidedAt   DateTime?
+
+  /// История выплат креатора.
+  @@index([creatorId])
+  /// Очередь заявок (REQUESTED, старые первыми).
+  @@index([status, createdAt])
+  /// Одна открытая заявка на креатора — вторую (двойной тап) не пустит сама база.
+  @@unique([creatorId], map: "Payout_one_requested", where: { status: "REQUESTED" })
 }

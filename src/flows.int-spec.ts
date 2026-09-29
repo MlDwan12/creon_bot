@@ -2,6 +2,7 @@ import type { ConfigService } from '@nestjs/config';
 import { AnalyticsService } from './api/analytics.service';
 import { BansService } from './api/bans.service';
 import { ProfilesService } from './api/profiles.service';
+import { PayoutsService } from './api/payouts.service';
 import { ReportsService } from './api/reports.service';
 import { MAX_ACTIVE_ORDERS, OrdersService } from './orders/orders.service';
 import { PrismaService } from './prisma/prisma.service';
@@ -33,6 +34,7 @@ const bans = new BansService(prisma);
 const profiles = new ProfilesService(prisma);
 const reports = new ReportsService(prisma, orders, profiles);
 const users = new UsersService(prisma);
+const payouts = new PayoutsService(prisma);
 
 const DAY = 24 * 60 * 60 * 1000;
 let nextTelegramId = 1n;
@@ -649,6 +651,80 @@ describe('бюджет и просмотры', () => {
     await expect(submissions.rate(s.id, adv.id, feedback)).rejects.toThrow(
       'уже оценён',
     );
+  });
+});
+
+describe('баланс и вывод', () => {
+  /** Одобренный ролик креатора на `views` просмотров: 100 ₽ за 1000. */
+  async function earned(creatorId: number, views: number) {
+    const order = await openOrder((await user()).id);
+    const s = await submissions.claim(order.id, creatorId);
+    await submissions.attachVideo(
+      s.id,
+      creatorId,
+      'https://v.example/b',
+      views,
+    );
+    await submissions.moderatorApprove(s.id, 1n, views);
+  }
+
+  it('баланс — начисленное минус заявки; ролик на проверке не в балансе', async () => {
+    const creator = await user();
+    await earned(creator.id, 5000); // 500 ₽
+    const order = await openOrder((await user()).id);
+    const pending = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(
+      pending.id,
+      creator.id,
+      'https://v.example/p',
+      5000,
+    );
+    expect(await payouts.balance(creator.id)).toEqual({
+      earnedMinor: 50_000,
+      paidMinor: 0,
+      requestedMinor: 0,
+      availableMinor: 50_000,
+    });
+
+    const p = await payouts.requestPayout(creator.id, 30_000);
+    expect((await payouts.balance(creator.id)).availableMinor).toBe(20_000);
+    await payouts.markPaid(p.id, 1n);
+    expect(await payouts.balance(creator.id)).toMatchObject({
+      paidMinor: 30_000,
+      requestedMinor: 0,
+      availableMinor: 20_000,
+    });
+  });
+
+  it('больше баланса и вторую открытую заявку — нельзя; отказ возвращает сумму', async () => {
+    const creator = await user();
+    await earned(creator.id, 5000);
+    await expect(payouts.requestPayout(creator.id, 50_001)).rejects.toThrow(
+      'больше доступного',
+    );
+    const p = await payouts.requestPayout(creator.id, 10_000);
+    await expect(payouts.requestPayout(creator.id, 10_000)).rejects.toThrow(
+      'уже есть заявка',
+    );
+    await payouts.reject(p.id, 1n, 'реквизиты не пришли');
+    await expect(payouts.reject(p.id, 1n, 'ещё раз')).rejects.toThrow(
+      'уже обработана',
+    );
+    expect((await payouts.balance(creator.id)).availableMinor).toBe(50_000);
+    await expect(
+      payouts.requestPayout(creator.id, 50_000),
+    ).resolves.toBeDefined();
+  });
+
+  it('двойной тап — одна заявка', async () => {
+    const creator = await user();
+    await earned(creator.id, 5000);
+    const results = await Promise.allSettled([
+      payouts.requestPayout(creator.id, 40_000),
+      payouts.requestPayout(creator.id, 40_000),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(await prisma.payout.count()).toBe(1);
   });
 });
 
