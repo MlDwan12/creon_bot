@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { ApiError, categoryLabel, claimOrder, fetchOrder, type OrderDetail } from '../api';
 import SupportLink from '../components/SupportLink.vue';
-import { formatDeadline, formatPrice } from '../format';
+import { formatDeadline, formatPrice, formatVideoFormat } from '../format';
 import { safeUrl } from '../telegram';
 
 // `id` приходит из адреса /orders/:id (в router.ts у маршрута `props: true`).
@@ -83,6 +83,7 @@ void load();
       <section class="block">
         <h2 class="section-title">Задание</h2>
         <div class="text">{{ order.description }}</div>
+        <p v-if="formatVideoFormat(order)" class="format">Ролик: {{ formatVideoFormat(order) }}</p>
         <a v-if="safeUrl(order.referenceUrl)" :href="safeUrl(order.referenceUrl)" target="_blank" rel="noopener noreferrer" class="reference">
           Референс и материалы ›
         </a>
@@ -92,7 +93,7 @@ void load();
         <h2 class="section-title">Как это работает</h2>
         <ol class="steps">
           <li>Откликаетесь — заказ появляется в «Мои отклики»</li>
-          <li>Снимаете видео и присылаете ссылку</li>
+          <li>Снимаете видео и присылаете ссылку — на это 5 дней, потом слот сгорает</li>
           <li>Модератор проверяет ролик</li>
           <li>Рекламодатель подтверждает работу</li>
         </ol>
@@ -184,6 +185,13 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+.format {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  font-size: 15px;
 }
 .reference {
   padding: 12px 16px;

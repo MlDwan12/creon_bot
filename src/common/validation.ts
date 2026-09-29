@@ -6,6 +6,8 @@ export const MAX_DESCRIPTION_LENGTH = 1000;
 export const MAX_PRICE = 1_000_000;
 /** Сколько видео нужно по заказу. */
 export const MAX_VIDEOS_NEEDED = 100;
+/** Длительность ролика в требованиях заказа — до 10 минут. */
+export const MAX_DURATION_SEC = 600;
 export const MAX_COMMENT_LENGTH = 500;
 export const MAX_URL_LENGTH = 500;
 export const MAX_DEADLINE_DAYS = 365;

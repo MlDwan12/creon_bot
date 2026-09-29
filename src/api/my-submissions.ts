@@ -5,6 +5,7 @@ import {
   SubmissionStatus,
 } from '@prisma/client';
 import { kopecksToRubles } from '../common/money';
+import { slotDueAt } from '../submissions/submissions.service';
 
 /**
  * «Мои отклики» для Mini App: каждый отклик (одно видео) — своя карточка; `attempt` — номер видео
@@ -35,6 +36,11 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
             ? row.advertiserComment
             : null,
       createdAt: row.createdAt,
+      // Сдать видео до конца слота, но не позже срока заказа.
+      dueAt:
+        row.status === SubmissionStatus.IN_PROGRESS
+          ? earliest(slotDueAt(row.createdAt), row.order.deadline)
+          : null,
       order: {
         id: row.order.id,
         // Изменённый заказ на проверке (или отклонённый после правки): новое название модератор ещё
@@ -50,4 +56,8 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
       },
     };
   });
+}
+
+function earliest(a: Date, b: Date | null) {
+  return b && b < a ? b : a;
 }

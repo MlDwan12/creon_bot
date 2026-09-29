@@ -15,7 +15,7 @@ const STALE_MS = STALE_HOURS * 60 * 60 * 1000;
 
 /**
  * Фоновые задачи раз в 5 минут: закрыть заказы с истёкшим сроком, напомнить креаторам о близком
- * сроке, напомнить модераторам о застрявшей очереди.
+ * сроке, сжечь просроченные слоты и напомнить о них, напомнить модераторам о застрявшей очереди.
  * ponytail: setInterval в одном процессе — хватает, пока инстанс один. Станет несколько —
  * cron (@nestjs/schedule) на одном из них или advisory lock в Postgres, иначе уведомления задвоятся.
  */
@@ -46,6 +46,8 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
     for (const task of [
       () => this.expireOverdue(),
       () => this.remindDeadlines(),
+      () => this.expireSlots(),
+      () => this.remindSlots(),
       () => this.remindModerators(),
     ]) {
       try {
@@ -68,6 +70,20 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
     for (const { id } of await this.ordersService.listDeadlineSoon()) {
       const order = await this.ordersService.markDeadlineReminded(id);
       if (order) this.notifications.deadlineSoon(order);
+    }
+  }
+
+  private async expireSlots() {
+    for (const { id } of await this.submissionsService.listSlotOverdue()) {
+      const submission = await this.submissionsService.expireSlot(id);
+      if (submission) this.notifications.slotExpired(submission);
+    }
+  }
+
+  private async remindSlots() {
+    for (const { id } of await this.submissionsService.listSlotEndingSoon()) {
+      const submission = await this.submissionsService.markSlotReminded(id);
+      if (submission) this.notifications.slotEndingSoon(submission);
     }
   }
 

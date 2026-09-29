@@ -3,7 +3,7 @@ import { ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ApiError, categoryLabel, fetchModOrder, fetchModQueue, type ModOrder, moderateOrder } from '../../api';
 import ReasonPicker from '../../components/ReasonPicker.vue';
-import { formatDate, formatPrice, waitingFor } from '../../format';
+import { formatDate, formatPrice, formatVideoFormat, waitingFor } from '../../format';
 import { safeUrl } from '../../telegram';
 
 const props = defineProps<{ id: string }>();
@@ -88,6 +88,7 @@ watch(() => props.id, load, { immediate: true });
       </section>
 
       <div class="text">{{ order.description }}</div>
+      <p v-if="formatVideoFormat(order)" class="reference">Ролик: {{ formatVideoFormat(order) }}</p>
       <p v-if="order.referenceUrl" class="reference">
         Референс:
         <a v-if="safeUrl(order.referenceUrl)" :href="safeUrl(order.referenceUrl)" target="_blank" rel="noopener noreferrer">{{ order.referenceUrl }}</a>

@@ -32,7 +32,7 @@ import { attemptNumbers } from './attempts';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { UserThrottlerGuard } from './user-throttler.guard';
 import { ModeratorGuard } from './moderator.guard';
-import { parseRejectComment } from './order-input';
+import { parseRejectComment, videoFormat } from './order-input';
 
 const PAGE_SIZE = 20;
 
@@ -144,6 +144,7 @@ export class ModerationController {
       title: o.title,
       description: o.description,
       referenceUrl: o.referenceUrl,
+      ...videoFormat(o),
       price: kopecksToRubles(o.priceKopecks),
       category: o.category,
       deadline: o.deadline,
@@ -208,6 +209,7 @@ export class ModerationController {
         id: s.order.id,
         title: s.order.title,
         description: s.order.description,
+        ...videoFormat(s.order),
       },
     };
   }

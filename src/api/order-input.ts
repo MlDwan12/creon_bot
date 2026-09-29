@@ -1,10 +1,11 @@
 import { BadRequestException } from '@nestjs/common';
-import { OrderCategory } from '@prisma/client';
+import { OrderCategory, VideoOrientation } from '@prisma/client';
 import {
   isMeaningfulText,
   MAX_COMMENT_LENGTH,
   MAX_DEADLINE_DAYS,
   MAX_DESCRIPTION_LENGTH,
+  MAX_DURATION_SEC,
   MAX_PRICE,
   MAX_TITLE_LENGTH,
   MAX_URL_LENGTH,
@@ -92,6 +93,21 @@ export function parseOrderInput(body: unknown) {
     );
   }
 
+  const minDurationSec = durationSec(b.minDurationSec);
+  const maxDurationSec = durationSec(b.maxDurationSec);
+  if (minDurationSec && maxDurationSec && minDurationSec > maxDurationSec)
+    throw new BadRequestException(
+      'Минимальная длительность больше максимальной',
+    );
+
+  // Пусто — любая ориентация.
+  const orientation = (b.orientation ?? null) as VideoOrientation | null;
+  if (
+    orientation !== null &&
+    !Object.values(VideoOrientation).includes(orientation)
+  )
+    throw new BadRequestException('Неизвестная ориентация ролика');
+
   const category = b.category as OrderCategory;
   if (!Object.values(OrderCategory).includes(category)) {
     throw new BadRequestException('Выберите категорию');
@@ -108,9 +124,39 @@ export function parseOrderInput(body: unknown) {
     referenceUrl,
     priceKopecks: price === undefined ? undefined : rublesToKopecks(price),
     videosNeeded,
+    minDurationSec,
+    maxDurationSec,
+    orientation,
     category,
     deadline,
   };
+}
+
+/** Требования к ролику из заказа — для ответов API, где поля перечислены явно. */
+export function videoFormat(o: {
+  minDurationSec: number | null;
+  maxDurationSec: number | null;
+  orientation: VideoOrientation | null;
+}) {
+  return {
+    minDurationSec: o.minDurationSec,
+    maxDurationSec: o.maxDurationSec,
+    orientation: o.orientation,
+  };
+}
+
+/** Длительность в секундах из требований; пусто — любая (null). */
+function durationSec(value: unknown): number | null {
+  if (value === undefined || value === null || value === '') return null;
+  if (
+    !Number.isInteger(value) ||
+    (value as number) < 1 ||
+    (value as number) > MAX_DURATION_SEC
+  )
+    throw new BadRequestException(
+      `Длительность — целое число секунд от 1 до ${MAX_DURATION_SEC}`,
+    );
+  return value as number;
 }
 
 /**
@@ -126,6 +172,9 @@ export function parseOrderEdit(body: unknown) {
     referenceUrl: input.referenceUrl ?? null,
     priceKopecks: input.priceKopecks ?? null,
     videosNeeded: input.videosNeeded ?? null,
+    minDurationSec: input.minDurationSec,
+    maxDurationSec: input.maxDurationSec,
+    orientation: input.orientation,
     category: input.category,
     deadline:
       b.deadlineDays === undefined

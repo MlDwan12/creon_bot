@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { SubmissionStatus, type User } from '@prisma/client';
 import { creatorLabel, publicName } from '../bot/utils/format';
 import { PrismaService } from '../prisma/prisma.service';
+import { NO_LINKS, type ProfileLinks } from './profile-input';
 
 /** Сколько последних отзывов и видео портфолио показывать в профиле. */
 const PROFILE_LIST_LIMIT = 20;
@@ -85,8 +86,10 @@ export class ProfilesService {
             tiktokUrl: creator.tiktokUrl,
             youtubeUrl: creator.youtubeUrl,
             vkUrl: creator.vkUrl,
+            instagramUrl: creator.instagramUrl,
+            xUrl: creator.xUrl,
           }
-        : { tiktokUrl: null, youtubeUrl: null, vkUrl: null },
+        : NO_LINKS,
       reviews: reviews.map((s) => ({
         submissionId: s.id,
         rating: s.rating!,
@@ -111,14 +114,7 @@ export class ProfilesService {
     return user?.telegramId ?? null;
   }
 
-  updateLinks(
-    userId: number,
-    links: {
-      tiktokUrl: string | null;
-      youtubeUrl: string | null;
-      vkUrl: string | null;
-    },
-  ) {
+  updateLinks(userId: number, links: ProfileLinks) {
     return this.prisma.user.update({ where: { id: userId }, data: links });
   }
 }

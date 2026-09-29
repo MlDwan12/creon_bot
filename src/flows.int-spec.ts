@@ -5,7 +5,10 @@ import { ProfilesService } from './api/profiles.service';
 import { ReportsService } from './api/reports.service';
 import { MAX_ACTIVE_ORDERS, OrdersService } from './orders/orders.service';
 import { PrismaService } from './prisma/prisma.service';
-import { SubmissionsService } from './submissions/submissions.service';
+import {
+  SLOT_DAYS,
+  SubmissionsService,
+} from './submissions/submissions.service';
 import { UsersService } from './users/users.service';
 
 /**
@@ -124,6 +127,40 @@ describe('отклик', () => {
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect(await prisma.submission.count()).toBe(1);
+  });
+});
+
+describe('слот на видео', () => {
+  it('без видео за SLOT_DAYS дней сгорает, после — можно откликнуться снова', async () => {
+    const adv = await user();
+    const creator = await user();
+    const order = await openOrder(adv.id);
+    const fresh = await submissions.claim(order.id, creator.id);
+    const old = await submissions.claim(
+      (await openOrder(adv.id)).id,
+      creator.id,
+    );
+    await prisma.submission.update({
+      where: { id: old.id },
+      data: { createdAt: new Date(Date.now() - (SLOT_DAYS * DAY + 1000)) },
+    });
+
+    // Напоминание — только по старому и один раз.
+    expect(await submissions.listSlotEndingSoon()).toEqual([{ id: old.id }]);
+    expect(await submissions.markSlotReminded(old.id)).not.toBeNull();
+    expect(await submissions.markSlotReminded(old.id)).toBeNull();
+    expect(await submissions.listSlotEndingSoon()).toEqual([]);
+
+    expect(await submissions.listSlotOverdue()).toEqual([{ id: old.id }]);
+    expect((await submissions.expireSlot(old.id))?.status).toBe('SLOT_EXPIRED');
+    expect(await submissions.expireSlot(old.id)).toBeNull();
+    await expect(
+      submissions.attachVideo(old.id, creator.id, 'https://youtu.be/x'),
+    ).rejects.toThrow();
+    await expect(
+      submissions.claim(old.orderId, creator.id),
+    ).resolves.toBeDefined();
+    expect((await submissions.findById(fresh.id))?.status).toBe('IN_PROGRESS');
   });
 });
 
@@ -673,11 +710,9 @@ describe('профиль креатора', () => {
     // портфолио — только названия работ: ссылка обычно ведёт на аккаунт креатора
     expect(forAdvertiser.portfolio).toHaveLength(1);
     expect(forAdvertiser.portfolio[0].videoUrl).toBeNull();
-    expect(forAdvertiser.links).toEqual({
-      tiktokUrl: null,
-      youtubeUrl: null,
-      vkUrl: null,
-    });
+    expect(Object.values(forAdvertiser.links).every((l) => l === null)).toBe(
+      true,
+    );
     expect(JSON.stringify(forAdvertiser)).not.toContain('secret_creator');
 
     const full = await profiles.profile(creator.id, true);

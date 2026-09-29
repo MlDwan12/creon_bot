@@ -46,14 +46,26 @@ const NETWORKS = {
   tiktokUrl: { name: 'TikTok', hosts: ['tiktok.com'] },
   youtubeUrl: { name: 'YouTube', hosts: ['youtube.com', 'youtu.be'] },
   vkUrl: { name: 'VK', hosts: ['vk.com', 'vk.ru'] },
+  instagramUrl: { name: 'Instagram', hosts: ['instagram.com'] },
+  xUrl: { name: 'X', hosts: ['x.com', 'twitter.com'] },
 } as const;
 
 type LinkField = keyof typeof NETWORKS;
+export type ProfileLinks = Record<LinkField, string | null>;
+
+/** Все ссылки пустые — чужому (без права видеть контакты) и при сбросе профиля по жалобе. */
+export const NO_LINKS: ProfileLinks = {
+  tiktokUrl: null,
+  youtubeUrl: null,
+  vkUrl: null,
+  instagramUrl: null,
+  xUrl: null,
+};
 
 /** Ссылки профиля: пустое — удалить ссылку; иначе https на домен своей соцсети. */
-export function parseLinks(body: unknown): Record<LinkField, string | null> {
+export function parseLinks(body: unknown): ProfileLinks {
   const b = (body ?? {}) as Record<string, unknown>;
-  const result = {} as Record<LinkField, string | null>;
+  const result = { ...NO_LINKS };
   for (const field of Object.keys(NETWORKS) as LinkField[]) {
     const { name, hosts } = NETWORKS[field];
     const value = typeof b[field] === 'string' ? b[field].trim() : '';

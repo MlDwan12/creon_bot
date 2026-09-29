@@ -17,6 +17,8 @@ model User {
   tiktokUrl  String?
   youtubeUrl String?
   vkUrl      String?
+  instagramUrl String?
+  xUrl       String?
   /// Заблокирован модератором: мини-апп показывает только экран блокировки, бот не пишет.
   bannedAt   DateTime?
   banReason  String?
@@ -39,6 +41,12 @@ enum OrderStatus {
   CLOSED
   /// Истёк срок (deadline) — закрыт автоматически; рекламодатель может продлить и открыть снова.
   EXPIRED
+}
+
+/// Ориентация ролика в требованиях заказа; null в заказе — любая.
+enum VideoOrientation {
+  VERTICAL
+  HORIZONTAL
 }
 
 enum OrderCategory {
@@ -67,6 +75,10 @@ model Order {
   /// (SubmissionsService.advertiserApprove), принять больше нельзя.
   videosNeeded     Int?
   category         OrderCategory @default(OTHER)
+  /// Требования к ролику: длительность в секундах и ориентация; null — любая.
+  minDurationSec   Int?
+  maxDurationSec   Int?
+  orientation      VideoOrientation?
   deadline         DateTime?
   status           OrderStatus   @default(PENDING_MODERATION)
   moderatorId      BigInt?
@@ -95,6 +107,8 @@ enum SubmissionStatus {
   MODERATOR_REJECTED
   ADVERTISER_APPROVED
   ADVERTISER_REJECTED
+  /// Креатор не прислал видео за SLOT_DAYS дней после отклика — слот сгорел (ScheduledJob).
+  SLOT_EXPIRED
 }
 
 model Submission {
@@ -116,6 +130,8 @@ model Submission {
   createdAt         DateTime         @default(now())
   submittedAt       DateTime?
   decidedAt         DateTime?
+  /// Креатору напомнили, что слот сгорает меньше чем через сутки.
+  slotReminderSentAt DateTime?
 
   /// Отклики по заказу; внешний ключ Postgres сам не индексирует.
   @@index([orderId])

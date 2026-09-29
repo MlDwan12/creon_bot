@@ -25,6 +25,7 @@ import {
   parseDeadlineDays,
   parseOrderEdit,
   parseOrderInput,
+  videoFormat,
 } from './order-input';
 
 /** Заказы текущего пользователя как рекламодателя. Права проверяют сервисы. */
@@ -46,6 +47,7 @@ export class MyOrdersController {
       title: o.title,
       description: o.description,
       referenceUrl: o.referenceUrl,
+      ...videoFormat(o),
       price: kopecksToRubles(o.priceKopecks),
       category: o.category,
       deadline: o.deadline,
