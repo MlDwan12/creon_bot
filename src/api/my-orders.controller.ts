@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -15,11 +16,10 @@ import { OrderStatus, SubmissionStatus } from '@prisma/client';
 import { kopecksToRubles } from '../common/money';
 import { HOLDS_MONEY, payoutPool } from '../orders/budget';
 import { NotificationsService } from '../bot/notifications.service';
-import { publicName } from '../bot/utils/format';
 import { Throttle } from '@nestjs/throttler';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
-import { attemptNumbers } from './attempts';
+import { buildOrderReport, reportCsv } from './order-report';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { UserThrottlerGuard } from './user-throttler.guard';
 import {
@@ -136,33 +136,42 @@ export class MyOrdersController {
     return { ok: true };
   }
 
-  /** Одобренные ролики по моему заказу с просмотрами — отчёт и оценка по желанию. */
-  @Get(':id/pending-videos')
-  async pendingVideos(
+  /** Отчёт по моему заказу: сводка, площадки, одобренные ролики (оценка — по желанию). */
+  @Get(':id/report')
+  async report(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
+    return buildOrderReport(
+      await this.ownOrder(id, req.user.id),
+      await this.submissionsService.listByOrder(id),
+    );
+  }
+
+  /** Тот же отчёт файлом CSV — в чат с ботом: скачивание файлов из мини-аппа работает не везде. */
+  @Post(':id/report/csv')
+  @Throttle({ default: { limit: 10, ttl: 60 * 60_000 } })
+  async reportFile(
     @Param('id', ParseIdPipe) id: number,
     @Req() req: ApiRequest,
   ) {
+    const report = buildOrderReport(
+      await this.ownOrder(id, req.user.id),
+      await this.submissionsService.listByOrder(id),
+    );
+    const sent = await this.notifications.sendFile(
+      req.user.telegramId,
+      reportCsv(report),
+      `creon-order-${id}.csv`,
+    );
+    if (!sent)
+      throw new BadRequestException(
+        'Не удалось отправить файл — откройте чат с ботом и нажмите «Старт»',
+      );
+    return { ok: true };
+  }
+
+  private async ownOrder(id: number, advertiserId: number) {
     const order = await this.ordersService.findById(id);
-    if (!order || order.advertiserId !== req.user.id) {
+    if (!order || order.advertiserId !== advertiserId)
       throw new NotFoundException('Заказ не найден');
-    }
-    const all = await this.submissionsService.listByOrder(id);
-    const attempts = attemptNumbers(all);
-    return {
-      order: { id: order.id, title: order.title },
-      items: all
-        .filter((s) => s.status === SubmissionStatus.MODERATOR_APPROVED)
-        .reverse() // старые — первыми
-        .map((s) => ({
-          id: s.id,
-          videoUrl: s.videoUrl,
-          creator: publicName(s.creator),
-          creatorId: s.creatorId,
-          attempt: attempts.get(s.id)!,
-          submittedAt: s.submittedAt,
-          views: s.views,
-          rating: s.rating,
-        })),
-    };
+    return order;
   }
 }

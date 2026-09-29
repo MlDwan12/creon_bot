@@ -144,18 +144,44 @@ export interface NewOrderInput extends VideoFormat {
   deadlineDays: number | null;
 }
 
-/** Ответ `GET /api/my-orders/:id/pending-videos`: одобренные ролики — отчёт и оценка. */
-export interface PendingVideos {
-  order: { id: number; title: string };
+/** Площадка ролика — по ссылке на публикацию (src/common/platforms.ts). */
+export type Platform = 'TIKTOK' | 'YOUTUBE' | 'VK' | 'INSTAGRAM' | 'X' | 'OTHER';
+
+export const PLATFORM_NAMES: Record<Platform, string> = {
+  TIKTOK: 'TikTok',
+  YOUTUBE: 'YouTube',
+  VK: 'VK',
+  INSTAGRAM: 'Instagram',
+  X: 'X',
+  OTHER: 'Другое',
+};
+
+/** Ответ `GET /api/my-orders/:id/report` — см. src/api/order-report.ts. Деньги в ₽, с комиссией. */
+export interface OrderReport {
+  order: { id: number; title: string; status: OrderStatus };
+  summary: {
+    budget: number;
+    spent: number;
+    /** Под ролики на проверке. */
+    reserved: number;
+    left: number;
+    views: number;
+    videos: number;
+    creators: number;
+    /** Фактическая цена 1000 просмотров; null — просмотров ещё нет. */
+    cpm: number | null;
+  };
+  platforms: { platform: Platform; videos: number; views: number }[];
+  /** Одобренные ролики, больше просмотров — выше. */
   items: {
     id: number;
     videoUrl: string | null;
+    platform: Platform;
     creator: string;
     creatorId: number;
-    attempt: number;
-    submittedAt: string | null;
-    views: number | null;
+    views: number;
     rating: number | null;
+    approvedAt: string | null;
   }[];
 }
 
@@ -442,8 +468,13 @@ export function deleteOrder(id: number) {
   return request<{ ok: true }>('DELETE', `/api/my-orders/${id}`);
 }
 
-export function fetchPendingVideos(orderId: number) {
-  return request<PendingVideos>('GET', `/api/my-orders/${orderId}/pending-videos`);
+export function fetchOrderReport(orderId: number) {
+  return request<OrderReport>('GET', `/api/my-orders/${orderId}/report`);
+}
+
+/** Отчёт файлом CSV — придёт в чат с ботом. */
+export function sendReportCsv(orderId: number) {
+  return request<{ ok: true }>('POST', `/api/my-orders/${orderId}/report/csv`);
 }
 
 export function rateVideo(submissionId: number, feedback: Feedback) {

@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { findExactContacts } from '../common/contacts';
+import { isOnHosts, PLATFORMS } from '../common/platforms';
 import { isMeaningfulText, MAX_COMMENT_LENGTH } from '../common/validation';
 
 /** Оценка при приёмке видео: звёзды обязательны, отзыв и согласие на портфолио — по желанию. */
@@ -43,11 +44,11 @@ const MAX_LINK_LENGTH = 200;
 
 /** Соцсети креатора: поле → разрешённые домены (с поддоменами) и название для ошибки. */
 const NETWORKS = {
-  tiktokUrl: { name: 'TikTok', hosts: ['tiktok.com'] },
-  youtubeUrl: { name: 'YouTube', hosts: ['youtube.com', 'youtu.be'] },
-  vkUrl: { name: 'VK', hosts: ['vk.com', 'vk.ru'] },
-  instagramUrl: { name: 'Instagram', hosts: ['instagram.com'] },
-  xUrl: { name: 'X', hosts: ['x.com', 'twitter.com'] },
+  tiktokUrl: PLATFORMS.TIKTOK,
+  youtubeUrl: PLATFORMS.YOUTUBE,
+  vkUrl: PLATFORMS.VK,
+  instagramUrl: PLATFORMS.INSTAGRAM,
+  xUrl: PLATFORMS.X,
 } as const;
 
 type LinkField = keyof typeof NETWORKS;
@@ -79,11 +80,10 @@ export function parseLinks(body: unknown): ProfileLinks {
     } catch {
       // ниже — общая ошибка
     }
-    const host = url?.hostname.toLowerCase() ?? '';
     const ok =
       value.length <= MAX_LINK_LENGTH &&
       url?.protocol === 'https:' &&
-      hosts.some((h) => host === h || host.endsWith(`.${h}`));
+      isOnHosts(url.hostname, hosts);
     if (!ok)
       throw new BadRequestException(
         `Ссылка на ${name} должна начинаться с https:// и вести на ${hosts.join(' или ')}`,

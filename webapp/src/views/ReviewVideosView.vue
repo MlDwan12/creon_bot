@@ -1,16 +1,46 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { RouterLink } from 'vue-router';
-import { ApiError, type Feedback, fetchPendingVideos, type PendingVideos, rateVideo } from '../api';
+import {
+  ApiError,
+  type Feedback,
+  fetchOrderReport,
+  type OrderReport,
+  PLATFORM_NAMES,
+  rateVideo,
+  sendReportCsv,
+} from '../api';
 import SupportLink from '../components/SupportLink.vue';
 import UserAvatar from '../components/UserAvatar.vue';
-import { formatViews, timeAgo } from '../format';
+import { formatDate, formatRubles, formatViews } from '../format';
 import { safeUrl } from '../telegram';
 
 // `id` заказа из адреса /my-orders/:id/review.
 const props = defineProps<{ id: string }>();
 
-const data = ref<PendingVideos>();
+const data = ref<OrderReport>();
+/** Порядок роликов: по просмотрам (как отдаёт сервер) или новые первыми. */
+const sort = ref<'views' | 'date'>('views');
+const items = computed(() => {
+  const list = data.value?.items ?? [];
+  return sort.value === 'views'
+    ? list
+    : [...list].sort((a, b) => (b.approvedAt ?? '').localeCompare(a.approvedAt ?? ''));
+});
+const csvState = ref<'idle' | 'sending' | 'sent'>('idle');
+const csvError = ref('');
+
+async function sendCsv() {
+  csvState.value = 'sending';
+  csvError.value = '';
+  try {
+    await sendReportCsv(Number(props.id));
+    csvState.value = 'sent';
+  } catch (err) {
+    csvState.value = 'idle';
+    csvError.value = err instanceof ApiError ? err.userMessage : 'Не удалось отправить файл';
+  }
+}
 const loadError = ref('');
 /** Какой ролик сейчас оценивают — форма открыта только у него. */
 const rating = ref<number>();
@@ -20,7 +50,7 @@ const error = ref('');
 
 async function load() {
   try {
-    data.value = await fetchPendingVideos(Number(props.id));
+    data.value = await fetchOrderReport(Number(props.id));
   } catch (err) {
     loadError.value = err instanceof ApiError ? err.userMessage : 'Не удалось загрузить ролики';
   }
@@ -58,23 +88,59 @@ void load();
     <template v-else>
       <header class="head">
         <span class="hint">{{ data.order.title }}</span>
-        <h1>Ролики по заказу</h1>
-        <span class="hint">
-          Модератор проверил каждый ролик на соответствие заданию и зафиксировал просмотры. Оценка — по желанию:
-          она попадёт в рейтинг креатора.
-        </span>
+        <h1>Отчёт по заказу</h1>
       </header>
+
+      <section class="tiles">
+        <div class="tile"><strong>{{ formatViews(data.summary.views) }}</strong><span>просмотров</span></div>
+        <div class="tile"><strong>{{ data.summary.videos }}</strong><span>роликов · креаторов {{ data.summary.creators }}</span></div>
+        <div class="tile">
+          <strong>{{ formatRubles(data.summary.spent) }}</strong><span>потрачено из {{ formatRubles(data.summary.budget) }}</span>
+        </div>
+        <div class="tile">
+          <strong>{{ data.summary.cpm === null ? '—' : formatRubles(data.summary.cpm) }}</strong><span>за 1000 просмотров</span>
+        </div>
+      </section>
+      <p class="hint">
+        Осталось {{ formatRubles(data.summary.left) }}<template v-if="data.summary.reserved">
+          · ещё {{ formatRubles(data.summary.reserved) }} зарезервировано под ролики на проверке</template
+        >. Суммы — вместе с комиссией площадки.
+      </p>
+
+      <section v-if="data.platforms.length" class="rows">
+        <div v-for="p in data.platforms" :key="p.platform" class="row">
+          <span>{{ PLATFORM_NAMES[p.platform] }}</span>
+          <span>{{ p.videos }} · {{ formatViews(p.views) }} просмотров</span>
+        </div>
+      </section>
+
+      <button type="button" class="secondary" :disabled="csvState !== 'idle'" @click="sendCsv">
+        {{ csvState === 'sent' ? 'Файл отправлен в чат с ботом' : csvState === 'sending' ? 'Отправляем…' : 'Отчёт CSV — в чат с ботом' }}
+      </button>
+      <p v-if="csvError" class="error" role="alert">{{ csvError }}</p>
+
+      <div class="title-row">
+        <h2 class="section-title flush">Ролики</h2>
+        <div class="segmented" role="radiogroup" aria-label="Порядок">
+          <button type="button" role="radio" :aria-checked="sort === 'views'" @click="sort = 'views'">По просмотрам</button>
+          <button type="button" role="radio" :aria-checked="sort === 'date'" @click="sort = 'date'">Новые</button>
+        </div>
+      </div>
+      <p class="hint">
+        Модератор проверил каждый ролик на соответствие заданию и зафиксировал просмотры. Оценка — по желанию: она попадёт
+        в рейтинг креатора.
+      </p>
 
       <p v-if="data.items.length === 0" class="hint">Одобренных роликов пока нет. Бот сообщит, когда появятся.</p>
 
-      <article v-for="item in data.items" :key="item.id" class="item">
+      <article v-for="item in items" :key="item.id" class="item">
         <RouterLink :to="`/creators/${item.creatorId}`" class="creator">
           <UserAvatar :user-id="item.creatorId" :name="item.creator" />
           <div class="who">
             <div class="name">{{ item.creator }}</div>
             <div class="hint">
-              {{ formatViews(item.views ?? 0) }} просмотров<template v-if="item.submittedAt">
-                · прислано {{ timeAgo(item.submittedAt) }}</template
+              {{ PLATFORM_NAMES[item.platform] }} · {{ formatViews(item.views) }} просмотров<template v-if="item.approvedAt">
+                · {{ formatDate(item.approvedAt) }}</template
               >
             </div>
           </div>
@@ -146,6 +212,68 @@ void load();
 </template>
 
 <style scoped>
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.tile strong {
+  font-size: 22px;
+}
+.tile span {
+  font-size: 13px;
+  color: var(--hint);
+}
+.rows {
+  border-radius: 14px;
+  background: var(--surface);
+}
+.rows .row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  font-size: 15px;
+}
+.rows .row + .row {
+  border-top: 1px solid var(--separator);
+}
+.title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.flush {
+  padding: 0;
+}
+.segmented {
+  display: flex;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--fill);
+}
+.segmented button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+}
+.segmented button[aria-checked='true'] {
+  background: var(--surface);
+  font-weight: 600;
+}
 .page {
   display: flex;
   flex-direction: column;

@@ -320,6 +320,23 @@ export class NotificationsService implements OnApplicationShutdown {
     );
   }
 
+  /**
+   * Файл в чат с ботом (отчёт CSV) — сразу, а не через очередь: пользователь ждёт ответа на экране.
+   * `false` — не дошло (бота не запускали или заблокировали).
+   */
+  async sendFile(telegramId: bigint, content: string, filename: string) {
+    try {
+      await this.bot.telegram.sendDocument(telegramId.toString(), {
+        source: Buffer.from(content, 'utf8'),
+        filename,
+      });
+      return true;
+    } catch (err) {
+      this.logger.warn(err);
+      return false;
+    }
+  }
+
   /** Креатору: рекламодатель оценил ролик. */
   videoRated(submission: SubmissionWithParties & { rating: number | null }) {
     if (!submission.rating) return;

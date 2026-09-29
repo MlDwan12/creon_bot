@@ -80,7 +80,7 @@ const remove = () =>
 
     <RouterLink v-if="order.approved > 0" :to="`/my-orders/${order.id}/review`" class="pending">
       <span>
-        <strong>Ролики по заказу: {{ order.approved }}</strong>
+        <strong>Отчёт · роликов: {{ order.approved }}</strong>
         <small v-if="order.toRate > 0">можно оценить: {{ order.toRate }}</small>
         <small v-else>откликов всего: {{ order.submissionsCount }}</small>
       </span>
