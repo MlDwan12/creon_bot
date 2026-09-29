@@ -3,14 +3,15 @@ import {
   Controller,
   ForbiddenException,
   Get,
-  Header,
   NotFoundException,
   Param,
   Put,
   Req,
+  Res,
   StreamableFile,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ParseIdPipe } from './parse-id.pipe';
 import { TelegramPhotosService } from '../bot/telegram-photos.service';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
@@ -59,12 +60,18 @@ export class ProfilesController {
    * а каждый запрос — два обращения к Bot API.
    */
   @Get('creators/:id/photo')
-  @Header('Cache-Control', 'private, max-age=3600')
-  async photo(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
+  async photo(
+    @Param('id', ParseIdPipe) id: number,
+    @Req() req: ApiRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     await this.mustView(req, id);
     const telegramId = await this.profiles.telegramIdOf(id);
     const photo = telegramId && (await this.photos.profilePhoto(telegramId));
     if (!photo) throw new NotFoundException('Фото нет');
+    // только на успех: @Header ставится до обработчика, и клиент на час запоминал бы 404,
+    // полученный, пока Telegram был недоступен
+    res.setHeader('Cache-Control', 'private, max-age=3600');
     return new StreamableFile(photo, { type: 'image/jpeg' });
   }
 
