@@ -158,6 +158,20 @@ export function parseViews(value: unknown, what = 'Просмотры'): number 
   return value as number;
 }
 
+/** Лайки — по желанию: пусто — неизвестно (null), иначе целое от 0 до MAX_VIEWS. */
+export function parseLikes(value: unknown): number | null {
+  if (value === undefined || value === null || value === '') return null;
+  if (
+    !Number.isInteger(value) ||
+    (value as number) < 0 ||
+    (value as number) > MAX_VIEWS
+  )
+    throw new BadRequestException(
+      `Лайки — целое число от 0 до ${MAX_VIEWS.toLocaleString('ru-RU')}`,
+    );
+  return value as number;
+}
+
 /** Длительность в секундах из требований; пусто — любая (null). */
 function durationSec(value: unknown): number | null {
   if (value === undefined || value === null || value === '') return null;

@@ -43,6 +43,7 @@ async function load() {
     video.value = await fetchModVideo(Number(props.id));
     // Просмотры из API площадки точнее заявленных — подставляем их.
     views.value = video.value.autoViews ?? video.value.views ?? '';
+    likes.value = video.value.autoLikes ?? video.value.likes ?? '';
   } catch (err) {
     loadError.value = err instanceof ApiError ? err.userMessage : 'Не удалось загрузить видео';
   }
@@ -73,14 +74,17 @@ const decide = (decision: 'approve' | 'reject') =>
       moderateVideo(
         Number(props.id),
         decision,
-        decision === 'reject' ? { comment: comment.value } : { views: Number(views.value) },
+        decision === 'reject' ? { comment: comment.value } : { views: Number(views.value), likes: likesOrNull() },
       ),
     'videos',
   );
-const finalize = () => run(() => finalizeVideo(Number(props.id), Number(views.value)), 'topups');
+const finalize = () => run(() => finalizeVideo(Number(props.id), Number(views.value), likesOrNull()), 'topups');
 
 /** Просмотры, которые фиксирует модератор: на проверке — заявленные креатором, при итоге — текущие. */
 const views = ref<number | ''>('');
+/** Лайки — только для отчёта рекламодателю, по желанию; пусто — неизвестно. */
+const likes = ref<number | ''>('');
+const likesOrNull = () => (likes.value === '' ? null : likes.value);
 /** Сколько начислится за введённые просмотры (без учёта остатка бюджета). */
 const estimate = computed(() => {
   const cpm = video.value?.order.cpm;
@@ -142,6 +146,10 @@ watch(() => props.id, load, { immediate: true });
         <span class="section-title">{{ video.status === 'SUBMITTED' ? 'Просмотров по ссылке' : 'Итог просмотров' }}</span>
         <input v-model.number="views" type="number" inputmode="numeric" min="1" step="1" />
         <span v-if="estimate" class="hint">К начислению за эти просмотры: {{ estimate }} (не больше остатка бюджета)</span>
+      </label>
+      <label v-if="video.status === 'SUBMITTED' || topupAt" class="views">
+        <span class="section-title">Лайков — по желанию, для отчёта рекламодателю</span>
+        <input v-model.number="likes" type="number" inputmode="numeric" min="0" step="1" />
       </label>
 
       <template v-if="video.status === 'SUBMITTED'">

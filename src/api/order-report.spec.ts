@@ -16,12 +16,14 @@ const video = (
   views: number,
   payoutMinor: number,
   creator: Partial<User> = {},
+  likes: number | null = null,
 ) =>
   ({
     id: nextId++,
     status,
     videoUrl: url,
     views,
+    likes,
     payoutMinor,
     creatorId: creator.id ?? 7,
     rating: null,
@@ -36,8 +38,11 @@ describe('buildOrderReport', () => {
       'https://www.tiktok.com/@a/video/1',
       1000,
       8_000,
+      {},
+      50,
     ),
     video('MODERATOR_APPROVED', 'https://youtu.be/x', 3000, 24_000, { id: 8 }),
+    video('SUBMITTED', 'https://youtu.be/w', 2000, 0, {}, 999),
     video('SUBMITTED', 'https://youtu.be/y', 2000, 16_000),
     video('MODERATOR_REJECTED', 'https://youtu.be/z', 9000, 0),
   ]);
@@ -49,6 +54,7 @@ describe('buildOrderReport', () => {
       reserved: 200,
       left: 49_400,
       views: 4000,
+      likes: 50, // лайки ролика на проверке и неизвестные (null) не считаются
       videos: 2,
       creators: 2,
       cpm: 100,
@@ -56,9 +62,9 @@ describe('buildOrderReport', () => {
   });
 
   it('ролики — только одобренные, больше просмотров выше; площадки по ссылке', () => {
-    expect(report.items.map((i) => [i.platform, i.views])).toEqual([
-      ['YOUTUBE', 3000],
-      ['TIKTOK', 1000],
+    expect(report.items.map((i) => [i.platform, i.views, i.likes])).toEqual([
+      ['YOUTUBE', 3000, null],
+      ['TIKTOK', 1000, 50],
     ]);
     expect(report.platforms).toEqual([
       { platform: 'YOUTUBE', videos: 1, views: 3000 },
@@ -84,7 +90,7 @@ describe('reportCsv', () => {
     );
     expect(csv.startsWith('﻿"Креатор";"Площадка"')).toBe(true);
     expect(csv).toContain(
-      `"'=HYPERLINK(""x"")";"VK";"https://vk.com/clip1";"500";"2026-10-01"`,
+      `"'=HYPERLINK(""x"")";"VK";"https://vk.com/clip1";"500";"";"2026-10-01"`,
     );
   });
 });

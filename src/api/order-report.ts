@@ -30,6 +30,8 @@ export function buildOrderReport(
   const spent = budgetSpent(order, paid);
   const reserved = budgetSpent(order, paid + onReview) - spent;
   const views = approved.reduce((total, s) => total + (s.views ?? 0), 0);
+  // лайки известны не по всем роликам (вне YouTube их вводит модератор по желанию)
+  const likes = approved.reduce((total, s) => total + (s.likes ?? 0), 0);
 
   const byPlatform = new Map<Platform, { videos: number; views: number }>();
   const items = approved.map((s) => {
@@ -46,6 +48,7 @@ export function buildOrderReport(
       creator: publicName(s.creator),
       creatorId: s.creatorId,
       views: s.views ?? 0,
+      likes: s.likes,
       rating: s.rating,
       approvedAt: s.decidedAt,
     };
@@ -60,6 +63,7 @@ export function buildOrderReport(
       reserved: kopecksToRubles(reserved),
       left: kopecksToRubles(Math.max(0, order.budgetMinor - spent - reserved)),
       views,
+      likes,
       videos: approved.length,
       creators: new Set(approved.map((s) => s.creatorId)).size,
       /** Фактическая цена 1000 просмотров для рекламодателя; нет просмотров — null. */
@@ -85,12 +89,13 @@ export function reportCsv(report: Report): string {
     return `"${safe.replace(/"/g, '""')}"`;
   };
   const rows = [
-    ['Креатор', 'Площадка', 'Ссылка', 'Просмотры', 'Одобрено'],
+    ['Креатор', 'Площадка', 'Ссылка', 'Просмотры', 'Лайки', 'Одобрено'],
     ...report.items.map((i) => [
       i.creator,
       i.platform === 'OTHER' ? 'Другое' : PLATFORMS[i.platform].name,
       i.videoUrl ?? '',
       i.views,
+      i.likes ?? '',
       i.approvedAt ? i.approvedAt.toISOString().slice(0, 10) : '',
     ]),
   ];

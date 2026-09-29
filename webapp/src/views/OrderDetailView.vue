@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onUnmounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { ApiError, categoryLabel, claimOrder, fetchOrder, type OrderDetail } from '../api';
 import SupportLink from '../components/SupportLink.vue';
@@ -38,6 +38,14 @@ async function claim() {
 }
 
 void load();
+
+// Остаток бюджета меняется, пока другие креаторы сдают ролики, — обновляем, пока экран открыт
+// и виден. Сбой обновления не показываем: на экране остаются последние данные.
+const refresh = setInterval(async () => {
+  if (document.hidden || !order.value) return;
+  order.value = await fetchOrder(Number(props.id)).catch(() => order.value);
+}, 30_000);
+onUnmounted(() => clearInterval(refresh));
 </script>
 
 <template>

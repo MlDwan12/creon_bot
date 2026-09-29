@@ -41,6 +41,7 @@ const submission = (
   moderatorId: 888n,
   moderatorComment: null,
   views: null,
+  likes: null,
   payoutMinor: 0,
   finalizedAt: null,
   rating: null,

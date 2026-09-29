@@ -225,6 +225,7 @@ export class SubmissionsService {
     submissionId: number,
     moderatorTelegramId: bigint,
     views: number,
+    likes: number | null = null,
   ) {
     const found = await this.mustFind(submissionId);
     if (views < found.order.minViews)
@@ -246,6 +247,7 @@ export class SubmissionsService {
           status: SubmissionStatus.MODERATOR_APPROVED,
           moderatorId: moderatorTelegramId,
           views,
+          likes,
           payoutMinor,
           decidedAt: new Date(),
         },
@@ -302,7 +304,11 @@ export class SubmissionsService {
    * Итог добора: модератор фиксирует просмотры через VIEWS_TOPUP_DAYS после одобрения. Прирост
    * доплачивается из свободного остатка, пока он есть; начисленное не уменьшается. `extraMinor` — доплата.
    */
-  async finalizeViews(submissionId: number, views: number) {
+  async finalizeViews(
+    submissionId: number,
+    views: number,
+    likes: number | null = null,
+  ) {
     const found = await this.mustFind(submissionId);
     return this.prisma.$transaction(async (tx) => {
       const { order, budget } = await this.lockBudget(tx, found.orderId);
@@ -331,6 +337,8 @@ export class SubmissionsService {
         },
         data: {
           views,
+          // лайки не ввели — остаются те, что зафиксированы при одобрении
+          ...(likes !== null && { likes }),
           payoutMinor: { increment: extraMinor },
           finalizedAt: new Date(),
         },

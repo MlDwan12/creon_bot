@@ -166,6 +166,8 @@ export interface OrderReport {
     reserved: number;
     left: number;
     views: number;
+    /** Сумма известных лайков: вне YouTube их вводит модератор по желанию. */
+    likes: number;
     videos: number;
     creators: number;
     /** Фактическая цена 1000 просмотров; null — просмотров ещё нет. */
@@ -180,6 +182,8 @@ export interface OrderReport {
     creator: string;
     creatorId: number;
     views: number;
+    /** null — неизвестно. */
+    likes: number | null;
     rating: number | null;
     approvedAt: string | null;
   }[];
@@ -276,6 +280,10 @@ export interface ModVideo {
   views: number | null;
   /** Сейчас по данным API площадки (YouTube); null — вводится вручную по ссылке. */
   autoViews: number | null;
+  /** Зафиксированные лайки; null — не вводили. */
+  likes: number | null;
+  /** Лайки по данным API площадки; null — нет API или автор их скрыл. */
+  autoLikes: number | null;
   platform: Platform;
   /** ₽: резерв или начислено. */
   payout: number;
@@ -571,7 +579,11 @@ export function fetchModVideo(id: number) {
 }
 
 /** Одобрить с просмотрами (`views`) или отклонить с причиной (`comment`). */
-export function moderateVideo(id: number, decision: 'approve' | 'reject', body: { views?: number; comment?: string }) {
+export function moderateVideo(
+  id: number,
+  decision: 'approve' | 'reject',
+  body: { views?: number; likes?: number | null; comment?: string },
+) {
   return request<{ ok: true }>('POST', `/api/mod/videos/${id}/${decision}`, body);
 }
 
@@ -593,8 +605,8 @@ export function decidePayout(id: number, decision: 'paid' | 'reject', comment?: 
 }
 
 /** Итог просмотров после добора. */
-export function finalizeVideo(id: number, views: number) {
-  return request<{ ok: true }>('POST', `/api/mod/videos/${id}/finalize`, { views });
+export function finalizeVideo(id: number, views: number, likes: number | null) {
+  return request<{ ok: true }>('POST', `/api/mod/videos/${id}/finalize`, { views, likes });
 }
 
 /** На что жалоба: VIDEO и REVIEW — по id отклика, PROFILE — по id пользователя. */

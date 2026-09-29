@@ -65,7 +65,7 @@ export class SubmissionsController {
       );
     const claimed = parseViews(b.views);
     // Где просмотры отдаёт API площадки — резервируем по ним, а не по словам креатора.
-    const counted = (await this.viewCounter.fetchViews([url])).get(url);
+    const counted = (await this.viewCounter.fetchViews([url])).get(url)?.views;
     // attachVideo сам проверяет, что отклик ваш и ещё «в работе», порог и бюджет.
     const { submission, closed } = await this.submissionsService.attachVideo(
       id,
