@@ -9,6 +9,7 @@ import {
 import { RouterLink } from 'vue-router';
 import OrderCard from '../components/OrderCard.vue';
 import SupportLink from '../components/SupportLink.vue';
+import { onboardingOpen } from '../onboarding';
 
 // ref() — реактивное значение: поменяли `.value` в коде, и шаблон ниже перерисовался сам.
 const category = ref<OrderCategory>();
@@ -84,6 +85,7 @@ watch(category, () => load(true), { immediate: true });
     </button>
 
     <footer class="footer">
+      <button type="button" class="quiet-link" @click="onboardingOpen = true">Как это работает</button>
       <SupportLink />
       <RouterLink to="/privacy" class="quiet-link">Политика конфиденциальности</RouterLink>
     </footer>
