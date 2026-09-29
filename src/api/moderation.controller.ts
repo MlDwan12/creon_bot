@@ -24,7 +24,9 @@ import { creatorLabel } from '../bot/utils/format';
 import { payoutPool, VIEWS_TOPUP_DAYS } from '../orders/budget';
 import { OrdersService } from '../orders/orders.service';
 import { DAY_MS } from '../orders/deadline';
+import { platformOf } from '../common/platforms';
 import { SubmissionsService } from '../submissions/submissions.service';
+import { ViewCounterService } from '../submissions/view-counter.service';
 import { UsersService } from '../users/users.service';
 import { AnalyticsService } from './analytics.service';
 import { BansService, parseBanReason } from './bans.service';
@@ -68,6 +70,7 @@ export class ModerationController {
     private readonly usersService: UsersService,
     private readonly moderatorGuard: ModeratorGuard,
     private readonly payouts: PayoutsService,
+    private readonly viewCounter: ViewCounterService,
   ) {}
 
   /** Обе очереди сразу: заказы и видео на проверке, старые первыми. */
@@ -216,9 +219,12 @@ export class ModerationController {
   async video(@Param('id', ParseIdPipe) id: number) {
     const s = await this.submissionsService.findById(id);
     if (!s) throw new NotFoundException('Отклик не найден');
-    const [attempts, budget] = await Promise.all([
+    const [attempts, budget, counted] = await Promise.all([
       this.submissionsService.listByOrder(s.orderId).then(attemptNumbers),
       this.submissionsService.orderBudget(s.order),
+      s.videoUrl
+        ? this.viewCounter.fetchViews([s.videoUrl])
+        : new Map<string, number>(),
     ]);
     return {
       id: s.id,
@@ -230,6 +236,9 @@ export class ModerationController {
       attempt: attempts.get(s.id)!,
       // на проверке — заявлено креатором, после одобрения — зафиксировано
       views: s.views,
+      // сейчас по данным API площадки; null — считается вручную или API не ответило
+      autoViews: s.videoUrl ? (counted.get(s.videoUrl) ?? null) : null,
+      platform: platformOf(s.videoUrl),
       payout: kopecksToRubles(s.payoutMinor),
       decidedAt: s.decidedAt,
       finalizedAt: s.finalizedAt,

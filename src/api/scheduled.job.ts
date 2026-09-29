@@ -9,6 +9,7 @@ import { VIEWS_TOPUP_DAYS } from '../orders/budget';
 import { DAY_MS } from '../orders/deadline';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
+import { ViewCounterService } from '../submissions/view-counter.service';
 import { PayoutsService } from './payouts.service';
 
 const INTERVAL_MS = 5 * 60 * 1000;
@@ -34,6 +35,7 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly submissionsService: SubmissionsService,
     private readonly notifications: NotificationsService,
     private readonly payouts: PayoutsService,
+    private readonly viewCounter: ViewCounterService,
   ) {}
 
   onApplicationBootstrap() {
@@ -52,6 +54,7 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
       () => this.remindDeadlines(),
       () => this.expireSlots(),
       () => this.remindSlots(),
+      () => this.finalizeAutomatic(),
       () => this.remindModerators(),
     ]) {
       try {
@@ -88,6 +91,37 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
     for (const { id } of await this.submissionsService.listSlotEndingSoon()) {
       const submission = await this.submissionsService.markSlotReminded(id);
       if (submission) this.notifications.slotEndingSoon(submission);
+    }
+  }
+
+  /**
+   * Итог добора по роликам, чьи просмотры отдаёт API площадки (YouTube, VK), — без модератора.
+   * API не ответило — ролик остаётся в очереди «Итоги», итог введёт модератор.
+   */
+  private async finalizeAutomatic() {
+    const due = (await this.submissionsService.listTopupDue()).filter((s) =>
+      this.viewCounter.isAutomatic(s.videoUrl),
+    );
+    if (!due.length) return;
+    const counted = await this.viewCounter.fetchViews(
+      due.map((s) => s.videoUrl!),
+    );
+    for (const s of due) {
+      const views = counted.get(s.videoUrl!);
+      if (views === undefined) continue;
+      try {
+        // просмотры не уменьшаем: начисленное за них уже не вернуть
+        const { submission, extraMinor, closed } =
+          await this.submissionsService.finalizeViews(
+            s.id,
+            Math.max(views, s.views ?? 0),
+          );
+        this.notifications.viewsFinalized(submission, extraMinor);
+        if (closed) this.notifications.orderBudgetExhausted(closed);
+      } catch (err) {
+        // модератор успел зафиксировать итог сам — остальные ролики это не останавливает
+        this.logger.warn(err);
+      }
     }
   }
 
