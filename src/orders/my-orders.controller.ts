@@ -14,7 +14,7 @@ import {
 import { ParseIdPipe } from '../common/parse-id.pipe';
 import { OrderStatus, SubmissionStatus } from '@prisma/client';
 import { kopecksToRubles } from '../common/money';
-import { HOLDS_MONEY, payoutPool } from './budget';
+import { HOLDS_MONEY, NO_VIDEO, payoutPool } from './budget';
 import { NotificationsService } from '../telegram/notifications.service';
 import { Throttle } from '@nestjs/throttler';
 import { OrdersService } from './orders.service';
@@ -74,9 +74,7 @@ export class MyOrdersController {
         toRate: approved.filter((s) => s.rating === null).length,
         submissionsCount: o.submissions.length,
         // Та же проверка, что в OrdersService.remove.
-        deletable: o.submissions.every(
-          (s) => s.status === SubmissionStatus.IN_PROGRESS,
-        ),
+        deletable: o.submissions.every((s) => NO_VIDEO.includes(s.status)),
         createdAt: o.createdAt,
       };
     });

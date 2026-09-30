@@ -47,14 +47,28 @@ export const HOLDS_MONEY: SubmissionStatus[] = [
   SubmissionStatus.MODERATOR_APPROVED,
 ];
 
-/** Сколько фонда уже занято по каждому заказу (резерв + начислено); нет в карте — 0. */
+/** Отклики без сданного видео: такие не мешают удалить заказ. */
+export const NO_VIDEO: SubmissionStatus[] = [
+  SubmissionStatus.IN_PROGRESS,
+  SubmissionStatus.SLOT_EXPIRED,
+];
+
+/** Начисленное окончательно — по нему заказ закрывается: резерв ещё может вернуться в фонд. */
+export const ACCRUED: SubmissionStatus[] = [
+  SubmissionStatus.MODERATOR_APPROVED,
+];
+
+/**
+ * Сколько фонда уже занято по каждому заказу (по умолчанию резерв + начислено); нет в карте — 0.
+ */
 export async function spentByOrder(
   db: Prisma.TransactionClient,
   orderIds: number[],
+  statuses: SubmissionStatus[] = HOLDS_MONEY,
 ) {
   const rows = await db.submission.groupBy({
     by: ['orderId'],
-    where: { orderId: { in: orderIds }, status: { in: HOLDS_MONEY } },
+    where: { orderId: { in: orderIds }, status: { in: statuses } },
     _sum: { payoutMinor: true },
   });
   return new Map(rows.map((r) => [r.orderId, r._sum.payoutMinor ?? 0]));

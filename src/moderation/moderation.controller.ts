@@ -15,7 +15,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ParseIdPipe } from '../common/parse-id.pipe';
-import { ReportTarget } from '@prisma/client';
+import { OrderStatus, ReportTarget } from '@prisma/client';
 import { findContacts } from '../common/contacts';
 import { isDbId } from '../common/validation';
 import { kopecksToRubles } from '../common/money';
@@ -198,7 +198,9 @@ export class ModerationController {
       parseVersion(body),
       parseCpm(body),
     );
-    this.notifications.orderApproved(order);
+    if (order.status === OrderStatus.CLOSED)
+      this.notifications.orderBudgetExhausted(order);
+    else this.notifications.orderApproved(order);
     return { ok: true };
   }
 

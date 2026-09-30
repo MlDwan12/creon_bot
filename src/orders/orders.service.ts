@@ -13,7 +13,9 @@ import {
 import { kopecksToRubles } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  ACCRUED,
   budgetState,
+  NO_VIDEO,
   ORDER_CURRENCY,
   payoutPool,
   platformFeePercent,
@@ -372,9 +374,7 @@ export class OrdersService {
     const { count } = await this.prisma.order.deleteMany({
       where: {
         id: orderId,
-        submissions: {
-          none: { status: { not: SubmissionStatus.IN_PROGRESS } },
-        },
+        submissions: { none: { status: { notIn: NO_VIDEO } } },
       },
     });
     if (count === 0)
@@ -475,6 +475,8 @@ export class OrdersService {
   /**
    * Публикация. Срок в форме — «N дней» от отправки на проверку: сдвигаем его на время модерации,
    * чтобы у креаторов было ровно N дней с момента публикации (после правки — сколько оставалось).
+   * Изменённый заказ, пока был на проверке, мог израсходовать фонд одобренными роликами (закрывает
+   * исчерпанные только SubmissionsService и только открытые) — тогда он сразу закрывается.
    */
   async moderatorApprove(
     orderId: number,
@@ -489,27 +491,42 @@ export class OrdersService {
         'Фонда выплат не хватит даже на один ролик с порогом просмотров — уменьшите ставку',
       );
     const now = new Date();
-    await this.transitionStatus(
-      orderId,
-      [OrderStatus.PENDING_MODERATION],
-      {
-        status: OrderStatus.OPEN,
-        moderatorId: moderatorTelegramId,
-        cpmMinor,
-        decidedAt: now,
-        deadline: order.deadline
-          ? new Date(
-              order.deadline.getTime() +
-                (now.getTime() - order.moderationRequestedAt.getTime()),
-            )
-          : null,
-      },
-      CHANGED_WHILE_VIEWED,
-      { moderationRequestedAt: version },
-    );
+    await this.prisma.$transaction(async (tx) => {
+      // та же блокировка, что у начислений в SubmissionsService — начисленное не вырастет до записи
+      await tx.$queryRaw`SELECT 1 FROM "Order" WHERE id = ${orderId} FOR UPDATE`;
+      const accrued =
+        (await spentByOrder(tx, [orderId], ACCRUED)).get(orderId) ?? 0;
+      const exhausted = budgetState({ ...order, cpmMinor }, accrued).exhausted;
+      await this.transitionStatus(
+        orderId,
+        [OrderStatus.PENDING_MODERATION],
+        {
+          status: exhausted ? OrderStatus.CLOSED : OrderStatus.OPEN,
+          ...(exhausted && { closedAt: now }),
+          moderatorId: moderatorTelegramId,
+          cpmMinor,
+          decidedAt: now,
+          deadline: order.deadline
+            ? new Date(
+                order.deadline.getTime() +
+                  (now.getTime() - order.moderationRequestedAt.getTime()),
+              )
+            : null,
+        },
+        CHANGED_WHILE_VIEWED,
+        { moderationRequestedAt: version },
+        tx,
+      );
+    });
     return this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
-      include: { advertiser: true },
+      include: {
+        advertiser: true,
+        submissions: {
+          where: { status: SubmissionStatus.IN_PROGRESS },
+          include: { creator: true },
+        },
+      },
     });
   }
 

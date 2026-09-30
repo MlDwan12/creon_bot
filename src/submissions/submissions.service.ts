@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, OrderStatus, SubmissionStatus } from '@prisma/client';
 import {
+  ACCRUED,
   budgetState,
   payoutFor,
   spentByOrder,
@@ -31,8 +32,9 @@ const ACCEPTS_VIDEOS: Prisma.OrderWhereInput = {
   status: { notIn: [OrderStatus.EXPIRED, OrderStatus.REJECTED] },
 };
 
+// Свободного остатка может не хватать и из-за резерва роликов на проверке — тогда он ещё вернётся.
 const EXHAUSTED_MESSAGE =
-  'Бюджет заказа исчерпан — новые ролики по нему не принимаются';
+  'Свободного бюджета в заказе сейчас не хватает на ролик — новые ролики по нему не принимаются';
 
 const ALREADY_CLAIMED_MESSAGE =
   'По этому заказу у вас уже есть отклик в работе — отправьте по нему видео в «Мои отклики»';
@@ -62,6 +64,9 @@ export class SubmissionsService {
       throw new ForbiddenException('Заказ сейчас недоступен');
     if (order.advertiserId === creatorId)
       throw new ForbiddenException('Нельзя откликнуться на свой заказ');
+    // без блокировки: сдачу всё равно проверит attachVideo, здесь — не брать слот впустую
+    if ((await this.orderBudget(order)).exhausted)
+      throw new ForbiddenException(EXHAUSTED_MESSAGE);
     // ponytail: заказ могут закрыть между проверкой и вставкой — отклик на только что закрытый
     // заказ безвреден (видео по закрытому принимаются), блокировать ради этого незачем.
     try {
@@ -84,7 +89,8 @@ export class SubmissionsService {
   /**
    * Креатор сдаёт ролик, набравший порог просмотров. Из фонда сразу резервируется выплата за
    * заявленные просмотры (не больше свободного остатка), поэтому фонд не уходит в минус.
-   * Остатка не хватает даже на порог — сдать нельзя. `closed` — заказ этим исчерпал бюджет.
+   * Остатка не хватает даже на порог — сдать нельзя. Заказ резерв не закрывает: просмотры
+   * заявил креатор, и после проверки резерв может вернуться в фонд (см. closeIfExhausted).
    */
   async attachVideo(
     submissionId: number,
@@ -125,10 +131,7 @@ export class SubmissionsService {
         ACCEPTS_VIDEOS,
         tx,
       );
-      return {
-        submission: await this.mustFind(submissionId, tx),
-        closed: await this.closeIfExhausted(tx, submission.orderId),
-      };
+      return this.mustFind(submissionId, tx);
     });
   }
 
@@ -259,7 +262,7 @@ export class SubmissionsService {
           where: { id: submissionId },
           include: { order: { include: { advertiser: true } }, creator: true },
         }),
-        closed: await this.closeIfExhausted(tx, found.orderId),
+        closed: await this.closeIfExhausted(tx, order),
       };
     });
   }
@@ -313,13 +316,17 @@ export class SubmissionsService {
     return this.prisma.$transaction(async (tx) => {
       const { order, budget } = await this.lockBudget(tx, found.orderId);
       const current = await this.mustFind(submissionId, tx);
-      const extraMinor = Math.max(
-        0,
-        Math.min(
-          payoutFor(views, order.cpmMinor!) - current.payoutMinor,
-          budget.free,
-        ),
-      );
+      // заказ снят модератором — итог фиксируем, но не доплачиваем (как и не одобряем по снятому)
+      const extraMinor =
+        order.status === OrderStatus.REJECTED
+          ? 0
+          : Math.max(
+              0,
+              Math.min(
+                payoutFor(views, order.cpmMinor!) - current.payoutMinor,
+                budget.free,
+              ),
+            );
       const ready = new Date(
         (current.decidedAt?.getTime() ?? Date.now()) +
           VIEWS_TOPUP_DAYS * DAY_MS,
@@ -348,7 +355,7 @@ export class SubmissionsService {
       return {
         submission: await this.mustFind(submissionId, tx),
         extraMinor,
-        closed: await this.closeIfExhausted(tx, found.orderId),
+        closed: await this.closeIfExhausted(tx, order),
       };
     });
   }
@@ -399,15 +406,19 @@ export class SubmissionsService {
   }
 
   /**
-   * Остатка не хватает на ролик с порогом — открытый заказ закрывается. Возвращает его
-   * с рекламодателем и креаторами «в работе» для уведомления; `null` — закрывать не нужно.
+   * Начисленного столько, что на ролик с порогом не хватает, — открытый заказ закрывается.
+   * Считается без резерва: он может вернуться в фонд, а закрытый заказ сам не откроется.
+   * Вызывать под lockBudget того же заказа. Возвращает заказ с рекламодателем и креаторами
+   * «в работе» для уведомления; `null` — закрывать не нужно.
    */
   private async closeIfExhausted(
     tx: Prisma.TransactionClient,
-    orderId: number,
+    order: Parameters<typeof budgetState>[0] & { id: number },
   ) {
-    const { budget } = await this.lockBudget(tx, orderId);
-    if (!budget.exhausted) return null;
+    const orderId = order.id;
+    const accrued =
+      (await spentByOrder(tx, [orderId], ACCRUED)).get(orderId) ?? 0;
+    if (!budgetState(order, accrued).exhausted) return null;
     const { count } = await tx.order.updateMany({
       where: { id: orderId, status: OrderStatus.OPEN },
       data: { status: OrderStatus.CLOSED, closedAt: new Date() },
