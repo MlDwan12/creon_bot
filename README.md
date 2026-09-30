@@ -80,12 +80,4 @@ yarn prisma:migrate   # применить новую миграцию посл�
 
 ## Прод-деплой
 
-`.github/workflows/deploy.yml` после успешного CI на `main` собирает Docker-образ, пушит его в GHCR (`ghcr.io/<repo>:latest`) и по SSH разворачивает на сервере через `docker-compose.prod.yml` (Nest-приложение + Postgres в докере). Образ при старте контейнера сам накатывает миграции (`docker-entrypoint.sh` → `prisma migrate deploy`) перед запуском бота.
-
-Что нужно на сервере и в секретах репозитория (Settings → Secrets and variables → Actions):
-
-- `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY` — доступ по SSH к серверу.
-- `DEPLOY_PATH` — директория на сервере с `docker-compose.prod.yml`.
-- В `DEPLOY_PATH` на сервере вручную положить `.env` с `BOT_TOKEN` и `MODERATOR_IDS` (`DATABASE_URL` в проде уже задан в `docker-compose.prod.yml` и указывает на контейнер `db`).
-
-Ручной прогон деплоя без пуша: вкладка Actions → workflow **Deploy** → Run workflow.
+Вручную: образ собирается локально и загружается на VPS — см. [DEPLOY.md](DEPLOY.md). Миграции образ накатывает сам при старте контейнера.
