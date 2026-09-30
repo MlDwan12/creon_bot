@@ -1,9 +1,9 @@
 import type { ConfigService } from '@nestjs/config';
-import { AnalyticsService } from './api/analytics.service';
-import { BansService } from './api/bans.service';
-import { ProfilesService } from './api/profiles.service';
-import { PayoutsService } from './api/payouts.service';
-import { ReportsService } from './api/reports.service';
+import { AnalyticsService } from './moderation/analytics.service';
+import { BansService } from './users/bans.service';
+import { ProfilesService } from './profiles/profiles.service';
+import { PayoutsService } from './payouts/payouts.service';
+import { ReportsService } from './reports/reports.service';
 import { MAX_ACTIVE_ORDERS, OrdersService } from './orders/orders.service';
 import { PrismaService } from './prisma/prisma.service';
 import {

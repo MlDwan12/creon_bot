@@ -22,7 +22,7 @@ process.on('unhandledRejection', (reason) => {
 });
 
 async function bootstrap() {
-  // HTTP нужен для API Mini App (src/api); бот по-прежнему работает через long polling.
+  // HTTP нужен для API Mini App (контроллеры в модулях src/*); бот по-прежнему работает через long polling.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: new RedactingLogger(),
   });
