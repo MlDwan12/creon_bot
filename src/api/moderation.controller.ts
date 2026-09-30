@@ -26,7 +26,10 @@ import { OrdersService } from '../orders/orders.service';
 import { DAY_MS } from '../orders/deadline';
 import { platformOf } from '../common/platforms';
 import { SubmissionsService } from '../submissions/submissions.service';
-import { ViewCounterService } from '../submissions/view-counter.service';
+import {
+  type VideoStats,
+  ViewCounterService,
+} from '../submissions/view-counter.service';
 import { UsersService } from '../users/users.service';
 import { AnalyticsService } from './analytics.service';
 import { BansService, parseBanReason } from './bans.service';
@@ -39,6 +42,7 @@ import { ModeratorGuard } from './moderator.guard';
 import {
   parseCpm,
   parseRejectComment,
+  parseLikes,
   parseViews,
   videoFormat,
 } from './order-input';
@@ -224,7 +228,7 @@ export class ModerationController {
       this.submissionsService.orderBudget(s.order),
       s.videoUrl
         ? this.viewCounter.fetchViews([s.videoUrl])
-        : new Map<string, number>(),
+        : new Map<string, VideoStats>(),
     ]);
     return {
       id: s.id,
@@ -236,8 +240,10 @@ export class ModerationController {
       attempt: attempts.get(s.id)!,
       // на проверке — заявлено креатором, после одобрения — зафиксировано
       views: s.views,
+      likes: s.likes,
       // сейчас по данным API площадки; null — считается вручную или API не ответило
-      autoViews: s.videoUrl ? (counted.get(s.videoUrl) ?? null) : null,
+      autoViews: counted.get(s.videoUrl ?? '')?.views ?? null,
+      autoLikes: counted.get(s.videoUrl ?? '')?.likes ?? null,
       platform: platformOf(s.videoUrl),
       payout: kopecksToRubles(s.payoutMinor),
       decidedAt: s.decidedAt,
@@ -343,11 +349,12 @@ export class ModerationController {
     return { ok: true };
   }
 
-  /** Одобрить ролик и зафиксировать просмотры (`views`) — выплата начисляется окончательно. */
+  /** Одобрить ролик и зафиксировать просмотры (`views`) — выплата начисляется окончательно. `likes` — по желанию. */
   @Post('videos/:id/approve')
   async approveVideo(
     @Param('id', ParseIdPipe) id: number,
     @Body('views') views: unknown,
+    @Body('likes') likes: unknown,
     @Req() req: ApiRequest,
   ) {
     const { submission, closed } =
@@ -355,6 +362,7 @@ export class ModerationController {
         id,
         req.user.telegramId,
         parseViews(views),
+        parseLikes(likes),
       );
     this.notifications.videoApprovedByModerator(submission);
     if (closed) this.notifications.orderBudgetExhausted(closed);
@@ -366,9 +374,14 @@ export class ModerationController {
   async finalizeVideo(
     @Param('id', ParseIdPipe) id: number,
     @Body('views') views: unknown,
+    @Body('likes') likes: unknown,
   ) {
     const { submission, extraMinor, closed } =
-      await this.submissionsService.finalizeViews(id, parseViews(views));
+      await this.submissionsService.finalizeViews(
+        id,
+        parseViews(views),
+        parseLikes(likes),
+      );
     this.notifications.viewsFinalized(submission, extraMinor);
     if (closed) this.notifications.orderBudgetExhausted(closed);
     return { ok: true };

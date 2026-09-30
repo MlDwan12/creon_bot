@@ -107,14 +107,15 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
       due.map((s) => s.videoUrl!),
     );
     for (const s of due) {
-      const views = counted.get(s.videoUrl!);
-      if (views === undefined) continue;
+      const stats = counted.get(s.videoUrl!);
+      if (!stats) continue;
       try {
         // просмотры не уменьшаем: начисленное за них уже не вернуть
         const { submission, extraMinor, closed } =
           await this.submissionsService.finalizeViews(
             s.id,
-            Math.max(views, s.views ?? 0),
+            Math.max(stats.views, s.views ?? 0),
+            stats.likes,
           );
         this.notifications.viewsFinalized(submission, extraMinor);
         if (closed) this.notifications.orderBudgetExhausted(closed);

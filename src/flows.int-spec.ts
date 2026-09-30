@@ -616,7 +616,7 @@ describe('бюджет и просмотры', () => {
     const [adv, a] = [await user(), await user()];
     const order = await orderWith(adv.id, 10_000);
     const s = await sent(order.id, a.id, 1000);
-    await submissions.moderatorApprove(s.id, 1n, 1000); // 100 ₽
+    await submissions.moderatorApprove(s.id, 1n, 1000, 40); // 100 ₽
     await expect(submissions.finalizeViews(s.id, 3000)).rejects.toThrow(
       'через 3 дня',
     );
@@ -628,7 +628,12 @@ describe('бюджет и просмотры', () => {
 
     const res = await submissions.finalizeViews(s.id, 3000);
     expect(res.extraMinor).toBe(20_000);
-    expect(res.submission).toMatchObject({ views: 3000, payoutMinor: 30_000 });
+    // лайки при итоге не ввели — остаются зафиксированные при одобрении
+    expect(res.submission).toMatchObject({
+      views: 3000,
+      likes: 40,
+      payoutMinor: 30_000,
+    });
     await expect(submissions.finalizeViews(s.id, 5000)).rejects.toThrow(
       'уже зафиксирован',
     );

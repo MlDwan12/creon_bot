@@ -92,7 +92,9 @@ void load();
       </header>
 
       <section class="tiles">
-        <div class="tile"><strong>{{ formatViews(data.summary.views) }}</strong><span>просмотров</span></div>
+        <div class="tile">
+          <strong>{{ formatViews(data.summary.views) }}</strong><span>просмотров · лайков {{ formatViews(data.summary.likes) }}</span>
+        </div>
         <div class="tile"><strong>{{ data.summary.videos }}</strong><span>роликов · креаторов {{ data.summary.creators }}</span></div>
         <div class="tile">
           <strong>{{ formatRubles(data.summary.spent) }}</strong><span>потрачено из {{ formatRubles(data.summary.budget) }}</span>
@@ -139,7 +141,9 @@ void load();
           <div class="who">
             <div class="name">{{ item.creator }}</div>
             <div class="hint">
-              {{ PLATFORM_NAMES[item.platform] }} · {{ formatViews(item.views) }} просмотров<template v-if="item.approvedAt">
+              {{ PLATFORM_NAMES[item.platform] }} · {{ formatViews(item.views) }} просмотров<template v-if="item.likes !== null">
+                · {{ formatViews(item.likes) }} лайков</template
+              ><template v-if="item.approvedAt">
                 · {{ formatDate(item.approvedAt) }}</template
               >
             </div>
