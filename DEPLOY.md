@@ -1,47 +1,48 @@
 # Деплой
 
-Пуш в `main` гоняет `CI` (typecheck/lint/test/build), и только если он зелёный — `Deploy`: собирает
-Docker-образ, пушит в `ghcr.io/<owner>/<repo>`, по SSH заходит на VPS,
-подтягивает свежий образ и перезапускает контейнеры (`docker-compose.prod.yml`).
-Миграции (`prisma migrate deploy`) применяются автоматически при старте
-контейнера бота — руками катить не нужно.
+Прод деплоится вручную: образ собирается локально и загружается на VPS. Автодеплоя нет, пуш в `main` только прогоняет CI.
 
-## Секреты репозитория (Settings → Secrets and variables → Actions)
+## Как устроен прод
 
-| Secret            | Значение                                                |
-| ------------------ | -------------------------------------------------------- |
-| `SSH_HOST`         | IP или домен VPS                                          |
-| `SSH_USER`          | пользователь для SSH (например, `deploy`)                 |
-| `SSH_PRIVATE_KEY`   | приватный ключ (без пароля) для этого пользователя         |
-| `DEPLOY_PATH`       | путь на VPS с `docker-compose.prod.yml` и `.env`, например `/opt/creon_bot` |
+- VPS, каталог `/var/www/site`. Там общий `docker-compose.yaml` с другими проектами. Бот — сервис `creon_bot`.
+- База — общий сервис `postgres:17` в сети `backend`. Отдельного контейнера БД у бота нет.
+- nginx и certbot стоят на хосте (`/etc/nginx/sites-enabled`). Mini App — `https://creon.couchreboot.site` → `127.0.0.1:8003`.
+  `frame-ancestors` и `X-Frame-Options` в vhost не добавлять: Telegram Web открывает Mini App во фрейме.
+- Миграции накатываются сами при старте контейнера (`docker-entrypoint.sh` → `prisma migrate deploy`).
+- `HEALTHCHECK` образа дёргает `/api/health`, статус виден в `docker ps`.
 
-`GITHUB_TOKEN` передавать не нужно — GitHub создаёт его автоматически на каждый запуск воркфлоу.
+Сервис в общем compose:
 
-## Разовая настройка VPS
+```yaml
+creon_bot:
+  image: creon_bot:<дата>-<N>
+  restart: unless-stopped
+  env_file: ./.env.creon_bot
+  mem_limit: 256m
+  ports:
+    - 127.0.0.1:8003:3000
+  networks:
+    - backend
+```
 
-1. Поставить Docker + Docker Compose plugin (`curl -fsSL https://get.docker.com | sh`).
-2. Создать пользователя для деплоя, добавить в группу `docker`, прописать его публичный ключ в `~/.ssh/authorized_keys`.
-3. Создать каталог деплоя (должен совпадать с `DEPLOY_PATH`):
+В `.env.creon_bot` — переменные из `.env.example`. `DATABASE_URL` указывает на сервис postgres общего compose. `BOT_TOKEN` — боевой: бот работает через long polling, и один токен может опрашивать только один процесс.
+
+## Выкатка
+
+1. Перед релизом с миграциями сделать бэкап базы (`pg_dump` из контейнера postgres).
+2. Собрать образ локально из нужного коммита и сохранить в файл:
    ```bash
-   mkdir -p /opt/creon_bot && cd /opt/creon_bot
+   docker build -t creon_bot:<дата>-<N> .
+   docker save creon_bot:<дата>-<N> | gzip > creon_bot_<дата>-<N>.tar.gz
    ```
-4. Положить туда `docker-compose.prod.yml` из репозитория (просто скопировать файл — репозиторий на сервере клонировать не нужно).
-5. Создать `.env` рядом с ним:
-   ```
-   BOT_TOKEN=<боевой токен от @BotFather>
-   MODERATOR_IDS=<id модераторов через запятую>
-   ```
-   `DATABASE_URL` сюда не класть — он задаётся автоматически в `docker-compose.prod.yml` (контейнер бота стучится в контейнер `db` по внутренней docker-сети).
-6. Первый прогон (пока ещё нет пуша в `main`, который создаст образ) можно сделать руками:
+3. Загрузить архив в `/var/www/site/_images/` (SFTP).
+4. На сервере:
    ```bash
-   docker login ghcr.io -u <github-username>
-   GITHUB_REPOSITORY=<owner>/<repo> docker compose -f docker-compose.prod.yml pull
-   GITHUB_REPOSITORY=<owner>/<repo> docker compose -f docker-compose.prod.yml up -d
+   cd /var/www/site
+   sudo docker load < _images/creon_bot_<дата>-<N>.tar.gz
+   # поменять тег образа у сервиса creon_bot в docker-compose.yaml
+   sudo docker compose up -d --no-deps creon_bot
+   sudo docker compose logs -f creon_bot   # миграции и старт бота
    ```
-   Дальше это делает воркфлоу `Deploy` после каждого успешного CI на `main`.
 
-## Пакет ghcr.io
-
-По умолчанию образ приватный (репозиторий приватный). Воркфлоу `Deploy` сам
-логинится на VPS через `GITHUB_TOKEN` перед `pull`, отдельно ничего делать не
-нужно.
+Откат — вернуть в compose прошлый тег и снова `up -d --no-deps creon_bot`. Если релиз применил миграции, откат кода их не отменит: для возврата схемы нужен бэкап.
