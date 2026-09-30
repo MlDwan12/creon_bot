@@ -70,7 +70,7 @@ const rubles = (n: number) => `${n.toLocaleString('ru-RU')} ₽`;
       </div>
       <div class="tiles three">
         <div class="tile"><strong>{{ stats.submissions.pending }}</strong><span>видео на модерации</span></div>
-        <div class="tile"><strong>{{ stats.submissions.approved }}</strong><span>видео принято</span></div>
+        <div class="tile"><strong>{{ stats.submissions.approved }}</strong><span>роликов одобрено</span></div>
         <div class="tile"><strong>{{ stats.submissions.rejected }}</strong><span>видео отклонено</span></div>
       </div>
     </template>
@@ -104,11 +104,10 @@ const rubles = (n: number) => `${n.toLocaleString('ru-RU')} ₽`;
       </p>
 
       <h2 class="section-title flush">Видео · прислано {{ funnel.videos.submitted }}</h2>
-      <div class="tiles">
-        <div class="tile"><strong>{{ funnel.videos.accepted }}</strong><span>принято</span></div>
-        <div class="tile"><strong>{{ funnel.videos.pending }}</strong><span>ждут решения</span></div>
-        <div class="tile"><strong>{{ funnel.videos.moderatorRejected }}</strong><span>отклонил модератор</span></div>
-        <div class="tile"><strong>{{ funnel.videos.advertiserRejected }}</strong><span>отклонил рекламодатель</span></div>
+      <div class="tiles three">
+        <div class="tile"><strong>{{ funnel.videos.accepted }}</strong><span>одобрено</span></div>
+        <div class="tile"><strong>{{ funnel.videos.pending }}</strong><span>на проверке</span></div>
+        <div class="tile"><strong>{{ funnel.videos.moderatorRejected }}</strong><span>отклонено</span></div>
       </div>
 
       <h2 class="section-title flush">Пользователи</h2>
@@ -121,7 +120,7 @@ const rubles = (n: number) => `${n.toLocaleString('ru-RU')} ₽`;
       <h2 class="section-title flush">Оборот</h2>
       <div class="tile">
         <strong>{{ rubles(funnel.turnover.rubles) }}</strong>
-        <span>цены принятых видео ({{ funnel.turnover.acceptedPriced }}), без договорных</span>
+        <span>начислено креаторам за одобренные ролики</span>
       </div>
     </template>
   </main>

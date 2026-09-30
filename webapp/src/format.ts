@@ -1,3 +1,5 @@
+import type { VideoFormat } from './api';
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const relative = new Intl.RelativeTimeFormat('ru', { numeric: 'auto' });
 
@@ -25,10 +27,29 @@ export function timeAgo(iso: string): string {
   return relative.format(Math.round(seconds / (24 * 3600)), 'day');
 }
 
-/** Цена в заказе — свободный текст рекламодателя; пустая — договорная. */
-/** «3 000 ₽ за видео» или «цена договорная». */
-export function formatPrice(price: number | null): string {
-  return price === null ? 'цена договорная' : `${price.toLocaleString('ru-RU')} ₽ за видео`;
+/** «12 500 ₽», копейки — только если есть: «12,5 ₽». */
+export function formatRubles(rubles: number): string {
+  return `${rubles.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽`;
+}
+
+/** «100 ₽ за 1000 просмотров»; ставки ещё нет — до одобрения модератором. */
+export function formatCpm(cpm: number | null): string {
+  return cpm === null ? 'ставку назначит модератор' : `${formatRubles(cpm)} за 1000 просмотров`;
+}
+
+/** «12 500». */
+export function formatViews(views: number): string {
+  return views.toLocaleString('ru-RU');
+}
+
+/** «Вертикальное · 15–60 сек»; пусто — требований нет. */
+export function formatVideoFormat(f: VideoFormat): string {
+  const { minDurationSec: min, maxDurationSec: max } = f;
+  const duration =
+    min && max ? `${min}–${max} сек` : min ? `от ${min} сек` : max ? `до ${max} сек` : '';
+  const orientation =
+    f.orientation === 'VERTICAL' ? 'Вертикальное' : f.orientation === 'HORIZONTAL' ? 'Горизонтальное' : '';
+  return [orientation, duration].filter(Boolean).join(' · ');
 }
 
 /** Сколько ждёт в очереди: «40 мин», «6 ч», «2 дн». */

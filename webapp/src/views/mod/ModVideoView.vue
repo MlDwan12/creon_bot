@@ -1,9 +1,17 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
-import { ApiError, fetchModQueue, fetchModVideo, type ModVideo, moderateVideo } from '../../api';
+import {
+  ApiError,
+  fetchModQueue,
+  fetchModVideo,
+  finalizeVideo,
+  type ModVideo,
+  moderateVideo,
+  PLATFORM_NAMES,
+} from '../../api';
 import ReasonPicker from '../../components/ReasonPicker.vue';
-import { timeAgo } from '../../format';
+import { formatCpm, formatDate, formatRubles, formatVideoFormat, formatViews, timeAgo } from '../../format';
 import { safeUrl } from '../../telegram';
 
 const props = defineProps<{ id: string }>();
@@ -11,8 +19,14 @@ const router = useRouter();
 
 const PRESETS = [
   'Не соответствует заданию',
+  'Не та длительность ролика',
+  'Не та ориентация (вертикаль / горизонталь)',
+  'Меньше порога просмотров',
+  'Публикация закрыта или удалена',
   'Ссылка не открывается — проверьте доступ',
   'Низкое качество видео',
+  'Водяной знак или чужой логотип',
+  'Чужой или перезалитый ролик',
 ];
 
 const video = ref<ModVideo>();
@@ -27,29 +41,61 @@ async function load() {
   comment.value = '';
   try {
     video.value = await fetchModVideo(Number(props.id));
+    // Просмотры из API площадки точнее заявленных — подставляем их.
+    views.value = video.value.autoViews ?? video.value.views ?? '';
+    likes.value = video.value.autoLikes ?? video.value.likes ?? '';
   } catch (err) {
     loadError.value = err instanceof ApiError ? err.userMessage : 'Не удалось загрузить видео';
   }
 }
 
-/** После решения — следующее видео из очереди; очередь пуста — назад к ней (на вкладку «Видео»). */
-async function goNext() {
-  const next = (await fetchModQueue().catch(() => undefined))?.videos.find((v) => v.id !== Number(props.id));
-  await router.replace(next ? `/mod/videos/${next.id}` : '/mod?tab=videos');
+/** После решения — следующее из той же очереди (проверка или итог добора); пуста — назад к ней. */
+async function goNext(tab: 'videos' | 'topups') {
+  const next = (await fetchModQueue().catch(() => undefined))?.[tab].find((v) => v.id !== Number(props.id));
+  await router.replace(next ? `/mod/videos/${next.id}` : `/mod?tab=${tab}`);
 }
 
-async function decide(decision: 'approve' | 'reject') {
+async function run(action: () => Promise<unknown>, tab: 'videos' | 'topups') {
   busy.value = true;
   error.value = '';
   try {
-    await moderateVideo(Number(props.id), decision, decision === 'reject' ? comment.value : undefined);
-    await goNext();
+    await action();
+    await goNext(tab);
   } catch (err) {
     error.value = err instanceof ApiError ? err.userMessage : 'Не получилось, попробуйте ещё раз';
   } finally {
     busy.value = false;
   }
 }
+
+const decide = (decision: 'approve' | 'reject') =>
+  run(
+    () =>
+      moderateVideo(
+        Number(props.id),
+        decision,
+        decision === 'reject' ? { comment: comment.value } : { views: Number(views.value), likes: likesOrNull() },
+      ),
+    'videos',
+  );
+const finalize = () => run(() => finalizeVideo(Number(props.id), Number(views.value), likesOrNull()), 'topups');
+
+/** Просмотры, которые фиксирует модератор: на проверке — заявленные креатором, при итоге — текущие. */
+const views = ref<number | ''>('');
+/** Лайки — только для отчёта рекламодателю, по желанию; пусто — неизвестно. */
+const likes = ref<number | ''>('');
+const likesOrNull = () => (likes.value === '' ? null : likes.value);
+/** Сколько начислится за введённые просмотры (без учёта остатка бюджета). */
+const estimate = computed(() => {
+  const cpm = video.value?.order.cpm;
+  return cpm && views.value ? formatRubles(Math.floor((views.value * cpm) / 10) / 100) : '';
+});
+/** Когда можно зафиксировать итог после добора; null — не одобрен или уже зафиксирован. */
+const topupAt = computed(() => {
+  const v = video.value;
+  if (!v || v.status !== 'MODERATOR_APPROVED' || v.finalizedAt || !v.decidedAt) return null;
+  return new Date(new Date(v.decidedAt).getTime() + v.topupDays * 24 * 60 * 60 * 1000);
+});
 
 watch(() => props.id, load, { immediate: true });
 </script>
@@ -79,7 +125,32 @@ watch(() => props.id, load, { immediate: true });
       <section class="block">
         <h2 class="section-title">Сверьте с заданием</h2>
         <div class="text">{{ video.order.description }}</div>
+        <p v-if="formatVideoFormat(video.order)" class="text">Ролик: {{ formatVideoFormat(video.order) }}</p>
       </section>
+
+      <section class="rows">
+        <div class="row"><span>Ставка</span><span>{{ formatCpm(video.order.cpm) }}</span></div>
+        <div class="row"><span>Порог</span><span>от {{ formatViews(video.order.minViews) }} просмотров</span></div>
+        <div class="row"><span>Свободно в бюджете</span><span>{{ formatRubles(video.order.free) }}</span></div>
+        <div v-if="video.autoViews !== null" class="row">
+          <span>Сейчас по данным {{ PLATFORM_NAMES[video.platform] }}</span>
+          <span>{{ formatViews(video.autoViews) }} просмотров</span>
+        </div>
+        <div v-if="video.views !== null" class="row">
+          <span>{{ video.status === 'SUBMITTED' ? 'Креатор указал' : 'Зафиксировано' }}</span>
+          <span>{{ formatViews(video.views) }} просмотров · {{ formatRubles(video.payout) }}</span>
+        </div>
+      </section>
+
+      <label v-if="video.status === 'SUBMITTED' || topupAt" class="views">
+        <span class="section-title">{{ video.status === 'SUBMITTED' ? 'Просмотров по ссылке' : 'Итог просмотров' }}</span>
+        <input v-model.number="views" type="number" inputmode="numeric" min="1" step="1" />
+        <span v-if="estimate" class="hint">К начислению за эти просмотры: {{ estimate }} (не больше остатка бюджета)</span>
+      </label>
+      <label v-if="video.status === 'SUBMITTED' || topupAt" class="views">
+        <span class="section-title">Лайков — по желанию, для отчёта рекламодателю</span>
+        <input v-model.number="likes" type="number" inputmode="numeric" min="0" step="1" />
+      </label>
 
       <template v-if="video.status === 'SUBMITTED'">
         <ReasonPicker v-model="comment" :presets="PRESETS" />
@@ -89,15 +160,62 @@ watch(() => props.id, load, { immediate: true });
           <button type="button" class="reject" :disabled="busy || !comment.trim()" @click="decide('reject')">
             Отклонить
           </button>
-          <button type="button" class="approve" :disabled="busy" @click="decide('approve')">Одобрить</button>
+          <button type="button" class="approve" :disabled="busy || !views" @click="decide('approve')">Одобрить</button>
         </div>
       </template>
+      <template v-else-if="topupAt && topupAt <= new Date()">
+        <p class="hint">Добор закончился: откройте публикацию и зафиксируйте итог. Прирост доплатится, пока есть бюджет.</p>
+        <p v-if="error" class="error" role="alert">{{ error }}</p>
+        <div class="bottom-bar">
+          <button type="button" class="main-button" :disabled="busy || !views" @click="finalize">Зафиксировать итог</button>
+        </div>
+      </template>
+      <p v-else-if="topupAt" class="hint">Одобрено. Итог просмотров — {{ formatDate(topupAt.toISOString()) }}.</p>
       <p v-else class="hint">Это видео уже проверено.</p>
     </template>
   </main>
 </template>
 
 <style scoped>
+.rows {
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  font-size: 15px;
+}
+.row + .row {
+  border-top: 1px solid var(--separator);
+}
+.row span:first-child {
+  color: var(--hint);
+}
+.views {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.views input {
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+.views input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
 .head a {
   color: var(--link);
   font-weight: 600;

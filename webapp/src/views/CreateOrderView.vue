@@ -1,13 +1,26 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ApiError, createOrder, fetchMe, fetchMyOrders, ORDER_CATEGORIES, type NewOrderInput } from '../api';
+import { ApiError, createOrder, fetchMyOrders, type MyOrder, ORDER_CATEGORIES, type NewOrderInput, updateOrder } from '../api';
 
 // Лимиты — те же, что проверяет бэкенд (src/common/validation.ts); здесь только подсказка браузеру.
 const MAX_TITLE = 100;
 const MAX_DESCRIPTION = 1000;
-const MAX_PRICE = 1_000_000;
-const DEADLINES: { days: number | null; label: string }[] = [
+const MIN_BUDGET = 1_000;
+const MAX_BUDGET = 10_000_000;
+const DEFAULT_MIN_VIEWS = 250;
+const MAX_DURATION = 600;
+const ORIENTATIONS: { value: NewOrderInput['orientation']; label: string }[] = [
+  { value: 'VERTICAL', label: 'Вертикальное' },
+  { value: 'HORIZONTAL', label: 'Горизонтальное' },
+  { value: null, label: 'Любое' },
+];
+// С `id` (/my-orders/:id/edit) — правка своего заказа, без — новый.
+const props = defineProps<{ id?: string }>();
+
+/** undefined — «не менять» (только при правке), null — без срока. */
+const KEEP_DEADLINE = { days: undefined, label: 'как было' };
+const DEADLINES: { days: number | null | undefined; label: string }[] = [
   { days: 3, label: '3 дн' },
   { days: 7, label: '7 дн' },
   { days: 14, label: '14 дн' },
@@ -19,31 +32,56 @@ const route = useRoute();
 const router = useRouter();
 
 // reactive() — как ref(), но для объекта целиком: form.title и т.д. без `.value`.
-// price: '' — поле пустое (цена договорная); v-model.number отдаёт '' для пустого ввода.
-const form = reactive<Omit<NewOrderInput, 'price'> & { price: number | '' }>({
+// v-model.number отдаёт '' для пустого ввода: budget '' — ещё не введён, minViews '' — порог по умолчанию.
+const form = reactive<
+  Omit<
+    NewOrderInput,
+    'referenceUrl' | 'budget' | 'minViews' | 'minDurationSec' | 'maxDurationSec' | 'deadlineDays'
+  > & {
+    referenceUrl: string;
+    budget: number | '';
+    minViews: number | '';
+    minDurationSec: number | '';
+    maxDurationSec: number | '';
+    deadlineDays: number | null | undefined;
+  }
+>({
   title: '',
   description: '',
-  price: '',
+  referenceUrl: '',
+  budget: '',
+  minViews: DEFAULT_MIN_VIEWS,
+  // Короткие вертикальные ролики — самый частый заказ; рекламодатель может поменять.
+  minDurationSec: 15,
+  maxDurationSec: 60,
+  orientation: 'VERTICAL',
   category: 'OTHER',
-  deadlineDays: 7,
+  deadlineDays: props.id ? undefined : 7,
 });
+/** Редактируемый заказ — для подсказки, что открытый уйдёт на повторную проверку. */
+const editing = ref<MyOrder>();
+const deadlines = computed(() => (props.id ? [KEEP_DEADLINE, ...DEADLINES] : DEADLINES));
 const sending = ref(false);
 const error = ref('');
-// Без username бэкенд заказ не примет — предупреждаем, пока форма не заполнена.
-const noUsername = ref(false);
-fetchMe()
-  .then((me) => (noUsername.value = !me.hasUsername))
-  .catch(() => {});
 
-/** «Исправить и отправить снова»: /my-orders/new?from=<id> — подставляем данные отклонённого заказа. */
+/**
+ * Правка (/my-orders/:id/edit) или «Исправить и отправить снова» (/my-orders/new?from=<id>) —
+ * подставляем данные заказа в форму.
+ */
 async function prefill() {
-  const fromId = Number(route.query.from);
+  const fromId = Number(props.id ?? route.query.from);
   if (!fromId) return;
   const source = (await fetchMyOrders().catch(() => [])).find((o) => o.id === fromId);
   if (!source) return;
+  if (props.id) editing.value = source;
   form.title = source.title;
   form.description = source.description;
-  form.price = source.price ?? '';
+  form.referenceUrl = source.referenceUrl ?? '';
+  form.budget = source.budget;
+  form.minViews = source.minViews;
+  form.minDurationSec = source.minDurationSec ?? '';
+  form.maxDurationSec = source.maxDurationSec ?? '';
+  form.orientation = source.orientation;
   form.category = source.category;
 }
 
@@ -51,7 +89,15 @@ async function submit() {
   sending.value = true;
   error.value = '';
   try {
-    await createOrder({ ...form, price: form.price === '' ? null : form.price });
+    const budget = Number(form.budget);
+    const minViews = form.minViews === '' ? null : form.minViews;
+    const referenceUrl = form.referenceUrl.trim() || null;
+    const minDurationSec = form.minDurationSec === '' ? null : form.minDurationSec;
+    const maxDurationSec = form.maxDurationSec === '' ? null : form.maxDurationSec;
+    const input = { ...form, referenceUrl, budget, minViews, minDurationSec, maxDurationSec };
+    if (props.id) await updateOrder(Number(props.id), input);
+    // при создании «как было» не бывает — срок всегда выбран
+    else await createOrder({ ...input, deadlineDays: form.deadlineDays ?? null });
     await router.replace('/my-orders');
   } catch (err) {
     // Тексты ошибок проверки пишет бэкенд.
@@ -66,11 +112,7 @@ void prefill();
 
 <template>
   <main class="page">
-    <h1>Новый заказ</h1>
-    <p v-if="noUsername" class="error" role="alert">
-      Чтобы креаторы могли с вами связаться, укажите имя пользователя (username) в настройках Telegram
-      и откройте приложение заново — без него заказ не отправится.
-    </p>
+    <h1>{{ props.id ? 'Изменить заказ' : 'Новый заказ' }}</h1>
 
     <form id="order-form" class="form" @submit.prevent="submit">
       <div class="field">
@@ -90,8 +132,65 @@ void prefill();
           rows="5"
           :maxlength="MAX_DESCRIPTION"
           required
-          placeholder="Формат, длительность, что обязательно показать или сказать"
+          placeholder="Что обязательно показать или сказать, стиль, чего избегать"
         />
+      </div>
+
+      <div class="field">
+        <label for="reference" class="section-title">Референс или материалы</label>
+        <input
+          id="reference"
+          v-model="form.referenceUrl"
+          type="url"
+          inputmode="url"
+          maxlength="500"
+          placeholder="Ссылка на пример ролика или файлы — по желанию"
+        />
+      </div>
+
+      <div class="field">
+        <span class="section-title">Требования к ролику</span>
+        <div class="group">
+          <div class="row column">
+            <span id="orientation-label">Ориентация</span>
+            <div class="segmented" role="radiogroup" aria-labelledby="orientation-label">
+              <button
+                v-for="o in ORIENTATIONS"
+                :key="o.label"
+                type="button"
+                role="radio"
+                :aria-checked="form.orientation === o.value"
+                @click="form.orientation = o.value"
+              >
+                {{ o.label }}
+              </button>
+            </div>
+          </div>
+          <label class="row bordered">
+            Длительность от, сек
+            <input
+              v-model.number="form.minDurationSec"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              :max="MAX_DURATION"
+              step="1"
+              placeholder="любая"
+            />
+          </label>
+          <label class="row bordered">
+            до, сек
+            <input
+              v-model.number="form.maxDurationSec"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              :max="MAX_DURATION"
+              step="1"
+              placeholder="любая"
+            />
+          </label>
+        </div>
       </div>
 
       <fieldset class="field">
@@ -111,22 +210,34 @@ void prefill();
 
       <div class="group">
         <label class="row">
-          Цена за видео, ₽
+          Бюджет, ₽
           <input
-            v-model.number="form.price"
+            v-model.number="form.budget"
+            type="number"
+            inputmode="numeric"
+            :min="MIN_BUDGET"
+            :max="MAX_BUDGET"
+            step="1"
+            required
+            :placeholder="`от ${MIN_BUDGET.toLocaleString('ru-RU')}`"
+          />
+        </label>
+        <label class="row bordered">
+          Сдать ролик можно от, просмотров
+          <input
+            v-model.number="form.minViews"
             type="number"
             inputmode="numeric"
             min="1"
-            :max="MAX_PRICE"
             step="1"
-            placeholder="договорная"
+            :placeholder="String(DEFAULT_MIN_VIEWS)"
           />
         </label>
         <div class="row column">
           <span id="deadline-label">Срок сдачи</span>
           <div class="segmented" role="radiogroup" aria-labelledby="deadline-label">
             <button
-              v-for="d in DEADLINES"
+              v-for="d in deadlines"
               :key="d.label"
               type="button"
               role="radio"
@@ -139,13 +250,21 @@ void prefill();
         </div>
       </div>
 
+      <p class="hint">
+        Вы платите за просмотры: креаторы публикуют ролики у себя, модератор проверяет их и фиксирует просмотры.
+        Ставку за 1000 просмотров назначит модератор. Бюджет закончится — заказ закроется сам, больше бюджета вы не
+        потратите.
+      </p>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </form>
 
     <div class="bottom-bar">
-      <p class="note">Заказ увидят креаторы после проверки модератором</p>
+      <p v-if="editing?.status === 'OPEN'" class="note">
+        Заказ снова уйдёт на проверку и пропадёт из каталога до одобрения. Креаторы, которые уже взялись за него, получат уведомление.
+      </p>
+      <p v-else class="note">Заказ увидят креаторы после проверки модератором</p>
       <button type="submit" form="order-form" class="main-button" :disabled="sending">
-        {{ sending ? 'Отправляем…' : 'Отправить на модерацию' }}
+        {{ sending ? 'Отправляем…' : props.id ? 'Сохранить и отправить на проверку' : 'Отправить на модерацию' }}
       </button>
     </div>
   </main>
@@ -256,6 +375,9 @@ legend {
   background: none;
   text-align: right;
 }
+.row.bordered {
+  border-top: 1px solid var(--separator);
+}
 .row.column {
   flex-direction: column;
   align-items: stretch;
@@ -263,9 +385,14 @@ legend {
   padding: 12px 16px;
   border-top: 1px solid var(--separator);
 }
+.row.column:first-child {
+  border-top: none;
+}
 .segmented {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  /* Сколько вариантов, столько колонок: 3 ориентации, 5–6 сроков. */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   padding: 2px;
   border-radius: 9px;
   background: var(--fill);
@@ -286,6 +413,12 @@ legend {
   margin: 0 0 8px;
   font-size: 13px;
   text-align: center;
+  color: var(--hint);
+}
+.hint {
+  margin: -8px 0 0;
+  padding: 0 16px;
+  font-size: 13px;
   color: var(--hint);
 }
 .error {

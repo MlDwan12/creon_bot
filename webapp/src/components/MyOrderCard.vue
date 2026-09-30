@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { RouterLink } from 'vue-router';
+import { RouterLink, useRouter } from 'vue-router';
 import { ApiError, closeOrder, deleteOrder, extendOrder, type MyOrder } from '../api';
-import { formatDate, formatPrice } from '../format';
+import { formatDate, formatRubles, formatViews } from '../format';
 import { confirmAction } from '../telegram';
 
 const props = defineProps<{ order: MyOrder }>();
 // emit — сообщить родителю (MyOrdersView), что список надо перезагрузить.
 const emit = defineEmits<{ changed: [] }>();
+const router = useRouter();
 
 const STATUS: Record<MyOrder['status'], { label: string; tone: string }> = {
   PENDING_MODERATION: { label: 'На проверке', tone: 'warn' },
@@ -44,7 +45,9 @@ async function run(question: string | null, action: () => Promise<unknown>) {
 }
 
 const close = () =>
-  run('Закрыть заказ? Новые отклики перестанут приниматься.', () => closeOrder(props.order.id));
+  run('Закрыть заказ? Новые отклики перестанут приниматься, уже сданные ролики будут оплачены из бюджета.', () =>
+    closeOrder(props.order.id),
+  );
 const extend = (days: number) =>
   run(null, async () => {
     await extendOrder(props.order.id, days);
@@ -63,15 +66,23 @@ const remove = () =>
       <span :class="['badge', STATUS[order.status].tone]">{{ STATUS[order.status].label }}</span>
     </div>
     <div class="hint">
-      {{ formatPrice(order.price) }}
+      Бюджет {{ formatRubles(order.budget) }}
       <template v-if="order.deadline"> · до {{ formatDate(order.deadline) }}</template>
       <template v-if="order.status === 'PENDING_MODERATION'"> · модератор проверит заказ перед публикацией</template>
     </div>
 
-    <RouterLink v-if="order.pendingDecision > 0" :to="`/my-orders/${order.id}/review`" class="pending">
+    <div v-if="order.approved > 0 || order.usedPercent > 0" class="usage">
+      <div class="bar" aria-hidden="true"><span :style="{ width: `${order.usedPercent}%` }" /></div>
+      <div class="hint">
+        Израсходовано {{ order.usedPercent }}% бюджета · роликов: {{ order.approved }} · просмотров: {{ formatViews(order.views) }}
+      </div>
+    </div>
+
+    <RouterLink v-if="order.approved > 0" :to="`/my-orders/${order.id}/review`" class="pending">
       <span>
-        <strong>Видео ждут вашего решения: {{ order.pendingDecision }}</strong>
-        <small>всего откликов: {{ order.submissionsCount }}</small>
+        <strong>Отчёт · роликов: {{ order.approved }}</strong>
+        <small v-if="order.toRate > 0">можно оценить: {{ order.toRate }}</small>
+        <small v-else>откликов всего: {{ order.submissionsCount }}</small>
       </span>
       <span aria-hidden="true">›</span>
     </RouterLink>
@@ -94,11 +105,28 @@ const remove = () =>
       </button>
     </div>
     <div class="buttons">
+      <button
+        v-if="order.status === 'PENDING_MODERATION' || order.status === 'OPEN'"
+        type="button"
+        :disabled="busy"
+        @click="router.push(`/my-orders/${order.id}/edit`)"
+      >
+        Изменить
+      </button>
       <button v-if="canExtend" type="button" :disabled="busy" @click="extending = !extending">
         {{ extending ? 'Отмена' : 'Продлить срок' }}
       </button>
       <button v-if="order.status === 'OPEN'" type="button" :disabled="busy" @click="close">
         Закрыть набор
+      </button>
+      <!-- та же форма, что «Исправить и отправить снова»: поля подставятся из этого заказа -->
+      <button
+        v-if="order.status !== 'REJECTED' && order.status !== 'PENDING_MODERATION'"
+        type="button"
+        :disabled="busy"
+        @click="router.push(`/my-orders/new?from=${order.id}`)"
+      >
+        Создать похожий
       </button>
       <button v-if="order.deletable" type="button" class="danger" :disabled="busy" @click="remove">Удалить</button>
     </div>
@@ -107,6 +135,22 @@ const remove = () =>
 </template>
 
 <style scoped>
+.usage {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--fill);
+  overflow: hidden;
+}
+.bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
 .card {
   display: flex;
   flex-direction: column;
@@ -199,11 +243,13 @@ const remove = () =>
 }
 .buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 .buttons button {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 40px;
+  padding: 0 12px;
   border: none;
   border-radius: 10px;
   background: var(--fill);

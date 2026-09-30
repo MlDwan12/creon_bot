@@ -2,33 +2,40 @@
 import { computed, ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { ApiError, claimOrder, type MySubmission, type SubmissionStatus } from '../api';
-import { formatDate, formatPrice } from '../format';
+import { formatCpm, formatDeadline, formatRubles, formatViews } from '../format';
 
 const props = defineProps<{ submission: MySubmission }>();
 const router = useRouter();
 
-/** Сколько из 4 этапов пройдено: в работе → видео отправлено → модератор → рекламодатель. */
+/** Сколько из 4 этапов пройдено: в работе → ролик сдан → одобрен, начислено → итог после добора. */
 const STEPS: Record<SubmissionStatus, number> = {
   IN_PROGRESS: 1,
   SUBMITTED: 2,
   MODERATOR_APPROVED: 3,
-  ADVERTISER_APPROVED: 4,
   MODERATOR_REJECTED: 0,
-  ADVERTISER_REJECTED: 0,
+  SLOT_EXPIRED: 0,
 };
 
 const STATUS: Record<SubmissionStatus, { label: string; tone: string }> = {
   IN_PROGRESS: { label: 'В работе', tone: 'accent' },
   SUBMITTED: { label: 'На проверке у модератора', tone: 'warn' },
-  MODERATOR_APPROVED: { label: 'Ждёт решения рекламодателя', tone: 'warn' },
-  ADVERTISER_APPROVED: { label: 'Принято рекламодателем', tone: 'success' },
+  MODERATOR_APPROVED: { label: 'Одобрено — идёт добор просмотров', tone: 'success' },
   MODERATOR_REJECTED: { label: 'Отклонено модератором', tone: 'danger' },
-  ADVERTISER_REJECTED: { label: 'Отклонено рекламодателем', tone: 'danger' },
+  SLOT_EXPIRED: { label: 'Слот сгорел — видео не прислали за 5 дней', tone: 'danger' },
 };
 
 // computed — значение, которое пересчитывается само, когда меняются props.
-const steps = computed(() => STEPS[props.submission.status]);
-const status = computed(() => STATUS[props.submission.status]);
+const steps = computed(() => (props.submission.finalized ? 4 : STEPS[props.submission.status]));
+const status = computed(() =>
+  props.submission.finalized ? { label: 'Итог зафиксирован', tone: 'success' } : STATUS[props.submission.status],
+);
+/** Просмотры и деньги по сданному ролику: на проверке — резерв, после одобрения — начислено. */
+const earnings = computed(() => {
+  const { status: st, views, payout } = props.submission;
+  if (views === null || (st !== 'SUBMITTED' && st !== 'MODERATOR_APPROVED')) return '';
+  const money = st === 'SUBMITTED' ? `в резерве ${formatRubles(payout)}` : `начислено ${formatRubles(payout)}`;
+  return `${formatViews(views)} просмотров · ${money}`;
+});
 const rejected = computed(() => steps.value === 0);
 const canResubmit = computed(
   () => rejected.value && props.submission.latest && props.submission.order.status === 'OPEN',
@@ -57,7 +64,7 @@ async function resubmit() {
   <article class="card">
     <div class="top">
       <div class="title">{{ submission.order.title }}</div>
-      <span class="price">{{ formatPrice(submission.order.price) }}</span>
+      <span class="price">{{ formatCpm(submission.order.cpm) }}</span>
     </div>
 
     <div v-if="!rejected" class="steps" aria-hidden="true">
@@ -66,12 +73,13 @@ async function resubmit() {
 
     <div class="status">
       <span :class="['label', status.tone]">{{ status.label }}</span>
-      <span v-if="submission.status === 'IN_PROGRESS' && submission.order.deadline" class="hint">
-        сдать до {{ formatDate(submission.order.deadline) }}
+      <span v-if="submission.dueAt" class="hint">
+        сдать до {{ formatDeadline(submission.dueAt) }}
       </span>
       <span v-else-if="submission.attempt > 1" class="hint">видео {{ submission.attempt }}</span>
     </div>
 
+    <p v-if="earnings" class="earnings">{{ earnings }}</p>
     <p v-if="submission.comment" class="comment">«{{ submission.comment }}»</p>
 
     <RouterLink
@@ -155,6 +163,11 @@ async function resubmit() {
   margin: 0;
   font-size: 14px;
   color: var(--hint);
+}
+.earnings {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
 }
 .comment {
   margin: 0;

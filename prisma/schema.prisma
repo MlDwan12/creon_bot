@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -16,6 +17,8 @@ model User {
   tiktokUrl  String?
   youtubeUrl String?
   vkUrl      String?
+  instagramUrl String?
+  xUrl       String?
   /// Заблокирован модератором: мини-апп показывает только экран блокировки, бот не пишет.
   bannedAt   DateTime?
   banReason  String?
@@ -25,6 +28,10 @@ model User {
   orders      Order[]
   submissions Submission[]
   reports     Report[]
+  payouts     Payout[]
+
+  /// Ответ поддержки в теме → чей это пользователь (SupportService.fromSupport).
+  @@index([supportTopicId])
 }
 
 enum OrderStatus {
@@ -35,6 +42,19 @@ enum OrderStatus {
   CLOSED
   /// Истёк срок (deadline) — закрыт автоматически; рекламодатель может продлить и открыть снова.
   EXPIRED
+}
+
+/// Валюта заказа. Клиент её не показывает: пока принимаются только рубли (src/orders/budget.ts).
+enum Currency {
+  RUB
+  USD
+  USDT
+}
+
+/// Ориентация ролика в требованиях заказа; null в заказе — любая.
+enum VideoOrientation {
+  VERTICAL
+  HORIZONTAL
 }
 
 enum OrderCategory {
@@ -55,29 +75,52 @@ model Order {
   advertiserId     Int
   title            String
   description      String
-  /// Цена за одно принятое видео в копейках (в API — рубли, см. src/common/money.ts); null — договорная.
-  priceKopecks     Int?
+  /// Ссылка на референс или материалы (бриф, пример ролика). Контакты в ней не пропускает order-input.
+  referenceUrl     String?
+  /// Деньги — в сотых долях валюты (копейки, центы); в API — целые единицы, см. src/common/money.ts.
+  currency         Currency      @default(RUB)
+  /// Всё, что платит рекламодатель, включая комиссию площадки.
+  budgetMinor      Int
+  /// Комиссия площадки в процентах на момент создания: креаторам — budget × (100 − fee) / 100.
+  feePercent       Int
+  /// Выплата креатору за 1000 просмотров. Ставит модератор при одобрении; до этого null.
+  cpmMinor         Int?
+  /// Ролик можно сдать, только когда он набрал столько просмотров.
+  minViews         Int           @default(250)
   category         OrderCategory @default(OTHER)
+  /// Требования к ролику: длительность в секундах и ориентация; null — любая.
+  minDurationSec   Int?
+  maxDurationSec   Int?
+  orientation      VideoOrientation?
   deadline         DateTime?
   status           OrderStatus   @default(PENDING_MODERATION)
   moderatorId      BigInt?
   moderatorComment String?
   createdAt        DateTime      @default(now())
+  /// Когда последний раз отправлен на проверку: при создании и при каждой правке. От него считаются
+  /// сдвиг срока при публикации и время модерации (createdAt после правки уже не подходит).
+  moderationRequestedAt DateTime @default(now())
   decidedAt        DateTime?
   closedAt         DateTime?
   /// Креаторам напомнили, что срок истекает меньше чем через сутки. Сбрасывается при продлении.
   deadlineReminderSentAt DateTime?
 
   submissions Submission[]
+
+  /// Каталог (OPEN, новые первыми), очередь модерации (PENDING_MODERATION), сроки — всё по статусу.
+  @@index([status, createdAt])
+  /// «Мои заказы» и лимит активных заказов.
+  @@index([advertiserId])
 }
 
 enum SubmissionStatus {
   IN_PROGRESS
   SUBMITTED
+  /// Одобрен модератором: просмотры зафиксированы, деньги начислены. Решение окончательное.
   MODERATOR_APPROVED
   MODERATOR_REJECTED
-  ADVERTISER_APPROVED
-  ADVERTISER_REJECTED
+  /// Креатор не прислал видео за SLOT_DAYS дней после отклика — слот сгорел (ScheduledJob).
+  SLOT_EXPIRED
 }
 
 model Submission {
@@ -90,8 +133,17 @@ model Submission {
   status            SubmissionStatus @default(IN_PROGRESS)
   moderatorId       BigInt?
   moderatorComment  String?
-  advertiserComment String?
-  /// Оценка рекламодателя 1–5 при приёмке видео (ADVERTISER_APPROVED); менять нельзя, модератор может удалить.
+  /// Просмотры: при сдаче — сколько указал креатор, после одобрения — сколько зафиксировал модератор.
+  views             Int?
+  /// Лайки — для отчёта рекламодателю, на выплату не влияют. YouTube — из API, иначе вводит
+  /// модератор по желанию; null — неизвестно.
+  likes             Int?
+  /// Деньги креатору за ролик: на проверке — резерв из бюджета, после одобрения — начислено.
+  /// Отклонили — 0. Вместе по заказу не больше фонда выплат (src/orders/budget.ts).
+  payoutMinor       Int              @default(0)
+  /// Добор завершён: итоговые просмотры зафиксированы через VIEWS_TOPUP_DAYS после одобрения.
+  finalizedAt       DateTime?
+  /// Оценка рекламодателя 1–5 одобренному ролику, по желанию; менять нельзя, модератор может удалить.
   rating            Int?
   review            String?
   /// Рекламодатель разрешил показывать видео в портфолио креатора.
@@ -99,6 +151,17 @@ model Submission {
   createdAt         DateTime         @default(now())
   submittedAt       DateTime?
   decidedAt         DateTime?
+  /// Креатору напомнили, что слот сгорает меньше чем через сутки.
+  slotReminderSentAt DateTime?
+
+  /// Отклики по заказу; внешний ключ Postgres сам не индексирует.
+  @@index([orderId])
+  /// Один отклик «в работе» на креатора и заказ — дубль (двойной тап) отсекает сама база.
+  @@unique([orderId, creatorId], map: "Submission_one_in_progress", where: { status: "IN_PROGRESS" })
+  /// «Мои отклики», профиль креатора, рейтинг.
+  @@index([creatorId])
+  /// Очередь модерации видео (SUBMITTED, старые первыми) и счётчики по статусам.
+  @@index([status, submittedAt])
 }
 
 /// На что жалоба. VIDEO и REVIEW — по id отклика (Submission), PROFILE — по id пользователя.
@@ -134,4 +197,36 @@ model Report {
   /// Одна жалоба от человека на один объект.
   @@unique([reporterId, target, targetId])
   @@index([status])
+}
+
+enum PayoutStatus {
+  /// Креатор запросил вывод — ждёт менеджера.
+  REQUESTED
+  /// Менеджер перевёл деньги.
+  PAID
+  /// Отклонена с причиной — сумма вернулась на баланс.
+  REJECTED
+}
+
+/// Заявка креатора на вывод начисленного. Сами переводы — вручную, реквизиты — в чате поддержки.
+/// Баланс = начислено за одобренные ролики − заявки REQUESTED и PAID (src/api/payouts.service.ts).
+model Payout {
+  id          Int          @id @default(autoincrement())
+  creator     User         @relation(fields: [creatorId], references: [id])
+  creatorId   Int
+  currency    Currency     @default(RUB)
+  amountMinor Int
+  status      PayoutStatus @default(REQUESTED)
+  /// Причина отказа — её увидит креатор.
+  comment     String?
+  moderatorId BigInt?
+  createdAt   DateTime     @default(now())
+  decidedAt   DateTime?
+
+  /// История выплат креатора.
+  @@index([creatorId])
+  /// Очередь заявок (REQUESTED, старые первыми).
+  @@index([status, createdAt])
+  /// Одна открытая заявка на креатора — вторую (двойной тап) не пустит сама база.
+  @@unique([creatorId], map: "Payout_one_requested", where: { status: "REQUESTED" })
 }

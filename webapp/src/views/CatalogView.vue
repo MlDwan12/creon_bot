@@ -9,12 +9,13 @@ import {
 import { RouterLink } from 'vue-router';
 import OrderCard from '../components/OrderCard.vue';
 import SupportLink from '../components/SupportLink.vue';
+import { onboardingOpen } from '../onboarding';
 
 // ref() — реактивное значение: поменяли `.value` в коде, и шаблон ниже перерисовался сам.
 const category = ref<OrderCategory>();
 const orders = ref<OrderSummary[]>([]);
 const total = ref(0);
-const page = ref(0);
+const hasMore = ref(false);
 const loading = ref(false);
 const error = ref('');
 
@@ -25,15 +26,15 @@ async function load(reset: boolean) {
   // Быстро переключили категорию дважды — ответ на старый запрос может прийти позже
   // нового и затереть список. Применяем только ответ на последний запрос.
   const requestId = ++lastRequest;
-  const nextPage = reset ? 0 : page.value + 1;
   loading.value = true;
   error.value = '';
   try {
-    const res = await fetchOpenOrders(nextPage, category.value);
+    // Следующая страница — заказы старше последнего показанного (курсор, а не номер страницы).
+    const res = await fetchOpenOrders(reset ? undefined : orders.value.at(-1), category.value);
     if (requestId !== lastRequest) return;
     orders.value = reset ? res.items : [...orders.value, ...res.items];
     total.value = res.total;
-    page.value = nextPage;
+    hasMore.value = res.hasMore;
   } catch {
     if (requestId === lastRequest) error.value = 'Не удалось загрузить заказы';
   } finally {
@@ -74,7 +75,7 @@ watch(category, () => load(true), { immediate: true });
     <OrderCard v-for="o in orders" :key="o.id" :order="o" />
 
     <button
-      v-if="orders.length < total"
+      v-if="hasMore"
       type="button"
       class="more"
       :disabled="loading"
@@ -84,6 +85,7 @@ watch(category, () => load(true), { immediate: true });
     </button>
 
     <footer class="footer">
+      <button type="button" class="quiet-link" @click="onboardingOpen = true">Как это работает</button>
       <SupportLink />
       <RouterLink to="/privacy" class="quiet-link">Политика конфиденциальности</RouterLink>
     </footer>

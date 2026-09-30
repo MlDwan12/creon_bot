@@ -1,9 +1,12 @@
-/**
- * Похоже ли на контакты для связи в обход площадки: @ник, ссылки на мессенджеры и соцсети,
- * телефон, email, «пишите в тг». Это подсказка модератору, не автоблокировка — ложные
- * срабатывания допустимы. Ссылки на маркетплейсы и прочие сайты не считаем: в задании они нормальны.
+/*
+ * Контакты для связи в обход площадки. findContacts — подсказка модератору, вместе с намёками
+ * («пишите в тг»): ложные срабатывания допустимы. findExactContacts / stripContacts — только явные
+ * контакты: по ним текст, который модератор не видит, отклоняется или вычищается.
+ * Ссылки на маркетплейсы и прочие сайты не считаем: в задании они нормальны.
  */
-const PATTERNS: RegExp[] = [
+
+/** Сами контакты: @ник, ссылки на мессенджеры и соцсети, телефон, email. */
+const CONTACTS: RegExp[] = [
   // @ник (но не часть email)
   /(?<![\w.@])@[a-z][\w]{3,31}/giu,
   // мессенджеры и соцсети
@@ -12,6 +15,10 @@ const PATTERNS: RegExp[] = [
   /(?<!\d)(?:\+7|8)[\s\-()]*\d{3}[\s\-()]*\d{3}[\s-]*\d{2}[\s-]*\d{2}(?!\d)/gu,
   // email
   /[\w.+-]+@[\w-]+\.[a-z]{2,}/giu,
+];
+
+/** Намёки — только подсказка модератору: «видео не для телеграма» — не контакт. */
+const HINTS: RegExp[] = [
   // «пишите в тг», «в личку», ватсап…
   /(?<![\p{L}\d])(?:телеграм\p{L}*|тг|tg|telegram|ватсап\p{L}*|вотсап\p{L}*|whats?app|вайбер\p{L}*|viber|в\s+лс|в\s+личк\p{L}*|в\s+директ)(?![\p{L}\d])/giu,
 ];
@@ -20,8 +27,23 @@ const PATTERNS: RegExp[] = [
 export function findContacts(
   ...texts: (string | null | undefined)[]
 ): string[] {
-  const text = texts.filter(Boolean).join('\n');
-  const found = PATTERNS.flatMap((re) =>
+  return find([...CONTACTS, ...HINTS], texts.filter(Boolean).join('\n'));
+}
+
+/** Только явные контакты (@ник, ссылка на мессенджер, телефон, email) — без намёков. */
+export function findExactContacts(text: string): string[] {
+  return find(CONTACTS, text);
+}
+
+/** Текст без явных контактов — для имени, которое видит другая сторона сделки. */
+export function stripContacts(text: string): string {
+  return CONTACTS.reduce((t, re) => t.replace(re, ' '), text)
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function find(patterns: RegExp[], text: string): string[] {
+  const found = patterns.flatMap((re) =>
     [...text.matchAll(re)].map((m) => ({ at: m.index, value: m[0].trim() })),
   );
   found.sort((a, b) => a.at - b.at);

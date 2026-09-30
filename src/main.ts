@@ -22,10 +22,12 @@ process.on('unhandledRejection', (reason) => {
 });
 
 async function bootstrap() {
-  // HTTP нужен для API Mini App (src/api); бот по-прежнему работает через long polling.
+  // HTTP нужен для API Mini App (контроллеры в модулях src/*); бот по-прежнему работает через long polling.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: new RedactingLogger(),
   });
+  // не подсказываем снаружи, на чём сервер
+  app.disable('x-powered-by');
   serveWebapp(app);
   // На SIGTERM (docker stop / редеплой) останавливает polling и закрывает соединение Prisma.
   app.enableShutdownHooks();

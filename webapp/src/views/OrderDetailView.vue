@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onUnmounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { ApiError, categoryLabel, claimOrder, fetchOrder, type OrderDetail } from '../api';
 import SupportLink from '../components/SupportLink.vue';
-import { formatDeadline, formatPrice } from '../format';
+import { formatCpm, formatDeadline, formatRubles, formatVideoFormat, formatViews } from '../format';
+import { safeUrl } from '../telegram';
 
 // `id` приходит из адреса /orders/:id (в router.ts у маршрута `props: true`).
 const props = defineProps<{ id: string }>();
@@ -37,6 +38,14 @@ async function claim() {
 }
 
 void load();
+
+// Остаток бюджета меняется, пока другие креаторы сдают ролики, — обновляем, пока экран открыт
+// и виден. Сбой обновления не показываем: на экране остаются последние данные.
+const refresh = setInterval(async () => {
+  if (document.hidden || !order.value) return;
+  order.value = await fetchOrder(Number(props.id)).catch(() => order.value);
+}, 30_000);
+onUnmounted(() => clearInterval(refresh));
 </script>
 
 <template>
@@ -53,40 +62,43 @@ void load();
       <section class="rows">
         <div class="row">
           <span>Оплата</span>
-          <strong>{{ formatPrice(order.price) }}</strong>
+          <strong>{{ formatCpm(order.cpm) }}</strong>
+        </div>
+        <div class="row">
+          <span>Осталось в бюджете</span>
+          <span class="value">{{ formatRubles(order.free) }}</span>
+        </div>
+        <div class="row">
+          <span>Сдать можно</span>
+          <span class="value">от {{ formatViews(order.minViews) }} просмотров</span>
         </div>
         <div v-if="order.deadline" class="row">
           <span>Сдать до</span>
           <span class="value">{{ formatDeadline(order.deadline) }}</span>
         </div>
         <div class="row">
-          <span>Рекламодатель</span>
-          <span class="value">
-            {{
-              order.advertiser.accepted + order.advertiser.rejected
-                ? `принял видео: ${order.advertiser.accepted}, отклонил: ${order.advertiser.rejected}`
-                : 'ещё не принимал видео'
-            }}
-          </span>
-        </div>
-        <div class="row">
-          <span>Оплата</span>
-          <span class="value">через CreON, после приёмки видео</span>
+          <span>Выплата</span>
+          <span class="value">через CreON, после проверки модератором</span>
         </div>
       </section>
 
       <section class="block">
         <h2 class="section-title">Задание</h2>
         <div class="text">{{ order.description }}</div>
+        <p v-if="formatVideoFormat(order)" class="format">Ролик: {{ formatVideoFormat(order) }}</p>
+        <a v-if="safeUrl(order.referenceUrl)" :href="safeUrl(order.referenceUrl)" target="_blank" rel="noopener noreferrer" class="reference">
+          Референс и материалы ›
+        </a>
       </section>
 
       <section class="block">
         <h2 class="section-title">Как это работает</h2>
         <ol class="steps">
           <li>Откликаетесь — заказ появляется в «Мои отклики»</li>
-          <li>Снимаете видео и присылаете ссылку</li>
-          <li>Модератор проверяет ролик</li>
-          <li>Рекламодатель подтверждает работу</li>
+          <li>Публикуете ролик у себя в соцсети — на это 5 дней, потом слот сгорает</li>
+          <li>Когда ролик наберёт {{ formatViews(order.minViews) }} просмотров, присылаете ссылку и число просмотров</li>
+          <li>Модератор проверяет ролик и фиксирует просмотры — начисляется оплата</li>
+          <li>Через 3 дня фиксируем итог и доплачиваем за новые просмотры, пока есть бюджет</li>
         </ol>
       </section>
 
@@ -176,6 +188,21 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+.format {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  font-size: 15px;
+}
+.reference {
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--link);
+  font-size: 16px;
+  text-decoration: none;
 }
 .text {
   padding: 14px 16px;
