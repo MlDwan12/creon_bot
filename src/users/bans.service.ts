@@ -68,6 +68,20 @@ export class BansService {
       await tx.submission.deleteMany({
         where: { creatorId: userId, status: SubmissionStatus.IN_PROGRESS },
       });
+      // Заказы на повторной проверке сняты — чужие ролики по ним не ждут модератора, как в
+      // OrdersService.moderatorReject; резерв возвращается в фонд.
+      await tx.submission.updateMany({
+        where: {
+          orderId: { in: pending.map((o) => o.id) },
+          status: SubmissionStatus.SUBMITTED,
+        },
+        data: {
+          status: SubmissionStatus.MODERATOR_REJECTED,
+          moderatorComment: 'Заказ снят модератором',
+          payoutMinor: 0,
+          decidedAt: new Date(),
+        },
+      });
       await tx.submission.updateMany({
         where: { creatorId: userId, status: SubmissionStatus.SUBMITTED },
         data: {

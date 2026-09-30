@@ -59,3 +59,25 @@ describe('NotificationsService — очередь отправки', () => {
     expect(sent).toEqual(['11', '14']);
   });
 });
+
+describe('NotificationsService — название заказа креаторам', () => {
+  it('непроверенное модератором название не уходит креатору — только номер', async () => {
+    const { service, release, sendMessage } = setup();
+    const pending = {
+      ...order([11]),
+      status: 'PENDING_MODERATION',
+      title: 'пишите @shop',
+    } as ReturnType<typeof order>;
+    service.orderClosed(pending);
+    service.orderClosed({ ...pending, status: 'OPEN' });
+    release();
+    await service.onApplicationShutdown();
+
+    const texts = sendMessage.mock.calls.map((c) =>
+      String((c as unknown[])[1]),
+    );
+    expect(texts[0]).toContain('Заказ #1 закрыт');
+    expect(texts[0]).not.toContain('@shop');
+    expect(texts[1]).toContain('«пишите @shop»');
+  });
+});

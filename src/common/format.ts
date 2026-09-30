@@ -1,4 +1,9 @@
-import type { OrderCategory, User } from '@prisma/client';
+import {
+  type Order,
+  OrderCategory,
+  OrderStatus,
+  type User,
+} from '@prisma/client';
 import { stripContacts } from './contacts';
 
 /** Уведомления уходят с parse_mode HTML — пользовательский текст экранировать перед подстановкой. */
@@ -60,4 +65,15 @@ export function creatorLabel(user: User): string {
   return user.username
     ? `@${user.username}`
     : (user.firstName ?? `id${user.telegramId}`);
+}
+
+/**
+ * Название заказа видно креаторам, только если его проверил модератор. Изменённый заказ на проверке
+ * или отклонённый после правки — новое название модератор не одобрил, в нём может быть контакт.
+ */
+export function titleVisibleToCreators(order: Pick<Order, 'status'>): boolean {
+  return (
+    order.status !== OrderStatus.PENDING_MODERATION &&
+    order.status !== OrderStatus.REJECTED
+  );
 }

@@ -1,10 +1,6 @@
-import {
-  type Order,
-  OrderStatus,
-  type Submission,
-  SubmissionStatus,
-} from '@prisma/client';
+import { type Order, type Submission, SubmissionStatus } from '@prisma/client';
 import { kopecksToRubles } from '../common/money';
+import { titleVisibleToCreators } from '../common/format';
 import { slotDueAt } from './submissions.service';
 
 /**
@@ -45,13 +41,9 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
           : null,
       order: {
         id: row.order.id,
-        // Изменённый заказ на проверке (или отклонённый после правки): новое название модератор ещё
-        // не видел — в нём может быть контакт. Креатору — только номер.
-        title:
-          row.order.status === OrderStatus.PENDING_MODERATION ||
-          row.order.status === OrderStatus.REJECTED
-            ? `Заказ #${row.order.id} — на проверке у модератора`
-            : row.order.title,
+        title: titleVisibleToCreators(row.order)
+          ? row.order.title
+          : `Заказ #${row.order.id} — на проверке у модератора`,
         cpm: kopecksToRubles(row.order.cpmMinor),
         minViews: row.order.minViews,
         deadline: row.order.deadline,

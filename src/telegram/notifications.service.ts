@@ -20,6 +20,7 @@ import {
   formatRubles,
   html,
   orderCategoryLabel,
+  titleVisibleToCreators,
 } from '../common/format';
 import { parseModeratorIds } from '../auth/moderator.util';
 
@@ -144,7 +145,7 @@ export class NotificationsService implements OnApplicationShutdown {
     const views = (submission.views ?? 0).toLocaleString('ru-RU');
     this.send(
       submission.creator.telegramId,
-      `✅ Ролик по заказу «${escapeHtml(submission.order.title)}» одобрен: ${views} просмотров, начислено ${formatRubles(kopecksToRubles(submission.payoutMinor))}.\n\nЧерез ${VIEWS_TOPUP_DAYS} дня зафиксируем итог просмотров и доплатим за новые, пока в заказе есть бюджет. Вывести деньги — «Мои отклики» → «Баланс».`,
+      `✅ Ролик по заказу ${forCreator(submission.order)} одобрен: ${views} просмотров, начислено ${formatRubles(kopecksToRubles(submission.payoutMinor))}.\n\nЧерез ${VIEWS_TOPUP_DAYS} дня зафиксируем итог просмотров и доплатим за новые, пока в заказе есть бюджет. Вывести деньги — «Мои отклики» → «Баланс».`,
       '/submissions',
       true,
     );
@@ -168,8 +169,8 @@ export class NotificationsService implements OnApplicationShutdown {
     this.send(
       submission.creator.telegramId,
       extraMinor > 0
-        ? `📈 Итог по ролику «${escapeHtml(submission.order.title)}»: ${views} просмотров, доплачено ${formatRubles(kopecksToRubles(extraMinor))}.`
-        : `📈 Итог по ролику «${escapeHtml(submission.order.title)}»: ${views} просмотров. Доплаты нет — новых просмотров нет или бюджет заказа исчерпан.`,
+        ? `📈 Итог по ролику (заказ ${forCreator(submission.order)}): ${views} просмотров, доплачено ${formatRubles(kopecksToRubles(extraMinor))}.`
+        : `📈 Итог по ролику (заказ ${forCreator(submission.order)}): ${views} просмотров. Доплаты нет — новых просмотров нет или бюджет заказа исчерпан.`,
       '/submissions',
       true,
     );
@@ -179,8 +180,9 @@ export class NotificationsService implements OnApplicationShutdown {
   videoRejectedByModerator(submission: SubmissionWithParties, comment: string) {
     this.send(
       submission.creator.telegramId,
-      `❌ Ваш отклик на заказ «${submission.order.title}» отклонён модератором.\nПричина: ${comment}\n\nВы можете отправить новый отклик на этот заказ.`,
+      `❌ Ваш отклик на заказ ${forCreator(submission.order)} отклонён модератором.\nПричина: ${escapeHtml(comment)}\n\nВы можете отправить новый отклик на этот заказ.`,
       '/submissions',
+      true,
     );
   }
 
@@ -188,7 +190,7 @@ export class NotificationsService implements OnApplicationShutdown {
   orderClosed(order: OrderWithCreators) {
     this.toCreators(
       order,
-      `🔒 Заказ «${escapeHtml(order.title)}» закрыт рекламодателем. Новые отклики по нему больше не принимаются.`,
+      `🔒 Заказ ${forCreator(order)} закрыт рекламодателем. Новые отклики по нему больше не принимаются.`,
     );
   }
 
@@ -204,7 +206,7 @@ export class NotificationsService implements OnApplicationShutdown {
     );
     this.toCreators(
       order,
-      `🔒 Бюджет заказа «${escapeHtml(order.title)}» исчерпан — новые ролики по нему не принимаются.`,
+      `🔒 Бюджет заказа ${forCreator(order)} исчерпан — новые ролики по нему не принимаются.`,
     );
   }
 
@@ -220,7 +222,7 @@ export class NotificationsService implements OnApplicationShutdown {
     );
     this.toCreators(
       order,
-      `🔒 Заказ «${escapeHtml(order.title)}» закрыт модератором за нарушение правил площадки — не продолжайте работу по нему.`,
+      `🔒 Заказ ${forCreator(order)} закрыт модератором за нарушение правил площадки — не продолжайте работу по нему.`,
     );
   }
 
@@ -244,7 +246,7 @@ export class NotificationsService implements OnApplicationShutdown {
   orderRemoved(order: OrderWithCreators) {
     this.toCreators(
       order,
-      `🗑 Заказ «${escapeHtml(order.title)}» удалён рекламодателем. Отклик по нему больше не актуален.`,
+      `🗑 Заказ ${forCreator(order)} удалён рекламодателем. Отклик по нему больше не актуален.`,
     );
   }
 
@@ -258,7 +260,7 @@ export class NotificationsService implements OnApplicationShutdown {
     );
     this.toCreators(
       order,
-      `⏰ Срок заказа «${escapeHtml(order.title)}» истёк — видео по нему больше не принимаются.`,
+      `⏰ Срок заказа ${forCreator(order)} истёк — видео по нему больше не принимаются.`,
     );
   }
 
@@ -266,7 +268,7 @@ export class NotificationsService implements OnApplicationShutdown {
   deadlineSoon(order: OrderWithCreators & Order) {
     this.toCreators(
       order,
-      `⏳ Меньше чем через сутки истекает срок заказа «${escapeHtml(order.title)}» — успейте отправить видео. После срока его не примут.`,
+      `⏳ Меньше чем через сутки истекает срок заказа ${forCreator(order)} — успейте отправить видео. После срока его не примут.`,
     );
   }
 
@@ -274,7 +276,7 @@ export class NotificationsService implements OnApplicationShutdown {
   slotEndingSoon(submission: SubmissionWithParties) {
     this.send(
       submission.creator.telegramId,
-      `⏳ Меньше чем через сутки сгорит ваш слот по заказу «${escapeHtml(submission.order.title)}» — успейте отправить видео.`,
+      `⏳ Меньше чем через сутки сгорит ваш слот по заказу ${forCreator(submission.order)} — успейте отправить видео.`,
       `/submissions/${submission.id}/video`,
       true,
     );
@@ -284,7 +286,7 @@ export class NotificationsService implements OnApplicationShutdown {
   slotExpired(submission: SubmissionWithParties) {
     this.send(
       submission.creator.telegramId,
-      `⌛ Слот по заказу «${escapeHtml(submission.order.title)}» сгорел: видео не прислали за ${SLOT_DAYS} дней. Если заказ ещё открыт, можно откликнуться снова.`,
+      `⌛ Слот по заказу ${forCreator(submission.order)} сгорел: видео не прислали за ${SLOT_DAYS} дней. Если заказ ещё открыт, можно откликнуться снова.`,
       '/submissions',
       true,
     );
@@ -342,8 +344,9 @@ export class NotificationsService implements OnApplicationShutdown {
     if (!submission.rating) return;
     this.send(
       submission.creator.telegramId,
-      `⭐ Рекламодатель оценил ваш ролик по заказу «${submission.order.title}»: ${'★'.repeat(submission.rating)}${'☆'.repeat(5 - submission.rating)}`,
+      `⭐ Рекламодатель оценил ваш ролик по заказу ${forCreator(submission.order)}: ${'★'.repeat(submission.rating)}${'☆'.repeat(5 - submission.rating)}`,
       '/profile',
+      true,
     );
   }
 
@@ -414,6 +417,13 @@ export class NotificationsService implements OnApplicationShutdown {
       Markup.button.webApp('Открыть', this.webAppUrl + path),
     ]);
   }
+}
+
+/** Заказ в тексте креатору (HTML): название — только проверенное модератором, иначе номер. */
+function forCreator(order: Order) {
+  return titleVisibleToCreators(order)
+    ? `«${escapeHtml(order.title)}»`
+    : `#${order.id}`;
 }
 
 type OrderWithCreators = Order & {

@@ -1,3 +1,4 @@
+import { MAX_VIEWS } from '../common/validation';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { platformOf } from '../common/platforms';
@@ -69,10 +70,14 @@ export class ViewCounterService {
         `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${batch.join(',')}&key=${this.youtubeKey}`,
       );
       for (const item of data?.items ?? []) {
-        const views = Number(item.statistics?.viewCount);
+        // колонки просмотров — Int4: больше MAX_VIEWS не пишем (такой ролик — всё равно выше любого бюджета)
+        const views = Math.min(Number(item.statistics?.viewCount), MAX_VIEWS);
         if (!Number.isFinite(views)) continue;
         // автор может скрыть лайки — тогда likeCount нет
-        const likes = Number(item.statistics?.likeCount ?? NaN);
+        const likes = Math.min(
+          Number(item.statistics?.likeCount ?? NaN),
+          MAX_VIEWS,
+        );
         const stats = { views, likes: Number.isFinite(likes) ? likes : null };
         for (const url of urlsById.get(item.id) ?? []) result.set(url, stats);
       }

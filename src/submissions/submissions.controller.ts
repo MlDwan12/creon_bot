@@ -67,14 +67,13 @@ export class SubmissionsController {
     // Где просмотры отдаёт API площадки — резервируем по ним, а не по словам креатора.
     const counted = (await this.viewCounter.fetchViews([url])).get(url)?.views;
     // attachVideo сам проверяет, что отклик ваш и ещё «в работе», порог и бюджет.
-    const { submission, closed } = await this.submissionsService.attachVideo(
+    const submission = await this.submissionsService.attachVideo(
       id,
       req.user.id,
       url,
       counted ?? claimed,
     );
     this.notifications.videoSubmitted(submission);
-    if (closed) this.notifications.orderBudgetExhausted(closed);
     return { ok: true };
   }
 
