@@ -28,7 +28,7 @@ export function parseWallet(body: unknown): string | null {
   if (!wallet) return null;
   if (!isTrc20Address(wallet))
     throw new BadRequestException(
-      'Это не адрес USDT в сети TRC20: он начинается с T и состоит из 34 символов. Скопируйте его из кошелька',
+      'Адрес не прошёл проверку: в нём опечатка или это не сеть TRC20. Скопируйте адрес USDT (TRC20) из кошелька целиком — вручную легко ошибиться в одном символе',
     );
   return wallet;
 }
