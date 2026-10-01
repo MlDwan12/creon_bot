@@ -345,6 +345,14 @@ describe('правка заказа', () => {
     expect(updated.submissions.map((s) => s.creatorId)).toEqual([creator.id]);
   });
 
+  it('рассылка о новом заказе — только при первой публикации, не после правки', async () => {
+    const adv = await user();
+    const order = await openOrder(adv.id);
+    expect(order.firstPublication).toBe(true);
+    await orders.update(order.id, adv.id, edit);
+    expect((await approveOrder(order.id, 1n)).firstPublication).toBe(false);
+  });
+
   it('чужой и закрытый — нельзя', async () => {
     const adv = await user();
     const other = await user();

@@ -86,6 +86,8 @@ export class ProfilesService {
         : NO_LINKS,
       /** Кошелёк для выплат — только самому креатору и модератору. */
       wallet: full ? creator.payoutWallet : null,
+      /** Сообщения о новых заказах — переключатель в своём профиле. */
+      notifyNewOrders: full ? creator.notifyNewOrders : null,
       reviews: reviews.map((s) => ({
         submissionId: s.id,
         rating: s.rating!,
@@ -112,6 +114,13 @@ export class ProfilesService {
 
   updateLinks(userId: number, links: ProfileLinks) {
     return this.prisma.user.update({ where: { id: userId }, data: links });
+  }
+
+  updateNotifications(userId: number, notifyNewOrders: boolean) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { notifyNewOrders },
+    });
   }
 
   updateWallet(userId: number, payoutWallet: string | null) {

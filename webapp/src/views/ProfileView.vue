@@ -12,6 +12,7 @@ import {
   type ProfileLinks,
   removeReview,
   unbanUser,
+  updateNotifications,
   updateProfileLinks,
   updateWallet,
 } from '../api';
@@ -99,6 +100,20 @@ async function saveWallet() {
     walletError.value = err instanceof ApiError ? err.userMessage : 'Не удалось сохранить';
   } finally {
     busy.value = false;
+  }
+}
+
+const notifyError = ref('');
+
+async function toggleNewOrders(event: Event) {
+  const input = event.target as HTMLInputElement;
+  notifyError.value = '';
+  try {
+    await updateNotifications(input.checked);
+    profile.value!.notifyNewOrders = input.checked;
+  } catch (err) {
+    input.checked = !input.checked;
+    notifyError.value = err instanceof ApiError ? err.userMessage : 'Не удалось сохранить';
   }
 }
 
@@ -223,6 +238,18 @@ void load();
             {{ profile.wallet ? 'Изменить кошелёк' : 'Добавить кошелёк' }}
           </button>
         </template>
+      </section>
+
+      <section v-if="own" class="block">
+        <h2 class="section-title">Уведомления</h2>
+        <label class="switch-row">
+          <span>
+            Новые заказы
+            <small>Бот напишет, когда в каталоге появится заказ</small>
+          </span>
+          <input type="checkbox" role="switch" :checked="profile.notifyNewOrders ?? true" @change="toggleNewOrders" />
+        </label>
+        <p v-if="notifyError" class="error" role="alert">{{ notifyError }}</p>
       </section>
 
       <section class="block">
@@ -388,6 +415,54 @@ h1 {
 .balance-action {
   color: var(--link);
   font-weight: 600;
+}
+.switch-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.switch-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.switch-row small {
+  font-size: 13px;
+  color: var(--hint);
+}
+/* нативный чекбокс в виде переключателя */
+.switch-row input {
+  flex: none;
+  appearance: none;
+  position: relative;
+  width: 51px;
+  height: 31px;
+  margin: 0;
+  border-radius: 16px;
+  background: var(--fill);
+  transition: background 0.2s;
+}
+.switch-row input::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s;
+}
+.switch-row input:checked {
+  background: var(--accent);
+}
+.switch-row input:checked::after {
+  transform: translateX(20px);
 }
 .wallet {
   margin: 0;

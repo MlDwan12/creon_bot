@@ -94,6 +94,34 @@ export class NotificationsService implements OnApplicationShutdown {
       .join('\n');
   }
 
+  /**
+   * Всем, кроме автора, модераторов, заблокированных и отписавшихся: в каталоге новый заказ.
+   * Название уже проверено модератором. Бюджет не пишем — только ставку и порог.
+   */
+  newOrderPublished(order: Order) {
+    const text = [
+      `🆕 Новый заказ: «${order.title}»`,
+      `${formatMoney(fromMinor(order.cpmMinor ?? 0))} за 1000 просмотров · сдать можно от ${order.minViews.toLocaleString('ru-RU')} просмотров`,
+      '',
+      'Отключить такие сообщения — «Профиль» → «Уведомления».',
+    ].join('\n');
+    // ponytail: все получатели одним запросом и общая очередь — на тысячах пользователей рассылка
+    // займёт минуты и задержит другие уведомления; тогда отдельная очередь с пачками
+    this.enqueue(async () => {
+      const users = await this.prisma.user.findMany({
+        where: {
+          id: { not: order.advertiserId },
+          bannedAt: null,
+          notifyNewOrders: true,
+        },
+        select: { telegramId: true },
+      });
+      for (const { telegramId } of users)
+        if (!this.moderatorIds.includes(telegramId.toString()))
+          this.send(telegramId, text, `/orders/${order.id}`);
+    });
+  }
+
   /** Модераторам: креатор прислал видео. */
   videoSubmitted(submission: SubmissionWithParties) {
     const text = [

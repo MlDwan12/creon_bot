@@ -200,7 +200,11 @@ export class ModerationController {
     );
     if (order.status === OrderStatus.CLOSED)
       this.notifications.orderBudgetExhausted(order);
-    else this.notifications.orderApproved(order);
+    else {
+      this.notifications.orderApproved(order);
+      // изменённый заказ после повторной проверки — не новый, второй раз не рассылаем
+      if (order.firstPublication) this.notifications.newOrderPublished(order);
+    }
     return { ok: true };
   }
 
