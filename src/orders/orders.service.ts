@@ -519,7 +519,7 @@ export class OrdersService {
         tx,
       );
     });
-    return this.prisma.order.findUniqueOrThrow({
+    const approved = await this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
       include: {
         advertiser: true,
@@ -529,6 +529,8 @@ export class OrdersService {
         },
       },
     });
+    // ставку назначают при первом одобрении, правка заказа её не сбрасывает
+    return { ...approved, firstPublication: order.cpmMinor === null };
   }
 
   /**

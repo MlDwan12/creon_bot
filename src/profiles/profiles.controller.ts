@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   ForbiddenException,
@@ -40,6 +41,18 @@ export class ProfilesController {
   @Put('profile/links')
   async updateLinks(@Body() body: unknown, @Req() req: ApiRequest) {
     await this.profiles.updateLinks(req.user.id, parseLinks(body));
+    return { ok: true };
+  }
+
+  /** Присылать ли сообщения о новых заказах. */
+  @Put('profile/notifications')
+  async updateNotifications(
+    @Body('newOrders') newOrders: unknown,
+    @Req() req: ApiRequest,
+  ) {
+    if (typeof newOrders !== 'boolean')
+      throw new BadRequestException('newOrders — true или false');
+    await this.profiles.updateNotifications(req.user.id, newOrders);
     return { ok: true };
   }
 

@@ -355,6 +355,8 @@ export interface CreatorProfile {
   links: ProfileLinks;
   /** Кошелёк USDT (TRC20) для выплат — только в своём профиле и модератору. */
   wallet: string | null;
+  /** Сообщения о новых заказах — только в своём профиле и модератору. */
+  notifyNewOrders: boolean | null;
   reviews: {
     submissionId: number;
     rating: number;
@@ -527,6 +529,10 @@ export function fetchCreatorPhoto(id: number): Promise<string | null> {
 
 export function updateProfileLinks(links: ProfileLinks) {
   return request<{ ok: true }>('PUT', '/api/profile/links', links);
+}
+
+export function updateNotifications(newOrders: boolean) {
+  return request<{ ok: true }>('PUT', '/api/profile/notifications', { newOrders });
 }
 
 /** Пустая строка — убрать кошелёк. */

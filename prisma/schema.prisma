@@ -21,6 +21,8 @@ model User {
   xUrl       String?
   /// Кошелёк USDT (TRC20) для выплат — видят только сам креатор и модераторы (src/payouts/trc20.ts).
   payoutWallet String?
+  /// Присылать ли сообщение о каждом новом заказе в каталоге — переключатель в профиле.
+  notifyNewOrders Boolean @default(true)
   /// Заблокирован модератором: мини-апп показывает только экран блокировки, бот не пишет.
   bannedAt   DateTime?
   banReason  String?
