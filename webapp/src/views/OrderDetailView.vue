@@ -3,7 +3,7 @@ import { onUnmounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { ApiError, categoryLabel, claimOrder, fetchOrder, type OrderDetail } from '../api';
 import SupportLink from '../components/SupportLink.vue';
-import { formatCpm, formatDeadline, formatRubles, formatVideoFormat, formatViews } from '../format';
+import { formatCpm, formatDeadline, formatMoney, formatVideoFormat, formatViews } from '../format';
 import { safeUrl } from '../telegram';
 
 // `id` приходит из адреса /orders/:id (в router.ts у маршрута `props: true`).
@@ -66,7 +66,7 @@ onUnmounted(() => clearInterval(refresh));
         </div>
         <div class="row">
           <span>Осталось в бюджете</span>
-          <span class="value">{{ formatRubles(order.free) }}</span>
+          <span class="value">{{ formatMoney(order.free) }}</span>
         </div>
         <div class="row">
           <span>Сдать можно</span>
@@ -95,7 +95,7 @@ onUnmounted(() => clearInterval(refresh));
         <h2 class="section-title">Как это работает</h2>
         <ol class="steps">
           <li>Откликаетесь — заказ появляется в «Мои отклики»</li>
-          <li>Публикуете ролик у себя в соцсети — на это 5 дней, потом слот сгорает</li>
+          <li>Публикуете ролик у себя в соцсети — на всё 7 дней с отклика, потом слот сгорает</li>
           <li>Когда ролик наберёт {{ formatViews(order.minViews) }} просмотров, присылаете ссылку и число просмотров</li>
           <li>Модератор проверяет ролик и фиксирует просмотры — начисляется оплата</li>
           <li>Через 3 дня фиксируем итог и доплачиваем за новые просмотры, пока есть бюджет</li>

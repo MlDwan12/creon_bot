@@ -19,6 +19,10 @@ model User {
   vkUrl      String?
   instagramUrl String?
   xUrl       String?
+  /// Кошелёк USDT (TRC20) для выплат — видят только сам креатор и модераторы (src/payouts/trc20.ts).
+  payoutWallet String?
+  /// Присылать ли сообщение о каждом новом заказе в каталоге — переключатель в профиле.
+  notifyNewOrders Boolean @default(true)
   /// Заблокирован модератором: мини-апп показывает только экран блокировки, бот не пишет.
   bannedAt   DateTime?
   banReason  String?
@@ -44,7 +48,7 @@ enum OrderStatus {
   EXPIRED
 }
 
-/// Валюта заказа. Клиент её не показывает: пока принимаются только рубли (src/orders/budget.ts).
+/// Валюта денег. Всё в USDT (src/orders/budget.ts); RUB — у старых заказов и выплат.
 enum Currency {
   RUB
   USD
@@ -78,7 +82,7 @@ model Order {
   /// Ссылка на референс или материалы (бриф, пример ролика). Контакты в ней не пропускает order-input.
   referenceUrl     String?
   /// Деньги — в сотых долях валюты (копейки, центы); в API — целые единицы, см. src/common/money.ts.
-  currency         Currency      @default(RUB)
+  currency         Currency      @default(USDT)
   /// Всё, что платит рекламодатель, включая комиссию площадки.
   budgetMinor      Int
   /// Комиссия площадки в процентах на момент создания: креаторам — budget × (100 − fee) / 100.
@@ -214,8 +218,10 @@ model Payout {
   id          Int          @id @default(autoincrement())
   creator     User         @relation(fields: [creatorId], references: [id])
   creatorId   Int
-  currency    Currency     @default(RUB)
+  currency    Currency     @default(USDT)
   amountMinor Int
+  /// Кошелёк на момент заявки: смена адреса в профиле не перенаправит уже поданную выплату.
+  wallet      String?
   status      PayoutStatus @default(REQUESTED)
   /// Причина отказа — её увидит креатор.
   comment     String?

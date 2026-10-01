@@ -5,7 +5,7 @@ const order = {
   id: 1,
   title: 'Заказ',
   status: 'OPEN',
-  budgetMinor: 5_000_000, // 50 000 ₽
+  budgetMinor: 5_000_000, // 50 000 USDT
   feePercent: 20,
 } as Order;
 
@@ -50,7 +50,7 @@ describe('buildOrderReport', () => {
   it('сводка — со стороны рекламодателя: выплаты вместе с комиссией', () => {
     expect(report.summary).toEqual({
       budget: 50_000,
-      spent: 400, // 320 ₽ креаторам / 0,8
+      spent: 400, // 320 USDT креаторам / 0,8
       reserved: 200,
       left: 49_400,
       views: 4000,

@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { ApiError, fetchMySubmissions, type MySubmission, submitVideo } from '../api';
-import { formatCpm, formatDeadline, formatRubles, formatViews } from '../format';
+import { formatCpm, formatDeadline, formatMoney, formatViews } from '../format';
 
 // `id` отклика приходит из адреса /submissions/:id/video.
 const props = defineProps<{ id: string }>();
@@ -15,7 +15,7 @@ const views = ref<number | ''>('');
 /** Сколько примерно начислят за указанные просмотры — если ставка уже есть. */
 const estimate = computed(() => {
   const cpm = submission.value?.order.cpm;
-  return cpm && views.value ? formatRubles(Math.floor((views.value * cpm) / 10) / 100) : '';
+  return cpm && views.value ? formatMoney(Math.floor((views.value * cpm) / 10) / 100) : '';
 });
 const sending = ref(false);
 const sendError = ref('');

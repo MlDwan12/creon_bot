@@ -6,8 +6,8 @@ export const DEFAULT_MIN_VIEWS = 250;
 /** Сколько дней после одобрения добираются просмотры — потом модератор фиксирует итог. */
 export const VIEWS_TOPUP_DAYS = 3;
 
-/** Валюты заложены в базе, но пока принимаем только рубли — клиент валюту не показывает. */
-export const ORDER_CURRENCY = Currency.RUB;
+/** Все деньги площадки — в USDT; другие валюты в enum остались от старых заказов. */
+export const ORDER_CURRENCY = Currency.USDT;
 
 const DEFAULT_FEE_PERCENT = 20;
 

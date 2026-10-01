@@ -47,9 +47,9 @@ export function formatDeadline(deadline: Date): string {
   });
 }
 
-/** «3 000 ₽». */
-export function formatRubles(rubles: number): string {
-  return `${rubles.toLocaleString('ru-RU')} ₽`;
+/** «3 000 USDT», центы — только если есть: «12,5 USDT». */
+export function formatMoney(amount: number): string {
+  return `${amount.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} USDT`;
 }
 
 /**

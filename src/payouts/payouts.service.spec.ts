@@ -2,12 +2,12 @@ import { BadRequestException } from '@nestjs/common';
 import { parsePayoutAmount } from './payouts.service';
 
 describe('parsePayoutAmount', () => {
-  it('целые рубли от минимума — в копейки', () => {
-    expect(parsePayoutAmount(100)).toBe(10_000);
-    expect(parsePayoutAmount(2500)).toBe(250_000);
+  it('целые USDT от минимума — в центы', () => {
+    expect(parsePayoutAmount(10)).toBe(1_000);
+    expect(parsePayoutAmount(250)).toBe(25_000);
   });
 
-  it.each([[99], [100.5], ['500'], [null], [-100]])('отклоняет %p', (v) => {
+  it.each([[9], [10.5], ['50'], [null], [-10]])('отклоняет %p', (v) => {
     expect(() => parsePayoutAmount(v)).toThrow(BadRequestException);
   });
 });

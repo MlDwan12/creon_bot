@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { fetchModFunnel, fetchModStats, type ModFunnel, type ModStats } from '../../api';
+import { formatMoney } from '../../format';
 
 const stats = ref<ModStats>();
 const error = ref('');
@@ -51,7 +52,6 @@ const steps = computed(() => {
   }));
 });
 
-const rubles = (n: number) => `${n.toLocaleString('ru-RU')} ₽`;
 </script>
 
 <template>
@@ -119,7 +119,7 @@ const rubles = (n: number) => `${n.toLocaleString('ru-RU')} ₽`;
 
       <h2 class="section-title flush">Оборот</h2>
       <div class="tile">
-        <strong>{{ rubles(funnel.turnover.rubles) }}</strong>
+        <strong>{{ formatMoney(funnel.turnover.amount) }}</strong>
         <span>начислено креаторам за одобренные ролики</span>
       </div>
     </template>

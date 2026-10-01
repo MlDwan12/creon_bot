@@ -47,7 +47,7 @@ export const router = createRouter({
       meta: { back: true },
     },
     // Свой профиль креатора (без id) и чужой — рекламодателю, чьи видео он смотрел.
-    { path: '/profile', component: ProfileView, meta: { back: true } },
+    { path: '/profile', component: ProfileView },
     { path: '/creators/:id', component: ProfileView, props: true, meta: { back: true } },
     // ?target=ORDER|VIDEO|REVIEW|PROFILE&id=…&title=… — одна форма на все жалобы.
     { path: '/report', component: ReportView, meta: { back: true } },

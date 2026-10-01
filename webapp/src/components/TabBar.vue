@@ -61,6 +61,14 @@ const moderator = computed(() => route.path.startsWith('/mod'));
         </svg>
         Обучение
       </RouterLink>
+      <!-- баланс открывается из профиля — вкладка подсвечена и там -->
+      <RouterLink to="/profile" class="tab" :class="{ active: route.path === '/balance' }" active-class="active">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 20c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5" />
+        </svg>
+        Профиль
+      </RouterLink>
     </template>
   </nav>
 </template>
@@ -72,7 +80,7 @@ const moderator = computed(() => route.path.startsWith('/mod'));
   right: 0;
   bottom: 0;
   display: grid;
-  /* 3 вкладки у модератора, 4 у остальных. */
+  /* 3 вкладки у модератора, 5 у остальных. */
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   padding: 6px 0 var(--safe-bottom);
@@ -90,6 +98,7 @@ const moderator = computed(() => route.path.startsWith('/mod'));
   font-size: 11px;
   font-weight: 500;
   text-decoration: none;
+  white-space: nowrap;
 }
 .tab.active {
   color: var(--accent);
