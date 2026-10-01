@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { ApiError, claimOrder, type MySubmission, type SubmissionStatus } from '../api';
-import { formatCpm, formatDeadline, formatRubles, formatViews } from '../format';
+import { formatCpm, formatDeadline, formatMoney, formatViews } from '../format';
 
 const props = defineProps<{ submission: MySubmission }>();
 const router = useRouter();
@@ -21,7 +21,7 @@ const STATUS: Record<SubmissionStatus, { label: string; tone: string }> = {
   SUBMITTED: { label: 'На проверке у модератора', tone: 'warn' },
   MODERATOR_APPROVED: { label: 'Одобрено — идёт добор просмотров', tone: 'success' },
   MODERATOR_REJECTED: { label: 'Отклонено модератором', tone: 'danger' },
-  SLOT_EXPIRED: { label: 'Слот сгорел — видео не прислали за 5 дней', tone: 'danger' },
+  SLOT_EXPIRED: { label: 'Слот сгорел — видео не прислали за 7 дней', tone: 'danger' },
 };
 
 // computed — значение, которое пересчитывается само, когда меняются props.
@@ -33,7 +33,7 @@ const status = computed(() =>
 const earnings = computed(() => {
   const { status: st, views, payout } = props.submission;
   if (views === null || (st !== 'SUBMITTED' && st !== 'MODERATOR_APPROVED')) return '';
-  const money = st === 'SUBMITTED' ? `в резерве ${formatRubles(payout)}` : `начислено ${formatRubles(payout)}`;
+  const money = st === 'SUBMITTED' ? `в резерве ${formatMoney(payout)}` : `начислено ${formatMoney(payout)}`;
   return `${formatViews(views)} просмотров · ${money}`;
 });
 const rejected = computed(() => steps.value === 0);

@@ -3,17 +3,20 @@ import { computed, reactive, ref } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import {
   ApiError,
+  type Balance,
   banUser,
   type CreatorProfile,
+  fetchBalance,
   fetchCreator,
   fetchMyProfile,
   type ProfileLinks,
   removeReview,
   unbanUser,
   updateProfileLinks,
+  updateWallet,
 } from '../api';
 import UserAvatar from '../components/UserAvatar.vue';
-import { formatDate } from '../format';
+import { formatDate, formatMoney } from '../format';
 import { confirmAction, safeUrl } from '../telegram';
 
 // Без id — свой профиль (/profile, ссылки можно редактировать); с id — чужой, только просмотр.
@@ -25,6 +28,9 @@ const own = !props.id;
 
 const profile = ref<CreatorProfile>();
 const loadError = ref('');
+const balance = ref<Balance>();
+// баланс — второстепенное: не загрузился — просто не показываем
+if (own) void fetchBalance().then((b) => (balance.value = b), () => {});
 
 async function load() {
   try {
@@ -66,6 +72,31 @@ async function saveLinks() {
     await load();
   } catch (err) {
     error.value = err instanceof ApiError ? err.userMessage : 'Не удалось сохранить';
+  } finally {
+    busy.value = false;
+  }
+}
+
+// Кошелёк для выплат — только в своём профиле.
+const editingWallet = ref(false);
+const wallet = ref('');
+const walletError = ref('');
+
+function startWallet() {
+  wallet.value = profile.value?.wallet ?? '';
+  walletError.value = '';
+  editingWallet.value = true;
+}
+
+async function saveWallet() {
+  busy.value = true;
+  walletError.value = '';
+  try {
+    await updateWallet(wallet.value);
+    editingWallet.value = false;
+    await load();
+  } catch (err) {
+    walletError.value = err instanceof ApiError ? err.userMessage : 'Не удалось сохранить';
   } finally {
     busy.value = false;
   }
@@ -125,7 +156,7 @@ void load();
       <header class="head">
         <UserAvatar :user-id="profile.id" :name="profile.name" :size="72" />
         <div class="who">
-          <span class="hint">{{ own ? 'Мой профиль креатора' : 'Профиль креатора' }}</span>
+          <span class="hint">{{ own ? 'Мой профиль' : 'Профиль креатора' }}</span>
           <h1>{{ profile.name }}</h1>
         </div>
       </header>
@@ -155,6 +186,44 @@ void load();
           <span>роликов одобрено</span>
         </div>
       </div>
+
+      <RouterLink v-if="balance" to="/balance" class="balance">
+        <span>
+          <small>Баланс</small>
+          <strong>{{ formatMoney(balance.available) }}</strong>
+        </span>
+        <span class="balance-action">Вывести ›</span>
+      </RouterLink>
+
+      <section v-if="own" class="block">
+        <h2 class="section-title">Кошелёк для выплат</h2>
+        <form v-if="editingWallet" class="links-form" @submit.prevent="saveWallet">
+          <label>
+            <span>Адрес USDT в сети TRC20</span>
+            <input
+              v-model.trim="wallet"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              maxlength="64"
+              placeholder="T…"
+            />
+          </label>
+          <p class="hint">Только сеть TRC20 (TRON): перевод на адрес другой сети потеряется. Пусто — убрать кошелёк.</p>
+          <p v-if="walletError" class="error" role="alert">{{ walletError }}</p>
+          <div class="buttons">
+            <button type="button" :disabled="busy" @click="editingWallet = false">Отмена</button>
+            <button type="submit" class="primary" :disabled="busy">Сохранить</button>
+          </div>
+        </form>
+        <template v-else>
+          <p v-if="profile.wallet" class="wallet">{{ profile.wallet }}</p>
+          <p v-else class="hint">Не указан — без него вывести деньги нельзя.</p>
+          <button type="button" class="edit" @click="startWallet">
+            {{ profile.wallet ? 'Изменить кошелёк' : 'Добавить кошелёк' }}
+          </button>
+        </template>
+      </section>
 
       <section class="block">
         <h2 class="section-title">Соцсети</h2>
@@ -294,6 +363,40 @@ h1 {
 }
 .block .section-title {
   padding: 0;
+}
+.balance {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+.balance span:first-child {
+  display: flex;
+  flex-direction: column;
+}
+.balance small {
+  font-size: 13px;
+  color: var(--hint);
+}
+.balance strong {
+  font-size: 20px;
+}
+.balance-action {
+  color: var(--link);
+  font-weight: 600;
+}
+.wallet {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+  overflow-wrap: anywhere;
 }
 .links {
   display: flex;

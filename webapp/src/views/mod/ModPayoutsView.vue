@@ -2,7 +2,7 @@
 import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { ApiError, decidePayout, fetchModPayouts, type ModPayout } from '../../api';
-import { formatRubles, isWaitingLong, waitingFor } from '../../format';
+import { formatMoney, isWaitingLong, waitingFor } from '../../format';
 import { confirmAction } from '../../telegram';
 
 const items = ref<ModPayout[]>();
@@ -22,7 +22,7 @@ async function load() {
 }
 
 async function decide(p: ModPayout, decision: 'paid' | 'reject') {
-  if (decision === 'paid' && !(await confirmAction(`Отметить: ${formatRubles(p.amount)} переведены ${p.creator}?`))) return;
+  if (decision === 'paid' && !(await confirmAction(`Отметить: ${formatMoney(p.amount)} переведены ${p.creator}?`))) return;
   busy.value = true;
   error.value = '';
   try {
@@ -37,6 +37,17 @@ async function decide(p: ModPayout, decision: 'paid' | 'reject') {
   }
 }
 
+/** Адрес, который только что скопировали, — подпись «Скопировано». */
+const copied = ref('');
+async function copyWallet(wallet: string) {
+  try {
+    await navigator.clipboard.writeText(wallet);
+    copied.value = wallet;
+  } catch {
+    // буфер обмена недоступен (старый WebView) — адрес виден, его можно выделить вручную
+  }
+}
+
 void load();
 </script>
 
@@ -44,7 +55,7 @@ void load();
   <main class="page">
     <h1>Заявки на вывод</h1>
     <p class="hint">
-      Реквизиты креатор присылает в свою тему поддержки. Переведите деньги и отметьте заявку — креатору придёт уведомление.
+      Переведите USDT в сети TRC20 на кошелёк из заявки и отметьте её — креатору придёт уведомление.
     </p>
 
     <p v-if="loadError" class="hint">{{ loadError }}</p>
@@ -53,10 +64,15 @@ void load();
 
     <article v-for="p in items" :key="p.id" class="item">
       <div class="row">
-        <strong>{{ formatRubles(p.amount) }}</strong>
+        <strong>{{ formatMoney(p.amount) }}</strong>
         <span :class="['wait', { long: isWaitingLong(p.createdAt) }]">{{ waitingFor(p.createdAt) }}</span>
       </div>
       <RouterLink :to="`/mod/creators/${p.creatorId}`" class="creator">{{ p.creator }} · заявка #{{ p.id }}</RouterLink>
+      <button v-if="p.wallet" type="button" class="wallet" @click="copyWallet(p.wallet)">
+        <span>{{ p.wallet }}</span>
+        <small>{{ copied === p.wallet ? 'Скопировано' : 'Скопировать' }}</small>
+      </button>
+      <p v-else class="hint">Кошелька в заявке нет — уточните реквизиты в теме креатора.</p>
 
       <template v-if="rejecting === p.id">
         <textarea v-model="comment" rows="2" maxlength="500" placeholder="Причина — её увидит креатор" />
@@ -120,6 +136,31 @@ h1 {
 .creator {
   color: var(--link);
   text-decoration: none;
+}
+.wallet {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--fill);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+.wallet span {
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.wallet small {
+  flex: none;
+  color: var(--link);
+  font-size: 13px;
+  font-weight: 600;
 }
 textarea {
   box-sizing: border-box;

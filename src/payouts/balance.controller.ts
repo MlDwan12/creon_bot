@@ -1,8 +1,8 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { SupportService } from '../support/support.service';
-import { creatorLabel, escapeHtml, formatRubles } from '../common/format';
-import { kopecksToRubles } from '../common/money';
+import { creatorLabel, escapeHtml, formatMoney } from '../common/format';
+import { fromMinor } from '../common/money';
 import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
 import {
   MIN_PAYOUT,
@@ -11,7 +11,7 @@ import {
 } from './payouts.service';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
 
-/** Баланс креатора и заявки на вывод. Суммы наружу — в рублях. */
+/** Баланс креатора и заявки на вывод. Суммы наружу — в USDT. */
 @Controller('api/balance')
 @UseGuards(InitDataGuard, UserThrottlerGuard)
 export class BalanceController {
@@ -27,14 +27,16 @@ export class BalanceController {
       this.payouts.listByCreator(req.user.id),
     ]);
     return {
-      earned: kopecksToRubles(balance.earnedMinor),
-      paid: kopecksToRubles(balance.paidMinor),
-      requested: kopecksToRubles(balance.requestedMinor),
-      available: kopecksToRubles(balance.availableMinor),
+      earned: fromMinor(balance.earnedMinor),
+      paid: fromMinor(balance.paidMinor),
+      requested: fromMinor(balance.requestedMinor),
+      available: fromMinor(balance.availableMinor),
       minPayout: MIN_PAYOUT,
+      /** Кошелёк из профиля: без него вывести нельзя. */
+      wallet: req.user.payoutWallet,
       payouts: history.map((p) => ({
         id: p.id,
-        amount: kopecksToRubles(p.amountMinor),
+        amount: fromMinor(p.amountMinor),
         status: p.status,
         comment: p.comment,
         createdAt: p.createdAt,
@@ -43,7 +45,7 @@ export class BalanceController {
     };
   }
 
-  /** Заявка на вывод `amount` ₽; менеджеру — сообщение в поддержку, реквизиты он спросит в теме креатора. */
+  /** Заявка на вывод `amount` USDT на кошелёк из профиля; менеджеру — сообщение в поддержку. */
   @Post('withdraw')
   @Throttle({ default: { limit: 10, ttl: 60 * 60_000 } })
   async withdraw(@Body('amount') amount: unknown, @Req() req: ApiRequest) {
@@ -55,8 +57,9 @@ export class BalanceController {
       [
         `💸 <b>Заявка на вывод #${payout.id}</b>`,
         `Креатор: ${escapeHtml(creatorLabel(payout.creator))} (#u${payout.creator.telegramId})`,
-        `Сумма: ${formatRubles(kopecksToRubles(payout.amountMinor))}`,
-        'Реквизиты — в теме креатора. После перевода отметьте заявку в мини-аппе: Модерация → Выплаты.',
+        `Сумма: ${formatMoney(fromMinor(payout.amountMinor))}`,
+        `Кошелёк USDT (TRC20): <code>${escapeHtml(payout.wallet ?? '')}</code>`,
+        'После перевода отметьте заявку в мини-аппе: Модерация → Выплаты.',
       ].join('\n'),
     );
     return { ok: true };

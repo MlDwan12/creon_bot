@@ -18,7 +18,7 @@ import { ParseIdPipe } from '../common/parse-id.pipe';
 import { OrderStatus, ReportTarget } from '@prisma/client';
 import { findContacts } from '../common/contacts';
 import { isDbId } from '../common/validation';
-import { kopecksToRubles } from '../common/money';
+import { fromMinor } from '../common/money';
 import { NotificationsService } from '../telegram/notifications.service';
 import { creatorLabel } from '../common/format';
 import { payoutPool, VIEWS_TOPUP_DAYS } from '../orders/budget';
@@ -89,7 +89,7 @@ export class ModerationController {
       orders: orders.map((o) => ({
         id: o.id,
         title: o.title,
-        budget: kopecksToRubles(o.budgetMinor),
+        budget: fromMinor(o.budgetMinor),
         advertiser: creatorLabel(o.advertiser),
         // ждёт с момента отправки на проверку: после правки — заново
         queuedAt: o.moderationRequestedAt,
@@ -146,7 +146,7 @@ export class ModerationController {
       items: items.map((o) => ({
         id: o.id,
         title: o.title,
-        budget: kopecksToRubles(o.budgetMinor),
+        budget: fromMinor(o.budgetMinor),
         status: o.status,
         advertiser: creatorLabel(o.advertiser),
         submissionsCount: o._count.submissions,
@@ -168,12 +168,12 @@ export class ModerationController {
       description: o.description,
       referenceUrl: o.referenceUrl,
       ...videoFormat(o),
-      budget: kopecksToRubles(o.budgetMinor),
+      budget: fromMinor(o.budgetMinor),
       feePercent: o.feePercent,
       // фонд выплат креаторам — от него модератор считает ставку
-      pool: kopecksToRubles(payoutPool(o)),
+      pool: fromMinor(payoutPool(o)),
       minViews: o.minViews,
-      cpm: kopecksToRubles(o.cpmMinor),
+      cpm: fromMinor(o.cpmMinor),
       category: o.category,
       deadline: o.deadline,
       status: o.status,
@@ -247,7 +247,7 @@ export class ModerationController {
       autoViews: counted.get(s.videoUrl ?? '')?.views ?? null,
       autoLikes: counted.get(s.videoUrl ?? '')?.likes ?? null,
       platform: platformOf(s.videoUrl),
-      payout: kopecksToRubles(s.payoutMinor),
+      payout: fromMinor(s.payoutMinor),
       decidedAt: s.decidedAt,
       finalizedAt: s.finalizedAt,
       topupDays: VIEWS_TOPUP_DAYS,
@@ -256,9 +256,9 @@ export class ModerationController {
         title: s.order.title,
         description: s.order.description,
         ...videoFormat(s.order),
-        cpm: kopecksToRubles(s.order.cpmMinor),
+        cpm: fromMinor(s.order.cpmMinor),
         minViews: s.order.minViews,
-        free: kopecksToRubles(budget.free),
+        free: fromMinor(budget.free),
       },
     };
   }
@@ -394,7 +394,8 @@ export class ModerationController {
   async payoutsList() {
     return (await this.payouts.listRequested()).map((p) => ({
       id: p.id,
-      amount: kopecksToRubles(p.amountMinor),
+      amount: fromMinor(p.amountMinor),
+      wallet: p.wallet,
       creator: creatorLabel(p.creator),
       creatorId: p.creatorId,
       createdAt: p.createdAt,

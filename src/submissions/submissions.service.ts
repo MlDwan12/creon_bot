@@ -20,7 +20,7 @@ const NOT_TAKEN_DOWN: Prisma.OrderWhereInput = {
 };
 
 /** Сколько дней у креатора на видео после отклика — потом слот сгорает (SLOT_EXPIRED). */
-export const SLOT_DAYS = 5;
+export const SLOT_DAYS = 7;
 
 /** До какого момента креатор должен прислать видео по отклику «в работе». */
 export function slotDueAt(createdAt: Date) {

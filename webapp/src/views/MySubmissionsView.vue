@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { type Balance, fetchBalance, fetchMySubmissions, type MySubmission } from '../api';
-import { formatRubles } from '../format';
+import { formatMoney } from '../format';
 import SubmissionCard from '../components/SubmissionCard.vue';
 
 const items = ref<MySubmission[]>([]);
@@ -44,15 +44,12 @@ void load();
 
 <template>
   <main class="page">
-    <header class="head">
-      <h1>Мои отклики</h1>
-      <RouterLink to="/profile" class="profile-link">Мой профиль</RouterLink>
-    </header>
+    <h1>Мои отклики</h1>
 
     <RouterLink v-if="balance" to="/balance" class="balance">
       <span>
         <small>Баланс</small>
-        <strong>{{ formatRubles(balance.available) }}</strong>
+        <strong>{{ formatMoney(balance.available) }}</strong>
       </span>
       <span class="balance-action">Вывести ›</span>
     </RouterLink>
@@ -94,19 +91,6 @@ void load();
   flex-direction: column;
   gap: 14px;
   padding: 16px 16px calc(96px + var(--safe-bottom));
-}
-.head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-.profile-link {
-  flex: none;
-  color: var(--link);
-  font-size: 15px;
-  font-weight: 600;
-  text-decoration: none;
 }
 h1 {
   margin: 0;

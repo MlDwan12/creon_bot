@@ -8,7 +8,7 @@ import {
   type User,
 } from '@prisma/client';
 import { InjectBot } from 'nestjs-telegraf';
-import { kopecksToRubles } from '../common/money';
+import { fromMinor } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
 import { VIEWS_TOPUP_DAYS } from '../orders/budget';
 import { SLOT_DAYS } from '../submissions/submissions.service';
@@ -17,7 +17,7 @@ import {
   creatorLabel,
   escapeHtml,
   formatDeadline,
-  formatRubles,
+  formatMoney,
   html,
   orderCategoryLabel,
   titleVisibleToCreators,
@@ -86,7 +86,7 @@ export class NotificationsService implements OnApplicationShutdown {
       `#${order.id}: <b>${escapeHtml(order.title)}</b>`,
       escapeHtml(order.description),
       orderCategoryLabel(order.category),
-      `💰 Бюджет: ${formatRubles(kopecksToRubles(order.budgetMinor))} · порог ${order.minViews.toLocaleString('ru-RU')} просмотров`,
+      `💰 Бюджет: ${formatMoney(fromMinor(order.budgetMinor))} · порог ${order.minViews.toLocaleString('ru-RU')} просмотров`,
       order.deadline ? `⏰ Дедлайн: ${formatDeadline(order.deadline)}` : '',
       `Рекламодатель: ${escapeHtml(creatorLabel(order.advertiser))}`,
     ]
@@ -145,7 +145,7 @@ export class NotificationsService implements OnApplicationShutdown {
     const views = (submission.views ?? 0).toLocaleString('ru-RU');
     this.send(
       submission.creator.telegramId,
-      `✅ Ролик по заказу ${forCreator(submission.order)} одобрен: ${views} просмотров, начислено ${formatRubles(kopecksToRubles(submission.payoutMinor))}.\n\nЧерез ${VIEWS_TOPUP_DAYS} дня зафиксируем итог просмотров и доплатим за новые, пока в заказе есть бюджет. Вывести деньги — «Мои отклики» → «Баланс».`,
+      `✅ Ролик по заказу ${forCreator(submission.order)} одобрен: ${views} просмотров, начислено ${formatMoney(fromMinor(submission.payoutMinor))}.\n\nЧерез ${VIEWS_TOPUP_DAYS} дня зафиксируем итог просмотров и доплатим за новые, пока в заказе есть бюджет. Вывести деньги — «Профиль» → «Баланс».`,
       '/submissions',
       true,
     );
@@ -169,7 +169,7 @@ export class NotificationsService implements OnApplicationShutdown {
     this.send(
       submission.creator.telegramId,
       extraMinor > 0
-        ? `📈 Итог по ролику (заказ ${forCreator(submission.order)}): ${views} просмотров, доплачено ${formatRubles(kopecksToRubles(extraMinor))}.`
+        ? `📈 Итог по ролику (заказ ${forCreator(submission.order)}): ${views} просмотров, доплачено ${formatMoney(fromMinor(extraMinor))}.`
         : `📈 Итог по ролику (заказ ${forCreator(submission.order)}): ${views} просмотров. Доплаты нет — новых просмотров нет или бюджет заказа исчерпан.`,
       '/submissions',
       true,
@@ -311,7 +311,7 @@ export class NotificationsService implements OnApplicationShutdown {
 
   /** Креатору: заявку на вывод выполнили или отклонили. */
   payoutDecided(payout: Payout & { creator: User }) {
-    const amount = formatRubles(kopecksToRubles(payout.amountMinor));
+    const amount = formatMoney(fromMinor(payout.amountMinor));
     this.send(
       payout.creator.telegramId,
       payout.status === PayoutStatus.PAID

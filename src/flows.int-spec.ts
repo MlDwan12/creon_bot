@@ -46,9 +46,9 @@ function user() {
   });
 }
 
-/** Бюджет 50 000 ₽ при комиссии 20% — фонд креаторам 40 000 ₽. */
+/** Бюджет 50 000 USDT при комиссии 20% — фонд креаторам 40 000 USDT. */
 const BUDGET = 5_000_000;
-/** Ставка 100 ₽ за 1000 просмотров: ролик с 1000 просмотров — 100 ₽. */
+/** Ставка 100 USDT за 1000 просмотров: ролик с 1000 просмотров — 100 USDT. */
 const CPM = 10_000;
 const VIEWS = 1000;
 
@@ -405,14 +405,14 @@ describe('правка заказа — защита', () => {
     const [adv, creator] = [await user(), await user()];
     const order = await openOrder(adv.id);
     const s = await submissions.claim(order.id, creator.id);
-    // 100 000 просмотров × 100 ₽ за 1000 = 10 000 ₽ в резерве
+    // 100 000 просмотров × 100 USDT за 1000 = 10 000 USDT в резерве
     await submissions.attachVideo(
       s.id,
       creator.id,
       'https://example.com/v',
       100_000,
     );
-    // бюджет 12 000 ₽ → фонд 9 600 ₽ < 10 000 ₽
+    // бюджет 12 000 USDT → фонд 9 600 USDT < 10 000 USDT
     await expect(
       orders.update(order.id, adv.id, { ...edit, budgetMinor: 1_200_000 }),
     ).rejects.toThrow('нельзя сделать меньше');
@@ -492,7 +492,7 @@ describe('гонки и снятые заказы', () => {
 });
 
 describe('бюджет и просмотры', () => {
-  /** Заказ с бюджетом `rubles` при ставке 100 ₽ за 1000 просмотров. */
+  /** Заказ с бюджетом `rubles` при ставке 100 USDT за 1000 просмотров. */
   async function orderWith(advertiserId: number, rubles: number) {
     const order = await pendingOrder(advertiserId, undefined, rubles * 100);
     return approveOrder(order.id, 1n);
@@ -515,7 +515,7 @@ describe('бюджет и просмотры', () => {
 
   it('ставку, при которой фонда не хватит на порог, модератор не поставит', async () => {
     const adv = await user();
-    // бюджет 1 000 ₽ → фонд 800 ₽; порог 250 просмотров × 4 000 ₽ = 1 000 ₽
+    // бюджет 1 000 USDT → фонд 800 USDT; порог 250 просмотров × 4 000 USDT = 1 000 USDT
     const order = await pendingOrder(adv.id, undefined, 100_000);
     await expect(approveOrder(order.id, 1n, 400_000)).rejects.toThrow(
       'уменьшите ставку',
@@ -537,8 +537,8 @@ describe('бюджет и просмотры', () => {
 
   it('резерв при сдаче, начисление по просмотрам модератора, отказ возвращает резерв', async () => {
     const [adv, a, b] = [await user(), await user(), await user()];
-    const order = await orderWith(adv.id, 10_000); // фонд 8 000 ₽
-    const s1 = await sent(order.id, a.id, 2000); // резерв 200 ₽
+    const order = await orderWith(adv.id, 10_000); // фонд 8 000 USDT
+    const s1 = await sent(order.id, a.id, 2000); // резерв 200 USDT
     expect(s1.payoutMinor).toBe(20_000);
     expect(await free(order.id)).toBe(780_000);
 
@@ -559,11 +559,11 @@ describe('бюджет и просмотры', () => {
       await user(),
       await user(),
     ];
-    const order = await orderWith(adv.id, 1_000); // фонд 800 ₽; порог — 25 ₽
+    const order = await orderWith(adv.id, 1_000); // фонд 800 USDT; порог — 25 USDT
     const inProgress = await submissions.claim(order.id, c.id);
-    const s1 = await sent(order.id, a.id, 7_000); // 700 ₽
+    const s1 = await sent(order.id, a.id, 7_000); // 700 USDT
     const s = await submissions.claim(order.id, b.id);
-    // хочет 500 ₽, свободно 100 ₽ — резерв 100 ₽; фонд занят, но заказ открыт: резерв может вернуться
+    // хочет 500 USDT, свободно 100 USDT — резерв 100 USDT; фонд занят, но заказ открыт: резерв может вернуться
     const s2 = await submissions.attachVideo(
       s.id,
       b.id,
@@ -587,7 +587,7 @@ describe('бюджет и просмотры', () => {
 
   it('завышенные просмотры не закрывают заказ: после отказа фонд снова свободен', async () => {
     const [adv, liar, honest] = [await user(), await user(), await user()];
-    const order = await orderWith(adv.id, 1_000); // фонд 800 ₽
+    const order = await orderWith(adv.id, 1_000); // фонд 800 USDT
     const s = await sent(order.id, liar.id, 1_000_000_000); // резерв — весь фонд
     expect(s.payoutMinor).toBe(80_000);
     expect(await statusOf(order.id)).toBe('OPEN');
@@ -602,8 +602,8 @@ describe('бюджет и просмотры', () => {
 
   it('заказ, израсходованный на повторной проверке, после одобрения закрыт, а не открыт', async () => {
     const [adv, a] = [await user(), await user()];
-    const order = await orderWith(adv.id, 1_000); // фонд 800 ₽
-    const s = await sent(order.id, a.id, 8_000); // резерв 800 ₽
+    const order = await orderWith(adv.id, 1_000); // фонд 800 USDT
+    const s = await sent(order.id, a.id, 8_000); // резерв 800 USDT
     await orders.update(order.id, adv.id, {
       title: 'Новое',
       description: 'Описание',
@@ -624,7 +624,7 @@ describe('бюджет и просмотры', () => {
     const [adv, a] = [await user(), await user()];
     const order = await orderWith(adv.id, 10_000);
     const s = await sent(order.id, a.id, 1000);
-    await submissions.moderatorApprove(s.id, 1n, 1000); // 100 ₽
+    await submissions.moderatorApprove(s.id, 1n, 1000); // 100 USDT
     await orders.update(order.id, adv.id, {
       title: 'Новое',
       description: 'Описание',
@@ -646,7 +646,7 @@ describe('бюджет и просмотры', () => {
   it('одновременные сдачи на остаток — вместе не больше фонда', async () => {
     const adv = await user();
     const creators = await Promise.all([1, 2, 3, 4].map(() => user()));
-    const order = await orderWith(adv.id, 1_000); // фонд 800 ₽
+    const order = await orderWith(adv.id, 1_000); // фонд 800 USDT
     const claims = await Promise.all(
       creators.map((c) => submissions.claim(order.id, c.id)),
     );
@@ -671,7 +671,7 @@ describe('бюджет и просмотры', () => {
     const [adv, a] = [await user(), await user()];
     const order = await orderWith(adv.id, 10_000);
     const s = await sent(order.id, a.id, 1000);
-    await submissions.moderatorApprove(s.id, 1n, 1000, 40); // 100 ₽
+    await submissions.moderatorApprove(s.id, 1n, 1000, 40); // 100 USDT
     await expect(submissions.finalizeViews(s.id, 3000)).rejects.toThrow(
       'через 3 дня',
     );
@@ -715,7 +715,18 @@ describe('бюджет и просмотры', () => {
 });
 
 describe('баланс и вывод', () => {
-  /** Одобренный ролик креатора на `views` просмотров: 100 ₽ за 1000. */
+  const WALLET = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
+
+  /** Креатор с кошельком в профиле — без него вывести нельзя. */
+  async function creatorWithWallet() {
+    const creator = await user();
+    return prisma.user.update({
+      where: { id: creator.id },
+      data: { payoutWallet: WALLET },
+    });
+  }
+
+  /** Одобренный ролик креатора на `views` просмотров: 100 USDT за 1000. */
   async function earned(creatorId: number, views: number) {
     const order = await openOrder((await user()).id);
     const s = await submissions.claim(order.id, creatorId);
@@ -729,8 +740,8 @@ describe('баланс и вывод', () => {
   }
 
   it('баланс — начисленное минус заявки; ролик на проверке не в балансе', async () => {
-    const creator = await user();
-    await earned(creator.id, 5000); // 500 ₽
+    const creator = await creatorWithWallet();
+    await earned(creator.id, 5000); // 500 USDT
     const order = await openOrder((await user()).id);
     const pending = await submissions.claim(order.id, creator.id);
     await submissions.attachVideo(
@@ -747,6 +758,7 @@ describe('баланс и вывод', () => {
     });
 
     const p = await payouts.requestPayout(creator.id, 30_000);
+    expect(p.wallet).toBe(WALLET);
     expect((await payouts.balance(creator.id)).availableMinor).toBe(20_000);
     await payouts.markPaid(p.id, 1n);
     expect(await payouts.balance(creator.id)).toMatchObject({
@@ -757,7 +769,7 @@ describe('баланс и вывод', () => {
   });
 
   it('больше баланса и вторую открытую заявку — нельзя; отказ возвращает сумму', async () => {
-    const creator = await user();
+    const creator = await creatorWithWallet();
     await earned(creator.id, 5000);
     await expect(payouts.requestPayout(creator.id, 50_001)).rejects.toThrow(
       'больше доступного',
@@ -776,8 +788,22 @@ describe('баланс и вывод', () => {
     ).resolves.toBeDefined();
   });
 
-  it('двойной тап — одна заявка', async () => {
+  it('без кошелька — нельзя; смена кошелька не меняет поданную заявку', async () => {
     const creator = await user();
+    await earned(creator.id, 5000);
+    await expect(payouts.requestPayout(creator.id, 10_000)).rejects.toThrow(
+      'кошелёк',
+    );
+    await profiles.updateWallet(creator.id, WALLET);
+    const p = await payouts.requestPayout(creator.id, 10_000);
+    await profiles.updateWallet(creator.id, null);
+    expect(
+      (await prisma.payout.findUnique({ where: { id: p.id } }))?.wallet,
+    ).toBe(WALLET);
+  });
+
+  it('двойной тап — одна заявка', async () => {
+    const creator = await creatorWithWallet();
     await earned(creator.id, 5000);
     const results = await Promise.allSettled([
       payouts.requestPayout(creator.id, 40_000),
@@ -887,14 +913,14 @@ describe('воронка', () => {
       },
       videos: { submitted: 1, accepted: 1, pending: 0 },
       users: { new: 2, activeAdvertisers: 1, activeCreators: 1 },
-      turnover: { rubles: 3000 },
+      turnover: { amount: 3000 },
     });
     expect((await analytics.funnel()).orders.moderationHours).toBe(0);
 
     // период, в который ничего не попало
     const future = await analytics.funnel(new Date(Date.now() + DAY));
     expect(future.orders.created).toBe(0);
-    expect(future.turnover.rubles).toBe(0);
+    expect(future.turnover.amount).toBe(0);
     expect(future.orders.moderationHours).toBeNull();
   });
 });

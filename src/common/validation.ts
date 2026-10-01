@@ -2,13 +2,13 @@
 // well within that even after it's wrapped in a formatted card alongside other fields.
 export const MAX_TITLE_LENGTH = 100;
 export const MAX_DESCRIPTION_LENGTH = 1000;
-/** Бюджет заказа в рублях (в базе — копейками в INTEGER, до ~21 млн ₽). */
-export const MIN_BUDGET = 1_000;
-export const MAX_BUDGET = 10_000_000;
+/** Бюджет заказа в USDT (в базе — центами в INTEGER, до ~21 млн USDT). */
+export const MIN_BUDGET = 10;
+export const MAX_BUDGET = 100_000;
 /** Порог просмотров для сдачи и просмотры ролика. */
 export const MAX_VIEWS = 1_000_000_000;
-/** Ставка креатору за 1000 просмотров в рублях. */
-export const MAX_CPM = 10_000;
+/** Ставка креатору за 1000 просмотров в USDT. */
+export const MAX_CPM = 100;
 /** Длительность ролика в требованиях заказа — до 10 минут. */
 export const MAX_DURATION_SEC = 600;
 export const MAX_COMMENT_LENGTH = 500;

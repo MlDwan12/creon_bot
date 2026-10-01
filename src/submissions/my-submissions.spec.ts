@@ -67,7 +67,7 @@ describe('toMySubmissions', () => {
       },
       submission(3, 3, 'SUBMITTED', { createdAt: created }),
     ]);
-    expect(slot.dueAt).toEqual(new Date('2026-10-06T00:00:00Z'));
+    expect(slot.dueAt).toEqual(new Date('2026-10-08T00:00:00Z'));
     expect(deadline.dueAt).toEqual(early);
     expect(sent.dueAt).toBeNull();
   });
@@ -99,7 +99,7 @@ describe('toMySubmissions', () => {
     expect(result[2].comment).toBe('битая ссылка');
   });
 
-  it('деньги наружу — в рублях: ставка заказа и начисленное за ролик', () => {
+  it('деньги наружу — в USDT: ставка заказа и начисленное за ролик', () => {
     expect(result[0].order.cpm).toBe(150);
     expect(result[1].payout).toBe(180);
     expect(result[1].views).toBe(1200);

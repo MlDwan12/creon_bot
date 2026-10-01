@@ -5,12 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PayoutStatus, Prisma, SubmissionStatus } from '@prisma/client';
-import { rublesToKopecks } from '../common/money';
+import { toMinor } from '../common/money';
 import { ORDER_CURRENCY } from '../orders/budget';
 import { PrismaService } from '../prisma/prisma.service';
 
-/** Минимальная сумма вывода, ₽: мелкие переводы вручную не окупают работу менеджера. */
-export const MIN_PAYOUT = 100;
+/** Минимальная сумма вывода, USDT: перевод в TRC20 стоит комиссии сети, мелкие не окупаются. */
+export const MIN_PAYOUT = 10;
 
 /** Заявки, которые уже списаны с баланса: ждут перевода или переведены. */
 const HOLDS_BALANCE: PayoutStatus[] = [
@@ -18,13 +18,13 @@ const HOLDS_BALANCE: PayoutStatus[] = [
   PayoutStatus.PAID,
 ];
 
-/** Сумма вывода — целые рубли, от MIN_PAYOUT. Не больше баланса проверяет requestPayout. */
+/** Сумма вывода — целые USDT, от MIN_PAYOUT. Не больше баланса проверяет requestPayout. */
 export function parsePayoutAmount(value: unknown): number {
   if (!Number.isInteger(value) || (value as number) < MIN_PAYOUT)
     throw new BadRequestException(
-      `Сумма вывода — целое число рублей от ${MIN_PAYOUT}`,
+      `Сумма вывода — целое число USDT от ${MIN_PAYOUT}`,
     );
-  return rublesToKopecks(value as number);
+  return toMinor(value as number);
 }
 
 /**
@@ -35,7 +35,7 @@ export function parsePayoutAmount(value: unknown): number {
 export class PayoutsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Начислено, выплачено, в заявке и доступно к выводу — всё в копейках. */
+  /** Начислено, выплачено, в заявке и доступно к выводу — всё в центах. */
   async balance(creatorId: number, db: Prisma.TransactionClient = this.prisma) {
     const [earned, payouts] = await Promise.all([
       db.submission.aggregate({
@@ -71,16 +71,27 @@ export class PayoutsService {
   /**
    * Заявка на вывод. Одна открытая заявка на креатора (частичный уникальный индекс), а проверка
    * баланса и запись — под блокировкой строки пользователя: двойной тап не выведет больше баланса.
+   * Кошелёк из профиля копируется в заявку.
    */
   async requestPayout(creatorId: number, amountMinor: number) {
     try {
       return await this.prisma.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT 1 FROM "User" WHERE id = ${creatorId} FOR UPDATE`;
+        const [user] = await tx.$queryRaw<{ payoutWallet: string | null }[]>`
+          SELECT "payoutWallet" FROM "User" WHERE id = ${creatorId} FOR UPDATE`;
+        if (!user?.payoutWallet)
+          throw new BadRequestException(
+            'Укажите кошелёк USDT (TRC20) в профиле — на него придёт выплата',
+          );
         const { availableMinor } = await this.balance(creatorId, tx);
         if (amountMinor > availableMinor)
           throw new ForbiddenException('Сумма больше доступного баланса');
         return tx.payout.create({
-          data: { creatorId, amountMinor, currency: ORDER_CURRENCY },
+          data: {
+            creatorId,
+            amountMinor,
+            currency: ORDER_CURRENCY,
+            wallet: user.payoutWallet,
+          },
           include: { creator: true },
         });
       });

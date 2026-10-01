@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { ApiError, closeOrder, deleteOrder, extendOrder, type MyOrder } from '../api';
-import { formatDate, formatRubles, formatViews } from '../format';
+import { formatDate, formatMoney, formatViews } from '../format';
 import { confirmAction } from '../telegram';
 
 const props = defineProps<{ order: MyOrder }>();
@@ -66,7 +66,7 @@ const remove = () =>
       <span :class="['badge', STATUS[order.status].tone]">{{ STATUS[order.status].label }}</span>
     </div>
     <div class="hint">
-      Бюджет {{ formatRubles(order.budget) }}
+      Бюджет {{ formatMoney(order.budget) }}
       <template v-if="order.deadline"> · до {{ formatDate(order.deadline) }}</template>
       <template v-if="order.status === 'PENDING_MODERATION'"> · модератор проверит заказ перед публикацией</template>
     </div>

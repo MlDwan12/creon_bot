@@ -1,5 +1,5 @@
 import { type Order, type Submission, SubmissionStatus } from '@prisma/client';
-import { kopecksToRubles } from '../common/money';
+import { fromMinor } from '../common/money';
 import { titleVisibleToCreators } from '../common/format';
 import { slotDueAt } from './submissions.service';
 
@@ -31,7 +31,7 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
           : null,
       views: row.views,
       // на проверке — резерв, после одобрения — начислено, отклонён — 0
-      payout: kopecksToRubles(row.payoutMinor),
+      payout: fromMinor(row.payoutMinor),
       finalized: row.finalizedAt !== null,
       createdAt: row.createdAt,
       // Сдать видео до конца слота, но не позже срока заказа.
@@ -44,7 +44,7 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
         title: titleVisibleToCreators(row.order)
           ? row.order.title
           : `Заказ #${row.order.id} — на проверке у модератора`,
-        cpm: kopecksToRubles(row.order.cpmMinor),
+        cpm: fromMinor(row.order.cpmMinor),
         minViews: row.order.minViews,
         deadline: row.order.deadline,
         status: row.order.status,

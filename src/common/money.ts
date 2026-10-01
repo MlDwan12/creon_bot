@@ -1,11 +1,11 @@
 /**
- * Деньги в базе — в копейках (целые): комиссии и выплаты дают дробные рубли.
- * В API и на клиенте — рубли; переводим только на границе API.
+ * Деньги в базе — в центах USDT (целые): комиссии и выплаты дают дробные суммы.
+ * В API и на клиенте — USDT; переводим только на границе API.
  */
-export function rublesToKopecks(rubles: number): number {
-  return Math.round(rubles * 100);
+export function toMinor(amount: number): number {
+  return Math.round(amount * 100);
 }
 
-export function kopecksToRubles<T extends number | null>(kopecks: T): T {
-  return (kopecks === null ? null : kopecks / 100) as T;
+export function fromMinor<T extends number | null>(minor: T): T {
+  return (minor === null ? null : minor / 100) as T;
 }

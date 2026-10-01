@@ -47,11 +47,11 @@ export interface OrderSummary extends VideoFormat {
   description: string;
   /** Ссылка на референс или материалы к заданию. */
   referenceUrl: string | null;
-  /** Выплата креатору за 1000 просмотров, ₽. */
+  /** Выплата креатору за 1000 просмотров, USDT. */
   cpm: number | null;
   /** Ролик можно сдать, когда он наберёт столько просмотров. */
   minViews: number;
-  /** Сколько ещё осталось на выплаты креаторам, ₽. */
+  /** Сколько ещё осталось на выплаты креаторам, USDT. */
   free: number;
   category: OrderCategory;
   deadline: string | null;
@@ -70,7 +70,7 @@ export type SubmissionStatus =
   | 'SUBMITTED'
   | 'MODERATOR_APPROVED'
   | 'MODERATOR_REJECTED'
-  /** Видео не прислали за 5 дней после отклика. */
+  /** Видео не прислали за 7 дней после отклика. */
   | 'SLOT_EXPIRED';
 
 /** EXPIRED — закрыт по сроку (рекламодатель может продлить), CLOSED — закрыт им вручную. */
@@ -91,7 +91,7 @@ export interface MySubmission {
   dueAt: string | null;
   /** На проверке — заявлено креатором, после одобрения — зафиксировано модератором. */
   views: number | null;
-  /** ₽: на проверке — зарезервировано, после одобрения — начислено. */
+  /** USDT: на проверке — зарезервировано, после одобрения — начислено. */
   payout: number;
   /** Итог просмотров после добора зафиксирован. */
   finalized: boolean;
@@ -111,7 +111,7 @@ export interface MyOrder extends VideoFormat {
   title: string;
   description: string;
   referenceUrl: string | null;
-  /** Весь бюджет, ₽. */
+  /** Весь бюджет, USDT. */
   budget: number;
   minViews: number;
   category: OrderCategory;
@@ -136,7 +136,7 @@ export interface NewOrderInput extends VideoFormat {
   description: string;
   /** Ссылка на референс или материалы; null — без ссылки. */
   referenceUrl: string | null;
-  /** Весь бюджет, ₽, включая комиссию площадки. */
+  /** Весь бюджет, USDT, включая комиссию площадки. */
   budget: number;
   /** Порог просмотров для сдачи; null — по умолчанию (250). */
   minViews: number | null;
@@ -156,7 +156,7 @@ export const PLATFORM_NAMES: Record<Platform, string> = {
   OTHER: 'Другое',
 };
 
-/** Ответ `GET /api/my-orders/:id/report` — см. src/api/order-report.ts. Деньги в ₽, с комиссией. */
+/** Ответ `GET /api/my-orders/:id/report` — см. src/api/order-report.ts. Деньги в USDT, с комиссией. */
 export interface OrderReport {
   order: { id: number; title: string; status: OrderStatus };
   summary: {
@@ -230,8 +230,8 @@ export interface ModFunnel {
     accepted: number;
   };
   users: { new: number; activeAdvertisers: number; activeCreators: number };
-  /** Начислено креаторам за одобренные ролики, ₽. */
-  turnover: { rubles: number };
+  /** Начислено креаторам за одобренные ролики, USDT. */
+  turnover: { amount: number };
 }
 
 export interface ModOrderRow {
@@ -251,10 +251,10 @@ export interface ModOrder extends VideoFormat {
   referenceUrl: string | null;
   budget: number;
   feePercent: number;
-  /** Фонд выплат креаторам (бюджет без комиссии), ₽ — от него считается ставка. */
+  /** Фонд выплат креаторам (бюджет без комиссии), USDT — от него считается ставка. */
   pool: number;
   minViews: number;
-  /** Ставка за 1000 просмотров, ₽; null — ещё не назначена. */
+  /** Ставка за 1000 просмотров, USDT; null — ещё не назначена. */
   cpm: number | null;
   category: OrderCategory;
   deadline: string | null;
@@ -285,7 +285,7 @@ export interface ModVideo {
   /** Лайки по данным API площадки; null — нет API или автор их скрыл. */
   autoLikes: number | null;
   platform: Platform;
-  /** ₽: резерв или начислено. */
+  /** USDT: резерв или начислено. */
   payout: number;
   decidedAt: string | null;
   finalizedAt: string | null;
@@ -297,12 +297,12 @@ export interface ModVideo {
     description: string;
     cpm: number | null;
     minViews: number;
-    /** Свободный остаток фонда, ₽. */
+    /** Свободный остаток фонда, USDT. */
     free: number;
   } & VideoFormat;
 }
 
-/** Ответ `GET /api/balance` — см. src/api/balance.controller.ts. Суммы в ₽. */
+/** Ответ `GET /api/balance` — см. src/api/balance.controller.ts. Суммы в USDT. */
 export interface Balance {
   earned: number;
   paid: number;
@@ -310,6 +310,8 @@ export interface Balance {
   requested: number;
   available: number;
   minPayout: number;
+  /** Кошелёк USDT (TRC20) из профиля; null — не указан, вывести нельзя. */
+  wallet: string | null;
   payouts: {
     id: number;
     amount: number;
@@ -324,6 +326,8 @@ export interface Balance {
 export interface ModPayout {
   id: number;
   amount: number;
+  /** Кошелёк USDT (TRC20) на момент заявки; null — у заявок до кошельков. */
+  wallet: string | null;
   creator: string;
   creatorId: number;
   createdAt: string;
@@ -349,6 +353,8 @@ export interface CreatorProfile {
   /** Блокировка — приходит только модератору. */
   ban: { at: string; reason: string | null } | null;
   links: ProfileLinks;
+  /** Кошелёк USDT (TRC20) для выплат — только в своём профиле и модератору. */
+  wallet: string | null;
   reviews: {
     submissionId: number;
     rating: number;
@@ -523,6 +529,11 @@ export function updateProfileLinks(links: ProfileLinks) {
   return request<{ ok: true }>('PUT', '/api/profile/links', links);
 }
 
+/** Пустая строка — убрать кошелёк. */
+export function updateWallet(wallet: string) {
+  return request<{ ok: true }>('PUT', '/api/profile/wallet', { wallet });
+}
+
 /** Модератор: удалить отзыв (оценку и текст). */
 export function removeReview(submissionId: number) {
   return request<{ ok: true }>('DELETE', `/api/mod/reviews/${submissionId}`);
@@ -563,7 +574,7 @@ export function fetchModOrder(id: number) {
 
 /**
  * `version` — из fetchModOrder: если рекламодатель успел изменить заказ, решение не пройдёт.
- * `cpm` — ставка за 1000 просмотров, ₽ (только при одобрении).
+ * `cpm` — ставка за 1000 просмотров, USDT (только при одобрении).
  */
 export function moderateOrder(
   id: number,
@@ -585,6 +596,19 @@ export function moderateVideo(
   body: { views?: number; likes?: number | null; comment?: string },
 ) {
   return request<{ ok: true }>('POST', `/api/mod/videos/${id}/${decision}`, body);
+}
+
+let rate: Promise<number | null> | undefined;
+
+/** Курс USDT в рублях, один запрос на запуск; null — неизвестен (подсказку «≈ … ₽» не показываем). */
+export function fetchRate() {
+  return (rate ??= request<{ rub: number | null }>('GET', '/api/rate').then(
+    (r) => r.rub,
+    () => {
+      rate = undefined;
+      return null;
+    },
+  ));
 }
 
 export function fetchBalance() {

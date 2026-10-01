@@ -15,7 +15,7 @@ import {
 import { ParseIdPipe } from '../common/parse-id.pipe';
 import { OrderCategory } from '@prisma/client';
 import { Throttle } from '@nestjs/throttler';
-import { kopecksToRubles } from '../common/money';
+import { fromMinor } from '../common/money';
 import { OrdersService } from './orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
 import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
@@ -25,7 +25,7 @@ import { videoFormat } from './order-input';
 const PAGE_SIZE = 20;
 
 /**
- * Креатору — ставка и свободный остаток фонда выплат в рублях. Бюджет рекламодателя и комиссию
+ * Креатору — ставка и свободный остаток фонда выплат в USDT. Бюджет рекламодателя и комиссию
  * площадки не показываем.
  */
 function toPublic(
@@ -38,8 +38,8 @@ function toPublic(
     referenceUrl: order.referenceUrl,
     ...videoFormat(order),
     minViews: order.minViews,
-    cpm: kopecksToRubles(order.cpmMinor),
-    free: kopecksToRubles(order.freeMinor),
+    cpm: fromMinor(order.cpmMinor),
+    free: fromMinor(order.freeMinor),
     category: order.category,
     deadline: order.deadline,
     createdAt: order.createdAt,
