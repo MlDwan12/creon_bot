@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router';
 import { categoryLabel, type OrderSummary } from '../api';
-import { formatCpm, formatDate, formatRubles, formatViews, timeAgo } from '../format';
+import { formatCpm, formatDate, formatMoney, formatViews, timeAgo } from '../format';
 
 // Входные параметры компонента: <OrderCard :order="o" /> в CatalogView передаёт сюда заказ.
 defineProps<{ order: OrderSummary }>();
@@ -24,7 +24,7 @@ defineProps<{ order: OrderSummary }>();
         </svg>
         до {{ formatDate(order.deadline) }}
       </span>
-      <span>осталось {{ formatRubles(order.free) }}</span>
+      <span>осталось {{ formatMoney(order.free) }}</span>
       <span>от {{ formatViews(order.minViews) }} просмотров</span>
       <span>размещён {{ timeAgo(order.createdAt) }}</span>
     </div>

@@ -15,7 +15,7 @@ import {
   VIDEO_URL_RE,
 } from '../common/validation';
 import { findExactContacts } from '../common/contacts';
-import { rublesToKopecks } from '../common/money';
+import { toMinor } from '../common/money';
 import { DEFAULT_MIN_VIEWS } from './budget';
 import { deadlineIn } from './deadline';
 
@@ -64,7 +64,7 @@ export function parseOrderInput(body: unknown) {
       );
   }
 
-  // Бюджет — всё, что платит рекламодатель, целыми рублями; в базу — копейками.
+  // Бюджет — всё, что платит рекламодатель, целыми USDT; в базу — центами.
   const budget = b.budget;
   if (
     !Number.isInteger(budget) ||
@@ -72,7 +72,7 @@ export function parseOrderInput(body: unknown) {
     (budget as number) > MAX_BUDGET
   )
     throw new BadRequestException(
-      `Бюджет — целое число рублей от ${MIN_BUDGET.toLocaleString('ru-RU')} до ${MAX_BUDGET.toLocaleString('ru-RU')}`,
+      `Бюджет — целое число USDT от ${MIN_BUDGET.toLocaleString('ru-RU')} до ${MAX_BUDGET.toLocaleString('ru-RU')}`,
     );
 
   // Пусто — порог по умолчанию.
@@ -110,7 +110,7 @@ export function parseOrderInput(body: unknown) {
     title,
     description,
     referenceUrl,
-    budgetMinor: rublesToKopecks(budget as number),
+    budgetMinor: toMinor(budget as number),
     minViews,
     minDurationSec,
     maxDurationSec,
@@ -133,16 +133,16 @@ export function videoFormat(o: {
   };
 }
 
-/** Ставка креатору за 1000 просмотров (решает модератор): рубли, до копеек; в базу — копейками. */
+/** Ставка креатору за 1000 просмотров (решает модератор): USDT, до центов; в базу — центами. */
 export function parseCpm(body: unknown): number {
   const cpm = (body as { cpm?: unknown } | null)?.cpm;
-  const kopecks =
-    typeof cpm === 'number' && Number.isFinite(cpm) ? rublesToKopecks(cpm) : 0;
-  if (kopecks < 1 || kopecks > MAX_CPM * 100)
+  const minor =
+    typeof cpm === 'number' && Number.isFinite(cpm) ? toMinor(cpm) : 0;
+  if (minor < 1 || minor > MAX_CPM * 100)
     throw new BadRequestException(
-      `Ставка за 1000 просмотров — от 0,01 до ${MAX_CPM.toLocaleString('ru-RU')} ₽`,
+      `Ставка за 1000 просмотров — от 0,01 до ${MAX_CPM.toLocaleString('ru-RU')} USDT`,
     );
-  return kopecks;
+  return minor;
 }
 
 /** Число просмотров: целое от 1 до MAX_VIEWS. `what` — для текста ошибки. */

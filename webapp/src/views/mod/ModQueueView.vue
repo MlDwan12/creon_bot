@@ -11,7 +11,7 @@ import {
   type ReportTarget,
   resolveReports,
 } from '../../api';
-import { formatRubles, isWaitingLong, timeAgo, waitingFor } from '../../format';
+import { formatMoney, isWaitingLong, timeAgo, waitingFor } from '../../format';
 import SupportLink from '../../components/SupportLink.vue';
 import { confirmAction } from '../../telegram';
 
@@ -194,7 +194,7 @@ void load();
             <span class="title">
               <span v-if="o.hasContacts" class="flag" title="Похоже на контакты в обход площадки">⚠ </span>{{ o.title }}
             </span>
-            <span class="sub">{{ o.advertiser }} · бюджет {{ formatRubles(o.budget) }}</span>
+            <span class="sub">{{ o.advertiser }} · бюджет {{ formatMoney(o.budget) }}</span>
           </span>
           <span :class="['wait', { long: isWaitingLong(o.queuedAt) }]">{{ waitingFor(o.queuedAt) }}</span>
           <span class="chevron" aria-hidden="true">›</span>

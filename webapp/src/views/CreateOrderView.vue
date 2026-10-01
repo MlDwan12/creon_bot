@@ -1,13 +1,23 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ApiError, createOrder, fetchMyOrders, type MyOrder, ORDER_CATEGORIES, type NewOrderInput, updateOrder } from '../api';
+import {
+  ApiError,
+  createOrder,
+  fetchMyOrders,
+  fetchRate,
+  type MyOrder,
+  ORDER_CATEGORIES,
+  type NewOrderInput,
+  updateOrder,
+} from '../api';
+import { approxRub } from '../format';
 
 // Лимиты — те же, что проверяет бэкенд (src/common/validation.ts); здесь только подсказка браузеру.
 const MAX_TITLE = 100;
 const MAX_DESCRIPTION = 1000;
-const MIN_BUDGET = 1_000;
-const MAX_BUDGET = 10_000_000;
+const MIN_BUDGET = 10;
+const MAX_BUDGET = 100_000;
 const DEFAULT_MIN_VIEWS = 250;
 const MAX_DURATION = 600;
 const ORIENTATIONS: { value: NewOrderInput['orientation']; label: string }[] = [
@@ -17,6 +27,9 @@ const ORIENTATIONS: { value: NewOrderInput['orientation']; label: string }[] = [
 ];
 // С `id` (/my-orders/:id/edit) — правка своего заказа, без — новый.
 const props = defineProps<{ id?: string }>();
+// курс — только подсказка «≈ … ₽», не загрузился — не показываем
+const rubPerUsdt = ref<number | null>(null);
+void fetchRate().then((r) => (rubPerUsdt.value = r));
 
 /** undefined — «не менять» (только при правке), null — без срока. */
 const KEEP_DEADLINE = { days: undefined, label: 'как было' };
@@ -210,7 +223,7 @@ void prefill();
 
       <div class="group">
         <label class="row">
-          Бюджет, ₽
+          Бюджет, USDT
           <input
             v-model.number="form.budget"
             type="number"
@@ -250,6 +263,9 @@ void prefill();
         </div>
       </div>
 
+      <p v-if="rubPerUsdt && form.budget" class="hint">
+        {{ approxRub(form.budget, rubPerUsdt) }} по курсу {{ rubPerUsdt.toLocaleString('ru-RU') }} ₽ за USDT
+      </p>
       <p class="hint">
         Вы платите за просмотры: креаторы публикуют ролики у себя, модератор проверяет их и фиксирует просмотры.
         Ставку за 1000 просмотров назначит модератор. Бюджет закончится — заказ закроется сам, больше бюджета вы не

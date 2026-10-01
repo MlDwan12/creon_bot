@@ -11,7 +11,7 @@ import {
   PLATFORM_NAMES,
 } from '../../api';
 import ReasonPicker from '../../components/ReasonPicker.vue';
-import { formatCpm, formatDate, formatRubles, formatVideoFormat, formatViews, timeAgo } from '../../format';
+import { formatCpm, formatDate, formatMoney, formatVideoFormat, formatViews, timeAgo } from '../../format';
 import { safeUrl } from '../../telegram';
 
 const props = defineProps<{ id: string }>();
@@ -88,7 +88,7 @@ const likesOrNull = () => (likes.value === '' ? null : likes.value);
 /** Сколько начислится за введённые просмотры (без учёта остатка бюджета). */
 const estimate = computed(() => {
   const cpm = video.value?.order.cpm;
-  return cpm && views.value ? formatRubles(Math.floor((views.value * cpm) / 10) / 100) : '';
+  return cpm && views.value ? formatMoney(Math.floor((views.value * cpm) / 10) / 100) : '';
 });
 /** Когда можно зафиксировать итог после добора; null — не одобрен или уже зафиксирован. */
 const topupAt = computed(() => {
@@ -131,14 +131,14 @@ watch(() => props.id, load, { immediate: true });
       <section class="rows">
         <div class="row"><span>Ставка</span><span>{{ formatCpm(video.order.cpm) }}</span></div>
         <div class="row"><span>Порог</span><span>от {{ formatViews(video.order.minViews) }} просмотров</span></div>
-        <div class="row"><span>Свободно в бюджете</span><span>{{ formatRubles(video.order.free) }}</span></div>
+        <div class="row"><span>Свободно в бюджете</span><span>{{ formatMoney(video.order.free) }}</span></div>
         <div v-if="video.autoViews !== null" class="row">
           <span>Сейчас по данным {{ PLATFORM_NAMES[video.platform] }}</span>
           <span>{{ formatViews(video.autoViews) }} просмотров</span>
         </div>
         <div v-if="video.views !== null" class="row">
           <span>{{ video.status === 'SUBMITTED' ? 'Креатор указал' : 'Зафиксировано' }}</span>
-          <span>{{ formatViews(video.views) }} просмотров · {{ formatRubles(video.payout) }}</span>
+          <span>{{ formatViews(video.views) }} просмотров · {{ formatMoney(video.payout) }}</span>
         </div>
       </section>
 

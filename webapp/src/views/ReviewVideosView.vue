@@ -12,7 +12,7 @@ import {
 } from '../api';
 import SupportLink from '../components/SupportLink.vue';
 import UserAvatar from '../components/UserAvatar.vue';
-import { formatDate, formatRubles, formatViews } from '../format';
+import { formatDate, formatMoney, formatViews } from '../format';
 import { safeUrl } from '../telegram';
 
 // `id` заказа из адреса /my-orders/:id/review.
@@ -97,15 +97,15 @@ void load();
         </div>
         <div class="tile"><strong>{{ data.summary.videos }}</strong><span>роликов · креаторов {{ data.summary.creators }}</span></div>
         <div class="tile">
-          <strong>{{ formatRubles(data.summary.spent) }}</strong><span>потрачено из {{ formatRubles(data.summary.budget) }}</span>
+          <strong>{{ formatMoney(data.summary.spent) }}</strong><span>потрачено из {{ formatMoney(data.summary.budget) }}</span>
         </div>
         <div class="tile">
-          <strong>{{ data.summary.cpm === null ? '—' : formatRubles(data.summary.cpm) }}</strong><span>за 1000 просмотров</span>
+          <strong>{{ data.summary.cpm === null ? '—' : formatMoney(data.summary.cpm) }}</strong><span>за 1000 просмотров</span>
         </div>
       </section>
       <p class="hint">
-        Осталось {{ formatRubles(data.summary.left) }}<template v-if="data.summary.reserved">
-          · ещё {{ formatRubles(data.summary.reserved) }} зарезервировано под ролики на проверке</template
+        Осталось {{ formatMoney(data.summary.left) }}<template v-if="data.summary.reserved">
+          · ещё {{ formatMoney(data.summary.reserved) }} зарезервировано под ролики на проверке</template
         >. Суммы — вместе с комиссией площадки.
       </p>
 

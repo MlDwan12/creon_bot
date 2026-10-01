@@ -16,6 +16,7 @@ import { ParseIdPipe } from '../common/parse-id.pipe';
 import { TelegramPhotosService } from '../telegram/telegram-photos.service';
 import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
 import { ModeratorGuard } from '../auth/moderator.guard';
+import { parseWallet } from '../payouts/trc20';
 import { parseLinks } from './profile-input';
 import { ProfilesService } from './profiles.service';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
@@ -39,6 +40,13 @@ export class ProfilesController {
   @Put('profile/links')
   async updateLinks(@Body() body: unknown, @Req() req: ApiRequest) {
     await this.profiles.updateLinks(req.user.id, parseLinks(body));
+    return { ok: true };
+  }
+
+  /** Кошелёк USDT (TRC20) для выплат; пусто — убрать. */
+  @Put('profile/wallet')
+  async updateWallet(@Body() body: unknown, @Req() req: ApiRequest) {
+    await this.profiles.updateWallet(req.user.id, parseWallet(body));
     return { ok: true };
   }
 

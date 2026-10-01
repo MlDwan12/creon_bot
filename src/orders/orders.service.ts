@@ -10,7 +10,8 @@ import {
   SubmissionStatus,
   VideoOrientation,
 } from '@prisma/client';
-import { kopecksToRubles } from '../common/money';
+import { formatMoney } from '../common/format';
+import { fromMinor } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ACCRUED,
@@ -428,7 +429,7 @@ export class OrdersService {
       const spent = (await spentByOrder(tx, [orderId])).get(orderId) ?? 0;
       if (payoutPool({ ...order, budgetMinor: data.budgetMinor }) < spent)
         throw new ForbiddenException(
-          `Из бюджета уже потрачено или зарезервировано ${kopecksToRubles(spent).toLocaleString('ru-RU')} ₽ выплат креаторам — бюджет нельзя сделать меньше`,
+          `Из бюджета уже потрачено или зарезервировано ${formatMoney(fromMinor(spent))} выплат креаторам — бюджет нельзя сделать меньше`,
         );
       await this.transitionStatus(
         orderId,

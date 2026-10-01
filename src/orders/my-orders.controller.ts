@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { ParseIdPipe } from '../common/parse-id.pipe';
 import { OrderStatus, SubmissionStatus } from '@prisma/client';
-import { kopecksToRubles } from '../common/money';
+import { fromMinor } from '../common/money';
 import { HOLDS_MONEY, NO_VIDEO, payoutPool } from './budget';
 import { NotificationsService } from '../telegram/notifications.service';
 import { Throttle } from '@nestjs/throttler';
@@ -57,7 +57,7 @@ export class MyOrdersController {
         description: o.description,
         referenceUrl: o.referenceUrl,
         ...videoFormat(o),
-        budget: kopecksToRubles(o.budgetMinor),
+        budget: fromMinor(o.budgetMinor),
         minViews: o.minViews,
         category: o.category,
         deadline: o.deadline,

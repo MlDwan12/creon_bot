@@ -5,13 +5,13 @@ import {
   type User,
 } from '@prisma/client';
 import { publicName } from '../common/format';
-import { kopecksToRubles } from '../common/money';
+import { fromMinor } from '../common/money';
 import { type Platform, PLATFORMS, platformOf } from '../common/platforms';
 import { budgetSpent } from './budget';
 
 /**
  * Отчёт рекламодателю по заказу: сводка, площадки и одобренные ролики (больше просмотров — выше).
- * Деньги — со стороны рекламодателя: выплаты креаторам вместе с комиссией, в рублях. Сколько
+ * Деньги — со стороны рекламодателя: выплаты креаторам вместе с комиссией, в USDT. Сколько
  * получил конкретный креатор, рекламодатель не видит.
  */
 export function buildOrderReport(
@@ -57,17 +57,17 @@ export function buildOrderReport(
   return {
     order: { id: order.id, title: order.title, status: order.status },
     summary: {
-      budget: kopecksToRubles(order.budgetMinor),
-      spent: kopecksToRubles(spent),
+      budget: fromMinor(order.budgetMinor),
+      spent: fromMinor(spent),
       /** Зарезервировано под ролики на проверке. */
-      reserved: kopecksToRubles(reserved),
-      left: kopecksToRubles(Math.max(0, order.budgetMinor - spent - reserved)),
+      reserved: fromMinor(reserved),
+      left: fromMinor(Math.max(0, order.budgetMinor - spent - reserved)),
       views,
       likes,
       videos: approved.length,
       creators: new Set(approved.map((s) => s.creatorId)).size,
       /** Фактическая цена 1000 просмотров для рекламодателя; нет просмотров — null. */
-      cpm: views ? kopecksToRubles(Math.round((spent * 1000) / views)) : null,
+      cpm: views ? fromMinor(Math.round((spent * 1000) / views)) : null,
     },
     platforms: [...byPlatform]
       .map(([platform, stat]) => ({ platform, ...stat }))

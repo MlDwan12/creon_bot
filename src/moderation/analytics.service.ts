@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { OrderStatus, Prisma, SubmissionStatus } from '@prisma/client';
-import { kopecksToRubles } from '../common/money';
+import { fromMinor } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -84,9 +84,9 @@ export class AnalyticsService {
         FROM "Order"
         WHERE "decidedAt" IS NOT NULL AND "createdAt" >= ${epoch}`),
       // Оборот — сколько начислено креаторам за одобренные ролики.
-      this.prisma.$queryRaw<{ kopecks: bigint | null }[]>(
+      this.prisma.$queryRaw<{ total: bigint | null }[]>(
         Prisma.sql`
-        SELECT sum("payoutMinor") AS kopecks FROM "Submission"
+        SELECT sum("payoutMinor") AS total FROM "Submission"
         WHERE status = 'MODERATOR_APPROVED' AND "submittedAt" >= ${epoch}`,
       ),
     ]);
@@ -117,7 +117,7 @@ export class AnalyticsService {
         activeCreators: creators.length,
       },
       turnover: {
-        rubles: kopecksToRubles(Number(turnover.kopecks ?? 0)),
+        amount: fromMinor(Number(turnover.total ?? 0)),
       },
     };
   }

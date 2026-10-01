@@ -27,14 +27,19 @@ export function timeAgo(iso: string): string {
   return relative.format(Math.round(seconds / (24 * 3600)), 'day');
 }
 
-/** «12 500 ₽», копейки — только если есть: «12,5 ₽». */
-export function formatRubles(rubles: number): string {
-  return `${rubles.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽`;
+/** «12 500 USDT», центы — только если есть: «12,5 USDT». */
+export function formatMoney(amount: number): string {
+  return `${amount.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} USDT`;
 }
 
-/** «100 ₽ за 1000 просмотров»; ставки ещё нет — до одобрения модератором. */
+/** «≈ 8 335 ₽» — подсказка по курсу рядом с суммой в USDT. */
+export function approxRub(usdt: number, rubPerUsdt: number): string {
+  return `≈ ${Math.round(usdt * rubPerUsdt).toLocaleString('ru-RU')} ₽`;
+}
+
+/** «1,5 USDT за 1000 просмотров»; ставки ещё нет — до одобрения модератором. */
 export function formatCpm(cpm: number | null): string {
-  return cpm === null ? 'ставку назначит модератор' : `${formatRubles(cpm)} за 1000 просмотров`;
+  return cpm === null ? 'ставку назначит модератор' : `${formatMoney(cpm)} за 1000 просмотров`;
 }
 
 /** «12 500». */

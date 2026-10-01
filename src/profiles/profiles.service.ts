@@ -84,6 +84,8 @@ export class ProfilesService {
             xUrl: creator.xUrl,
           }
         : NO_LINKS,
+      /** Кошелёк для выплат — только самому креатору и модератору. */
+      wallet: full ? creator.payoutWallet : null,
       reviews: reviews.map((s) => ({
         submissionId: s.id,
         rating: s.rating!,
@@ -110,5 +112,12 @@ export class ProfilesService {
 
   updateLinks(userId: number, links: ProfileLinks) {
     return this.prisma.user.update({ where: { id: userId }, data: links });
+  }
+
+  updateWallet(userId: number, payoutWallet: string | null) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { payoutWallet },
+    });
   }
 }

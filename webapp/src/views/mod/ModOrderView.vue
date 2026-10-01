@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ApiError, categoryLabel, fetchModOrder, fetchModQueue, type ModOrder, moderateOrder } from '../../api';
 import ReasonPicker from '../../components/ReasonPicker.vue';
-import { formatCpm, formatDate, formatRubles, formatVideoFormat, formatViews, waitingFor } from '../../format';
+import { formatCpm, formatDate, formatMoney, formatVideoFormat, formatViews, waitingFor } from '../../format';
 import { safeUrl } from '../../telegram';
 
 const props = defineProps<{ id: string }>();
@@ -28,7 +28,7 @@ const loadError = ref('');
 const comment = ref('');
 const busy = ref(false);
 const error = ref('');
-/** Ставка креатору за 1000 просмотров, ₽; '' — ещё не введена. После правки — прежняя. */
+/** Ставка креатору за 1000 просмотров, USDT; '' — ещё не введена. После правки — прежняя. */
 const cpm = ref<number | ''>('');
 /** Сколько просмотров оплатит фонд при этой ставке — чтобы ставка была разумной. */
 const coveredViews = computed(() =>
@@ -94,7 +94,7 @@ watch(() => props.id, load, { immediate: true });
         <div class="row"><span>Рекламодатель</span><span>{{ order.advertiser }}</span></div>
         <div class="row">
           <span>Бюджет</span>
-          <span>{{ formatRubles(order.budget) }}, креаторам {{ formatRubles(order.pool) }} (комиссия {{ order.feePercent }}%)</span>
+          <span>{{ formatMoney(order.budget) }}, креаторам {{ formatMoney(order.pool) }} (комиссия {{ order.feePercent }}%)</span>
         </div>
         <div class="row"><span>Порог</span><span>от {{ formatViews(order.minViews) }} просмотров</span></div>
         <div v-if="order.cpm !== null" class="row"><span>Ставка</span><span>{{ formatCpm(order.cpm) }}</span></div>
@@ -119,7 +119,7 @@ watch(() => props.id, load, { immediate: true });
 
       <template v-if="order.status === 'PENDING_MODERATION'">
         <label class="cpm">
-          <span class="section-title">Ставка креатору за 1000 просмотров, ₽</span>
+          <span class="section-title">Ставка креатору за 1000 просмотров, USDT</span>
           <input v-model.number="cpm" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="например, 100" />
           <span v-if="coveredViews" class="hint">
             Фонда хватит примерно на {{ formatViews(coveredViews) }} просмотров
