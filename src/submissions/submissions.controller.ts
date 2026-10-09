@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
@@ -8,16 +7,14 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ParseIdPipe } from '../common/parse-id.pipe';
 import { NotificationsService } from '../telegram/notifications.service';
-import { MAX_URL_LENGTH, VIDEO_URL_RE } from '../common/validation';
-import { PLATFORMS, platformOf } from '../common/platforms';
 import { SubmissionsService } from './submissions.service';
-import { ViewCounterService } from './view-counter.service';
+import { parseVideoSubmission } from './video-input';
 import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
 import { toMySubmissions } from './my-submissions';
-import { parseViews } from '../orders/order-input';
 import { parseFeedback } from '../profiles/profile-input';
 
 @Controller('api/submissions')
@@ -26,7 +23,6 @@ export class SubmissionsController {
   constructor(
     private readonly submissionsService: SubmissionsService,
     private readonly notifications: NotificationsService,
-    private readonly viewCounter: ViewCounterService,
   ) {}
 
   /** Отклики текущего пользователя как креатора. */
@@ -39,39 +35,16 @@ export class SubmissionsController {
 
   /** Ссылка на опубликованный ролик и его просмотры; модераторам уведомление. */
   @Post(':id/video')
+  @Throttle({ default: { limit: 30, ttl: 60 * 60_000 } })
   async submitVideo(
     @Param('id', ParseIdPipe) id: number,
     @Body() body: unknown,
     @Req() req: ApiRequest,
   ) {
-    const b = (body ?? {}) as Record<string, unknown>;
-    const url = typeof b.videoUrl === 'string' ? b.videoUrl.trim() : '';
-    if (!VIDEO_URL_RE.test(url)) {
-      throw new BadRequestException(
-        'Похоже, это не ссылка: она должна начинаться с http:// или https://',
-      );
-    }
-    if (url.length > MAX_URL_LENGTH) {
-      throw new BadRequestException(
-        `Ссылка слишком длинная (максимум ${MAX_URL_LENGTH} символов)`,
-      );
-    }
-    // Просмотры считаем по публикации на площадке: иначе модератору нечего сверять.
-    if (platformOf(url) === 'OTHER')
-      throw new BadRequestException(
-        `Пришлите ссылку на публикацию в ${Object.values(PLATFORMS)
-          .map((p) => p.name)
-          .join(', ')}`,
-      );
-    const claimed = parseViews(b.views);
-    // Где просмотры отдаёт API площадки — резервируем по ним, а не по словам креатора.
-    const counted = (await this.viewCounter.fetchViews([url])).get(url)?.views;
-    // attachVideo сам проверяет, что отклик ваш и ещё «в работе», порог и бюджет.
-    const submission = await this.submissionsService.attachVideo(
+    const submission = await this.submissionsService.submitVideo(
       id,
       req.user.id,
-      url,
-      counted ?? claimed,
+      parseVideoSubmission(body),
     );
     this.notifications.videoSubmitted(submission);
     return { ok: true };
