@@ -37,6 +37,7 @@ const submission = (
   orderId,
   creatorId: 5,
   videoUrl: null,
+  videoKey: null,
   status,
   moderatorId: 888n,
   moderatorComment: null,

@@ -22,6 +22,7 @@ const video = (
     id: nextId++,
     status,
     videoUrl: url,
+    videoKey: null,
     views,
     likes,
     payoutMinor,

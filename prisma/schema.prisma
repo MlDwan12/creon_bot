@@ -134,6 +134,8 @@ model Submission {
   creator           User             @relation(fields: [creatorId], references: [id])
   creatorId         Int
   videoUrl          String?
+  /// Ссылка, приведённая к одному виду (src/common/platforms.ts, videoKey): один ролик — одна оплата.
+  videoKey          String?
   status            SubmissionStatus @default(IN_PROGRESS)
   moderatorId       BigInt?
   moderatorComment  String?
@@ -166,6 +168,8 @@ model Submission {
   @@index([creatorId])
   /// Очередь модерации видео (SUBMITTED, старые первыми) и счётчики по статусам.
   @@index([status, submittedAt])
+  /// Один ролик нельзя сдать дважды — ни в тот же заказ, ни в другой, пока он на проверке или одобрен.
+  @@unique([videoKey], map: "Submission_video_once", where: raw("status = ANY (ARRAY['SUBMITTED'::\"SubmissionStatus\", 'MODERATOR_APPROVED'::\"SubmissionStatus\"])"))
 }
 
 /// На что жалоба. VIDEO и REVIEW — по id отклика (Submission), PROFILE — по id пользователя.
@@ -235,4 +239,24 @@ model Payout {
   @@index([status, createdAt])
   /// Одна открытая заявка на креатора — вторую (двойной тап) не пустит сама база.
   @@unique([creatorId], map: "Payout_one_requested", where: { status: "REQUESTED" })
+}
+
+/// Очередь уведомлений в чат бота (src/telegram/notifications.service.ts). Пишется при событии,
+/// отправляет фоновый воркер; отправленное удаляется. Переживает рестарт и падение процесса.
+model Notification {
+  id        Int      @id @default(autoincrement())
+  chatId    BigInt
+  text      String
+  html      Boolean  @default(false)
+  /// Экран мини-аппа для кнопки «Открыть»: путь вроде /my-orders.
+  path      String
+  /// 0 — обычные, 1 — рассылки: обычные уходят первыми, рассылка не задерживает срочное.
+  priority  Int      @default(0)
+  attempts  Int      @default(0)
+  /// Не раньше этого момента: пауза после 429 или сбоя, а взятое воркером — «аренда» на время отправки.
+  sendAfter DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  /// Выборка воркера: готовые к отправке, по приоритету.
+  @@index([priority, sendAfter])
 }
