@@ -26,8 +26,8 @@ export class AnalyticsService {
       videosSubmitted,
       videosByStatus,
       newUsers,
-      advertisers,
-      creators,
+      [advertisers],
+      [creators],
       [timing],
       [turnover],
     ] = await Promise.all([
@@ -66,16 +66,13 @@ export class AnalyticsService {
         _count: true,
       }),
       this.prisma.user.count({ where: { createdAt: created } }),
-      this.prisma.order.findMany({
-        where: order,
-        distinct: ['advertiserId'],
-        select: { advertiserId: true },
-      }),
-      this.prisma.submission.findMany({
-        where: { createdAt: created },
-        distinct: ['creatorId'],
-        select: { creatorId: true },
-      }),
+      // считает база: id всех активных в память не тянем
+      this.prisma.$queryRaw<{ n: bigint }[]>(
+        Prisma.sql`SELECT count(DISTINCT "advertiserId") AS n FROM "Order" WHERE "createdAt" >= ${epoch}`,
+      ),
+      this.prisma.$queryRaw<{ n: bigint }[]>(
+        Prisma.sql`SELECT count(DISTINCT "creatorId") AS n FROM "Submission" WHERE "createdAt" >= ${epoch}`,
+      ),
       // Медиана, а не среднее: один заказ, забытый на неделю, не должен искажать картину.
       this.prisma.$queryRaw<{ hours: number | null }[]>(Prisma.sql`
         SELECT percentile_cont(0.5) WITHIN GROUP (
@@ -113,8 +110,8 @@ export class AnalyticsService {
       },
       users: {
         new: newUsers,
-        activeAdvertisers: advertisers.length,
-        activeCreators: creators.length,
+        activeAdvertisers: Number(advertisers.n),
+        activeCreators: Number(creators.n),
       },
       turnover: {
         amount: fromMinor(Number(turnover.total ?? 0)),

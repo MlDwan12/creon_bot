@@ -6,6 +6,7 @@ import { ReportsModule } from '../reports/reports.module';
 import { SubmissionsModule } from '../submissions/submissions.module';
 import { TelegramModule } from '../telegram/telegram.module';
 import { AnalyticsService } from './analytics.service';
+import { BansService } from './bans.service';
 import { ModerationController } from './moderation.controller';
 
 @Module({
@@ -18,6 +19,6 @@ import { ModerationController } from './moderation.controller';
     ReportsModule,
   ],
   controllers: [ModerationController],
-  providers: [AnalyticsService],
+  providers: [AnalyticsService, BansService],
 })
 export class ModerationModule {}

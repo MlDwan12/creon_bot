@@ -116,6 +116,13 @@ export class PayoutsService {
     });
   }
 
+  /** Сколько заявок ждёт перевода с момента раньше `before` — для напоминания. */
+  countRequestedBefore(before: Date) {
+    return this.prisma.payout.count({
+      where: { status: PayoutStatus.REQUESTED, createdAt: { lt: before } },
+    });
+  }
+
   /** Деньги переведены. */
   markPaid(payoutId: number, moderatorTelegramId: bigint) {
     return this.transitionStatus(payoutId, {

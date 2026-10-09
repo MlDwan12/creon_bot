@@ -1,4 +1,4 @@
-import { youtubeId } from './view-counter.service';
+import { youtubeId } from '../common/platforms';
 
 describe('youtubeId', () => {
   it.each([

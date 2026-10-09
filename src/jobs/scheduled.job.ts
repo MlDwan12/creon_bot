@@ -5,8 +5,6 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { NotificationsService } from '../telegram/notifications.service';
-import { VIEWS_TOPUP_DAYS } from '../orders/budget';
-import { DAY_MS } from '../orders/deadline';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
 import { ViewCounterService } from '../submissions/view-counter.service';
@@ -29,6 +27,8 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
   private timer?: NodeJS.Timeout;
   // ponytail: в памяти — после рестарта модераторы могут получить напоминание раньше, чем через 12 ч.
   private lastQueueReminder = 0;
+  /** Прошлый проход ещё идёт (медленная база, сотни уведомлений) — следующий пропускаем. */
+  private running = false;
 
   constructor(
     private readonly ordersService: OrdersService,
@@ -48,6 +48,16 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   private async run() {
+    if (this.running) return;
+    this.running = true;
+    try {
+      await this.runTasks();
+    } finally {
+      this.running = false;
+    }
+  }
+
+  private async runTasks() {
     // Задачи независимы: сбой одной не должен останавливать остальные.
     for (const task of [
       () => this.expireOverdue(),
@@ -128,28 +138,16 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
 
   private async remindModerators() {
     if (Date.now() - this.lastQueueReminder < STALE_MS) return;
-    const staleBefore = Date.now() - STALE_MS;
-    const [orders, videos, topups, payouts] = await Promise.all([
-      this.ordersService.listPending(),
-      this.submissionsService.listPendingModeration(),
-      this.submissionsService.listTopupDue(),
-      this.payouts.listRequested(),
+    const staleBefore = new Date(Date.now() - STALE_MS);
+    const [
+      staleOrders,
+      { videos: staleVideos, topups: staleTopups },
+      stalePayouts,
+    ] = await Promise.all([
+      this.ordersService.countPendingBefore(staleBefore),
+      this.submissionsService.countStaleBefore(staleBefore),
+      this.payouts.countRequestedBefore(staleBefore),
     ]);
-    const staleOrders = orders.filter(
-      (o) => o.moderationRequestedAt.getTime() < staleBefore,
-    ).length;
-    const staleVideos = videos.filter(
-      (s) => s.submittedAt && s.submittedAt.getTime() < staleBefore,
-    ).length;
-    // итог добора ждёт с конца добора — тоже не дольше STALE_HOURS
-    const staleTopups = topups.filter(
-      (s) =>
-        s.decidedAt &&
-        s.decidedAt.getTime() + VIEWS_TOPUP_DAYS * DAY_MS < staleBefore,
-    ).length;
-    const stalePayouts = payouts.filter(
-      (p) => p.createdAt.getTime() < staleBefore,
-    ).length;
     if (!staleOrders && !staleVideos && !staleTopups && !stalePayouts) return;
     this.notifications.moderationQueueStale(
       {
