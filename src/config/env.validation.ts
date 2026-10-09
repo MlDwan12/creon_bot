@@ -8,6 +8,15 @@ export function validateEnv(config: Record<string, unknown>) {
       `Отсутствуют обязательные переменные окружения: ${missing.join(', ')}`,
     );
   }
+  // Telegram id модераторов через запятую — по ним шлются уведомления (BigInt).
+  const moderators = String(config.MODERATOR_IDS)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (moderators.some((id) => !/^\d+$/.test(id)))
+    throw new Error(
+      'MODERATOR_IDS — Telegram id через запятую, например 123,456',
+    );
   // Комиссия площадки для новых заказов, % (src/orders/budget.ts); не задана — 20.
   const fee = config.PLATFORM_FEE_PERCENT;
   if (fee !== undefined && fee !== '') {

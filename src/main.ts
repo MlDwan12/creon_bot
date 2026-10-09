@@ -13,10 +13,8 @@ import { RedactingLogger } from './common/redacting-logger';
 // На быстрой сети ничего не меняет: первый адрес отвечает раньше.
 setDefaultAutoSelectFamilyAttemptTimeout(2000);
 
-// nestjs-telegraf fires `bot.launch()` without awaiting or catching it, so a
-// transient network error talking to Telegram (e.g. getMe timing out) surfaces
-// as an unhandled rejection — which Node treats as fatal and kills the process.
-// Log it instead of crashing; Telegraf's own polling loop retries on its own.
+// Последний рубеж: забытый промис с ошибкой не роняет процесс со всеми запросами в работе — только
+// в лог. Запуск бота и его сбои обрабатывает StartUpdate.launch.
 process.on('unhandledRejection', (reason) => {
   Logger.error(reason, undefined, 'UnhandledRejection');
 });
