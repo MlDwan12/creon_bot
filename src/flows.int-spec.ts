@@ -175,6 +175,43 @@ describe('отклик', () => {
     );
   });
 
+  it('старым роликам ставится ключ: повторно не сдать, дубль остаётся без ключа', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const order = await openOrder(advertiser.id);
+    // как до videoKey: два отклика на проверке с одним роликом под разными ссылками
+    const old = (url: string) =>
+      prisma.submission.create({
+        data: {
+          orderId: order.id,
+          creatorId: creator.id,
+          status: 'SUBMITTED',
+          videoUrl: url,
+        },
+      });
+    const first = await old('https://youtu.be/dQw4w9WgXcQ');
+    const dup = await old('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+
+    expect(await submissions.backfillVideoKeys()).toEqual({
+      filled: 1,
+      duplicates: [dup.id],
+    });
+    const key = async (id: number) =>
+      (await prisma.submission.findUniqueOrThrow({ where: { id } })).videoKey;
+    expect(await key(first.id)).toBe('youtube:dQw4w9WgXcQ');
+    expect(await key(dup.id)).toBeNull();
+
+    const other = await openOrder(advertiser.id);
+    const s = await submissions.claim(other.id, creator.id);
+    await expect(
+      submissions.attachVideo(
+        s.id,
+        creator.id,
+        'https://youtube.com/shorts/dQw4w9WgXcQ',
+        VIEWS,
+      ),
+    ).rejects.toThrow('уже сдан');
+  });
+
   it('двойной тап создаёт один отклик', async () => {
     const [advertiser, creator] = [await user(), await user()];
     const order = await openOrder(advertiser.id);

@@ -1,7 +1,9 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
+  OnApplicationBootstrap,
 } from '@nestjs/common';
 import { Prisma, OrderStatus, SubmissionStatus } from '@prisma/client';
 import {
@@ -53,12 +55,62 @@ const ON_REVIEW_MESSAGE =
 const DUPLICATE_VIDEO_MESSAGE =
   'Этот ролик уже сдан — по этому или другому заказу. Один ролик оплачивается один раз';
 
+const isDuplicate = (err: unknown) =>
+  err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
+
 @Injectable()
-export class SubmissionsService {
+export class SubmissionsService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(SubmissionsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly viewCounter: ViewCounterService,
   ) {}
+
+  onApplicationBootstrap() {
+    this.backfillVideoKeys().catch((err) =>
+      this.logger.error('Не удалось заполнить videoKey старых роликов', err),
+    );
+  }
+
+  /**
+   * Ключ ролика для сданных до появления videoKey — чтобы их не сдали повторно (Submission_video_once).
+   * Если тот же ролик уже на проверке или оплачен по другому отклику, ключ не ставим (индекс не даст):
+   * такие дубли логируем для модераторов, остальное заполнится.
+   * ponytail: по строке на запрос и повтор дублей при каждом старте — старых роликов сотни, не миллионы.
+   */
+  async backfillVideoKeys() {
+    const rows = await this.prisma.submission.findMany({
+      where: { videoKey: null, videoUrl: { not: null } },
+      select: { id: true, videoUrl: true },
+      orderBy: { id: 'asc' },
+    });
+    const duplicates: number[] = [];
+    let filled = 0;
+    for (const { id, videoUrl } of rows) {
+      let key: string;
+      try {
+        key = videoKey(videoUrl!);
+      } catch {
+        continue; // не ссылка — сравнивать не с чем
+      }
+      try {
+        await this.prisma.submission.update({
+          where: { id },
+          data: { videoKey: key },
+        });
+        filled++;
+      } catch (err) {
+        if (!isDuplicate(err)) throw err;
+        duplicates.push(id);
+      }
+    }
+    if (duplicates.length)
+      this.logger.warn(
+        `Один ролик сдан несколько раз — отклики без ключа: ${duplicates.join(', ')}`,
+      );
+    return { filled, duplicates };
+  }
 
   /**
    * Видео по заказу креатор может присылать сколько угодно, но по одному: новый отклик — только
@@ -193,10 +245,7 @@ export class SubmissionsService {
         return this.mustFind(submissionId, tx);
       });
     } catch (err) {
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === 'P2002'
-      )
+      if (isDuplicate(err))
         throw new ForbiddenException(DUPLICATE_VIDEO_MESSAGE);
       throw err;
     }
