@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import {
   ForbiddenException,
   Injectable,
@@ -147,7 +148,12 @@ export class SubmissionsService implements OnApplicationBootstrap {
     // заказ безвреден (видео по закрытому принимаются), блокировать ради этого незачем.
     try {
       return await this.prisma.submission.create({
-        data: { orderId, creatorId },
+        // 72 случайных бита: перебором чужую ссылку не найти, совпадение кодов невероятно
+        data: {
+          orderId,
+          creatorId,
+          trackCode: randomBytes(9).toString('base64url'),
+        },
         include: { order: true, creator: true },
       });
     } catch (err) {
@@ -271,6 +277,27 @@ export class SubmissionsService implements OnApplicationBootstrap {
       orderBy: { createdAt: 'desc' },
       include: { order: true },
     });
+  }
+
+  /**
+   * Переход по ссылке креатора /r/<код>: +1 к счётчику, вернёт страницу товара. null — нет такой
+   * ссылки или у заказа нет страницы товара.
+   * ponytail: счётчик без защиты от накрутки — переходы на выплату не влияют; станут влиять —
+   * считать уникальных по IP. Ролик, отклонённый и сданный заново новым откликом, хранит в описании
+   * старую ссылку — её переходы останутся у отклонённого отклика и в отчёт не попадут.
+   */
+  async click(trackCode: string) {
+    const submission = await this.prisma.submission.findUnique({
+      where: { trackCode },
+      select: { id: true, order: { select: { targetUrl: true } } },
+    });
+    const url = submission?.order.targetUrl;
+    if (!url) return null;
+    await this.prisma.submission.update({
+      where: { id: submission.id },
+      data: { clicks: { increment: 1 } },
+    });
+    return url;
   }
 
   /** Какой по счёту это видео креатора по заказу: 1, 2, 3… */

@@ -82,6 +82,9 @@ model Order {
   description      String
   /// Ссылка на референс или материалы (бриф, пример ролика). Контакты в ней не пропускает order-input.
   referenceUrl     String?
+  /// Страница товара. Креатор ставит в описание ролика не её, а свою ссылку /r/<trackCode> —
+  /// так считаем переходы. Мессенджеры и соцсети не пропускает order-input.
+  targetUrl        String?
   /// Деньги — в сотых долях валюты (копейки, центы); в API — целые единицы, см. src/common/money.ts.
   currency         Currency      @default(USDT)
   /// Всё, что платит рекламодатель, включая комиссию площадки.
@@ -151,6 +154,10 @@ model Submission {
   videoUrl          String?
   /// Ссылка, приведённая к одному виду (src/common/platforms.ts, videoKey): один ролик — одна оплата.
   videoKey          String?
+  /// Код ссылки /r/<код> на страницу товара (Order.targetUrl): переходы считаются по креатору.
+  trackCode         String?          @unique
+  /// Сколько раз перешли по ссылке креатора — для отчёта рекламодателю, на выплату не влияет.
+  clicks            Int              @default(0)
   status            SubmissionStatus @default(IN_PROGRESS)
   moderatorId       BigInt?
   moderatorComment  String?

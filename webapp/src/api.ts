@@ -95,6 +95,8 @@ export interface MySubmission {
   payout: number;
   /** Итог просмотров после добора зафиксирован. */
   finalized: boolean;
+  /** Ссылка на товар для описания ролика — путь `/r/<код>` от адреса мини-аппа; null — у заказа нет товара. */
+  trackPath: string | null;
   order: {
     id: number;
     title: string;
@@ -111,6 +113,7 @@ export interface MyOrder extends VideoFormat {
   title: string;
   description: string;
   referenceUrl: string | null;
+  targetUrl: string | null;
   /** Весь бюджет, USDT. */
   budget: number;
   minViews: number;
@@ -136,6 +139,8 @@ export interface NewOrderInput extends VideoFormat {
   description: string;
   /** Ссылка на референс или материалы; null — без ссылки. */
   referenceUrl: string | null;
+  /** Страница товара: креаторы ставят в описание ролика свою ссылку на неё, считаем переходы. */
+  targetUrl: string | null;
   /** Весь бюджет, USDT, включая комиссию площадки. */
   budget: number;
   /** Порог просмотров для сдачи; null — по умолчанию (250). */
@@ -168,6 +173,8 @@ export interface OrderReport {
     views: number;
     /** Сумма известных лайков: вне YouTube их вводит модератор по желанию. */
     likes: number;
+    /** Переходы по ссылкам на товар; null — у заказа нет страницы товара. */
+    clicks: number | null;
     videos: number;
     creators: number;
     /** Фактическая цена 1000 просмотров; null — просмотров ещё нет. */
@@ -188,6 +195,7 @@ export interface OrderReport {
     views: number;
     /** null — неизвестно. */
     likes: number | null;
+    clicks: number | null;
     rating: number | null;
     approvedAt: string | null;
   }[];
@@ -255,6 +263,7 @@ export interface ModOrder extends VideoFormat {
   title: string;
   description: string;
   referenceUrl: string | null;
+  targetUrl: string | null;
   budget: number;
   feePercent: number;
   /** Фонд выплат креаторам (бюджет без комиссии), USDT — от него считается ставка. */

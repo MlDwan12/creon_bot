@@ -42,12 +42,13 @@ function serveWebapp(app: NestExpressApplication) {
   if (!existsSync(dir)) return;
   app.useStaticAssets(dir);
   // Роутер фронта на History API: /orders/5 — не файл, а экран, поэтому на такие пути отдаём index.html.
-  // Пути с точкой — отсутствующие файлы, им честный 404.
+  // Пути с точкой — отсутствующие файлы, им честный 404. /r/<код> — ссылки на товар (TrackController).
   const index = join(dir, 'index.html');
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (
       req.method === 'GET' &&
       !req.path.startsWith('/api') &&
+      !req.path.startsWith('/r/') &&
       !req.path.includes('.')
     )
       return res.sendFile(index);

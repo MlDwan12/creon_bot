@@ -84,6 +84,7 @@ export class OrdersService {
       title: string;
       description: string;
       referenceUrl?: string;
+      targetUrl?: string;
       budgetMinor: number;
       minViews: number;
       minDurationSec?: number | null;
@@ -109,6 +110,7 @@ export class OrdersService {
         title: data.title,
         description: data.description,
         referenceUrl: data.referenceUrl,
+        targetUrl: data.targetUrl,
         currency: ORDER_CURRENCY,
         budgetMinor: data.budgetMinor,
         feePercent: platformFeePercent(),
@@ -464,6 +466,7 @@ export class OrdersService {
       title: string;
       description: string;
       referenceUrl?: string | null;
+      targetUrl?: string | null;
       budgetMinor: number;
       minViews: number;
       minDurationSec?: number | null;

@@ -383,6 +383,30 @@ describe('воронка в отчёте', () => {
   });
 });
 
+describe('ссылка на товар', () => {
+  it('переход засчитывается креатору и ведёт на страницу товара; без страницы — null', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    const { trackCode } = await submissions.claim(order.id, creator.id);
+    expect(trackCode).toMatch(/^[\w-]{12}$/);
+
+    expect(await submissions.click(trackCode!)).toBeNull();
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { targetUrl: 'https://shop.example/item' },
+    });
+    expect(await submissions.click(trackCode!)).toBe(
+      'https://shop.example/item',
+    );
+    expect(await submissions.click('нет-такого')).toBeNull();
+
+    const { clicks } = await prisma.submission.findUniqueOrThrow({
+      where: { trackCode: trackCode! },
+    });
+    expect(clicks).toBe(1);
+  });
+});
+
 describe('каталог', () => {
   it('hasMore — есть ли следующая страница; total — число открытых', async () => {
     const adv = await user();

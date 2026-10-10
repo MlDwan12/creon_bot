@@ -102,6 +102,9 @@ void load();
         <div class="tile">
           <strong>{{ data.summary.cpm === null ? '—' : formatMoney(data.summary.cpm) }}</strong><span>за 1000 просмотров</span>
         </div>
+        <div v-if="data.summary.clicks !== null" class="tile">
+          <strong>{{ formatViews(data.summary.clicks) }}</strong><span>переходов на товар</span>
+        </div>
       </section>
       <p class="hint">
         Осталось {{ formatMoney(data.summary.left) }}<template v-if="data.summary.reserved">
@@ -156,6 +159,8 @@ void load();
             <div class="hint">
               {{ PLATFORM_NAMES[item.platform] }} · {{ formatViews(item.views) }} просмотров<template v-if="item.likes !== null">
                 · {{ formatViews(item.likes) }} лайков</template
+              ><template v-if="item.clicks !== null">
+                · {{ formatViews(item.clicks) }} переходов</template
               ><template v-if="item.approvedAt">
                 · {{ formatDate(item.approvedAt) }}</template
               >

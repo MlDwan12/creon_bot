@@ -42,6 +42,20 @@ const canResubmit = computed(
 );
 const expired = computed(() => props.submission.order.status === 'EXPIRED');
 
+/** Ссылка на товар для описания ролика — у каждого отклика своя, по ней считаем переходы. */
+const trackUrl = computed(() =>
+  props.submission.trackPath && !rejected.value ? location.origin + props.submission.trackPath : '',
+);
+const copied = ref(false);
+async function copyTrackUrl() {
+  try {
+    await navigator.clipboard.writeText(trackUrl.value);
+    copied.value = true;
+  } catch {
+    // буфер обмена недоступен (старый WebView) — ссылка видна, её можно выделить вручную
+  }
+}
+
 const resubmitting = ref(false);
 const error = ref('');
 
@@ -80,6 +94,11 @@ async function resubmit() {
     </div>
 
     <p v-if="earnings" class="earnings">{{ earnings }}</p>
+    <div v-if="trackUrl" class="track">
+      <span class="hint">Ссылка на товар — поставьте в описание ролика:</span>
+      <code>{{ trackUrl }}</code>
+      <button type="button" class="copy" @click="copyTrackUrl">{{ copied ? 'Скопировано' : 'Скопировать' }}</button>
+    </div>
     <p v-if="submission.comment" class="comment">«{{ submission.comment }}»</p>
 
     <RouterLink
@@ -101,6 +120,25 @@ async function resubmit() {
 </template>
 
 <style scoped>
+.track {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.track code {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.copy {
+  min-height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  background: var(--fill);
+  color: var(--text);
+  font-size: 14px;
+}
 .card {
   display: flex;
   flex-direction: column;

@@ -46,6 +46,7 @@ export class MyOrdersController {
       title: o.title,
       description: o.description,
       referenceUrl: o.referenceUrl,
+      targetUrl: o.targetUrl,
       ...videoFormat(o),
       budget: fromMinor(o.budgetMinor),
       minViews: o.minViews,

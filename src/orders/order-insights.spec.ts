@@ -8,7 +8,7 @@ const order = {
   deadline: null,
 };
 const report = {
-  summary: { budget: 1000, left: 800, videos: 1 },
+  summary: { budget: 1000, left: 800, videos: 1, views: 0, clicks: null },
   items: [] as { views: number; likes: number | null }[],
 } as unknown as Parameters<typeof orderInsights>[1];
 const funnel: OrderFunnel = {
@@ -50,6 +50,17 @@ describe('orderInsights', () => {
       ],
     } as typeof report;
     expect(codes(order, r, funnel, now)).toEqual(['LOW_ENGAGEMENT']);
+  });
+
+  it('смотрят, но не переходят — только если у заказа есть страница товара', () => {
+    const summary = { ...report.summary, views: 20_000, clicks: 5 };
+    expect(codes(order, { ...report, summary }, funnel, now)).toEqual([
+      'LOW_CLICKS',
+    ]);
+    const noTarget = { ...summary, clicks: null };
+    expect(codes(order, { ...report, summary: noTarget }, funnel, now)).toEqual(
+      [],
+    );
   });
 
   it('бюджет кончается и срок с остатком — только у открытого заказа', () => {

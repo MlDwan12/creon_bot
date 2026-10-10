@@ -84,6 +84,20 @@ export function orderInsights(
       },
     });
 
+  if (
+    summary.clicks !== null &&
+    summary.views >= 5000 &&
+    summary.clicks / summary.views < 0.001
+  )
+    result.push({
+      code: 'LOW_CLICKS',
+      text: `Ролики посмотрели ${summary.views.toLocaleString('ru-RU')} раз, а по ссылке на товар перешли ${summary.clicks}. Зрители не идут на сайт: попросите креаторов прямо звать по ссылке в описании и показать, что получит зритель.`,
+      offer: {
+        label: 'Заказать аудит креатива',
+        about: `Хочу аудит креатива по заказу #${order.id}`,
+      },
+    });
+
   if (open && summary.videos >= 3 && summary.left / summary.budget < 0.2)
     result.push({
       code: 'BUDGET_ENDING',
