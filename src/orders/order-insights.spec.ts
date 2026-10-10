@@ -8,7 +8,14 @@ const order = {
   deadline: null,
 };
 const report = {
-  summary: { budget: 1000, left: 800, videos: 1, views: 0, clicks: null },
+  summary: {
+    budget: 1000,
+    left: 800,
+    videos: 1,
+    views: 0,
+    clicks: null,
+    sales: null,
+  },
   items: [] as { views: number; likes: number | null }[],
 } as unknown as Parameters<typeof orderInsights>[1];
 const funnel: OrderFunnel = {
@@ -61,6 +68,28 @@ describe('orderInsights', () => {
     expect(codes(order, { ...report, summary: noTarget }, funnel, now)).toEqual(
       [],
     );
+  });
+
+  it('много переходов, мало продаж — разный текст, когда продаж нет совсем', () => {
+    const summary = { ...report.summary, clicks: 200, sales: 0 };
+    const [none] = orderInsights(order, { ...report, summary }, funnel, now);
+    expect(none.code).toBe('LOW_SALES');
+    expect(none.text).toContain('подключите');
+    const [few] = orderInsights(
+      order,
+      { ...report, summary: { ...summary, sales: 1 } },
+      funnel,
+      now,
+    );
+    expect(few.text).toContain('купили 1');
+    expect(
+      codes(
+        order,
+        { ...report, summary: { ...summary, sales: 5 } },
+        funnel,
+        now,
+      ),
+    ).toEqual([]);
   });
 
   it('бюджет кончается и срок с остатком — только у открытого заказа', () => {

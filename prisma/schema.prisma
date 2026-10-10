@@ -182,6 +182,8 @@ model Submission {
   /// Креатору напомнили, что слот сгорает меньше чем через сутки.
   slotReminderSentAt DateTime?
 
+  conversions       Conversion[]
+
   /// Отклики по заказу; внешний ключ Postgres сам не индексирует.
   @@index([orderId])
   /// Один отклик «в работе» на креатора и заказ — дубль (двойной тап) отсекает сама база.
@@ -192,6 +194,20 @@ model Submission {
   @@index([status, submittedAt])
   /// Один ролик нельзя сдать дважды — ни в тот же заказ, ни в другой, пока он на проверке или одобрен.
   @@unique([videoKey], map: "Submission_video_once", where: raw("status = ANY (ARRAY['SUBMITTED'::\"SubmissionStatus\", 'MODERATOR_APPROVED'::\"SubmissionStatus\"])"))
+}
+
+/// Продажа на сайте рекламодателя после перехода по ссылке креатора: шлёт пиксель или сервер
+/// рекламодателя (src/submissions/conversion.controller.ts). Для отчёта, на выплату не влияет.
+model Conversion {
+  id           Int        @id @default(autoincrement())
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submissionId Int
+  /// Номер заказа на сайте рекламодателя — повтор (перезагрузка страницы «спасибо») не засчитается.
+  /// null — номер не передали, такие не склеиваются.
+  externalId   String?
+  createdAt    DateTime   @default(now())
+
+  @@unique([submissionId, externalId])
 }
 
 /// На что жалоба. VIDEO и REVIEW — по id отклика (Submission), PROFILE — по id пользователя.
