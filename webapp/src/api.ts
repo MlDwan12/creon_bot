@@ -95,6 +95,8 @@ export interface MySubmission {
   payout: number;
   /** Итог просмотров после добора зафиксирован. */
   finalized: boolean;
+  /** Ссылка на товар для описания ролика — путь `/r/<код>` от адреса мини-аппа; null — у заказа нет товара. */
+  trackPath: string | null;
   order: {
     id: number;
     title: string;
@@ -111,6 +113,7 @@ export interface MyOrder extends VideoFormat {
   title: string;
   description: string;
   referenceUrl: string | null;
+  targetUrl: string | null;
   /** Весь бюджет, USDT. */
   budget: number;
   minViews: number;
@@ -136,6 +139,8 @@ export interface NewOrderInput extends VideoFormat {
   description: string;
   /** Ссылка на референс или материалы; null — без ссылки. */
   referenceUrl: string | null;
+  /** Страница товара: креаторы ставят в описание ролика свою ссылку на неё, считаем переходы. */
+  targetUrl: string | null;
   /** Весь бюджет, USDT, включая комиссию площадки. */
   budget: number;
   /** Порог просмотров для сдачи; null — по умолчанию (250). */
@@ -168,12 +173,22 @@ export interface OrderReport {
     views: number;
     /** Сумма известных лайков: вне YouTube их вводит модератор по желанию. */
     likes: number;
+    /** Переходы по ссылкам на товар; null — у заказа нет страницы товара. */
+    clicks: number | null;
+    /** Продажи по ссылкам (пиксель или сервер рекламодателя); null — как clicks. */
+    sales: number | null;
+    /** Цена одной продажи, USDT; продаж нет — null. */
+    costPerSale: number | null;
     videos: number;
     creators: number;
     /** Фактическая цена 1000 просмотров; null — просмотров ещё нет. */
     cpm: number | null;
   };
   platforms: { platform: Platform; videos: number; views: number }[];
+  /** Воронка: открыли карточку → взяли → не успели / на проверке / отклонено / одобрено. */
+  funnel: { viewers: number; taken: number; expired: number; onReview: number; rejected: number; approved: number };
+  /** Советы, что поправить; `offer` — услуга площадки: тема обращения в поддержку. */
+  insights: { code: string; text: string; offer?: { label: string; about: string } }[];
   /** Одобренные ролики, больше просмотров — выше. */
   items: {
     id: number;
@@ -184,6 +199,8 @@ export interface OrderReport {
     views: number;
     /** null — неизвестно. */
     likes: number | null;
+    clicks: number | null;
+    sales: number | null;
     rating: number | null;
     approvedAt: string | null;
   }[];
@@ -230,8 +247,27 @@ export interface ModFunnel {
     accepted: number;
   };
   users: { new: number; activeAdvertisers: number; activeCreators: number };
-  /** Начислено креаторам за одобренные ролики, USDT. */
-  turnover: { amount: number };
+  /** Начислено креаторам за одобренные ролики и комиссия площадки сверх этого, USDT. */
+  turnover: { amount: number; fee: number };
+  /** Частые причины отклонения роликов — текстом, как написал модератор. */
+  rejectReasons: { reason: string; count: number }[];
+  /** Бизнес-метрики — см. AnalyticsService.business. Деньги — USDT. */
+  business: {
+    /** Бюджеты опубликованных заказов, с комиссией. */
+    placed: number;
+    avgBudget: number | null;
+    /** Доля бюджета, освоенная завершёнными заказами, %; null — завершённых нет. */
+    utilization: number | null;
+    finished: number;
+    /** Завершённые, освоившие меньше половины бюджета. */
+    underused: number;
+    /** Медиана от публикации до первого отклика, часы. */
+    firstClaimHours: number | null;
+    advertisers: { total: number; repeat: number };
+    creators: { total: number; repeat: number };
+    /** На сейчас, не за период: начислено креаторам и не выплачено; из этого — в заявках. */
+    debt: { owed: number; requested: number };
+  };
 }
 
 export interface ModOrderRow {
@@ -249,6 +285,7 @@ export interface ModOrder extends VideoFormat {
   title: string;
   description: string;
   referenceUrl: string | null;
+  targetUrl: string | null;
   budget: number;
   feePercent: number;
   /** Фонд выплат креаторам (бюджет без комиссии), USDT — от него считается ставка. */

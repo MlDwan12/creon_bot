@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import {
   ForbiddenException,
   Injectable,
@@ -9,7 +10,6 @@ import { Prisma, OrderStatus, SubmissionStatus } from '@prisma/client';
 import {
   ACCRUED,
   budgetState,
-  HOLDS_MONEY,
   payoutFor,
   spentByOrder,
   VIEWS_TOPUP_DAYS,
@@ -148,7 +148,12 @@ export class SubmissionsService implements OnApplicationBootstrap {
     // заказ безвреден (видео по закрытому принимаются), блокировать ради этого незачем.
     try {
       return await this.prisma.submission.create({
-        data: { orderId, creatorId },
+        // 72 случайных бита: перебором чужую ссылку не найти, совпадение кодов невероятно
+        data: {
+          orderId,
+          creatorId,
+          trackCode: randomBytes(9).toString('base64url'),
+        },
         include: { order: true, creator: true },
       });
     } catch (err) {
@@ -274,12 +279,51 @@ export class SubmissionsService implements OnApplicationBootstrap {
     });
   }
 
-  /** Ролики заказа, за которыми закреплены деньги (на проверке и одобренные), — для отчёта. */
-  listWithMoney(orderId: number) {
-    return this.prisma.submission.findMany({
-      where: { orderId, status: { in: HOLDS_MONEY } },
-      include: { creator: true },
+  /**
+   * Переход по ссылке креатора /r/<код>: +1 к счётчику, вернёт страницу товара. null — нет такой
+   * ссылки или у заказа нет страницы товара.
+   * ponytail: счётчик без защиты от накрутки — переходы на выплату не влияют; станут влиять —
+   * считать уникальных по IP. Ролик, отклонённый и сданный заново новым откликом, хранит в описании
+   * старую ссылку — её переходы останутся у отклонённого отклика и в отчёт не попадут.
+   */
+  async click(trackCode: string) {
+    const submission = await this.prisma.submission.findUnique({
+      where: { trackCode },
+      select: { id: true, order: { select: { targetUrl: true } } },
     });
+    const url = submission?.order.targetUrl;
+    if (!url) return null;
+    await this.prisma.submission.update({
+      where: { id: submission.id },
+      data: { clicks: { increment: 1 } },
+    });
+    // метка для пикселя и сервера рекламодателя: по ней продажа найдёт креатора (convert)
+    try {
+      const target = new URL(url);
+      target.searchParams.set('creon', trackCode);
+      return target.toString();
+    } catch {
+      return url;
+    }
+  }
+
+  /**
+   * Продажа после перехода по ссылке креатора. `externalId` — номер заказа на сайте: повтор с тем же
+   * номером не засчитывается. false — нет такой ссылки.
+   * ponytail: без подписи и лимита — пиксель в браузере секрет не спрячет, а продажи на выплату не
+   * влияют. Начнут влиять (оплата за продажу) — постбэк только с ключом заказа.
+   */
+  async convert(trackCode: string, externalId: string | null) {
+    const submission = await this.prisma.submission.findUnique({
+      where: { trackCode },
+      select: { id: true },
+    });
+    if (!submission) return false;
+    await this.prisma.conversion.createMany({
+      data: [{ submissionId: submission.id, externalId }],
+      skipDuplicates: true,
+    });
+    return true;
   }
 
   /** Какой по счёту это видео креатора по заказу: 1, 2, 3… */

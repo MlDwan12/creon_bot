@@ -18,8 +18,7 @@ import { payoutPool } from './budget';
 import { NotificationsService } from '../telegram/notifications.service';
 import { Throttle } from '@nestjs/throttler';
 import { OrdersService } from './orders.service';
-import { SubmissionsService } from '../submissions/submissions.service';
-import { buildOrderReport, reportCsv } from './order-report';
+import { reportCsv } from './order-report';
 import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
 import {
@@ -35,7 +34,6 @@ import {
 export class MyOrdersController {
   constructor(
     private readonly ordersService: OrdersService,
-    private readonly submissionsService: SubmissionsService,
     private readonly notifications: NotificationsService,
   ) {}
 
@@ -48,6 +46,7 @@ export class MyOrdersController {
       title: o.title,
       description: o.description,
       referenceUrl: o.referenceUrl,
+      targetUrl: o.targetUrl,
       ...videoFormat(o),
       budget: fromMinor(o.budgetMinor),
       minViews: o.minViews,
@@ -124,13 +123,10 @@ export class MyOrdersController {
     return { ok: true };
   }
 
-  /** Отчёт по моему заказу: сводка, площадки, одобренные ролики (оценка — по желанию). */
+  /** Отчёт по моему заказу: сводка, площадки, одобренные ролики, воронка и советы. */
   @Get(':id/report')
   async report(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
-    return buildOrderReport(
-      await this.ownOrder(id, req.user.id),
-      await this.submissionsService.listWithMoney(id),
-    );
+    return this.ordersService.report(await this.ownOrder(id, req.user.id));
   }
 
   /** Тот же отчёт файлом CSV — в чат с ботом: скачивание файлов из мини-аппа работает не везде. */
@@ -140,9 +136,8 @@ export class MyOrdersController {
     @Param('id', ParseIdPipe) id: number,
     @Req() req: ApiRequest,
   ) {
-    const report = buildOrderReport(
+    const report = await this.ordersService.report(
       await this.ownOrder(id, req.user.id),
-      await this.submissionsService.listWithMoney(id),
     );
     const sent = await this.notifications.sendFile(
       req.user.telegramId,

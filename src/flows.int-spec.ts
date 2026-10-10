@@ -361,6 +361,75 @@ describe('срок от публикации и напоминания', () => {
   });
 });
 
+describe('воронка в отчёте', () => {
+  it('открытие карточки считается раз на креатора; взяли — все отклики', async () => {
+    const [adv, a, b] = [await user(), await user(), await user()];
+    const order = await openOrder(adv.id);
+    await orders.markViewed(order.id, a.id);
+    await orders.markViewed(order.id, a.id);
+    await orders.markViewed(order.id, b.id);
+    const claim = await submissions.claim(order.id, a.id);
+    await submissions.attachVideo(claim.id, a.id, videoUrl(), VIEWS);
+
+    const { funnel } = await orders.report(order);
+    expect(funnel).toEqual({
+      viewers: 2,
+      taken: 1,
+      expired: 0,
+      onReview: 1,
+      rejected: 0,
+      approved: 0,
+    });
+  });
+});
+
+describe('ссылка на товар', () => {
+  it('переход засчитывается креатору и ведёт на страницу товара; без страницы — null', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    const { trackCode } = await submissions.claim(order.id, creator.id);
+    expect(trackCode).toMatch(/^[\w-]{12}$/);
+
+    expect(await submissions.click(trackCode!)).toBeNull();
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { targetUrl: 'https://shop.example/item' },
+    });
+    expect(await submissions.click(trackCode!)).toBe(
+      `https://shop.example/item?creon=${trackCode}`,
+    );
+    expect(await submissions.click('нет-такого')).toBeNull();
+
+    const { clicks } = await prisma.submission.findUniqueOrThrow({
+      where: { trackCode: trackCode! },
+    });
+    expect(clicks).toBe(1);
+  });
+
+  it('продажа засчитывается одобренному ролику один раз на номер заказа', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { targetUrl: 'https://shop.example/item' },
+    });
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS);
+    await submissions.moderatorApprove(s.id, 1n, VIEWS);
+
+    const code = s.trackCode!;
+    await submissions.convert(code, 'A-1');
+    await submissions.convert(code, 'A-1'); // перезагрузили страницу «спасибо»
+    await submissions.convert(code, null);
+    expect(await submissions.convert('нет-такого', 'A-2')).toBe(false);
+
+    const { summary } = await orders.report(
+      await prisma.order.findUniqueOrThrow({ where: { id: order.id } }),
+    );
+    expect(summary.sales).toBe(2);
+  });
+});
+
 describe('каталог', () => {
   it('hasMore — есть ли следующая страница; total — число открытых', async () => {
     const adv = await user();
@@ -951,12 +1020,18 @@ describe('модерация', () => {
 });
 
 describe('воронка', () => {
-  it('считает заказы, видео, пользователей и оборот за период', async () => {
+  it('считает заказы, видео, пользователей, оборот, выручку и причины отклонений за период', async () => {
     const [advertiser, creator] = [await user(), await user()];
     const accepted = await openOrder(advertiser.id);
     const s = await submissions.claim(accepted.id, creator.id);
     await submissions.attachVideo(s.id, creator.id, videoUrl(), 30_000);
     await submissions.moderatorApprove(s.id, 1n, 30_000);
+
+    for (const comment of ['мало', 'мало', 'брак']) {
+      const r = await submissions.claim(accepted.id, creator.id);
+      await submissions.attachVideo(r.id, creator.id, videoUrl(), VIEWS);
+      await submissions.moderatorReject(r.id, 1n, comment);
+    }
 
     const rejected = await pendingOrder(advertiser.id);
     await rejectOrder(rejected.id, 1n, 'причина');
@@ -971,9 +1046,13 @@ describe('воронка', () => {
         withVideos: 1,
         withAccepted: 1,
       },
-      videos: { submitted: 1, accepted: 1, pending: 0 },
+      videos: { submitted: 4, accepted: 1, pending: 0, moderatorRejected: 3 },
       users: { new: 2, activeAdvertisers: 1, activeCreators: 1 },
-      turnover: { amount: 3000 },
+      turnover: { amount: 3000, fee: 750 }, // комиссия 20%: 3000 / 0,8 − 3000
+      rejectReasons: [
+        { reason: 'мало', count: 2 },
+        { reason: 'брак', count: 1 },
+      ],
     });
     expect((await analytics.funnel()).orders.moderationHours).toBe(0);
 
@@ -982,6 +1061,36 @@ describe('воронка', () => {
     expect(future.orders.created).toBe(0);
     expect(future.turnover.amount).toBe(0);
     expect(future.orders.moderationHours).toBeNull();
+  });
+});
+
+describe('бизнес-метрики', () => {
+  it('вложено, освоение завершённых, повторные клиенты и долг креаторам', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const done = await openOrder(advertiser.id);
+    const s = await submissions.claim(done.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, videoUrl(), 30_000);
+    await submissions.moderatorApprove(s.id, 1n, 30_000); // креатору 3000 USDT
+    await orders.close(done.id, advertiser.id);
+    await openOrder(advertiser.id);
+
+    await prisma.user.update({
+      where: { id: creator.id },
+      data: { payoutWallet: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t' },
+    });
+    await payouts.requestPayout(creator.id, 100_000); // 1000 USDT
+
+    expect((await analytics.funnel()).business).toEqual({
+      placed: 100_000,
+      avgBudget: 50_000,
+      utilization: 8, // 3000 / 0,8 = 3750 из 50 000
+      finished: 1,
+      underused: 1,
+      firstClaimHours: 0,
+      advertisers: { total: 1, repeat: 1 },
+      creators: { total: 1, repeat: 0 },
+      debt: { owed: 3000, requested: 1000 },
+    });
   });
 });
 

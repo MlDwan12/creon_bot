@@ -23,6 +23,7 @@ const video = (
     status,
     videoUrl: url,
     videoKey: null,
+    clicks: 10,
     views,
     likes,
     payoutMinor,
@@ -56,6 +57,9 @@ describe('buildOrderReport', () => {
       left: 49_400,
       views: 4000,
       likes: 50, // лайки ролика на проверке и неизвестные (null) не считаются
+      clicks: null, // у заказа нет страницы товара
+      sales: null,
+      costPerSale: null,
       videos: 2,
       creators: 2,
       cpm: 100,
@@ -80,6 +84,27 @@ describe('buildOrderReport', () => {
   });
 });
 
+describe('переходы по ссылке на товар', () => {
+  it('считаются по одобренным роликам, только если у заказа есть страница товара', () => {
+    const rows = [
+      video('MODERATOR_APPROVED', 'https://youtu.be/a', 1000, 8_000),
+      video('SUBMITTED', 'https://youtu.be/b', 1000, 8_000),
+    ];
+    const withTarget = { ...order, targetUrl: 'https://shop.example' };
+    const report = buildOrderReport(withTarget, rows);
+    expect(report.summary.clicks).toBe(10);
+    expect(report.items[0].clicks).toBe(10);
+    expect(report.summary.sales).toBe(0);
+    expect(report.summary.costPerSale).toBeNull();
+    const sold = buildOrderReport(withTarget, [
+      { ...rows[0], _count: { conversions: 4 } },
+    ]);
+    expect(sold.summary.sales).toBe(4);
+    expect(sold.summary.costPerSale).toBe(25); // 80 USDT креатору / 0,8 = 100 USDT на 4 продажи
+    expect(buildOrderReport(order, rows).items[0].clicks).toBeNull();
+  });
+});
+
 describe('reportCsv', () => {
   it('BOM, «;», кавычки и формулы в именах экранированы', () => {
     const csv = reportCsv(
@@ -91,7 +116,7 @@ describe('reportCsv', () => {
     );
     expect(csv.startsWith('﻿"Креатор";"Площадка"')).toBe(true);
     expect(csv).toContain(
-      `"'=HYPERLINK(""x"")";"VK";"https://vk.com/clip1";"500";"";"2026-10-01"`,
+      `"'=HYPERLINK(""x"")";"VK";"https://vk.com/clip1";"500";"";"";"";"2026-10-01"`,
     );
   });
 });

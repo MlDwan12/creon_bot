@@ -27,6 +27,23 @@ const items = computed(() => {
     ? list
     : [...list].sort((a, b) => (b.approvedAt ?? '').localeCompare(a.approvedAt ?? ''));
 });
+// Код учёта продаж для сайта рекламодателя (бэкенд: src/submissions/conversion.controller.ts).
+// Первый запоминает метку креатора из ссылки /r/<код>, второй на странице «спасибо» сообщает о продаже.
+const SALES_ENDPOINT = `${location.origin}/api/conversions`;
+const SALE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+const pixelSave = `<script>(function(){try{var c=new URLSearchParams(location.search).get('creon');if(c)localStorage.setItem('creon',JSON.stringify({c:c,t:Date.now()}))}catch(e){}})();</` + `script>`;
+const pixelSale = `<script>(function(){var id='';try{var v=JSON.parse(localStorage.getItem('creon')||'null');if(v&&Date.now()-v.t<${SALE_WINDOW_MS})new Image().src='${SALES_ENDPOINT}?code='+encodeURIComponent(v.c)+'&id='+encodeURIComponent(id)}catch(e){}})();</` + `script>`;
+const postback = `${SALES_ENDPOINT}?code=<метка creon из адреса>&id=<номер заказа>`;
+const copiedSnippet = ref('');
+async function copySnippet(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    copiedSnippet.value = text;
+  } catch {
+    // буфер обмена недоступен (старый WebView) — код виден, его можно выделить вручную
+  }
+}
+
 const csvState = ref<'idle' | 'sending' | 'sent'>('idle');
 const csvError = ref('');
 
@@ -102,6 +119,13 @@ void load();
         <div class="tile">
           <strong>{{ data.summary.cpm === null ? '—' : formatMoney(data.summary.cpm) }}</strong><span>за 1000 просмотров</span>
         </div>
+        <div v-if="data.summary.clicks !== null" class="tile">
+          <strong>{{ formatViews(data.summary.clicks) }}</strong><span>переходов на товар</span>
+        </div>
+        <div v-if="data.summary.sales !== null" class="tile">
+          <strong>{{ formatViews(data.summary.sales) }}</strong
+          ><span>продаж<template v-if="data.summary.costPerSale !== null"> · {{ formatMoney(data.summary.costPerSale) }} за продажу</template></span>
+        </div>
       </section>
       <p class="hint">
         Осталось {{ formatMoney(data.summary.left) }}<template v-if="data.summary.reserved">
@@ -109,12 +133,49 @@ void load();
         >. Суммы — вместе с комиссией площадки.
       </p>
 
+      <section class="rows" aria-label="Воронка">
+        <div class="row"><span>Открыли заказ</span><span>{{ data.funnel.viewers }}</span></div>
+        <div class="row"><span>Взяли в работу</span><span>{{ data.funnel.taken }}</span></div>
+        <div class="row"><span>Не прислали вовремя</span><span>{{ data.funnel.expired }}</span></div>
+        <div class="row"><span>Отклонено модератором</span><span>{{ data.funnel.rejected }}</span></div>
+        <div class="row"><span>На проверке · одобрено</span><span>{{ data.funnel.onReview }} · {{ data.funnel.approved }}</span></div>
+      </section>
+
+      <article v-for="i in data.insights" :key="i.code" class="insight">
+        <p>💡 {{ i.text }}</p>
+        <SupportLink v-if="i.offer" :label="i.offer.label" :about="i.offer.about" />
+      </article>
+
       <section v-if="data.platforms.length" class="rows">
         <div v-for="p in data.platforms" :key="p.platform" class="row">
           <span>{{ PLATFORM_NAMES[p.platform] }}</span>
           <span>{{ p.videos }} · {{ formatViews(p.views) }} просмотров</span>
         </div>
       </section>
+
+      <details v-if="data.summary.sales !== null" class="pixel">
+        <summary>Учёт продаж на вашем сайте</summary>
+        <p class="hint">
+          Зритель переходит по ссылке креатора — мы добавляем к адресу товара метку <code>creon</code>. Поставьте на сайт
+          два кода, и продажи появятся в этом отчёте сами.
+        </p>
+        <p class="hint">1. На все страницы сайта (в Tilda — «Настройки сайта» → «HTML-код для вставки внутрь head»):</p>
+        <code class="snippet">{{ pixelSave }}</code>
+        <button type="button" class="secondary" @click="copySnippet(pixelSave)">
+          {{ copiedSnippet === pixelSave ? 'Скопировано' : 'Скопировать' }}
+        </button>
+        <p class="hint">
+          2. На страницу «Спасибо за заказ». Если сайт умеет подставлять номер заказа — впишите его в
+          <code>var id=''</code> между кавычками: тогда перезагрузка страницы не засчитает продажу дважды.
+        </p>
+        <code class="snippet">{{ pixelSale }}</code>
+        <button type="button" class="secondary" @click="copySnippet(pixelSale)">
+          {{ copiedSnippet === pixelSale ? 'Скопировано' : 'Скопировать' }}
+        </button>
+        <p class="hint">Есть программист? Надёжнее, чем код на странице, — запрос с вашего сервера после оплаты:</p>
+        <code class="snippet">{{ postback }}</code>
+        <SupportLink label="Помочь с подключением" :about="`Помогите подключить учёт продаж по заказу #${data.order.id}`" />
+      </details>
 
       <button type="button" class="secondary" :disabled="csvState !== 'idle'" @click="sendCsv">
         {{ csvState === 'sent' ? 'Файл отправлен в чат с ботом' : csvState === 'sending' ? 'Отправляем…' : 'Отчёт CSV — в чат с ботом' }}
@@ -143,6 +204,10 @@ void load();
             <div class="hint">
               {{ PLATFORM_NAMES[item.platform] }} · {{ formatViews(item.views) }} просмотров<template v-if="item.likes !== null">
                 · {{ formatViews(item.likes) }} лайков</template
+              ><template v-if="item.clicks !== null">
+                · {{ formatViews(item.clicks) }} переходов</template
+              ><template v-if="item.sales">
+                · {{ formatViews(item.sales) }} продаж</template
               ><template v-if="item.approvedAt">
                 · {{ formatDate(item.approvedAt) }}</template
               >
@@ -249,6 +314,42 @@ void load();
 }
 .rows .row + .row {
   border-top: 1px solid var(--separator);
+}
+.pixel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.pixel summary {
+  font-size: 16px;
+  font-weight: 600;
+}
+.pixel[open] {
+  gap: 10px;
+}
+.snippet {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--fill);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.insight {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.insight p {
+  margin: 0;
+  font-size: 15px;
 }
 .title-row {
   display: flex;

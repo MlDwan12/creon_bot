@@ -16,7 +16,7 @@ import { budgetSpent } from './budget';
  */
 export function buildOrderReport(
   order: Order,
-  rows: (Submission & { creator: User })[],
+  rows: (Submission & { creator: User; _count?: { conversions: number } })[],
 ) {
   const approved = rows
     .filter((s) => s.status === SubmissionStatus.MODERATOR_APPROVED)
@@ -32,6 +32,14 @@ export function buildOrderReport(
   const views = approved.reduce((total, s) => total + (s.views ?? 0), 0);
   // лайки известны не по всем роликам (вне YouTube их вводит модератор по желанию)
   const likes = approved.reduce((total, s) => total + (s.likes ?? 0), 0);
+  // без страницы товара переходов не бывает — «0» вводил бы в заблуждение
+  const clicks = order.targetUrl
+    ? approved.reduce((total, s) => total + s.clicks, 0)
+    : null;
+  const salesOf = (s: (typeof rows)[number]) => s._count?.conversions ?? 0;
+  const sales = order.targetUrl
+    ? approved.reduce((total, s) => total + salesOf(s), 0)
+    : null;
 
   const byPlatform = new Map<Platform, { videos: number; views: number }>();
   const items = approved.map((s) => {
@@ -49,6 +57,8 @@ export function buildOrderReport(
       creatorId: s.creatorId,
       views: s.views ?? 0,
       likes: s.likes,
+      clicks: order.targetUrl ? s.clicks : null,
+      sales: order.targetUrl ? salesOf(s) : null,
       rating: s.rating,
       approvedAt: s.decidedAt,
     };
@@ -64,6 +74,12 @@ export function buildOrderReport(
       left: fromMinor(Math.max(0, order.budgetMinor - spent - reserved)),
       views,
       likes,
+      /** Переходы по ссылкам на товар из одобренных роликов; null — у заказа нет страницы товара. */
+      clicks,
+      /** Продажи по ссылкам из одобренных роликов (пиксель или сервер рекламодателя); null — как clicks. */
+      sales,
+      /** Цена одной продажи для рекламодателя; продаж нет — null. */
+      costPerSale: sales ? fromMinor(Math.round(spent / sales)) : null,
       videos: approved.length,
       creators: new Set(approved.map((s) => s.creatorId)).size,
       /** Фактическая цена 1000 просмотров для рекламодателя; нет просмотров — null. */
@@ -89,13 +105,24 @@ export function reportCsv(report: Report): string {
     return `"${safe.replace(/"/g, '""')}"`;
   };
   const rows = [
-    ['Креатор', 'Площадка', 'Ссылка', 'Просмотры', 'Лайки', 'Одобрено'],
+    [
+      'Креатор',
+      'Площадка',
+      'Ссылка',
+      'Просмотры',
+      'Лайки',
+      'Переходы',
+      'Продажи',
+      'Одобрено',
+    ],
     ...report.items.map((i) => [
       i.creator,
       i.platform === 'OTHER' ? 'Другое' : PLATFORMS[i.platform].name,
       i.videoUrl ?? '',
       i.views,
       i.likes ?? '',
+      i.clicks ?? '',
+      i.sales ?? '',
       i.approvedAt ? i.approvedAt.toISOString().slice(0, 10) : '',
     ]),
   ];

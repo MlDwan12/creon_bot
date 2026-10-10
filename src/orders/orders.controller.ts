@@ -90,6 +90,8 @@ export class OrdersController {
       req.user.id,
     );
     const { advertiserId, ...pub } = order;
+    if (advertiserId !== req.user.id)
+      await this.ordersService.markViewed(id, req.user.id);
     return {
       ...toPublic(pub),
       claimed,
