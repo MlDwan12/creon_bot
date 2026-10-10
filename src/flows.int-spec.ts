@@ -973,12 +973,18 @@ describe('модерация', () => {
 });
 
 describe('воронка', () => {
-  it('считает заказы, видео, пользователей и оборот за период', async () => {
+  it('считает заказы, видео, пользователей, оборот, выручку и причины отклонений за период', async () => {
     const [advertiser, creator] = [await user(), await user()];
     const accepted = await openOrder(advertiser.id);
     const s = await submissions.claim(accepted.id, creator.id);
     await submissions.attachVideo(s.id, creator.id, videoUrl(), 30_000);
     await submissions.moderatorApprove(s.id, 1n, 30_000);
+
+    for (const comment of ['мало', 'мало', 'брак']) {
+      const r = await submissions.claim(accepted.id, creator.id);
+      await submissions.attachVideo(r.id, creator.id, videoUrl(), VIEWS);
+      await submissions.moderatorReject(r.id, 1n, comment);
+    }
 
     const rejected = await pendingOrder(advertiser.id);
     await rejectOrder(rejected.id, 1n, 'причина');
@@ -993,9 +999,13 @@ describe('воронка', () => {
         withVideos: 1,
         withAccepted: 1,
       },
-      videos: { submitted: 1, accepted: 1, pending: 0 },
+      videos: { submitted: 4, accepted: 1, pending: 0, moderatorRejected: 3 },
       users: { new: 2, activeAdvertisers: 1, activeCreators: 1 },
-      turnover: { amount: 3000 },
+      turnover: { amount: 3000, fee: 750 }, // комиссия 20%: 3000 / 0,8 − 3000
+      rejectReasons: [
+        { reason: 'мало', count: 2 },
+        { reason: 'брак', count: 1 },
+      ],
     });
     expect((await analytics.funnel()).orders.moderationHours).toBe(0);
 

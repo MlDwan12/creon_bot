@@ -234,8 +234,10 @@ export interface ModFunnel {
     accepted: number;
   };
   users: { new: number; activeAdvertisers: number; activeCreators: number };
-  /** Начислено креаторам за одобренные ролики, USDT. */
-  turnover: { amount: number };
+  /** Начислено креаторам за одобренные ролики и комиссия площадки сверх этого, USDT. */
+  turnover: { amount: number; fee: number };
+  /** Частые причины отклонения роликов — текстом, как написал модератор. */
+  rejectReasons: { reason: string; count: number }[];
 }
 
 export interface ModOrderRow {

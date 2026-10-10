@@ -109,6 +109,15 @@ const steps = computed(() => {
         <div class="tile"><strong>{{ funnel.videos.pending }}</strong><span>на проверке</span></div>
         <div class="tile"><strong>{{ funnel.videos.moderatorRejected }}</strong><span>отклонено</span></div>
       </div>
+      <template v-if="funnel.rejectReasons.length">
+        <h2 class="section-title flush">Почему отклоняют видео</h2>
+        <ol class="rows">
+          <li v-for="r in funnel.rejectReasons" :key="r.reason">
+            <span>{{ r.reason }}</span>
+            <strong>{{ r.count }}</strong>
+          </li>
+        </ol>
+      </template>
 
       <h2 class="section-title flush">Пользователи</h2>
       <div class="tiles three">
@@ -118,9 +127,15 @@ const steps = computed(() => {
       </div>
 
       <h2 class="section-title flush">Оборот</h2>
-      <div class="tile">
-        <strong>{{ formatMoney(funnel.turnover.amount) }}</strong>
-        <span>начислено креаторам за одобренные ролики</span>
+      <div class="tiles">
+        <div class="tile">
+          <strong>{{ formatMoney(funnel.turnover.amount) }}</strong>
+          <span>начислено креаторам за одобренные ролики</span>
+        </div>
+        <div class="tile">
+          <strong>{{ formatMoney(funnel.turnover.fee) }}</strong>
+          <span>комиссия площадки с этих роликов</span>
+        </div>
       </div>
     </template>
   </main>

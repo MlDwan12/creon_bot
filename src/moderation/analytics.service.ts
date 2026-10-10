@@ -30,6 +30,7 @@ export class AnalyticsService {
       [creators],
       [timing],
       [turnover],
+      rejectReasons,
     ] = await Promise.all([
       this.prisma.order.count({ where: order }),
       this.prisma.order.count({
@@ -80,12 +81,26 @@ export class AnalyticsService {
         ) / 3600 AS hours
         FROM "Order"
         WHERE "decidedAt" IS NOT NULL AND "createdAt" >= ${epoch}`),
-      // Оборот — сколько начислено креаторам за одобренные ролики.
-      this.prisma.$queryRaw<{ total: bigint | null }[]>(
+      // Оборот — сколько начислено креаторам за одобренные ролики; выручка — комиссия площадки
+      // сверх этого, как в отчёте рекламодателю (budgetSpent в src/orders/budget.ts).
+      this.prisma.$queryRaw<{ total: bigint | null; fee: bigint | null }[]>(
         Prisma.sql`
-        SELECT sum("payoutMinor") AS total FROM "Submission"
-        WHERE status = 'MODERATOR_APPROVED' AND "submittedAt" >= ${epoch}`,
+        SELECT sum(s."payoutMinor") AS total,
+          sum(ceil(s."payoutMinor" * 100.0 / (100 - o."feePercent")) - s."payoutMinor")::bigint AS fee
+        FROM "Submission" s JOIN "Order" o ON o.id = s."orderId"
+        WHERE s.status = 'MODERATOR_APPROVED' AND s."submittedAt" >= ${epoch}`,
       ),
+      // Причины — текстом: модератор выбирает готовую и может дописать, дописанная — отдельной строкой.
+      this.prisma.submission.groupBy({
+        by: ['moderatorComment'],
+        where: {
+          status: SubmissionStatus.MODERATOR_REJECTED,
+          submittedAt: since ? { gte: since } : { not: null },
+        },
+        _count: true,
+        orderBy: { _count: { moderatorComment: 'desc' } },
+        take: 10,
+      }),
     ]);
 
     const videos = (status: SubmissionStatus) =>
@@ -115,7 +130,12 @@ export class AnalyticsService {
       },
       turnover: {
         amount: fromMinor(Number(turnover.total ?? 0)),
+        fee: fromMinor(Number(turnover.fee ?? 0)),
       },
+      rejectReasons: rejectReasons.map((r) => ({
+        reason: r.moderatorComment ?? '—',
+        count: r._count,
+      })),
     };
   }
 }
