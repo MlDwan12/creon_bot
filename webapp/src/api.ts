@@ -246,6 +246,23 @@ export interface ModFunnel {
   turnover: { amount: number; fee: number };
   /** Частые причины отклонения роликов — текстом, как написал модератор. */
   rejectReasons: { reason: string; count: number }[];
+  /** Бизнес-метрики — см. AnalyticsService.business. Деньги — USDT. */
+  business: {
+    /** Бюджеты опубликованных заказов, с комиссией. */
+    placed: number;
+    avgBudget: number | null;
+    /** Доля бюджета, освоенная завершёнными заказами, %; null — завершённых нет. */
+    utilization: number | null;
+    finished: number;
+    /** Завершённые, освоившие меньше половины бюджета. */
+    underused: number;
+    /** Медиана от публикации до первого отклика, часы. */
+    firstClaimHours: number | null;
+    advertisers: { total: number; repeat: number };
+    creators: { total: number; repeat: number };
+    /** На сейчас, не за период: начислено креаторам и не выплачено; из этого — в заявках. */
+    debt: { owed: number; requested: number };
+  };
 }
 
 export interface ModOrderRow {

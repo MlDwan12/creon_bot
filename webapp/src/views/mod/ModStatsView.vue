@@ -90,6 +90,34 @@ const steps = computed(() => {
 
     <p v-if="funnelError" class="hint">{{ funnelError }}</p>
     <template v-else-if="funnel">
+      <h2 class="section-title flush">Бизнес</h2>
+      <div class="tiles">
+        <div class="tile">
+          <strong>{{ formatMoney(funnel.business.placed) }}</strong>
+          <span>вложено в заказы · в среднем {{ funnel.business.avgBudget === null ? '—' : formatMoney(funnel.business.avgBudget) }}</span>
+        </div>
+        <div class="tile">
+          <strong>{{ funnel.business.utilization === null ? '—' : `${funnel.business.utilization}%` }}</strong>
+          <span>бюджета освоено в {{ funnel.business.finished }} завершённых · меньше половины — {{ funnel.business.underused }}</span>
+        </div>
+        <div class="tile">
+          <strong>{{ funnel.business.firstClaimHours === null ? '—' : `${funnel.business.firstClaimHours} ч` }}</strong>
+          <span>от публикации до первого отклика (медиана)</span>
+        </div>
+        <div class="tile">
+          <strong>{{ funnel.business.advertisers.repeat }} из {{ funnel.business.advertisers.total }}</strong>
+          <span>рекламодателей заказывают повторно</span>
+        </div>
+        <div class="tile">
+          <strong>{{ funnel.business.creators.repeat }} из {{ funnel.business.creators.total }}</strong>
+          <span>креаторов с оплаченными роликами в 2+ заказах</span>
+        </div>
+        <div class="tile">
+          <strong>{{ formatMoney(funnel.business.debt.owed) }}</strong>
+          <span>должны креаторам сейчас · в заявках {{ formatMoney(funnel.business.debt.requested) }}</span>
+        </div>
+      </div>
+
       <h2 class="section-title flush">Воронка заказов</h2>
       <ol class="rows">
         <li v-for="s in steps" :key="s.label">

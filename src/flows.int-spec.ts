@@ -1041,6 +1041,36 @@ describe('воронка', () => {
   });
 });
 
+describe('бизнес-метрики', () => {
+  it('вложено, освоение завершённых, повторные клиенты и долг креаторам', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const done = await openOrder(advertiser.id);
+    const s = await submissions.claim(done.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, videoUrl(), 30_000);
+    await submissions.moderatorApprove(s.id, 1n, 30_000); // креатору 3000 USDT
+    await orders.close(done.id, advertiser.id);
+    await openOrder(advertiser.id);
+
+    await prisma.user.update({
+      where: { id: creator.id },
+      data: { payoutWallet: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t' },
+    });
+    await payouts.requestPayout(creator.id, 100_000); // 1000 USDT
+
+    expect((await analytics.funnel()).business).toEqual({
+      placed: 100_000,
+      avgBudget: 50_000,
+      utilization: 8, // 3000 / 0,8 = 3750 из 50 000
+      finished: 1,
+      underused: 1,
+      firstClaimHours: 0,
+      advertisers: { total: 1, repeat: 1 },
+      creators: { total: 1, repeat: 0 },
+      debt: { owed: 3000, requested: 1000 },
+    });
+  });
+});
+
 describe('профиль креатора', () => {
   /** Ролик креатора одобрен модератором, рекламодатель ставит оценку. */
   async function acceptedVideo(
