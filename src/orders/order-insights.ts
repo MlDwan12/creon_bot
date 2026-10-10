@@ -13,11 +13,10 @@ export interface OrderFunnel {
   approved: number;
 }
 
-/** Совет рекламодателю; `offer` — услуга площадки: тема обращения в поддержку. */
+/** Совет рекламодателю: что поправить в заказе. */
 export interface OrderInsight {
   code: string;
   text: string;
-  offer?: { label: string; about: string };
 }
 
 /** Раньше этого срока после публикации выводов о спросе не делаем — креаторы ещё не увидели заказ. */
@@ -28,7 +27,7 @@ const SETTLE_MS = 2 * DAY_MS;
  * ponytail: фиксированные пороги; когда заказов станет 30+, сравнивать с медианой по категории.
  */
 export function orderInsights(
-  order: Pick<Order, 'id' | 'status' | 'decidedAt' | 'deadline'>,
+  order: Pick<Order, 'status' | 'decidedAt' | 'deadline'>,
   report: Pick<ReturnType<typeof buildOrderReport>, 'summary' | 'items'>,
   funnel: OrderFunnel,
   now = Date.now(),
@@ -37,10 +36,6 @@ export function orderInsights(
   const settled =
     order.decidedAt !== null && now - order.decidedAt.getTime() >= SETTLE_MS;
   const { summary } = report;
-  const brief = {
-    label: 'Помочь с брифом',
-    about: `Хочу помощь с брифом по заказу #${order.id}`,
-  };
   const result: OrderInsight[] = [];
 
   if (
@@ -52,14 +47,12 @@ export function orderInsights(
     result.push({
       code: 'NOT_TAKEN',
       text: `Заказ открыли ${funnel.viewers} креаторов, а взяли ${funnel.taken}. Условия не цепляют: снизьте порог просмотров, ослабьте требования к длительности и формату, приложите пример ролика.`,
-      offer: brief,
     });
 
   if (funnel.expired >= 3 && funnel.expired / funnel.taken >= 0.4)
     result.push({
       code: 'SLOTS_BURN',
       text: `${funnel.expired} из ${funnel.taken} креаторов взяли заказ, но не прислали видео вовремя. Похоже, задача сложнее, чем кажется: упростите требования или опишите её подробнее.`,
-      offer: brief,
     });
 
   const judged = funnel.rejected + funnel.approved;
@@ -67,7 +60,6 @@ export function orderInsights(
     result.push({
       code: 'REJECTED',
       text: `Модератор отклонил ${funnel.rejected} из ${judged} роликов — креаторы понимают задачу не так. Уточните описание заказа.`,
-      offer: brief,
     });
 
   // лайки известны не у всех роликов — считаем только по тем, где они есть
@@ -78,10 +70,6 @@ export function orderInsights(
     result.push({
       code: 'LOW_ENGAGEMENT',
       text: `Лайков — ${((likes / likedViews) * 100).toFixed(1)}% от просмотров: ролики смотрят, но не реагируют. Попробуйте другой посыл или формат.`,
-      offer: {
-        label: 'Заказать аудит креатива',
-        about: `Хочу аудит креатива по заказу #${order.id}`,
-      },
     });
 
   if (
@@ -92,10 +80,6 @@ export function orderInsights(
     result.push({
       code: 'LOW_CLICKS',
       text: `Ролики посмотрели ${summary.views.toLocaleString('ru-RU')} раз, а по ссылке на товар перешли ${summary.clicks}. Зрители не идут на сайт: попросите креаторов прямо звать по ссылке в описании и показать, что получит зритель.`,
-      offer: {
-        label: 'Заказать аудит креатива',
-        about: `Хочу аудит креатива по заказу #${order.id}`,
-      },
     });
 
   if (open && summary.videos >= 3 && summary.left / summary.budget < 0.2)
