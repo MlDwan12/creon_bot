@@ -88,6 +88,14 @@ describe('parseOrderInput', () => {
     expect(parseOrderEdit({ ...valid }).referenceUrl).toBeNull();
   });
 
+  it('ссылка на товар — по тем же правилам, в правке пусто — null', () => {
+    expect(
+      parseOrderInput({ ...valid, targetUrl: 'https://shop.example/item' })
+        .targetUrl,
+    ).toBe('https://shop.example/item');
+    expect(parseOrderEdit({ ...valid }).targetUrl).toBeNull();
+  });
+
   it('без срока — deadline не задан', () => {
     expect(
       parseOrderInput({ ...valid, deadlineDays: null }).deadline,
@@ -106,6 +114,8 @@ describe('parseOrderInput', () => {
     ['бюджет больше максимума', { budget: 100_001 }],
     ['референс не ссылка', { referenceUrl: 'мой диск' }],
     ['референс — телеграм', { referenceUrl: 'https://t.me/brand' }],
+    ['товар не ссылка', { targetUrl: 'наш сайт' }],
+    ['товар — телеграм', { targetUrl: 'https://t.me/brand' }],
   ])('отклоняет: %s', (_name, patch) => {
     expect(() => parseOrderInput({ ...valid, ...patch })).toThrow(
       BadRequestException,

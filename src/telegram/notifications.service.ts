@@ -1,9 +1,16 @@
-import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnApplicationShutdown,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  type Notification,
   type Order,
   type Payout,
   PayoutStatus,
+  Prisma,
   type Submission,
   type User,
 } from '@prisma/client';
@@ -12,7 +19,7 @@ import { fromMinor } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
 import { VIEWS_TOPUP_DAYS } from '../orders/budget';
 import { SLOT_DAYS } from '../submissions/submissions.service';
-import { Context, Markup, Telegraf } from 'telegraf';
+import { Context, Markup, Telegraf, TelegramError } from 'telegraf';
 import {
   creatorLabel,
   escapeHtml,
@@ -26,22 +33,40 @@ import { parseModeratorIds } from '../auth/moderator.util';
 
 type SubmissionWithParties = Submission & { order: Order; creator: User };
 
+/** Строка очереди: кому, текст, экран для кнопки «Открыть». */
+type Outgoing = Pick<Notification, 'chatId' | 'text' | 'html' | 'path'>;
+
+/** Сколько сообщений воркер берёт за раз и как часто смотрит в пустую очередь. */
+const BATCH = 20;
+const IDLE_MS = 1000;
+const FAILED_IDLE_MS = 10_000;
+/** Пауза между сообщениями: Telegram пускает ~30 сообщений в секунду на бота. */
+const SEND_GAP_MS = 40;
+/** Сколько ждать ответа Telegram на одно сообщение — зависший запрос не держит очередь. */
+const SEND_TIMEOUT_MS = 10_000;
+/** Попыток при сбоях сети и 5xx; 429 не считается — ждём, сколько сказал Telegram. */
+const MAX_ATTEMPTS = 5;
+/** Рассылки (новый заказ всем) — после обычных уведомлений. */
+const PRIORITY_BROADCAST = 1;
+
 /**
  * Все уведомления в чат бота о событиях из Mini App. К каждому — кнопка, открывающая нужный экран.
- * Каждая отправка глушит ошибку: получатель мог заблокировать бота или ещё не запускал его.
  *
- * Отправка — в фоне, через одну общую очередь: HTTP-запрос не ждёт Telegram (закрытие заказа
- * с 50 откликами — это 50 сообщений), а сообщения уходят по одному, что заодно держит бота
- * в лимите Telegram (~30 сообщений в секунду на бота).
- * ponytail: очередь в памяти — при падении процесса неотправленное теряется (при штатной остановке
- * дожидаемся её). Станет важно — таблица-очередь в Postgres.
+ * Методы не ждут Telegram: пишут сообщение в очередь — таблицу Notification, — и HTTP-запрос
+ * отвечает сразу (закрытие заказа с 50 откликами — это 50 сообщений). Воркер в этом же процессе
+ * отправляет очередь по одному сообщению, в лимите Telegram, с таймаутом и повтором после 429.
+ * Очередь в базе: неотправленное переживает рестарт, а несколько экземпляров не задвоят сообщения
+ * (строки берутся через FOR UPDATE SKIP LOCKED).
  */
 @Injectable()
-export class NotificationsService implements OnApplicationShutdown {
+export class NotificationsService
+  implements OnApplicationBootstrap, OnApplicationShutdown
+{
   private readonly logger = new Logger(NotificationsService.name);
-  private readonly moderatorIds: string[];
+  private readonly moderatorIds: bigint[];
   private readonly webAppUrl: string;
-  private queue: Promise<void> = Promise.resolve();
+  private stopping = false;
+  private worker?: Promise<void>;
 
   constructor(
     @InjectBot() private readonly bot: Telegraf<Context>,
@@ -50,6 +75,7 @@ export class NotificationsService implements OnApplicationShutdown {
   ) {
     this.moderatorIds = Array.from(
       parseModeratorIds(config.get<string>('MODERATOR_IDS')),
+      (id) => BigInt(id),
     );
     this.webAppUrl = config.get<string>('WEBAPP_URL')!.replace(/\/$/, '');
   }
@@ -105,21 +131,17 @@ export class NotificationsService implements OnApplicationShutdown {
       '',
       'Отключить такие сообщения — «Профиль» → «Уведомления».',
     ].join('\n');
-    // ponytail: все получатели одним запросом и общая очередь — на тысячах пользователей рассылка
-    // займёт минуты и задержит другие уведомления; тогда отдельная очередь с пачками
-    this.enqueue(async () => {
-      const users = await this.prisma.user.findMany({
-        where: {
-          id: { not: order.advertiserId },
-          bannedAt: null,
-          notifyNewOrders: true,
-        },
-        select: { telegramId: true },
-      });
-      for (const { telegramId } of users)
-        if (!this.moderatorIds.includes(telegramId.toString()))
-          this.send(telegramId, text, `/orders/${order.id}`);
-    });
+    // Получатели — одним INSERT … SELECT: тысячи строк не идут через память процесса.
+    const notModerator = this.moderatorIds.length
+      ? Prisma.sql`AND "telegramId" NOT IN (${Prisma.join(this.moderatorIds)})`
+      : Prisma.empty;
+    this.prisma.$executeRaw`
+      INSERT INTO "Notification" ("chatId", "text", "path", "priority")
+      SELECT "telegramId", ${text}, ${`/orders/${order.id}`}, ${PRIORITY_BROADCAST}
+      FROM "User"
+      WHERE id <> ${order.advertiserId} AND "bannedAt" IS NULL AND "notifyNewOrders" ${notModerator}`.catch(
+      (err) => this.logger.error(err),
+    );
   }
 
   /** Модераторам: креатор прислал видео. */
@@ -292,6 +314,15 @@ export class NotificationsService implements OnApplicationShutdown {
     );
   }
 
+  /** Рекламодателю: совет по заказу (src/orders/order-insights.ts) — подробности в отчёте. */
+  orderInsight(order: Order & { advertiser: User }, text: string) {
+    this.send(
+      order.advertiser.telegramId,
+      `💡 Совет по заказу «${order.title}»\n\n${text}\n\nВоронка и все советы — в отчёте по заказу.`,
+      `/my-orders/${order.id}/review`,
+    );
+  }
+
   /** Креаторам с откликом «в работе»: срок заказа истекает меньше чем через сутки. */
   deadlineSoon(order: OrderWithCreators & Order) {
     this.toCreators(
@@ -378,65 +409,152 @@ export class NotificationsService implements OnApplicationShutdown {
     );
   }
 
-  /**
-   * Штатная остановка (редеплой) — дослать очередь. Последний этап остановки: HTTP-сервер уже
-   * закрыт и дождался запросов в работе, так что новых уведомлений после этого не появится.
-   */
-  async onApplicationShutdown() {
-    await this.queue;
+  onApplicationBootstrap() {
+    this.worker = this.work();
   }
 
-  /** В очередь: задача выполнится после предыдущих; её сбой не останавливает следующие. */
-  private enqueue(task: () => Promise<unknown>) {
-    this.queue = this.queue.then(task).then(
-      () => undefined,
-      (err) => this.logger.error(err),
-    );
+  /** Штатная остановка: дослать то, что воркер уже взял; остальное отправится после запуска. */
+  async onApplicationShutdown() {
+    this.stopping = true;
+    await this.worker;
+  }
+
+  /** В очередь. Сбой записи не роняет действие, которое уже выполнено, — только в лог. */
+  private enqueue(rows: Outgoing[]) {
+    if (!rows.length) return;
+    this.prisma.notification
+      .createMany({ data: rows })
+      .catch((err) => this.logger.error(err));
   }
 
   private toModerators(text: string, path: string) {
-    const extra = html(this.openButton(path));
-    for (const modId of this.moderatorIds) {
-      this.enqueue(async () => {
-        try {
-          await this.bot.telegram.sendMessage(modId, text, extra);
-        } catch {
-          // модератор ещё не запускал бота — пропускаем
-        }
-      });
-    }
+    this.enqueue(
+      this.moderatorIds.map((chatId) => ({ chatId, text, html: true, path })),
+    );
   }
 
   /** Каждому креатору один раз, даже если у него несколько попыток по заказу. */
   private toCreators(order: OrderWithCreators, text: string) {
-    const seen = new Set<bigint>();
-    for (const s of order.submissions) {
-      if (seen.has(s.creator.telegramId)) continue;
-      seen.add(s.creator.telegramId);
-      this.send(s.creator.telegramId, text, '/submissions', true);
+    const ids = new Set(order.submissions.map((s) => s.creator.telegramId));
+    this.enqueue(
+      [...ids].map((chatId) => ({
+        chatId,
+        text,
+        html: true,
+        path: '/submissions',
+      })),
+    );
+  }
+
+  private send(chatId: bigint, text: string, path: string, asHtml = false) {
+    this.enqueue([{ chatId, text, html: asHtml, path }]);
+  }
+
+  private async work() {
+    while (!this.stopping) {
+      let pause = IDLE_MS;
+      try {
+        if ((await this.processBatch()) > 0) continue;
+      } catch (err) {
+        // база недоступна — реже, чтобы не забить лог
+        this.logger.error(err);
+        pause = FAILED_IDLE_MS;
+      }
+      await sleep(pause);
     }
   }
 
-  private send(telegramId: bigint, text: string, path: string, asHtml = false) {
-    const kb = this.openButton(path);
-    this.enqueue(async () => {
-      // Заблокированным бот не пишет. Проверяем в момент отправки: блокировка могла случиться,
-      // пока сообщение ждало в очереди.
-      const user = await this.prisma.user.findUnique({
-        where: { telegramId },
-        select: { bannedAt: true },
+  /**
+   * Берёт пачку готовых сообщений и отправляет. Взятые откладываются на минуту — «аренда»: упади
+   * процесс посреди пачки, другой экземпляр (или этот после рестарта) отправит их снова.
+   * Возвращает, сколько взято. Вызывается и из тестов.
+   */
+  async processBatch(): Promise<number> {
+    const batch = await this.prisma.$queryRaw<Notification[]>`
+      UPDATE "Notification" SET "sendAfter" = now() + interval '1 minute'
+      WHERE id IN (
+        SELECT id FROM "Notification" WHERE "sendAfter" <= now()
+        ORDER BY "priority", id LIMIT ${BATCH} FOR UPDATE SKIP LOCKED
+      )
+      RETURNING *`;
+    if (!batch.length) return 0;
+    batch.sort((a, b) => a.priority - b.priority || a.id - b.id);
+    // Заблокированным бот не пишет — проверяем в момент отправки: бан мог случиться, пока ждали.
+    const banned = new Set(
+      (
+        await this.prisma.user.findMany({
+          where: {
+            telegramId: { in: batch.map((n) => n.chatId) },
+            bannedAt: { not: null },
+          },
+          select: { telegramId: true },
+        })
+      ).map((u) => u.telegramId),
+    );
+    for (const n of batch) {
+      // остановка: недосланное из пачки уйдёт после рестарта, когда истечёт «аренда»
+      if (this.stopping) break;
+      if (!banned.has(n.chatId)) await this.deliver(n);
+      else await this.prisma.notification.delete({ where: { id: n.id } });
+      await sleep(SEND_GAP_MS);
+    }
+    return batch.length;
+  }
+
+  /** Одно сообщение: отправлено или повторять бессмысленно — удалить; иначе — повтор позже. */
+  private async deliver(n: Notification) {
+    const retry = await this.trySend(n);
+    if (!retry) await this.prisma.notification.delete({ where: { id: n.id } });
+    else
+      await this.prisma.notification.update({
+        where: { id: n.id },
+        data: {
+          sendAfter: new Date(Date.now() + retry.inMs),
+          attempts: { increment: retry.counts ? 1 : 0 },
+        },
       });
-      if (user?.bannedAt) return;
-      try {
-        await this.bot.telegram.sendMessage(
-          telegramId.toString(),
-          text,
-          asHtml ? html(kb) : kb,
-        );
-      } catch {
-        // получатель мог заблокировать бота
+  }
+
+  /** null — готово (доставлено или повтор не поможет); иначе — через сколько повторить. */
+  private async trySend(
+    n: Notification,
+  ): Promise<{ inMs: number; counts: boolean } | null> {
+    try {
+      const kb = this.openButton(n.path);
+      await this.bot.telegram.callApi(
+        'sendMessage',
+        {
+          chat_id: n.chatId.toString(),
+          text: n.text,
+          ...(n.html ? html(kb) : kb),
+        },
+        // telegraf типизирует сигнал своим полифилом; node-fetch принимает и встроенный
+        { signal: AbortSignal.timeout(SEND_TIMEOUT_MS) as never },
+      );
+      return null;
+    } catch (err) {
+      const code = err instanceof TelegramError ? err.code : null;
+      // 429 — не сбой: ждём, сколько сказал Telegram, попытку не тратим
+      if (code === 429)
+        return {
+          inMs: ((err as TelegramError).parameters?.retry_after ?? 5) * 1000,
+          counts: false,
+        };
+      // 4xx — заблокировал бота (403, обычное дело — не в лог), не запускал его, битый текст:
+      // повтор не поможет
+      if (code !== null && code < 500) {
+        if (code !== 403)
+          this.logger.warn(`Уведомление ${n.id} не доставлено: ${String(err)}`);
+        return null;
       }
-    });
+      // сеть, таймаут, 5xx — повторим с растущей паузой
+      if (n.attempts + 1 < MAX_ATTEMPTS)
+        return { inMs: (n.attempts + 1) * 30_000, counts: true };
+      this.logger.error(
+        `Уведомление ${n.id} брошено после ${MAX_ATTEMPTS} попыток: ${String(err)}`,
+      );
+      return null;
+    }
   }
 
   /** Кнопка web_app работает только в личных чатах — все уведомления как раз туда. */
@@ -457,3 +575,7 @@ function forCreator(order: Order) {
 type OrderWithCreators = Order & {
   submissions: { creator: { telegramId: bigint } }[];
 };
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}

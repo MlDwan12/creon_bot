@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  type Order,
   OrderCategory,
   OrderStatus,
   Prisma,
@@ -16,6 +17,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   ACCRUED,
   budgetState,
+  HOLDS_MONEY,
   NO_VIDEO,
   ORDER_CURRENCY,
   payoutPool,
@@ -23,6 +25,15 @@ import {
   spentByOrder,
 } from './budget';
 import { DAY_MS, extendedDeadline } from './deadline';
+import { type OrderFunnel, orderInsights } from './order-insights';
+import { buildOrderReport } from './order-report';
+import {
+  closeOpenOrders,
+  lockOrder,
+  transitionOrder,
+  tryTransitionOrder,
+} from './order-status';
+import { expireSlots, rejectSubmitted } from '../submissions/submission-status';
 
 /** Поля заказа, которые видит любой пользователь Mini App: без модераторских данных и без BigInt. */
 const PUBLIC_ORDER_FIELDS = {
@@ -73,6 +84,7 @@ export class OrdersService {
       title: string;
       description: string;
       referenceUrl?: string;
+      targetUrl?: string;
       budgetMinor: number;
       minViews: number;
       minDurationSec?: number | null;
@@ -98,6 +110,7 @@ export class OrdersService {
         title: data.title,
         description: data.description,
         referenceUrl: data.referenceUrl,
+        targetUrl: data.targetUrl,
         currency: ORDER_CURRENCY,
         budgetMinor: data.budgetMinor,
         feePercent: platformFeePercent(),
@@ -194,6 +207,16 @@ export class OrdersService {
     });
   }
 
+  /** Сколько заказов ждёт модератора с момента раньше `before` — для напоминания. */
+  countPendingBefore(before: Date) {
+    return this.prisma.order.count({
+      where: {
+        status: OrderStatus.PENDING_MODERATION,
+        moderationRequestedAt: { lt: before },
+      },
+    });
+  }
+
   /** Все заказы любого статуса для модератора — страница, новые первыми. */
   async listAll(skip: number, take: number) {
     const [items, total] = await Promise.all([
@@ -218,11 +241,53 @@ export class OrdersService {
     });
   }
 
-  listByAdvertiser(advertiserId: number) {
-    return this.prisma.order.findMany({
+  /**
+   * «Мои заказы» со сводкой по откликам. Сводка — агрегатами в базе: у заказа могут быть тысячи
+   * откликов, а грузить их ради сумм незачем.
+   */
+  async listByAdvertiser(advertiserId: number) {
+    const orders = await this.prisma.order.findMany({
       where: { advertiserId },
       orderBy: { createdAt: 'desc' },
-      include: { submissions: true },
+    });
+    const orderId = { in: orders.map((o) => o.id) };
+    const [byStatus, toRate] = await Promise.all([
+      this.prisma.submission.groupBy({
+        by: ['orderId', 'status'],
+        where: { orderId },
+        _count: true,
+        _sum: { payoutMinor: true, views: true },
+      }),
+      this.prisma.submission.groupBy({
+        by: ['orderId'],
+        where: {
+          orderId,
+          status: SubmissionStatus.MODERATOR_APPROVED,
+          rating: null,
+        },
+        _count: true,
+      }),
+    ]);
+    return orders.map((o) => {
+      const rows = byStatus.filter((r) => r.orderId === o.id);
+      const approved = rows.find(
+        (r) => r.status === SubmissionStatus.MODERATOR_APPROVED,
+      );
+      return {
+        ...o,
+        stats: {
+          submissions: rows.reduce((n, r) => n + r._count, 0),
+          approved: approved?._count ?? 0,
+          views: approved?._sum.views ?? 0,
+          toRate: toRate.find((r) => r.orderId === o.id)?._count ?? 0,
+          // резерв роликов на проверке тоже занимает фонд — как в src/orders/budget.ts
+          spentMinor: rows
+            .filter((r) => HOLDS_MONEY.includes(r.status))
+            .reduce((n, r) => n + (r._sum.payoutMinor ?? 0), 0),
+          // та же проверка, что в remove
+          deletable: rows.every((r) => NO_VIDEO.includes(r.status)),
+        },
+      };
     });
   }
 
@@ -235,7 +300,8 @@ export class OrdersService {
     if (!order) throw new NotFoundException('Заказ не найден');
     if (order.advertiserId !== advertiserId)
       throw new ForbiddenException('Это не ваш заказ');
-    await this.transitionStatus(
+    await transitionOrder(
+      this.prisma,
       orderId,
       [OrderStatus.OPEN],
       { status: OrderStatus.CLOSED, closedAt: new Date() },
@@ -249,14 +315,16 @@ export class OrdersService {
 
   /**
    * Модератор закрывает открытый заказ (по жалобе). `null` — заказ уже не открыт: закрывать нечего.
+   * В отличие от закрытия рекламодателем, начатые ролики по нему не принимаются: слоты сгорают.
    * Возвращает заказ с рекламодателем и откликами — для уведомлений.
    */
   async moderatorClose(orderId: number) {
-    const { count } = await this.prisma.order.updateMany({
-      where: { id: orderId, status: OrderStatus.OPEN },
-      data: { status: OrderStatus.CLOSED, closedAt: new Date() },
+    const closed = await this.prisma.$transaction(async (tx) => {
+      const count = await closeOpenOrders(tx, [orderId]);
+      if (count > 0) await expireSlots(tx, [orderId]);
+      return count > 0;
     });
-    if (count === 0) return null;
+    if (!closed) return null;
     return this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
       include: {
@@ -274,7 +342,8 @@ export class OrdersService {
     const order = await this.mustFind(orderId);
     if (order.advertiserId !== advertiserId)
       throw new ForbiddenException('Это не ваш заказ');
-    await this.transitionStatus(
+    await transitionOrder(
+      this.prisma,
       orderId,
       [OrderStatus.OPEN, OrderStatus.EXPIRED],
       {
@@ -338,14 +407,13 @@ export class OrdersService {
    * заказ не закроется. `null` — закрывать уже не нужно.
    */
   async expire(orderId: number) {
-    const { count } = await this.prisma.order.updateMany({
-      where: {
-        id: orderId,
-        status: OrderStatus.OPEN,
-        deadline: { lt: new Date() },
-      },
-      data: { status: OrderStatus.EXPIRED, closedAt: new Date() },
-    });
+    const count = await tryTransitionOrder(
+      this.prisma,
+      orderId,
+      [OrderStatus.OPEN],
+      { status: OrderStatus.EXPIRED, closedAt: new Date() },
+      { deadline: { lt: new Date() } },
+    );
     if (count === 0) return null;
     return this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
@@ -398,6 +466,7 @@ export class OrdersService {
       title: string;
       description: string;
       referenceUrl?: string | null;
+      targetUrl?: string | null;
       budgetMinor: number;
       minViews: number;
       minDurationSec?: number | null;
@@ -425,13 +494,14 @@ export class OrdersService {
       );
     await this.prisma.$transaction(async (tx) => {
       // Резерв при сдаче ролика берёт ту же блокировку — занятое не вырастет между проверкой и записью.
-      await tx.$queryRaw`SELECT 1 FROM "Order" WHERE id = ${orderId} FOR UPDATE`;
+      await lockOrder(tx, orderId);
       const spent = (await spentByOrder(tx, [orderId])).get(orderId) ?? 0;
       if (payoutPool({ ...order, budgetMinor: data.budgetMinor }) < spent)
         throw new ForbiddenException(
           `Из бюджета уже потрачено или зарезервировано ${formatMoney(fromMinor(spent))} выплат креаторам — бюджет нельзя сделать меньше`,
         );
-      await this.transitionStatus(
+      await transitionOrder(
+        tx,
         orderId,
         [OrderStatus.PENDING_MODERATION, OrderStatus.OPEN],
         {
@@ -444,8 +514,6 @@ export class OrdersService {
           deadlineReminderSentAt: null,
         },
         'Изменить можно только заказ на проверке или открытый',
-        undefined,
-        tx,
       );
     });
     return this.withActiveCreators(orderId);
@@ -494,11 +562,12 @@ export class OrdersService {
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
       // та же блокировка, что у начислений в SubmissionsService — начисленное не вырастет до записи
-      await tx.$queryRaw`SELECT 1 FROM "Order" WHERE id = ${orderId} FOR UPDATE`;
+      await lockOrder(tx, orderId);
       const accrued =
         (await spentByOrder(tx, [orderId], ACCRUED)).get(orderId) ?? 0;
       const exhausted = budgetState({ ...order, cpmMinor }, accrued).exhausted;
-      await this.transitionStatus(
+      await transitionOrder(
+        tx,
         orderId,
         [OrderStatus.PENDING_MODERATION],
         {
@@ -516,7 +585,6 @@ export class OrdersService {
         },
         CHANGED_WHILE_VIEWED,
         { moderationRequestedAt: version },
-        tx,
       );
     });
     const approved = await this.prisma.order.findUniqueOrThrow({
@@ -534,8 +602,8 @@ export class OrdersService {
   }
 
   /**
-   * Возвращает заказ с креаторами в работе: отклонить можно и изменённый открытый заказ —
-   * тогда им надо сказать, что работа по нему больше не нужна.
+   * Возвращает заказ с креаторами, чья работа по нему не решена: отклонить можно и изменённый
+   * открытый заказ — тогда им надо сказать, что работа по нему больше не нужна.
    */
   async moderatorReject(
     orderId: number,
@@ -543,31 +611,32 @@ export class OrdersService {
     comment: string,
     version: Date,
   ) {
-    await this.transitionStatus(
-      orderId,
-      [OrderStatus.PENDING_MODERATION],
-      {
-        status: OrderStatus.REJECTED,
-        moderatorId: moderatorTelegramId,
-        moderatorComment: comment,
-        decidedAt: new Date(),
-      },
-      CHANGED_WHILE_VIEWED,
-      { moderationRequestedAt: version },
-    );
+    // креаторы — до снятия: их ролики на проверке сейчас станут отклонёнными
     const order = await this.withActiveCreators(orderId);
-    // Изменённый открытый заказ сняли — ролики на проверке не ждут модератора, резерв освобождается.
-    // Одобренные остаются: деньги за них уже начислены.
-    await this.prisma.submission.updateMany({
-      where: { orderId, status: SubmissionStatus.SUBMITTED },
-      data: {
-        status: SubmissionStatus.MODERATOR_REJECTED,
-        moderatorComment: 'Заказ снят модератором',
-        payoutMinor: 0,
-        decidedAt: new Date(),
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await lockOrder(tx, orderId);
+      await transitionOrder(
+        tx,
+        orderId,
+        [OrderStatus.PENDING_MODERATION],
+        {
+          status: OrderStatus.REJECTED,
+          moderatorId: moderatorTelegramId,
+          moderatorComment: comment,
+          decidedAt: new Date(),
+        },
+        CHANGED_WHILE_VIEWED,
+        { moderationRequestedAt: version },
+      );
+      // Изменённый открытый заказ сняли — ролики на проверке не ждут модератора, резерв
+      // освобождается. Одобренные остаются: деньги за них уже начислены.
+      await rejectSubmitted(
+        tx,
+        { orderId: { in: [orderId] } },
+        'Заказ снят модератором',
+      );
     });
-    return order;
+    return { ...order, status: OrderStatus.REJECTED };
   }
 
   async stats() {
@@ -586,34 +655,66 @@ export class OrdersService {
     return { pending, open, rejected, closed, total };
   }
 
+  /** Креатор открыл карточку заказа — для воронки в отчёте; повторное открытие не считается. */
+  async markViewed(orderId: number, userId: number) {
+    await this.prisma.orderView.createMany({
+      data: [{ orderId, userId }],
+      skipDuplicates: true,
+    });
+  }
+
+  /** Отчёт рекламодателю: сводка и ролики, воронка и советы, что поправить. */
+  async report(order: Order) {
+    const [rows, viewers, byStatus] = await Promise.all([
+      this.prisma.submission.findMany({
+        where: { orderId: order.id, status: { in: HOLDS_MONEY } },
+        include: { creator: true },
+      }),
+      this.prisma.orderView.count({ where: { orderId: order.id } }),
+      this.prisma.submission.groupBy({
+        by: ['status'],
+        where: { orderId: order.id },
+        _count: true,
+      }),
+    ]);
+    const count = (status: SubmissionStatus) =>
+      byStatus.find((r) => r.status === status)?._count ?? 0;
+    const funnel: OrderFunnel = {
+      viewers,
+      taken: byStatus.reduce((sum, r) => sum + r._count, 0),
+      expired: count(SubmissionStatus.SLOT_EXPIRED),
+      onReview: count(SubmissionStatus.SUBMITTED),
+      rejected: count(SubmissionStatus.MODERATOR_REJECTED),
+      approved: count(SubmissionStatus.MODERATOR_APPROVED),
+    };
+    const report = buildOrderReport(order, rows);
+    return {
+      ...report,
+      funnel,
+      insights: orderInsights(order, report, funnel),
+    };
+  }
+
+  /** Открытые заказы, по которым советы ещё не отправляли. */
+  listInsightsPending() {
+    return this.prisma.order.findMany({
+      where: { status: OrderStatus.OPEN, insightsSentAt: null },
+      include: { advertiser: true },
+    });
+  }
+
+  /** Отметить, что советы отправлены; false — уже отметил другой проход. */
+  async markInsightsSent(orderId: number) {
+    const { count } = await this.prisma.order.updateMany({
+      where: { id: orderId, insightsSentAt: null },
+      data: { insightsSentAt: new Date() },
+    });
+    return count > 0;
+  }
+
   private async mustFind(id: number) {
     const order = await this.prisma.order.findUnique({ where: { id } });
     if (!order) throw new NotFoundException('Заказ не найден');
     return order;
-  }
-
-  /**
-   * Атомарно применяет переход статуса, обусловленный текущим статусом — поэтому два
-   * одновременных действия над одним заказом (двойной тап, или гонка двух модераторов
-   * над одним пунктом очереди) не могут оба пройти: первый `updateMany` находит строку,
-   * второй видит `count === 0` и сообщает о конфликте вместо перезаписи.
-   */
-  private async transitionStatus(
-    orderId: number,
-    fromStatuses: OrderStatus[],
-    data: Prisma.OrderUpdateManyMutationInput,
-    conflictMessage = 'Этот заказ уже обработан',
-    /** Доп. условие в том же запросе — например, версия, которую видел модератор. */
-    also?: Prisma.OrderWhereInput,
-    db: Prisma.TransactionClient = this.prisma,
-  ) {
-    const result = await db.order.updateMany({
-      where: { ...also, id: orderId, status: { in: fromStatuses } },
-      data,
-    });
-    if (result.count === 0) {
-      await this.mustFind(orderId);
-      throw new ForbiddenException(conflictMessage);
-    }
   }
 }

@@ -12,14 +12,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ParseIdPipe } from '../common/parse-id.pipe';
-import { OrderStatus, SubmissionStatus } from '@prisma/client';
+import { OrderStatus } from '@prisma/client';
 import { fromMinor } from '../common/money';
-import { HOLDS_MONEY, NO_VIDEO, payoutPool } from './budget';
+import { payoutPool } from './budget';
 import { NotificationsService } from '../telegram/notifications.service';
 import { Throttle } from '@nestjs/throttler';
 import { OrdersService } from './orders.service';
-import { SubmissionsService } from '../submissions/submissions.service';
-import { buildOrderReport, reportCsv } from './order-report';
+import { reportCsv } from './order-report';
 import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
 import {
@@ -35,7 +34,6 @@ import {
 export class MyOrdersController {
   constructor(
     private readonly ordersService: OrdersService,
-    private readonly submissionsService: SubmissionsService,
     private readonly notifications: NotificationsService,
   ) {}
 
@@ -43,41 +41,32 @@ export class MyOrdersController {
   async list(@Req() req: ApiRequest) {
     const orders = await this.ordersService.listByAdvertiser(req.user.id);
     // Поля явно: без модераторского id (BigInt) и без чужих данных из откликов.
-    return orders.map((o) => {
-      const approved = o.submissions.filter(
-        (s) => s.status === SubmissionStatus.MODERATOR_APPROVED,
-      );
-      // резерв роликов на проверке тоже занимает фонд — как в src/orders/budget.ts
-      const spent = o.submissions
-        .filter((s) => HOLDS_MONEY.includes(s.status))
-        .reduce((sum, s) => sum + s.payoutMinor, 0);
-      return {
-        id: o.id,
-        title: o.title,
-        description: o.description,
-        referenceUrl: o.referenceUrl,
-        ...videoFormat(o),
-        budget: fromMinor(o.budgetMinor),
-        minViews: o.minViews,
-        category: o.category,
-        deadline: o.deadline,
-        status: o.status,
-        rejectReason:
-          o.status === OrderStatus.REJECTED ? o.moderatorComment : null,
-        // Фонд креаторам — бюджет без комиссии; рекламодателю — доля израсходованного бюджета.
-        usedPercent: Math.min(
-          100,
-          Math.round((spent / Math.max(1, payoutPool(o))) * 100),
-        ),
-        approved: approved.length,
-        views: approved.reduce((sum, s) => sum + (s.views ?? 0), 0),
-        toRate: approved.filter((s) => s.rating === null).length,
-        submissionsCount: o.submissions.length,
-        // Та же проверка, что в OrdersService.remove.
-        deletable: o.submissions.every((s) => NO_VIDEO.includes(s.status)),
-        createdAt: o.createdAt,
-      };
-    });
+    return orders.map((o) => ({
+      id: o.id,
+      title: o.title,
+      description: o.description,
+      referenceUrl: o.referenceUrl,
+      targetUrl: o.targetUrl,
+      ...videoFormat(o),
+      budget: fromMinor(o.budgetMinor),
+      minViews: o.minViews,
+      category: o.category,
+      deadline: o.deadline,
+      status: o.status,
+      rejectReason:
+        o.status === OrderStatus.REJECTED ? o.moderatorComment : null,
+      // Фонд креаторам — бюджет без комиссии; рекламодателю — доля израсходованного бюджета.
+      usedPercent: Math.min(
+        100,
+        Math.round((o.stats.spentMinor / Math.max(1, payoutPool(o))) * 100),
+      ),
+      approved: o.stats.approved,
+      views: o.stats.views,
+      toRate: o.stats.toRate,
+      submissionsCount: o.stats.submissions,
+      deletable: o.stats.deletable,
+      createdAt: o.createdAt,
+    }));
   }
 
   /** Новый заказ → на модерацию, модераторам уведомление. */
@@ -134,13 +123,10 @@ export class MyOrdersController {
     return { ok: true };
   }
 
-  /** Отчёт по моему заказу: сводка, площадки, одобренные ролики (оценка — по желанию). */
+  /** Отчёт по моему заказу: сводка, площадки, одобренные ролики, воронка и советы. */
   @Get(':id/report')
   async report(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
-    return buildOrderReport(
-      await this.ownOrder(id, req.user.id),
-      await this.submissionsService.listByOrder(id),
-    );
+    return this.ordersService.report(await this.ownOrder(id, req.user.id));
   }
 
   /** Тот же отчёт файлом CSV — в чат с ботом: скачивание файлов из мини-аппа работает не везде. */
@@ -150,9 +136,8 @@ export class MyOrdersController {
     @Param('id', ParseIdPipe) id: number,
     @Req() req: ApiRequest,
   ) {
-    const report = buildOrderReport(
+    const report = await this.ordersService.report(
       await this.ownOrder(id, req.user.id),
-      await this.submissionsService.listByOrder(id),
     );
     const sent = await this.notifications.sendFile(
       req.user.telegramId,

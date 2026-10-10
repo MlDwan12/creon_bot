@@ -102,12 +102,27 @@ void load();
         <div class="tile">
           <strong>{{ data.summary.cpm === null ? '—' : formatMoney(data.summary.cpm) }}</strong><span>за 1000 просмотров</span>
         </div>
+        <div v-if="data.summary.clicks !== null" class="tile">
+          <strong>{{ formatViews(data.summary.clicks) }}</strong><span>переходов на товар</span>
+        </div>
       </section>
       <p class="hint">
         Осталось {{ formatMoney(data.summary.left) }}<template v-if="data.summary.reserved">
           · ещё {{ formatMoney(data.summary.reserved) }} зарезервировано под ролики на проверке</template
         >. Суммы — вместе с комиссией площадки.
       </p>
+
+      <section class="rows" aria-label="Воронка">
+        <div class="row"><span>Открыли заказ</span><span>{{ data.funnel.viewers }}</span></div>
+        <div class="row"><span>Взяли в работу</span><span>{{ data.funnel.taken }}</span></div>
+        <div class="row"><span>Не прислали вовремя</span><span>{{ data.funnel.expired }}</span></div>
+        <div class="row"><span>Отклонено модератором</span><span>{{ data.funnel.rejected }}</span></div>
+        <div class="row"><span>На проверке · одобрено</span><span>{{ data.funnel.onReview }} · {{ data.funnel.approved }}</span></div>
+      </section>
+
+      <article v-for="i in data.insights" :key="i.code" class="insight">
+        <p>💡 {{ i.text }}</p>
+      </article>
 
       <section v-if="data.platforms.length" class="rows">
         <div v-for="p in data.platforms" :key="p.platform" class="row">
@@ -143,6 +158,8 @@ void load();
             <div class="hint">
               {{ PLATFORM_NAMES[item.platform] }} · {{ formatViews(item.views) }} просмотров<template v-if="item.likes !== null">
                 · {{ formatViews(item.likes) }} лайков</template
+              ><template v-if="item.clicks !== null">
+                · {{ formatViews(item.clicks) }} переходов</template
               ><template v-if="item.approvedAt">
                 · {{ formatDate(item.approvedAt) }}</template
               >
@@ -249,6 +266,18 @@ void load();
 }
 .rows .row + .row {
   border-top: 1px solid var(--separator);
+}
+.insight {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.insight p {
+  margin: 0;
+  font-size: 15px;
 }
 .title-row {
   display: flex;

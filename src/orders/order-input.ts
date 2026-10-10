@@ -48,21 +48,16 @@ export function parseOrderInput(body: unknown) {
     );
   }
 
-  // Пусто — без ссылки. Ссылка на мессенджер или соцсеть — это контакт в обход площадки.
-  const referenceUrl = text(b.referenceUrl) || undefined;
-  if (referenceUrl !== undefined) {
-    if (
-      !VIDEO_URL_RE.test(referenceUrl) ||
-      referenceUrl.length > MAX_URL_LENGTH
-    )
-      throw new BadRequestException(
-        'Ссылка на референс должна начинаться с http:// или https://',
-      );
-    if (findExactContacts(referenceUrl).length)
-      throw new BadRequestException(
-        'Ссылка на мессенджер или соцсеть — это контакт: общение идёт через бота. Дайте ссылку на файл или видео',
-      );
-  }
+  const referenceUrl = optionalUrl(
+    b.referenceUrl,
+    'Ссылка на референс',
+    'Дайте ссылку на файл или видео',
+  );
+  const targetUrl = optionalUrl(
+    b.targetUrl,
+    'Ссылка на товар',
+    'Дайте ссылку на сайт или страницу товара в магазине',
+  );
 
   // Бюджет — всё, что платит рекламодатель, целыми USDT; в базу — центами.
   const budget = b.budget;
@@ -110,6 +105,7 @@ export function parseOrderInput(body: unknown) {
     title,
     description,
     referenceUrl,
+    targetUrl,
     budgetMinor: toMinor(budget as number),
     minViews,
     minDurationSec,
@@ -118,6 +114,24 @@ export function parseOrderInput(body: unknown) {
     category,
     deadline,
   };
+}
+
+/**
+ * Необязательная ссылка заказа: пусто — без ссылки. Ссылка на мессенджер или соцсеть — это контакт
+ * в обход площадки. `what` и `instead` — для текста ошибки.
+ */
+function optionalUrl(value: unknown, what: string, instead: string) {
+  const url = text(value) || undefined;
+  if (url === undefined) return undefined;
+  if (!VIDEO_URL_RE.test(url) || url.length > MAX_URL_LENGTH)
+    throw new BadRequestException(
+      `${what} должна начинаться с http:// или https://`,
+    );
+  if (findExactContacts(url).length)
+    throw new BadRequestException(
+      `Ссылка на мессенджер или соцсеть — это контакт: общение идёт через бота. ${instead}`,
+    );
+  return url;
 }
 
 /** Требования к ролику из заказа — для ответов API, где поля перечислены явно. */
@@ -197,6 +211,7 @@ export function parseOrderEdit(body: unknown) {
     title: input.title,
     description: input.description,
     referenceUrl: input.referenceUrl ?? null,
+    targetUrl: input.targetUrl ?? null,
     budgetMinor: input.budgetMinor,
     minViews: input.minViews,
     minDurationSec: input.minDurationSec,

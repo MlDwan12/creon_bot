@@ -11,18 +11,28 @@ import { creatorLabel, escapeHtml, html } from '../common/format';
 const MAX_TOPIC_NAME = 128;
 
 /**
+ * Сколько сообщений человек может прислать в поддержку за окно. В группу Telegram пускает около
+ * 20 сообщений в минуту на бота — один флудер иначе заглушил бы поддержку для всех.
+ */
+const FLOOD_LIMIT = 10;
+const FLOOD_WINDOW_MS = 60_000;
+
+/**
  * Поддержка через бота в группе-форуме (SUPPORT_CHAT_ID, темы включены, бот — админ с правом
  * управлять темами). У каждого пользователя своя тема: его сообщения боту и из формы в мини-аппе
  * идут туда, любое сообщение поддержки в теме бот доставляет ему. `/close` в теме закрывает
  * обращение, новое сообщение пользователя открывает её снова. «К оплате» — в общую тему (General).
  * Контакты сторон и поддержки друг другу не видны. Без SUPPORT_CHAT_ID поддержка выключена.
- * ponytail: без лимита на число сообщений в чате с ботом — флуд ограничить по пользователю, если появится.
  */
 @Injectable()
 export class SupportService {
   private readonly logger = new Logger(SupportService.name);
   readonly chatId: string | null;
   private botUsername?: Promise<string>;
+  // ponytail: фиксированное окно в памяти, сбрасывается целиком — память не растёт; инстанс один.
+  private readonly floodCounts = new Map<number, number>();
+  private floodWindowEnds = 0;
+
   /** Тема создаётся один раз, даже если человек прислал два сообщения подряд. */
   private readonly creating = new Map<number, Promise<number>>();
 
@@ -52,14 +62,30 @@ export class SupportService {
     return this.chatId !== null && String(chatId) === this.chatId;
   }
 
-  /** Сообщение пользователя боту → в его тему. false — такой тип сообщения не пересылаем. */
-  async fromUser(ctx: Context): Promise<boolean> {
+  /** Не превысил ли человек лимит сообщений в поддержку; считает и это сообщение. */
+  private allowMessage(telegramId: number): boolean {
+    const now = Date.now();
+    if (now >= this.floodWindowEnds) {
+      this.floodCounts.clear();
+      this.floodWindowEnds = now + FLOOD_WINDOW_MS;
+    }
+    const n = (this.floodCounts.get(telegramId) ?? 0) + 1;
+    this.floodCounts.set(telegramId, n);
+    return n <= FLOOD_LIMIT;
+  }
+
+  /**
+   * Сообщение пользователя боту → в его тему. 'unsupported' — такой тип не пересылаем,
+   * 'flood' — слишком часто.
+   */
+  async fromUser(ctx: Context): Promise<'sent' | 'unsupported' | 'flood'> {
     const msg = ctx.message as Message;
     const media =
       'photo' in msg || 'video' in msg || 'document' in msg || 'voice' in msg;
-    if (!('text' in msg) && !media) return false;
+    if (!('text' in msg) && !media) return 'unsupported';
 
     const from = ctx.from!;
+    if (!this.allowMessage(from.id)) return 'flood';
     const user = await this.prisma.user.upsert({
       where: { telegramId: BigInt(from.id) },
       // null, а не undefined: убранный в Telegram username должен стереться и здесь
@@ -84,7 +110,7 @@ export class SupportService {
             },
           ),
     );
-    return true;
+    return 'sent';
   }
 
   /** Сообщение из формы в мини-аппе → в тему пользователя, с пометкой. */

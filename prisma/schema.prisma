@@ -31,6 +31,7 @@ model User {
 
   orders      Order[]
   submissions Submission[]
+  orderViews  OrderView[]
   reports     Report[]
   payouts     Payout[]
 
@@ -81,6 +82,9 @@ model Order {
   description      String
   /// Ссылка на референс или материалы (бриф, пример ролика). Контакты в ней не пропускает order-input.
   referenceUrl     String?
+  /// Страница товара. Креатор ставит в описание ролика не её, а свою ссылку /r/<trackCode> —
+  /// так считаем переходы. Мессенджеры и соцсети не пропускает order-input.
+  targetUrl        String?
   /// Деньги — в сотых долях валюты (копейки, центы); в API — целые единицы, см. src/common/money.ts.
   currency         Currency      @default(USDT)
   /// Всё, что платит рекламодатель, включая комиссию площадки.
@@ -108,13 +112,27 @@ model Order {
   closedAt         DateTime?
   /// Креаторам напомнили, что срок истекает меньше чем через сутки. Сбрасывается при продлении.
   deadlineReminderSentAt DateTime?
+  /// Рекламодателю отправлены советы по заказу (src/orders/order-insights.ts) — раз на заказ.
+  insightsSentAt DateTime?
 
   submissions Submission[]
+  views       OrderView[]
 
   /// Каталог (OPEN, новые первыми), очередь модерации (PENDING_MODERATION), сроки — всё по статусу.
   @@index([status, createdAt])
   /// «Мои заказы» и лимит активных заказов.
   @@index([advertiserId])
+}
+
+/// Креатор открыл карточку заказа — верх воронки в отчёте рекламодателю. Один раз на пару.
+model OrderView {
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  createdAt DateTime @default(now())
+
+  @@id([orderId, userId])
 }
 
 enum SubmissionStatus {
@@ -134,6 +152,12 @@ model Submission {
   creator           User             @relation(fields: [creatorId], references: [id])
   creatorId         Int
   videoUrl          String?
+  /// Ссылка, приведённая к одному виду (src/common/platforms.ts, videoKey): один ролик — одна оплата.
+  videoKey          String?
+  /// Код ссылки /r/<код> на страницу товара (Order.targetUrl): переходы считаются по креатору.
+  trackCode         String?          @unique
+  /// Сколько раз перешли по ссылке креатора — для отчёта рекламодателю, на выплату не влияет.
+  clicks            Int              @default(0)
   status            SubmissionStatus @default(IN_PROGRESS)
   moderatorId       BigInt?
   moderatorComment  String?
@@ -166,6 +190,8 @@ model Submission {
   @@index([creatorId])
   /// Очередь модерации видео (SUBMITTED, старые первыми) и счётчики по статусам.
   @@index([status, submittedAt])
+  /// Один ролик нельзя сдать дважды — ни в тот же заказ, ни в другой, пока он на проверке или одобрен.
+  @@unique([videoKey], map: "Submission_video_once", where: raw("status = ANY (ARRAY['SUBMITTED'::\"SubmissionStatus\", 'MODERATOR_APPROVED'::\"SubmissionStatus\"])"))
 }
 
 /// На что жалоба. VIDEO и REVIEW — по id отклика (Submission), PROFILE — по id пользователя.
@@ -235,4 +261,24 @@ model Payout {
   @@index([status, createdAt])
   /// Одна открытая заявка на креатора — вторую (двойной тап) не пустит сама база.
   @@unique([creatorId], map: "Payout_one_requested", where: { status: "REQUESTED" })
+}
+
+/// Очередь уведомлений в чат бота (src/telegram/notifications.service.ts). Пишется при событии,
+/// отправляет фоновый воркер; отправленное удаляется. Переживает рестарт и падение процесса.
+model Notification {
+  id        Int      @id @default(autoincrement())
+  chatId    BigInt
+  text      String
+  html      Boolean  @default(false)
+  /// Экран мини-аппа для кнопки «Открыть»: путь вроде /my-orders.
+  path      String
+  /// 0 — обычные, 1 — рассылки: обычные уходят первыми, рассылка не задерживает срочное.
+  priority  Int      @default(0)
+  attempts  Int      @default(0)
+  /// Не раньше этого момента: пауза после 429 или сбоя, а взятое воркером — «аренда» на время отправки.
+  sendAfter DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  /// Выборка воркера: готовые к отправке, по приоритету.
+  @@index([priority, sendAfter])
 }
