@@ -175,10 +175,6 @@ export interface OrderReport {
     likes: number;
     /** Переходы по ссылкам на товар; null — у заказа нет страницы товара. */
     clicks: number | null;
-    /** Продажи по ссылкам (пиксель или сервер рекламодателя); null — как clicks. */
-    sales: number | null;
-    /** Цена одной продажи, USDT; продаж нет — null. */
-    costPerSale: number | null;
     videos: number;
     creators: number;
     /** Фактическая цена 1000 просмотров; null — просмотров ещё нет. */
@@ -200,7 +196,6 @@ export interface OrderReport {
     /** null — неизвестно. */
     likes: number | null;
     clicks: number | null;
-    sales: number | null;
     rating: number | null;
     approvedAt: string | null;
   }[];

@@ -396,7 +396,7 @@ describe('ссылка на товар', () => {
       data: { targetUrl: 'https://shop.example/item' },
     });
     expect(await submissions.click(trackCode!)).toBe(
-      `https://shop.example/item?creon=${trackCode}`,
+      'https://shop.example/item',
     );
     expect(await submissions.click('нет-такого')).toBeNull();
 
@@ -404,29 +404,6 @@ describe('ссылка на товар', () => {
       where: { trackCode: trackCode! },
     });
     expect(clicks).toBe(1);
-  });
-
-  it('продажа засчитывается одобренному ролику один раз на номер заказа', async () => {
-    const [adv, creator] = [await user(), await user()];
-    const order = await openOrder(adv.id);
-    await prisma.order.update({
-      where: { id: order.id },
-      data: { targetUrl: 'https://shop.example/item' },
-    });
-    const s = await submissions.claim(order.id, creator.id);
-    await submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS);
-    await submissions.moderatorApprove(s.id, 1n, VIEWS);
-
-    const code = s.trackCode!;
-    await submissions.convert(code, 'A-1');
-    await submissions.convert(code, 'A-1'); // перезагрузили страницу «спасибо»
-    await submissions.convert(code, null);
-    expect(await submissions.convert('нет-такого', 'A-2')).toBe(false);
-
-    const { summary } = await orders.report(
-      await prisma.order.findUniqueOrThrow({ where: { id: order.id } }),
-    );
-    expect(summary.sales).toBe(2);
   });
 });
 
