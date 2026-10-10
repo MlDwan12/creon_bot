@@ -98,24 +98,6 @@ export function orderInsights(
       },
     });
 
-  if (
-    summary.clicks !== null &&
-    summary.sales !== null &&
-    summary.clicks >= 100 &&
-    summary.sales / summary.clicks < 0.01
-  )
-    result.push({
-      code: 'LOW_SALES',
-      text:
-        summary.sales === 0
-          ? `По ссылкам перешли ${summary.clicks} раз, а продаж нет. Если код учёта продаж ещё не стоит на сайте — подключите его в отчёте. Если стоит — люди приходят и уходят: проверьте карточку товара, цену и оффер.`
-          : `По ссылкам перешли ${summary.clicks} раз, а купили ${summary.sales}. Люди приходят и уходят: проверьте карточку товара, цену и оффер.`,
-      offer: {
-        label: 'Заказать аудит карточки товара',
-        about: `Хочу аудит карточки товара по заказу #${order.id}`,
-      },
-    });
-
   if (open && summary.videos >= 3 && summary.left / summary.budget < 0.2)
     result.push({
       code: 'BUDGET_ENDING',

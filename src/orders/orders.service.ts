@@ -668,10 +668,7 @@ export class OrdersService {
     const [rows, viewers, byStatus] = await Promise.all([
       this.prisma.submission.findMany({
         where: { orderId: order.id, status: { in: HOLDS_MONEY } },
-        include: {
-          creator: true,
-          _count: { select: { conversions: true } },
-        },
+        include: { creator: true },
       }),
       this.prisma.orderView.count({ where: { orderId: order.id } }),
       this.prisma.submission.groupBy({

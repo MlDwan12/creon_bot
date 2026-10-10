@@ -297,33 +297,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
       where: { id: submission.id },
       data: { clicks: { increment: 1 } },
     });
-    // метка для пикселя и сервера рекламодателя: по ней продажа найдёт креатора (convert)
-    try {
-      const target = new URL(url);
-      target.searchParams.set('creon', trackCode);
-      return target.toString();
-    } catch {
-      return url;
-    }
-  }
-
-  /**
-   * Продажа после перехода по ссылке креатора. `externalId` — номер заказа на сайте: повтор с тем же
-   * номером не засчитывается. false — нет такой ссылки.
-   * ponytail: без подписи и лимита — пиксель в браузере секрет не спрячет, а продажи на выплату не
-   * влияют. Начнут влиять (оплата за продажу) — постбэк только с ключом заказа.
-   */
-  async convert(trackCode: string, externalId: string | null) {
-    const submission = await this.prisma.submission.findUnique({
-      where: { trackCode },
-      select: { id: true },
-    });
-    if (!submission) return false;
-    await this.prisma.conversion.createMany({
-      data: [{ submissionId: submission.id, externalId }],
-      skipDuplicates: true,
-    });
-    return true;
+    return url;
   }
 
   /** Какой по счёту это видео креатора по заказу: 1, 2, 3… */
