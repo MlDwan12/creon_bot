@@ -122,7 +122,6 @@ void load();
 
       <article v-for="i in data.insights" :key="i.code" class="insight">
         <p>💡 {{ i.text }}</p>
-        <SupportLink v-if="i.offer" :label="i.offer.label" :about="i.offer.about" />
       </article>
 
       <section v-if="data.platforms.length" class="rows">
