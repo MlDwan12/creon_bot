@@ -17,7 +17,8 @@ const STALE_MS = STALE_HOURS * 60 * 60 * 1000;
 
 /**
  * Фоновые задачи раз в 5 минут: закрыть заказы с истёкшим сроком, напомнить креаторам о близком
- * сроке, сжечь просроченные слоты и напомнить о них, напомнить модераторам о застрявшей очереди.
+ * сроке, сжечь просроченные слоты и напомнить о них, напомнить модераторам о застрявшей очереди,
+ * прислать рекламодателю совет по заказу.
  * ponytail: setInterval в одном процессе — хватает, пока инстанс один. Станет несколько —
  * cron (@nestjs/schedule) на одном из них или advisory lock в Postgres, иначе уведомления задвоятся.
  */
@@ -66,6 +67,7 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
       () => this.remindSlots(),
       () => this.finalizeAutomatic(),
       () => this.remindModerators(),
+      () => this.sendInsights(),
     ]) {
       try {
         await task();
@@ -133,6 +135,19 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
         // модератор успел зафиксировать итог сам — остальные ролики это не останавливает
         this.logger.warn(err);
       }
+    }
+  }
+
+  /**
+   * Первый появившийся совет по заказу — рекламодателю сообщением, один раз на заказ.
+   * ponytail: отчёт по каждому открытому заказу раз в 5 минут — хватит на сотни заказов;
+   * станет тяжело — проверять только заказы, где что-то изменилось.
+   */
+  private async sendInsights() {
+    for (const order of await this.ordersService.listInsightsPending()) {
+      const [first] = (await this.ordersService.report(order)).insights;
+      if (first && (await this.ordersService.markInsightsSent(order.id)))
+        this.notifications.orderInsight(order, first.text);
     }
   }
 

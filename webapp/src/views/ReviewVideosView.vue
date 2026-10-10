@@ -109,6 +109,19 @@ void load();
         >. Суммы — вместе с комиссией площадки.
       </p>
 
+      <section class="rows" aria-label="Воронка">
+        <div class="row"><span>Открыли заказ</span><span>{{ data.funnel.viewers }}</span></div>
+        <div class="row"><span>Взяли в работу</span><span>{{ data.funnel.taken }}</span></div>
+        <div class="row"><span>Не прислали вовремя</span><span>{{ data.funnel.expired }}</span></div>
+        <div class="row"><span>Отклонено модератором</span><span>{{ data.funnel.rejected }}</span></div>
+        <div class="row"><span>На проверке · одобрено</span><span>{{ data.funnel.onReview }} · {{ data.funnel.approved }}</span></div>
+      </section>
+
+      <article v-for="i in data.insights" :key="i.code" class="insight">
+        <p>💡 {{ i.text }}</p>
+        <SupportLink v-if="i.offer" :label="i.offer.label" :about="i.offer.about" />
+      </article>
+
       <section v-if="data.platforms.length" class="rows">
         <div v-for="p in data.platforms" :key="p.platform" class="row">
           <span>{{ PLATFORM_NAMES[p.platform] }}</span>
@@ -249,6 +262,18 @@ void load();
 }
 .rows .row + .row {
   border-top: 1px solid var(--separator);
+}
+.insight {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.insight p {
+  margin: 0;
+  font-size: 15px;
 }
 .title-row {
   display: flex;

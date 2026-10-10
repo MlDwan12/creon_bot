@@ -25,6 +25,7 @@ const order = (id: number): Order => ({
   decidedAt: null,
   closedAt: null,
   deadlineReminderSentAt: null,
+  insightsSentAt: null,
 });
 
 const submission = (

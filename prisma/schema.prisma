@@ -31,6 +31,7 @@ model User {
 
   orders      Order[]
   submissions Submission[]
+  orderViews  OrderView[]
   reports     Report[]
   payouts     Payout[]
 
@@ -108,13 +109,27 @@ model Order {
   closedAt         DateTime?
   /// Креаторам напомнили, что срок истекает меньше чем через сутки. Сбрасывается при продлении.
   deadlineReminderSentAt DateTime?
+  /// Рекламодателю отправлены советы по заказу (src/orders/order-insights.ts) — раз на заказ.
+  insightsSentAt DateTime?
 
   submissions Submission[]
+  views       OrderView[]
 
   /// Каталог (OPEN, новые первыми), очередь модерации (PENDING_MODERATION), сроки — всё по статусу.
   @@index([status, createdAt])
   /// «Мои заказы» и лимит активных заказов.
   @@index([advertiserId])
+}
+
+/// Креатор открыл карточку заказа — верх воронки в отчёте рекламодателю. Один раз на пару.
+model OrderView {
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  createdAt DateTime @default(now())
+
+  @@id([orderId, userId])
 }
 
 enum SubmissionStatus {

@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  type Order,
   OrderCategory,
   OrderStatus,
   Prisma,
@@ -24,6 +25,8 @@ import {
   spentByOrder,
 } from './budget';
 import { DAY_MS, extendedDeadline } from './deadline';
+import { type OrderFunnel, orderInsights } from './order-insights';
+import { buildOrderReport } from './order-report';
 import {
   closeOpenOrders,
   lockOrder,
@@ -647,6 +650,63 @@ export class OrdersService {
       this.prisma.order.count(),
     ]);
     return { pending, open, rejected, closed, total };
+  }
+
+  /** Креатор открыл карточку заказа — для воронки в отчёте; повторное открытие не считается. */
+  async markViewed(orderId: number, userId: number) {
+    await this.prisma.orderView.createMany({
+      data: [{ orderId, userId }],
+      skipDuplicates: true,
+    });
+  }
+
+  /** Отчёт рекламодателю: сводка и ролики, воронка и советы, что поправить. */
+  async report(order: Order) {
+    const [rows, viewers, byStatus] = await Promise.all([
+      this.prisma.submission.findMany({
+        where: { orderId: order.id, status: { in: HOLDS_MONEY } },
+        include: { creator: true },
+      }),
+      this.prisma.orderView.count({ where: { orderId: order.id } }),
+      this.prisma.submission.groupBy({
+        by: ['status'],
+        where: { orderId: order.id },
+        _count: true,
+      }),
+    ]);
+    const count = (status: SubmissionStatus) =>
+      byStatus.find((r) => r.status === status)?._count ?? 0;
+    const funnel: OrderFunnel = {
+      viewers,
+      taken: byStatus.reduce((sum, r) => sum + r._count, 0),
+      expired: count(SubmissionStatus.SLOT_EXPIRED),
+      onReview: count(SubmissionStatus.SUBMITTED),
+      rejected: count(SubmissionStatus.MODERATOR_REJECTED),
+      approved: count(SubmissionStatus.MODERATOR_APPROVED),
+    };
+    const report = buildOrderReport(order, rows);
+    return {
+      ...report,
+      funnel,
+      insights: orderInsights(order, report, funnel),
+    };
+  }
+
+  /** Открытые заказы, по которым советы ещё не отправляли. */
+  listInsightsPending() {
+    return this.prisma.order.findMany({
+      where: { status: OrderStatus.OPEN, insightsSentAt: null },
+      include: { advertiser: true },
+    });
+  }
+
+  /** Отметить, что советы отправлены; false — уже отметил другой проход. */
+  async markInsightsSent(orderId: number) {
+    const { count } = await this.prisma.order.updateMany({
+      where: { id: orderId, insightsSentAt: null },
+      data: { insightsSentAt: new Date() },
+    });
+    return count > 0;
   }
 
   private async mustFind(id: number) {

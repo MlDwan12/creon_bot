@@ -361,6 +361,28 @@ describe('срок от публикации и напоминания', () => {
   });
 });
 
+describe('воронка в отчёте', () => {
+  it('открытие карточки считается раз на креатора; взяли — все отклики', async () => {
+    const [adv, a, b] = [await user(), await user(), await user()];
+    const order = await openOrder(adv.id);
+    await orders.markViewed(order.id, a.id);
+    await orders.markViewed(order.id, a.id);
+    await orders.markViewed(order.id, b.id);
+    const claim = await submissions.claim(order.id, a.id);
+    await submissions.attachVideo(claim.id, a.id, videoUrl(), VIEWS);
+
+    const { funnel } = await orders.report(order);
+    expect(funnel).toEqual({
+      viewers: 2,
+      taken: 1,
+      expired: 0,
+      onReview: 1,
+      rejected: 0,
+      approved: 0,
+    });
+  });
+});
+
 describe('каталог', () => {
   it('hasMore — есть ли следующая страница; total — число открытых', async () => {
     const adv = await user();

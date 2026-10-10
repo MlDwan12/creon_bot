@@ -314,6 +314,15 @@ export class NotificationsService
     );
   }
 
+  /** Рекламодателю: совет по заказу (src/orders/order-insights.ts) — подробности в отчёте. */
+  orderInsight(order: Order & { advertiser: User }, text: string) {
+    this.send(
+      order.advertiser.telegramId,
+      `💡 Совет по заказу «${order.title}»\n\n${text}\n\nВоронка и все советы — в отчёте по заказу.`,
+      `/my-orders/${order.id}/review`,
+    );
+  }
+
   /** Креаторам с откликом «в работе»: срок заказа истекает меньше чем через сутки. */
   deadlineSoon(order: OrderWithCreators & Order) {
     this.toCreators(

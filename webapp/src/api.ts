@@ -174,6 +174,10 @@ export interface OrderReport {
     cpm: number | null;
   };
   platforms: { platform: Platform; videos: number; views: number }[];
+  /** Воронка: открыли карточку → взяли → не успели / на проверке / отклонено / одобрено. */
+  funnel: { viewers: number; taken: number; expired: number; onReview: number; rejected: number; approved: number };
+  /** Советы, что поправить; `offer` — услуга площадки: тема обращения в поддержку. */
+  insights: { code: string; text: string; offer?: { label: string; about: string } }[];
   /** Одобренные ролики, больше просмотров — выше. */
   items: {
     id: number;

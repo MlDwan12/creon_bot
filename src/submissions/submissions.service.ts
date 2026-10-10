@@ -9,7 +9,6 @@ import { Prisma, OrderStatus, SubmissionStatus } from '@prisma/client';
 import {
   ACCRUED,
   budgetState,
-  HOLDS_MONEY,
   payoutFor,
   spentByOrder,
   VIEWS_TOPUP_DAYS,
@@ -271,14 +270,6 @@ export class SubmissionsService implements OnApplicationBootstrap {
       where: { creatorId },
       orderBy: { createdAt: 'desc' },
       include: { order: true },
-    });
-  }
-
-  /** Ролики заказа, за которыми закреплены деньги (на проверке и одобренные), — для отчёта. */
-  listWithMoney(orderId: number) {
-    return this.prisma.submission.findMany({
-      where: { orderId, status: { in: HOLDS_MONEY } },
-      include: { creator: true },
     });
   }
 
