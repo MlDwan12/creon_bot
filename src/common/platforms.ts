@@ -57,6 +57,40 @@ export function xPostId(url: string): string | null {
 }
 
 /**
+ * id ролика TikTok: tiktok.com/@автор/video/ID, m.tiktok.com/v/ID.html.
+ * ponytail: короткие vm.tiktok.com/… не раскрываем — такой ролик считается вручную.
+ */
+export function tiktokVideoId(url: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!isOnHosts(u.hostname, PLATFORMS.TIKTOK.hosts)) return null;
+  return (
+    u.pathname.match(/\/(?:video|v)\/(\d{5,25})(?:\.html)?(?:\/|$)/)?.[1] ??
+    null
+  );
+}
+
+/**
+ * Ролик VK как «владелец_ролик» (как ждёт video.get): vk.com/video-1_2, vkvideo.ru/video1_2,
+ * vk.com/clip-1_2 и ролик в просмотрщике — vk.com/feed?z=video-1_2%2F….
+ */
+export function vkVideoId(url: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!isOnHosts(u.hostname, PLATFORMS.VK.hosts)) return null;
+  const where = `${u.pathname} ${u.searchParams.get('z') ?? ''}`;
+  return where.match(/(?:video|clip)(-?\d+_\d+)/)?.[1] ?? null;
+}
+
+/**
  * Ссылка на ролик в одном виде — чтобы тот же ролик не сдали дважды под разными ссылками.
  * YouTube — по id ролика (watch?v=, youtu.be, shorts — один ролик); X — по id поста (x.com и
  * twitter.com, любой ник в ссылке — один пост); остальное — домен без www/m

@@ -205,9 +205,9 @@ export class SubmissionsService implements OnApplicationBootstrap {
     video: { url: string; views: number },
   ) {
     await this.assertCanSubmit(submissionId, creatorId);
-    const counted = (await this.viewCounter.fetchViews([video.url])).get(
-      video.url,
-    )?.views;
+    const counted = (
+      await this.viewCounter.fetchViews([{ url: video.url, creatorId }])
+    ).get(video.url)?.views;
     return this.attachVideo(
       submissionId,
       creatorId,

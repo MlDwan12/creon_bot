@@ -251,7 +251,9 @@ export class ModerationController {
       this.submissionsService.attemptNumber(s),
       this.submissionsService.orderBudget(s.order),
       s.videoUrl
-        ? this.viewCounter.fetchViews([s.videoUrl])
+        ? this.viewCounter.fetchViews([
+            { url: s.videoUrl, creatorId: s.creatorId },
+          ])
         : new Map<string, VideoStats>(),
     ]);
     return {

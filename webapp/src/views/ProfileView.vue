@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, reactive, ref } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import {
   ApiError,
   type Balance,
   banUser,
+  connectSocialAccount,
   type CreatorProfile,
+  disconnectSocialAccount,
   fetchBalance,
   fetchCreator,
   fetchMyProfile,
+  fetchSocialAccounts,
   type ProfileLinks,
+  type SocialAccount,
   removeReview,
   unbanUser,
   updateNotifications,
@@ -18,7 +22,7 @@ import {
 } from '../api';
 import UserAvatar from '../components/UserAvatar.vue';
 import { formatDate, formatMoney } from '../format';
-import { confirmAction, safeUrl } from '../telegram';
+import { confirmAction, openExternalLink, safeUrl } from '../telegram';
 
 // Без id — свой профиль (/profile, ссылки можно редактировать); с id — чужой, только просмотр.
 const props = defineProps<{ id?: string }>();
@@ -100,6 +104,45 @@ async function saveWallet() {
     walletError.value = err instanceof ApiError ? err.userMessage : 'Не удалось сохранить';
   } finally {
     busy.value = false;
+  }
+}
+
+// Подключённые аккаунты площадок — только в своём профиле. Пусто — ни одна площадка не включена.
+const accounts = ref<SocialAccount[]>([]);
+const accountsError = ref('');
+const loadAccounts = () =>
+  fetchSocialAccounts().then(
+    (a) => (accounts.value = a),
+    () => {},
+  );
+if (own) {
+  void loadAccounts();
+  // вход на площадке идёт во внешнем браузере — вернулись в Telegram, обновляем статус
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') void loadAccounts();
+  };
+  document.addEventListener('visibilitychange', onVisible);
+  onBeforeUnmount(() => document.removeEventListener('visibilitychange', onVisible));
+}
+
+async function connectAccount(a: SocialAccount) {
+  accountsError.value = '';
+  try {
+    openExternalLink((await connectSocialAccount(a.platform)).url);
+  } catch (err) {
+    accountsError.value = err instanceof ApiError ? err.userMessage : 'Не удалось начать подключение';
+  }
+}
+
+async function disconnectAccount(a: SocialAccount) {
+  if (!(await confirmAction(`Отключить ${a.name}? Просмотры роликов оттуда снова будет вводить модератор.`)))
+    return;
+  accountsError.value = '';
+  try {
+    await disconnectSocialAccount(a.platform);
+    await loadAccounts();
+  } catch (err) {
+    accountsError.value = err instanceof ApiError ? err.userMessage : 'Не удалось отключить';
   }
 }
 
@@ -238,6 +281,22 @@ void load();
             {{ profile.wallet ? 'Изменить кошелёк' : 'Добавить кошелёк' }}
           </button>
         </template>
+      </section>
+
+      <section v-if="own && accounts.length" class="block">
+        <h2 class="section-title">Подключённые аккаунты</h2>
+        <p class="hint">Подключите аккаунт, с которого публикуете ролики, — просмотры будут считаться сами. Рекламодатель его не увидит.</p>
+        <div v-for="a in accounts" :key="a.platform" class="switch-row">
+          <span>
+            {{ a.name }}
+            <small>{{ a.connected ? 'Подключён — просмотры считаются автоматически' : 'Не подключён' }}</small>
+          </span>
+          <button v-if="a.connected" type="button" class="account-action quiet" @click="disconnectAccount(a)">
+            Отключить
+          </button>
+          <button v-else type="button" class="account-action" @click="connectAccount(a)">Подключить</button>
+        </div>
+        <p v-if="accountsError" class="error" role="alert">{{ accountsError }}</p>
       </section>
 
       <section v-if="own" class="block">
@@ -415,6 +474,21 @@ h1 {
 .balance-action {
   color: var(--link);
   font-weight: 600;
+}
+.account-action {
+  flex: none;
+  min-height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--fill);
+  color: var(--link);
+  font-size: 15px;
+  font-weight: 600;
+}
+.account-action.quiet {
+  color: var(--hint);
+  font-weight: 400;
 }
 .switch-row {
   display: flex;

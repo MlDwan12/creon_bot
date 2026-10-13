@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AccountsModule } from '../accounts/accounts.module';
 import { AuthModule } from '../auth/auth.module';
 import { TelegramModule } from '../telegram/telegram.module';
 import { SubmissionsController } from './submissions.controller';
@@ -7,7 +8,7 @@ import { TrackController } from './track.controller';
 import { ViewCounterService } from './view-counter.service';
 
 @Module({
-  imports: [AuthModule, TelegramModule],
+  imports: [AuthModule, TelegramModule, AccountsModule],
   controllers: [SubmissionsController, TrackController],
   providers: [SubmissionsService, ViewCounterService],
   exports: [SubmissionsService, ViewCounterService],

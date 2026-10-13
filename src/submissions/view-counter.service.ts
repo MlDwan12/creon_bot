@@ -1,22 +1,26 @@
-import { MAX_VIEWS } from '../common/validation';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { SocialPlatform } from '@prisma/client';
+import { AccountsService } from '../accounts/accounts.service';
+import { chunks, toStats, type VideoStats } from '../accounts/providers';
 import { platformOf, xPostId, youtubeId } from '../common/platforms';
+
+export type { VideoStats } from '../accounts/providers';
 
 const TIMEOUT_MS = 10_000;
 
-export interface VideoStats {
-  views: number;
-  /** null — площадка лайки не отдала (автор скрыл). */
-  likes: number | null;
+/** Ролик и его автор: TikTok и VK отдают просмотры только по токену самого креатора. */
+export interface VideoRef {
+  url: string;
+  creatorId: number;
 }
 
 /**
  * Просмотры публикаций из API площадок. Каждая площадка включается своим ключом в env:
- * YouTube — YOUTUBE_API_KEY (Data API), X — X_BEARER_TOKEN (API v2, оплата за чтение поста).
- * Ключа нет, ссылка не распознана или API не ответило — просмотры вводит модератор по ссылке,
- * поэтому новую площадку можно включить в любой момент, просто добавив ключ.
- * TikTok, Instagram и VK чужие просмотры без ключа самого креатора не отдают (нужно OAuth).
+ * YouTube — YOUTUBE_API_KEY (Data API), X — X_BEARER_TOKEN (API v2, оплата за чтение поста),
+ * TikTok и VK — ключами приложения (src/accounts) и аккаунтом, который креатор подключил в профиле.
+ * Ключа нет, аккаунт не подключён, ссылка не распознана или API не ответило — просмотры вводит
+ * модератор по ссылке, поэтому площадку можно включить в любой момент, просто добавив ключи.
  */
 @Injectable()
 export class ViewCounterService {
@@ -24,7 +28,10 @@ export class ViewCounterService {
   private readonly youtubeKey?: string;
   private readonly xToken?: string;
 
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    private readonly accounts: AccountsService,
+  ) {
     this.youtubeKey = config.get<string>('YOUTUBE_API_KEY') || undefined;
     this.xToken = config.get<string>('X_BEARER_TOKEN') || undefined;
   }
@@ -37,19 +44,60 @@ export class ViewCounterService {
       (!!this.youtubeKey &&
         platformOf(url) === 'YOUTUBE' &&
         youtubeId(url) !== null) ||
-      (!!this.xToken && xPostId(url) !== null)
+      (!!this.xToken && xPostId(url) !== null) ||
+      // креатор мог и не подключить аккаунт — тогда fetchViews ролик не вернёт, посчитает модератор
+      this.accounts.providerFor(url) !== null
     );
   }
 
   /** Просмотры и лайки по ссылкам; нет в карте — посчитать не удалось. */
-  async fetchViews(urls: string[]): Promise<Map<string, VideoStats>> {
+  async fetchViews(videos: VideoRef[]): Promise<Map<string, VideoStats>> {
     const result = new Map<string, VideoStats>();
-    const auto = urls.filter((u) => this.isAutomatic(u));
-    const youtube = byId(auto, youtubeId);
+    const auto = videos.map((v) => v.url).filter((u) => this.isAutomatic(u));
+    const youtube = byId(auto, (u) =>
+      platformOf(u) === 'YOUTUBE' ? youtubeId(u) : null,
+    );
     const x = byId(auto, xPostId);
     if (this.youtubeKey) await this.fetchYoutube(youtube, result);
     if (this.xToken) await this.fetchX(x, result);
+    await this.fetchByCreator(videos, result);
     return result;
+  }
+
+  /** TikTok и VK: ролики группируем по креатору и площадке — по одному токену на группу. */
+  private async fetchByCreator(
+    videos: VideoRef[],
+    result: Map<string, VideoStats>,
+  ) {
+    const groups = new Map<
+      string,
+      {
+        creatorId: number;
+        platform: SocialPlatform;
+        urlsById: Map<string, string[]>;
+      }
+    >();
+    for (const { url, creatorId } of videos) {
+      const found = this.accounts.providerFor(url);
+      if (!found) continue;
+      const key = `${creatorId}:${found.provider.platform}`;
+      const group = groups.get(key) ?? {
+        creatorId,
+        platform: found.provider.platform,
+        urlsById: new Map<string, string[]>(),
+      };
+      group.urlsById.set(found.videoId, [
+        ...(group.urlsById.get(found.videoId) ?? []),
+        url,
+      ]);
+      groups.set(key, group);
+    }
+    for (const g of groups.values()) {
+      const stats = await this.accounts.stats(g.creatorId, g.platform, [
+        ...g.urlsById.keys(),
+      ]);
+      for (const [id, s] of stats) setAll(result, g.urlsById.get(id), s);
+    }
   }
 
   private async fetchYoutube(
@@ -159,31 +207,10 @@ function byId(urls: string[], idOf: (url: string) => string | null) {
   return out;
 }
 
-/**
- * Колонки просмотров — Int4: больше MAX_VIEWS не пишем (такой ролик — всё равно выше любого
- * бюджета). Лайков нет (автор скрыл) — null; нет просмотров — посчитать не удалось.
- */
-function toStats(
-  views: string | number | undefined,
-  likes: string | number | undefined,
-): VideoStats | null {
-  const v = Math.min(Number(views ?? NaN), MAX_VIEWS);
-  if (!Number.isFinite(v)) return null;
-  const l = Math.min(Number(likes ?? NaN), MAX_VIEWS);
-  return { views: v, likes: Number.isFinite(l) ? l : null };
-}
-
 function setAll(
   result: Map<string, VideoStats>,
   urls: string[] | undefined,
   stats: VideoStats,
 ) {
   for (const url of urls ?? []) result.set(url, stats);
-}
-
-function chunks<T>(items: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size)
-    out.push(items.slice(i, i + size));
-  return out;
 }

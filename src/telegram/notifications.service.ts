@@ -397,6 +397,15 @@ export class NotificationsService
     );
   }
 
+  /** Креатору: аккаунт площадки подключён — просмотры его роликов там считаются сами. */
+  socialAccountConnected(user: User, platformName: string) {
+    this.send(
+      user.telegramId,
+      `✅ ${platformName} подключён. Просмотры ваших роликов оттуда теперь считаются автоматически.`,
+      '/profile',
+    );
+  }
+
   /** Креатору: заявку на вывод выполнили или отклонили. */
   payoutDecided(payout: Payout & { creator: User }) {
     const amount = formatMoney(fromMinor(payout.amountMinor));

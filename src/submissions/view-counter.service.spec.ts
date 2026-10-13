@@ -1,5 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
 import { youtubeId } from '../common/platforms';
+import type { AccountsService } from '../accounts/accounts.service';
 import { ViewCounterService } from './view-counter.service';
 
 describe('youtubeId', () => {
@@ -16,8 +17,17 @@ describe('youtubeId', () => {
 });
 
 describe('ViewCounterService', () => {
+  // аккаунты площадок (TikTok, VK) здесь не подключены
+  const noAccounts = {
+    providerFor: () => null,
+    stats: () => Promise.resolve(new Map()),
+  } as unknown as AccountsService;
   const service = (env: Record<string, string>) =>
-    new ViewCounterService({ get: (k: string) => env[k] } as ConfigService);
+    new ViewCounterService(
+      { get: (k: string) => env[k] } as ConfigService,
+      noAccounts,
+    );
+  const refs = (urls: string[]) => urls.map((url) => ({ url, creatorId: 1 }));
   const reply = (body: unknown, ok = true) =>
     jest
       .spyOn(global, 'fetch')
@@ -68,7 +78,9 @@ describe('ViewCounterService', () => {
       'https://x.com/a/status/3',
     ];
 
-    const stats = await service({ X_BEARER_TOKEN: 'secret' }).fetchViews(urls);
+    const stats = await service({ X_BEARER_TOKEN: 'secret' }).fetchViews(
+      refs(urls),
+    );
 
     expect(stats.get(urls[0])).toEqual({ views: 900, likes: 7 });
     expect(stats.get(urls[1])).toEqual({ views: 900, likes: 7 });
@@ -84,9 +96,9 @@ describe('ViewCounterService', () => {
 
   it('API не ответило — пустая карта, не исключение', async () => {
     reply({ title: 'Unauthorized' }, false);
-    const stats = await service({ X_BEARER_TOKEN: 't' }).fetchViews([
-      'https://x.com/a/status/1',
-    ]);
+    const stats = await service({ X_BEARER_TOKEN: 't' }).fetchViews(
+      refs(['https://x.com/a/status/1']),
+    );
     expect(stats.size).toBe(0);
   });
 });
