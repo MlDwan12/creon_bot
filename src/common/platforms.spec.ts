@@ -12,6 +12,8 @@ describe('videoKey', () => {
     ['https://WWW.Instagram.com/reel/AbC/', 'instagram.com/reel/AbC'],
     ['https://vk.com/feed?z=video-1_2%2Fall', 'vk.com/feed?z=video-1_2/all'],
     ['https://vk.com/video-1_2?list=x', 'vk.com/video-1_2'],
+    ['https://x.com/anya/status/1789?s=20', 'x:1789'],
+    ['https://twitter.com/Other/status/1789/video/1', 'x:1789'],
   ])('%s → %s', (url, key) => {
     expect(videoKey(url)).toBe(key);
   });
