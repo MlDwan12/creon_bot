@@ -156,20 +156,28 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
     const staleBefore = new Date(Date.now() - STALE_MS);
     const [
       staleOrders,
-      { videos: staleVideos, topups: staleTopups },
+      { videos: staleVideos, topups: staleTopups, reviews: staleReviews },
       stalePayouts,
     ] = await Promise.all([
       this.ordersService.countPendingBefore(staleBefore),
       this.submissionsService.countStaleBefore(staleBefore),
       this.payouts.countRequestedBefore(staleBefore),
     ]);
-    if (!staleOrders && !staleVideos && !staleTopups && !stalePayouts) return;
+    if (
+      !staleOrders &&
+      !staleVideos &&
+      !staleTopups &&
+      !stalePayouts &&
+      !staleReviews
+    )
+      return;
     this.notifications.moderationQueueStale(
       {
         orders: staleOrders,
         videos: staleVideos,
         topups: staleTopups,
         payouts: stalePayouts,
+        reviews: staleReviews,
       },
       STALE_HOURS,
     );

@@ -47,6 +47,8 @@ const rating = ref<number>();
 const feedback = reactive<Feedback>({ rating: 0, review: '', portfolioAllowed: false });
 const busy = ref(false);
 const error = ref('');
+/** Ролики, чей отзыв только что ушёл на проверку, — подсказка под оценкой. */
+const onModeration = ref(new Set<number>());
 
 async function load() {
   try {
@@ -66,7 +68,8 @@ async function rate() {
   busy.value = true;
   error.value = '';
   try {
-    await rateVideo(rating.value!, { ...feedback });
+    const { onModeration: queued } = await rateVideo(rating.value!, { ...feedback });
+    if (queued) onModeration.value.add(rating.value!);
     const item = data.value!.items.find((i) => i.id === rating.value);
     if (item) item.rating = feedback.rating;
     rating.value = undefined;
@@ -180,6 +183,9 @@ void load();
         <p v-if="item.rating" class="rated" :aria-label="`Ваша оценка: ${item.rating} из 5`">
           {{ '★'.repeat(item.rating) }}{{ '☆'.repeat(5 - item.rating) }}
         </p>
+        <p v-if="onModeration.has(item.id)" class="hint">
+          Спасибо! Отзыв появится в профиле креатора после проверки модератором.
+        </p>
         <fieldset v-else-if="rating === item.id" class="feedback">
           <legend class="section-title">Оцените работу креатора</legend>
           <div class="stars" role="radiogroup" aria-label="Оценка">
@@ -200,7 +206,7 @@ void load();
             v-model="feedback.review"
             rows="3"
             maxlength="500"
-            placeholder="Отзыв — по желанию. Его увидят в профиле креатора"
+            placeholder="Отзыв — по желанию. После проверки модератором его увидят в профиле креатора"
           />
           <label class="check">
             <input v-model="feedback.portfolioAllowed" type="checkbox" />

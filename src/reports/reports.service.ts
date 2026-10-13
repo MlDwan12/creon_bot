@@ -152,7 +152,12 @@ export class ReportsService {
           where: { id },
           include: { order: true },
         });
-        const visible = s && s.creatorId === reporter.id && s.rating !== null;
+        // отзыв на проверке креатор ещё не видел
+        const visible =
+          s &&
+          s.creatorId === reporter.id &&
+          s.rating !== null &&
+          s.reviewQueuedAt === null;
         return visible ? `отзыв по заказу «${s.order.title}»` : null;
       }
       case ReportTarget.PROFILE: {
@@ -295,7 +300,7 @@ export class ReportsService {
         case ReportTarget.REVIEW:
           await this.prisma.submission.updateMany({
             where: { id: group.targetId },
-            data: { rating: null, review: null },
+            data: { rating: null, review: null, reviewQueuedAt: null },
           });
           break;
         case ReportTarget.PROFILE:

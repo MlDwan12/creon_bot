@@ -174,6 +174,9 @@ model Submission {
   /// Оценка рекламодателя 1–5 одобренному ролику, по желанию; менять нельзя, модератор может удалить.
   rating            Int?
   review            String?
+  /// Отзыв с текстом ждёт модератора с этого момента; пока не null — в профиле креатора его нет.
+  /// Оценка без текста публикуется сразу (src/submissions/submissions.service.ts, rate).
+  reviewQueuedAt    DateTime?
   /// Рекламодатель разрешил показывать видео в портфолио креатора.
   portfolioAllowed  Boolean          @default(false)
   createdAt         DateTime         @default(now())

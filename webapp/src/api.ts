@@ -217,6 +217,17 @@ export interface ModQueue {
   videos: { id: number; orderTitle: string; creator: string; submittedAt: string | null }[];
   /** Добор закончился — зафиксировать итог просмотров. */
   topups: { id: number; orderTitle: string; creator: string; decidedAt: string | null }[];
+  /** Отзывы рекламодателей с текстом — в профиле креатора только после проверки. */
+  reviews: {
+    submissionId: number;
+    orderTitle: string;
+    advertiser: string;
+    creator: string;
+    rating: number;
+    review: string;
+    queuedAt: string;
+    hasContacts: boolean;
+  }[];
 }
 
 export interface ModStats {
@@ -528,8 +539,13 @@ export function sendReportCsv(orderId: number) {
   return request<{ ok: true }>('POST', `/api/my-orders/${orderId}/report/csv`);
 }
 
+/** `onModeration` — отзыв с текстом ушёл на проверку и появится в профиле креатора после неё. */
 export function rateVideo(submissionId: number, feedback: Feedback) {
-  return request<{ ok: true }>('POST', `/api/submissions/${submissionId}/rate`, feedback);
+  return request<{ ok: true; onModeration: boolean }>(
+    'POST',
+    `/api/submissions/${submissionId}/rate`,
+    feedback,
+  );
 }
 
 export function fetchMyProfile() {
@@ -572,7 +588,12 @@ export function updateWallet(wallet: string) {
   return request<{ ok: true }>('PUT', '/api/profile/wallet', { wallet });
 }
 
-/** Модератор: удалить отзыв (оценку и текст). */
+/** Модератор: опубликовать отзыв с проверки в профиле креатора. */
+export function approveReview(submissionId: number) {
+  return request<{ ok: true }>('POST', `/api/mod/reviews/${submissionId}/approve`);
+}
+
+/** Модератор: удалить отзыв (оценку и текст) — опубликованный или с проверки. */
 export function removeReview(submissionId: number) {
   return request<{ ok: true }>('DELETE', `/api/mod/reviews/${submissionId}`);
 }
