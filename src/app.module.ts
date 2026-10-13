@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { AccountsModule } from './accounts/accounts.module';
 import { AuthModule } from './auth/auth.module';
 import { validateEnv } from './config/env.validation';
 import { HealthModule } from './health/health.module';
@@ -32,6 +33,7 @@ import { TelegramModule } from './telegram/telegram.module';
     TelegramModule,
     OrdersModule,
     SubmissionsModule,
+    AccountsModule,
     ProfilesModule,
     ReportsModule,
     PayoutsModule,

@@ -592,6 +592,27 @@ export function updateWallet(wallet: string) {
   return request<{ ok: true }>('PUT', '/api/profile/wallet', { wallet });
 }
 
+/** Площадка, где креатор подключает свой аккаунт — тогда просмотры его роликов оттуда считаются сами. */
+export interface SocialAccount {
+  platform: 'TIKTOK' | 'VK';
+  name: string;
+  connected: boolean;
+}
+
+/** Пусто — ни одна площадка пока не подключается (нет ключей), раздел в профиле не показываем. */
+export function fetchSocialAccounts() {
+  return request<SocialAccount[]>('GET', '/api/accounts');
+}
+
+/** Ссылка на вход на площадке — открыть во внешнем браузере. */
+export function connectSocialAccount(platform: SocialAccount['platform']) {
+  return request<{ url: string }>('POST', `/api/accounts/${platform.toLowerCase()}/connect`);
+}
+
+export function disconnectSocialAccount(platform: SocialAccount['platform']) {
+  return request<{ ok: true }>('DELETE', `/api/accounts/${platform.toLowerCase()}`);
+}
+
 /** Модератор: опубликовать отзыв с проверки в профиле креатора. */
 export function approveReview(submissionId: number) {
   return request<{ ok: true }>('POST', `/api/mod/reviews/${submissionId}/approve`);

@@ -1,4 +1,4 @@
-import { videoKey } from './platforms';
+import { tiktokVideoId, videoKey, vkVideoId } from './platforms';
 
 describe('videoKey', () => {
   it.each([
@@ -16,5 +16,33 @@ describe('videoKey', () => {
     ['https://twitter.com/Other/status/1789/video/1', 'x:1789'],
   ])('%s → %s', (url, key) => {
     expect(videoKey(url)).toBe(key);
+  });
+});
+
+describe('tiktokVideoId', () => {
+  it.each([
+    [
+      'https://www.tiktok.com/@anya/video/7312345678901234567?lang=ru',
+      '7312345678901234567',
+    ],
+    ['https://m.tiktok.com/v/7312345678901234567.html', '7312345678901234567'],
+    ['https://vm.tiktok.com/ZMabc/', null],
+    ['https://www.tiktok.com/@anya', null],
+    ['https://example.com/video/7312345678901234567', null],
+  ])('%s → %s', (url, id) => {
+    expect(tiktokVideoId(url)).toBe(id);
+  });
+});
+
+describe('vkVideoId', () => {
+  it.each([
+    ['https://vk.com/video-123_456', '-123_456'],
+    ['https://vkvideo.ru/video123_456?list=x', '123_456'],
+    ['https://vk.com/clip-1_2', '-1_2'],
+    ['https://vk.com/feed?z=video-1_2%2Fall', '-1_2'],
+    ['https://vk.com/anya', null],
+    ['https://example.com/video-1_2', null],
+  ])('%s → %s', (url, id) => {
+    expect(vkVideoId(url)).toBe(id);
   });
 });

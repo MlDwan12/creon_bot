@@ -107,7 +107,8 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   /**
-   * Итог добора по роликам, чьи просмотры отдаёт API площадки (YouTube), — без модератора.
+   * Итог добора по роликам, чьи просмотры отдаёт API площадки (YouTube, X, а TikTok и VK — если
+   * креатор подключил аккаунт), — без модератора.
    * API не ответило — ролик остаётся в очереди «Итоги», итог введёт модератор.
    */
   private async finalizeAutomatic() {
@@ -116,7 +117,7 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
     );
     if (!due.length) return;
     const counted = await this.viewCounter.fetchViews(
-      due.map((s) => s.videoUrl!),
+      due.map((s) => ({ url: s.videoUrl!, creatorId: s.creatorId })),
     );
     for (const s of due) {
       const stats = counted.get(s.videoUrl!);

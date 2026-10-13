@@ -34,6 +34,7 @@ model User {
   orderViews  OrderView[]
   reports     Report[]
   payouts     Payout[]
+  socialAccounts SocialAccount[]
 
   /// Ответ поддержки в теме → чей это пользователь (SupportService.fromSupport).
   @@index([supportTopicId])
@@ -284,4 +285,36 @@ model Notification {
 
   /// Выборка воркера: готовые к отправке, по приоритету.
   @@index([priority, sendAfter])
+}
+
+/** Площадки, где креатор подключает свой аккаунт (OAuth): по его токену берём просмотры его роликов. */
+enum SocialPlatform {
+  TIKTOK
+  VK
+}
+
+/**
+ * Аккаунт креатора на площадке, подключённый через OAuth (src/accounts). Токены — зашифрованы
+ * (SOCIAL_TOKENS_KEY, src/accounts/token-crypto.ts): это доступ к чужому аккаунту.
+ * Рекламодателю аккаунт не показываем — контакты сторон скрыты.
+ */
+model SocialAccount {
+  id              Int            @id @default(autoincrement())
+  userId          Int
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform        SocialPlatform
+  /// id пользователя на площадке: TikTok open_id, VK user_id.
+  externalId      String
+  accessToken     String
+  refreshToken    String
+  accessExpiresAt DateTime
+  /// VK ID: без device_id токен не обновить.
+  deviceId        String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  /// Один аккаунт площадки на креатора.
+  @@unique([userId, platform])
+  /// Один аккаунт площадки — одному креатору: чужой аккаунт к себе не подключить.
+  @@unique([platform, externalId])
 }
