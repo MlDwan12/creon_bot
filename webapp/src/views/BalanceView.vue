@@ -64,6 +64,11 @@ void load();
           Начислено {{ formatMoney(balance.earned) }} · выплачено {{ formatMoney(balance.paid) }}
           <template v-if="balance.requested"> · в заявке {{ formatMoney(balance.requested) }}</template>
         </span>
+        <span v-if="balance.held" class="hint">
+          В холде {{ formatMoney(balance.held) }} — станет доступно после итога просмотров<template
+            v-if="balance.nextReleaseAt"
+          >, ближайшее — {{ formatDate(balance.nextReleaseAt) }}</template>
+        </span>
         <span v-if="rubPerUsdt" class="hint">
           {{ approxRub(balance.available, rubPerUsdt) }} · курс {{ rubPerUsdt.toLocaleString('ru-RU') }} ₽ за USDT
         </span>

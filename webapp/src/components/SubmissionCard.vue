@@ -19,7 +19,7 @@ const STEPS: Record<SubmissionStatus, number> = {
 const STATUS: Record<SubmissionStatus, { label: string; tone: string }> = {
   IN_PROGRESS: { label: 'В работе', tone: 'accent' },
   SUBMITTED: { label: 'На проверке у модератора', tone: 'warn' },
-  MODERATOR_APPROVED: { label: 'Одобрено — идёт добор просмотров', tone: 'success' },
+  MODERATOR_APPROVED: { label: 'Одобрено — идёт добор, деньги в холде', tone: 'success' },
   MODERATOR_REJECTED: { label: 'Отклонено модератором', tone: 'danger' },
   SLOT_EXPIRED: { label: 'Слот сгорел — видео не прислали за 7 дней', tone: 'danger' },
 };

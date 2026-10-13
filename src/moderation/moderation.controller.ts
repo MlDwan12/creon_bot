@@ -376,6 +376,20 @@ export class ModerationController {
     return { ok: true };
   }
 
+  /** При итоге публикации нет — начисление из холда отменяется, креатору — уведомление. */
+  @Post('videos/:id/deleted')
+  async publicationDeleted(
+    @Param('id', ParseIdPipe) id: number,
+    @Req() req: ApiRequest,
+  ) {
+    const submission = await this.submissionsService.publicationDeleted(
+      id,
+      req.user.telegramId,
+    );
+    this.notifications.publicationDeleted(submission);
+    return { ok: true };
+  }
+
   /** Открытые заявки на вывод, старые первыми. */
   @Get('payouts')
   async payoutsList() {

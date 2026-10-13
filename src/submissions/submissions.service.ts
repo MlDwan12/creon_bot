@@ -49,6 +49,10 @@ const EXHAUSTED_MESSAGE =
 const ALREADY_CLAIMED_MESSAGE =
   'По этому заказу у вас уже есть отклик в работе — отправьте по нему видео в «Мои отклики»';
 
+/** Причина отклонения, когда публикацию удалили до конца холда — креатор увидит её. */
+export const PUBLICATION_DELETED =
+  'Публикация удалена до итога просмотров — начисление отменено';
+
 const ON_REVIEW_MESSAGE =
   'Ваш ролик по этому заказу ещё на проверке — следующий можно будет прислать после решения модератора';
 
@@ -425,6 +429,35 @@ export class SubmissionsService implements OnApplicationBootstrap {
     return this.mustFind(submissionId);
   }
 
+  /**
+   * При итоге модератор не нашёл публикацию: креатор удалил ролик до конца холда. Начисление
+   * отменяется и возвращается в фонд заказа — деньги ещё не выводились, они были в холде.
+   */
+  async publicationDeleted(submissionId: number, moderatorTelegramId: bigint) {
+    const found = await this.mustFind(submissionId);
+    return this.prisma.$transaction(async (tx) => {
+      // итог фиксируют под той же блокировкой заказа — проверка ниже не устареет
+      await this.lockBudget(tx, found.orderId);
+      if ((await this.mustFind(submissionId, tx)).finalizedAt)
+        throw new ForbiddenException(
+          'Итог уже зафиксирован — деньги вышли из холда',
+        );
+      await transitionSubmission(
+        tx,
+        submissionId,
+        [SubmissionStatus.MODERATOR_APPROVED],
+        {
+          status: SubmissionStatus.MODERATOR_REJECTED,
+          moderatorId: moderatorTelegramId,
+          moderatorComment: PUBLICATION_DELETED,
+          payoutMinor: 0,
+          decidedAt: new Date(),
+        },
+      );
+      return this.mustFind(submissionId, tx);
+    });
+  }
+
   /** Свободный остаток фонда заказа — показать модератору при проверке ролика. */
   async orderBudget(order: Parameters<typeof budgetState>[0] & { id: number }) {
     const spent =
@@ -501,7 +534,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
       );
       if (ready > new Date())
         throw new ForbiddenException(
-          `Итог просмотров фиксируется через ${VIEWS_TOPUP_DAYS} дня после одобрения`,
+          `Итог просмотров фиксируется через ${VIEWS_TOPUP_DAYS} дн. после одобрения`,
         );
       // не статус, но то же условное обновление: второй модератор не доплатит повторно
       const { count } = await tx.submission.updateMany({

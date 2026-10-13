@@ -6,13 +6,14 @@ import {
   fetchModQueue,
   fetchModVideo,
   finalizeVideo,
+  markPublicationDeleted,
   type ModVideo,
   moderateVideo,
   PLATFORM_NAMES,
 } from '../../api';
 import ReasonPicker from '../../components/ReasonPicker.vue';
 import { formatCpm, formatDate, formatMoney, formatVideoFormat, formatViews, timeAgo } from '../../format';
-import { safeUrl } from '../../telegram';
+import { confirmAction, safeUrl } from '../../telegram';
 
 const props = defineProps<{ id: string }>();
 const router = useRouter();
@@ -79,6 +80,11 @@ const decide = (decision: 'approve' | 'reject') =>
     'videos',
   );
 const finalize = () => run(() => finalizeVideo(Number(props.id), Number(views.value), likesOrNull()), 'topups');
+async function deleted() {
+  if (!(await confirmAction('Публикации нет по ссылке? Начисление за ролик отменится, деньги вернутся в бюджет заказа.')))
+    return;
+  await run(() => markPublicationDeleted(Number(props.id)), 'topups');
+}
 
 /** Просмотры, которые фиксирует модератор: на проверке — заявленные креатором, при итоге — текущие. */
 const views = ref<number | ''>('');
@@ -164,10 +170,14 @@ watch(() => props.id, load, { immediate: true });
         </div>
       </template>
       <template v-else-if="topupAt && topupAt <= new Date()">
-        <p class="hint">Добор закончился: откройте публикацию и зафиксируйте итог. Прирост доплатится, пока есть бюджет.</p>
+        <p class="hint">
+          Добор закончился: откройте публикацию и зафиксируйте итог — прирост доплатится, пока есть бюджет, а деньги
+          за ролик станут доступны к выводу. Публикации нет — отмените начисление.
+        </p>
         <p v-if="error" class="error" role="alert">{{ error }}</p>
-        <div class="bottom-bar">
-          <button type="button" class="main-button" :disabled="busy || !views" @click="finalize">Зафиксировать итог</button>
+        <div class="bottom-bar two">
+          <button type="button" class="reject" :disabled="busy" @click="deleted">Публикация удалена</button>
+          <button type="button" class="approve" :disabled="busy || !views" @click="finalize">Зафиксировать итог</button>
         </div>
       </template>
       <p v-else-if="topupAt" class="hint">Одобрено. Итог просмотров — {{ formatDate(topupAt.toISOString()) }}.</p>
