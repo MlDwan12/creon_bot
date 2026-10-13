@@ -13,10 +13,8 @@ import { RedactingLogger } from './common/redacting-logger';
 // На быстрой сети ничего не меняет: первый адрес отвечает раньше.
 setDefaultAutoSelectFamilyAttemptTimeout(2000);
 
-// nestjs-telegraf fires `bot.launch()` without awaiting or catching it, so a
-// transient network error talking to Telegram (e.g. getMe timing out) surfaces
-// as an unhandled rejection — which Node treats as fatal and kills the process.
-// Log it instead of crashing; Telegraf's own polling loop retries on its own.
+// Последний рубеж: забытый промис с ошибкой не роняет процесс со всеми запросами в работе — только
+// в лог. Запуск бота и его сбои обрабатывает StartUpdate.launch.
 process.on('unhandledRejection', (reason) => {
   Logger.error(reason, undefined, 'UnhandledRejection');
 });
@@ -44,12 +42,13 @@ function serveWebapp(app: NestExpressApplication) {
   if (!existsSync(dir)) return;
   app.useStaticAssets(dir);
   // Роутер фронта на History API: /orders/5 — не файл, а экран, поэтому на такие пути отдаём index.html.
-  // Пути с точкой — отсутствующие файлы, им честный 404.
+  // Пути с точкой — отсутствующие файлы, им честный 404. /r/<код> — ссылки на товар (TrackController).
   const index = join(dir, 'index.html');
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (
       req.method === 'GET' &&
       !req.path.startsWith('/api') &&
+      !req.path.startsWith('/r/') &&
       !req.path.includes('.')
     )
       return res.sendFile(index);

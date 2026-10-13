@@ -49,9 +49,10 @@ const router = useRouter();
 const form = reactive<
   Omit<
     NewOrderInput,
-    'referenceUrl' | 'budget' | 'minViews' | 'minDurationSec' | 'maxDurationSec' | 'deadlineDays'
+    'referenceUrl' | 'targetUrl' | 'budget' | 'minViews' | 'minDurationSec' | 'maxDurationSec' | 'deadlineDays'
   > & {
     referenceUrl: string;
+    targetUrl: string;
     budget: number | '';
     minViews: number | '';
     minDurationSec: number | '';
@@ -62,6 +63,7 @@ const form = reactive<
   title: '',
   description: '',
   referenceUrl: '',
+  targetUrl: '',
   budget: '',
   minViews: DEFAULT_MIN_VIEWS,
   // Короткие вертикальные ролики — самый частый заказ; рекламодатель может поменять.
@@ -90,6 +92,7 @@ async function prefill() {
   form.title = source.title;
   form.description = source.description;
   form.referenceUrl = source.referenceUrl ?? '';
+  form.targetUrl = source.targetUrl ?? '';
   form.budget = source.budget;
   form.minViews = source.minViews;
   form.minDurationSec = source.minDurationSec ?? '';
@@ -105,9 +108,10 @@ async function submit() {
     const budget = Number(form.budget);
     const minViews = form.minViews === '' ? null : form.minViews;
     const referenceUrl = form.referenceUrl.trim() || null;
+    const targetUrl = form.targetUrl.trim() || null;
     const minDurationSec = form.minDurationSec === '' ? null : form.minDurationSec;
     const maxDurationSec = form.maxDurationSec === '' ? null : form.maxDurationSec;
-    const input = { ...form, referenceUrl, budget, minViews, minDurationSec, maxDurationSec };
+    const input = { ...form, referenceUrl, targetUrl, budget, minViews, minDurationSec, maxDurationSec };
     if (props.id) await updateOrder(Number(props.id), input);
     // при создании «как было» не бывает — срок всегда выбран
     else await createOrder({ ...input, deadlineDays: form.deadlineDays ?? null });
@@ -159,6 +163,19 @@ void prefill();
           maxlength="500"
           placeholder="Ссылка на пример ролика или файлы — по желанию"
         />
+      </div>
+
+      <div class="field">
+        <label for="target" class="section-title">Ссылка на товар</label>
+        <input
+          id="target"
+          v-model="form.targetUrl"
+          type="url"
+          inputmode="url"
+          maxlength="500"
+          placeholder="Сайт или страница в магазине — по желанию"
+        />
+        <span class="hint">Каждый креатор получит свою ссылку для описания ролика — в отчёте увидите переходы.</span>
       </div>
 
       <div class="field">

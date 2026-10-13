@@ -3,11 +3,13 @@ import { computed, ref } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import {
   ApiError,
+  approveReview,
   fetchModQueue,
   fetchModReports,
   type ModQueue,
   type ModReportGroup,
   reasonLabel,
+  removeReview,
   type ReportTarget,
   resolveReports,
 } from '../../api';
@@ -18,8 +20,8 @@ import { confirmAction } from '../../telegram';
 const route = useRoute();
 const router = useRouter();
 
-type Tab = 'orders' | 'videos' | 'topups' | 'reports';
-const TABS: Tab[] = ['orders', 'videos', 'topups', 'reports'];
+type Tab = 'orders' | 'videos' | 'topups' | 'reviews' | 'reports';
+const TABS: Tab[] = ['orders', 'videos', 'topups', 'reviews', 'reports'];
 // Вкладка — в адресе (?tab=videos), чтобы «Назад» из карточки вернул на ту же вкладку.
 const tab = computed<Tab>(() =>
   TABS.includes(route.query.tab as Tab) ? (route.query.tab as Tab) : 'orders',
@@ -80,12 +82,26 @@ function subjectLink(g: ModReportGroup): string | null {
 
 const queue = ref<ModQueue>();
 const error = ref('');
+const reviewError = ref('');
+
+/** Отзыв с проверки: опубликовать в профиле креатора или удалить (оценка пропадёт вместе с текстом). */
+async function decideReview(submissionId: number, publish: boolean) {
+  if (!publish && !(await confirmAction('Удалить отзыв? Оценка тоже не попадёт в рейтинг.'))) return;
+  reviewError.value = '';
+  try {
+    await (publish ? approveReview(submissionId) : removeReview(submissionId));
+  } catch (err) {
+    reviewError.value = err instanceof ApiError ? err.userMessage : 'Не получилось, попробуйте ещё раз';
+  }
+  queue.value = await fetchModQueue().catch(() => queue.value);
+}
 
 /** Самое старое ожидание в обеих очередях — главный сигнал «пора разбирать». */
 const oldest = computed(() => {
   const dates = [
     ...(queue.value?.orders.map((o) => o.queuedAt) ?? []),
     ...(queue.value?.videos.map((v) => v.submittedAt).filter((d): d is string => !!d) ?? []),
+    ...(queue.value?.reviews.map((r) => r.queuedAt) ?? []),
   ].sort();
   return dates[0];
 });
@@ -129,6 +145,9 @@ void load();
         </button>
         <button type="button" role="tab" :aria-selected="tab === 'topups'" @click="setTab('topups')">
           Итоги · {{ queue.topups.length }}
+        </button>
+        <button type="button" role="tab" :aria-selected="tab === 'reviews'" @click="setTab('reviews')">
+          Отзывы · {{ queue.reviews.length }}
         </button>
         <button type="button" role="tab" :aria-selected="tab === 'reports'" @click="setTab('reports')">
           Жалобы · {{ reports.length }}
@@ -184,6 +203,28 @@ void load();
               {{ ACTIONS[g.target].label }} и заблокировать автора
             </button>
           </template>
+        </article>
+      </template>
+
+      <template v-else-if="tab === 'reviews'">
+        <p v-if="queue.reviews.length === 0" class="empty list">Отзывов на проверку нет.</p>
+        <p v-if="reviewError" class="error" role="alert">{{ reviewError }}</p>
+        <article v-for="r in queue.reviews" :key="r.submissionId" class="report">
+          <div class="report-top">
+            <span class="stars" :aria-label="`Оценка ${r.rating} из 5`">
+              {{ '★'.repeat(r.rating) }}{{ '☆'.repeat(5 - r.rating) }}
+            </span>
+            <span :class="['wait', { long: isWaitingLong(r.queuedAt) }]">{{ waitingFor(r.queuedAt) }}</span>
+          </div>
+          <strong class="subject">{{ r.orderTitle }}</strong>
+          <p class="quote">
+            <span v-if="r.hasContacts" class="flag" title="Похоже на контакты в обход площадки">⚠ </span>{{ r.review }}
+          </p>
+          <span class="hint">{{ r.advertiser }} о креаторе {{ r.creator }}</span>
+          <div class="actions">
+            <button type="button" class="danger" @click="decideReview(r.submissionId, false)">Удалить</button>
+            <button type="button" @click="decideReview(r.submissionId, true)">Опубликовать</button>
+          </div>
         </article>
       </template>
 
@@ -284,7 +325,7 @@ h1 {
 }
 .segmented {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   padding: 2px;
   border-radius: 9px;
   background: var(--fill);
@@ -295,7 +336,9 @@ h1 {
   border-radius: 7px;
   background: none;
   color: var(--text);
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 4px 2px;
 }
 .segmented button[aria-selected='true'] {
   background: var(--surface);
@@ -399,6 +442,10 @@ a.subject {
 }
 .flag {
   color: #9a5200;
+}
+.stars {
+  color: #d99a00;
+  letter-spacing: 1px;
 }
 .list {
   border-radius: 14px;

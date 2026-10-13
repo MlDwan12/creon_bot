@@ -1,22 +1,7 @@
 import { MAX_VIEWS } from '../common/validation';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { platformOf } from '../common/platforms';
-
-/** id ролика YouTube: youtu.be/ID, watch?v=ID, /shorts/ID, /embed/ID, /live/ID. */
-export function youtubeId(url: string): string | null {
-  let u: URL;
-  try {
-    u = new URL(url);
-  } catch {
-    return null;
-  }
-  const id = u.hostname.toLowerCase().endsWith('youtu.be')
-    ? u.pathname.slice(1)
-    : (u.searchParams.get('v') ??
-      u.pathname.match(/^\/(?:shorts|embed|live)\/([^/]+)/)?.[1]);
-  return id && /^[\w-]{11}$/.test(id) ? id : null;
-}
+import { platformOf, youtubeId } from '../common/platforms';
 
 const TIMEOUT_MS = 10_000;
 

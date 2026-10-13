@@ -34,6 +34,9 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
       payout: fromMinor(row.payoutMinor),
       finalized: row.finalizedAt !== null,
       createdAt: row.createdAt,
+      // Ссылка на товар для описания ролика; адрес сайта добавляет мини-апп. null — у заказа нет товара.
+      trackPath:
+        row.order.targetUrl && row.trackCode ? `/r/${row.trackCode}` : null,
       // Сдать видео до конца слота, но не позже срока заказа.
       dueAt:
         row.status === SubmissionStatus.IN_PROGRESS

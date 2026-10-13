@@ -47,6 +47,8 @@ const rating = ref<number>();
 const feedback = reactive<Feedback>({ rating: 0, review: '', portfolioAllowed: false });
 const busy = ref(false);
 const error = ref('');
+/** Ролики, чей отзыв только что ушёл на проверку, — подсказка под оценкой. */
+const onModeration = ref(new Set<number>());
 
 async function load() {
   try {
@@ -66,7 +68,8 @@ async function rate() {
   busy.value = true;
   error.value = '';
   try {
-    await rateVideo(rating.value!, { ...feedback });
+    const { onModeration: queued } = await rateVideo(rating.value!, { ...feedback });
+    if (queued) onModeration.value.add(rating.value!);
     const item = data.value!.items.find((i) => i.id === rating.value);
     if (item) item.rating = feedback.rating;
     rating.value = undefined;
@@ -102,12 +105,27 @@ void load();
         <div class="tile">
           <strong>{{ data.summary.cpm === null ? '—' : formatMoney(data.summary.cpm) }}</strong><span>за 1000 просмотров</span>
         </div>
+        <div v-if="data.summary.clicks !== null" class="tile">
+          <strong>{{ formatViews(data.summary.clicks) }}</strong><span>переходов на товар</span>
+        </div>
       </section>
       <p class="hint">
         Осталось {{ formatMoney(data.summary.left) }}<template v-if="data.summary.reserved">
           · ещё {{ formatMoney(data.summary.reserved) }} зарезервировано под ролики на проверке</template
         >. Суммы — вместе с комиссией площадки.
       </p>
+
+      <section class="rows" aria-label="Воронка">
+        <div class="row"><span>Открыли заказ</span><span>{{ data.funnel.viewers }}</span></div>
+        <div class="row"><span>Взяли в работу</span><span>{{ data.funnel.taken }}</span></div>
+        <div class="row"><span>Не прислали вовремя</span><span>{{ data.funnel.expired }}</span></div>
+        <div class="row"><span>Отклонено модератором</span><span>{{ data.funnel.rejected }}</span></div>
+        <div class="row"><span>На проверке · одобрено</span><span>{{ data.funnel.onReview }} · {{ data.funnel.approved }}</span></div>
+      </section>
+
+      <article v-for="i in data.insights" :key="i.code" class="insight">
+        <p>💡 {{ i.text }}</p>
+      </article>
 
       <section v-if="data.platforms.length" class="rows">
         <div v-for="p in data.platforms" :key="p.platform" class="row">
@@ -143,6 +161,8 @@ void load();
             <div class="hint">
               {{ PLATFORM_NAMES[item.platform] }} · {{ formatViews(item.views) }} просмотров<template v-if="item.likes !== null">
                 · {{ formatViews(item.likes) }} лайков</template
+              ><template v-if="item.clicks !== null">
+                · {{ formatViews(item.clicks) }} переходов</template
               ><template v-if="item.approvedAt">
                 · {{ formatDate(item.approvedAt) }}</template
               >
@@ -162,6 +182,9 @@ void load();
 
         <p v-if="item.rating" class="rated" :aria-label="`Ваша оценка: ${item.rating} из 5`">
           {{ '★'.repeat(item.rating) }}{{ '☆'.repeat(5 - item.rating) }}
+        </p>
+        <p v-if="onModeration.has(item.id)" class="hint">
+          Спасибо! Отзыв появится в профиле креатора после проверки модератором.
         </p>
         <fieldset v-else-if="rating === item.id" class="feedback">
           <legend class="section-title">Оцените работу креатора</legend>
@@ -183,7 +206,7 @@ void load();
             v-model="feedback.review"
             rows="3"
             maxlength="500"
-            placeholder="Отзыв — по желанию. Его увидят в профиле креатора"
+            placeholder="Отзыв — по желанию. После проверки модератором его увидят в профиле креатора"
           />
           <label class="check">
             <input v-model="feedback.portfolioAllowed" type="checkbox" />
@@ -249,6 +272,18 @@ void load();
 }
 .rows .row + .row {
   border-top: 1px solid var(--separator);
+}
+.insight {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.insight p {
+  margin: 0;
+  font-size: 15px;
 }
 .title-row {
   display: flex;

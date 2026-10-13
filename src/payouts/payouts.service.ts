@@ -6,7 +6,8 @@ import {
 } from '@nestjs/common';
 import { PayoutStatus, Prisma, SubmissionStatus } from '@prisma/client';
 import { toMinor } from '../common/money';
-import { ORDER_CURRENCY } from '../orders/budget';
+import { ORDER_CURRENCY, VIEWS_TOPUP_DAYS } from '../orders/budget';
+import { DAY_MS } from '../orders/deadline';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Минимальная сумма вывода, USDT: перевод в TRC20 стоит комиссии сети, мелкие не окупаются. */
@@ -35,12 +36,22 @@ export function parsePayoutAmount(value: unknown): number {
 export class PayoutsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Начислено, выплачено, в заявке и доступно к выводу — всё в центах. */
+  /**
+   * Начислено, в холде, выплачено, в заявке и доступно к выводу — всё в центах. В холде — ролики,
+   * по которым ещё не зафиксирован итог (VIEWS_TOPUP_DAYS после одобрения); `nextReleaseAt` — когда
+   * подойдёт срок итога у самого раннего из них.
+   */
   async balance(creatorId: number, db: Prisma.TransactionClient = this.prisma) {
-    const [earned, payouts] = await Promise.all([
+    const approved = { creatorId, status: SubmissionStatus.MODERATOR_APPROVED };
+    const [earned, held, payouts] = await Promise.all([
       db.submission.aggregate({
-        where: { creatorId, status: SubmissionStatus.MODERATOR_APPROVED },
+        where: approved,
         _sum: { payoutMinor: true },
+      }),
+      db.submission.aggregate({
+        where: { ...approved, finalizedAt: null },
+        _sum: { payoutMinor: true },
+        _min: { decidedAt: true },
       }),
       db.payout.groupBy({
         by: ['status'],
@@ -51,13 +62,23 @@ export class PayoutsService {
     const sum = (status: PayoutStatus) =>
       payouts.find((p) => p.status === status)?._sum.amountMinor ?? 0;
     const earnedMinor = earned._sum.payoutMinor ?? 0;
+    const heldMinor = held._sum.payoutMinor ?? 0;
     const paidMinor = sum(PayoutStatus.PAID);
     const requestedMinor = sum(PayoutStatus.REQUESTED);
+    const firstHeld = held._min.decidedAt;
     return {
       earnedMinor,
+      heldMinor,
       paidMinor,
       requestedMinor,
-      availableMinor: earnedMinor - paidMinor - requestedMinor,
+      // до холда выводили и неподтверждённое — тогда выведено больше освобождённого, а не минус
+      availableMinor: Math.max(
+        0,
+        earnedMinor - heldMinor - paidMinor - requestedMinor,
+      ),
+      nextReleaseAt: firstHeld
+        ? new Date(firstHeld.getTime() + VIEWS_TOPUP_DAYS * DAY_MS)
+        : null,
     };
   }
 
@@ -113,6 +134,13 @@ export class PayoutsService {
       where: { status: PayoutStatus.REQUESTED },
       orderBy: { createdAt: 'asc' },
       include: { creator: true },
+    });
+  }
+
+  /** Сколько заявок ждёт перевода с момента раньше `before` — для напоминания. */
+  countRequestedBefore(before: Date) {
+    return this.prisma.payout.count({
+      where: { status: PayoutStatus.REQUESTED, createdAt: { lt: before } },
     });
   }
 

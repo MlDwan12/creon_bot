@@ -1,12 +1,14 @@
 # Деплой
 
-Прод деплоится вручную: образ собирается локально и загружается на VPS. Автодеплоя нет, пуш в `main` только прогоняет CI.
+Прод выкатывает GitHub Actions: мерж в `main` → зелёный CI → `.github/workflows/deploy.yml` собирает образ и по SSH
+выкатывает его на сервер. На сервер ничего не ставится: все шаги — в workflow.
 
 ## Как устроен прод
 
-- VPS, каталог `/var/www/site`. Там общий `docker-compose.yaml` с другими проектами. Бот — сервис `creon_bot`.
-- База — общий сервис `postgres:17` в сети `backend`. Отдельного контейнера БД у бота нет.
-- nginx и certbot стоят на хосте (`/etc/nginx/sites-enabled`). Mini App — `https://creon.couchreboot.site` → `127.0.0.1:8003`.
+- VPS `72.60.80.75`, каталог `/var/www/site`. Там общий `docker-compose.yaml` с другим проектом (vituss) —
+  ничего, кроме сервиса `creon_bot`, не трогаем.
+- База — общий сервис `postgres` (postgres 15), у бота своя роль `creon` (не суперпользователь) и база `creon_bot`.
+- nginx и certbot стоят на хосте: `/etc/nginx/sites-available/creon.couchreboot.site` → `127.0.0.1:8003`.
   `frame-ancestors` и `X-Frame-Options` в vhost не добавлять: Telegram Web открывает Mini App во фрейме.
 - Миграции накатываются сами при старте контейнера (`docker-entrypoint.sh` → `prisma migrate deploy`).
 - `HEALTHCHECK` образа дёргает `/api/health`, статус виден в `docker ps`.
@@ -15,34 +17,63 @@
 
 ```yaml
 creon_bot:
-  image: creon_bot:<дата>-<N>
-  restart: unless-stopped
-  env_file: ./.env.creon_bot
-  mem_limit: 256m
+  <<: *default-logging
+  image: creon_bot:current
+  pull_policy: never
+  container_name: creon_bot
+  restart: always
+  env_file:
+    - .env.creon_bot
   ports:
-    - 127.0.0.1:8003:3000
+    - '127.0.0.1:8003:3000'
+  depends_on:
+    postgres:
+      condition: service_healthy
+  deploy:
+    resources:
+      limits:
+        memory: 256M
+      reservations:
+        memory: 128M
   networks:
     - backend
 ```
 
-В `.env.creon_bot` — переменные из `.env.example`. `DATABASE_URL` указывает на сервис postgres общего compose. `BOT_TOKEN` — боевой: бот работает через long polling, и один токен может опрашивать только один процесс.
+В `.env.creon_bot` (права 600) — переменные из `.env.example`; `DATABASE_URL=postgresql://creon:<пароль>@postgres:5432/creon_bot`.
+`BOT_TOKEN` — боевой: long polling, один токен опрашивает только один процесс.
 
-## Выкатка
+## Как идёт выкатка
 
-1. Перед релизом с миграциями сделать бэкап базы (`pg_dump` из контейнера postgres).
-2. Собрать образ локально из нужного коммита и сохранить в файл:
+`.github/workflows/deploy.yml`:
+1. собирает образ `creon_bot:sha-<коммит>` из того коммита, что прошёл CI, и по SSH делает на сервере `docker load`;
+2. бэкап базы в `/var/www/site/_backups/` (хранятся последние 5);
+3. текущий `creon_bot:current` становится `creon_bot:previous`, новый образ — `current`;
+4. `docker compose up -d --no-deps creon_bot` и ждёт `healthy` до 3 минут;
+5. не поднялся — откат на `previous`, job падает красным. Миграции откат не отменит: для этого бэкап;
+6. удаляет старые образы creon (по метке `app=creon_bot`), чужие не трогает.
+
+Откат вручную: `sudo docker tag creon_bot:previous creon_bot:current && sudo docker compose up -d --no-deps creon_bot`.
+
+## Настройка (один раз)
+
+1. На сервере — пользователь для CI в группе `docker`, без пароля и sudo:
    ```bash
-   docker build -t creon_bot:<дата>-<N> .
-   docker save creon_bot:<дата>-<N> | gzip > creon_bot_<дата>-<N>.tar.gz
+   sudo useradd -m -s /bin/bash -G docker deploy
+   sudo passwd -l deploy
    ```
-3. Загрузить архив в `/var/www/site/_images/` (SFTP).
-4. На сервере:
-   ```bash
-   cd /var/www/site
-   sudo docker load < _images/creon_bot_<дата>-<N>.tar.gz
-   # поменять тег образа у сервиса creon_bot в docker-compose.yaml
-   sudo docker compose up -d --no-deps creon_bot
-   sudo docker compose logs -f creon_bot   # миграции и старт бота
-   ```
+   Группа `docker` — это фактически root на сервере, включая контейнеры соседнего проекта: ключ храним только
+   в секретах GitHub.
+2. Ключ — на своей машине: `ssh-keygen -t ed25519 -f creon_deploy -N '' -C creon-ci`.
+   Публичный (`creon_deploy.pub`) — в `/home/deploy/.ssh/authorized_keys` (каталог 700, файл 600, владелец deploy).
+3. Проверка со своей машины: `ssh -i creon_deploy deploy@72.60.80.75 docker ps` — список контейнеров.
+4. GitHub → Settings → Environments → `production`, секреты:
 
-Откат — вернуть в compose прошлый тег и снова `up -d --no-deps creon_bot`. Если релиз применил миграции, откат кода их не отменит: для возврата схемы нужен бэкап.
+   | Секрет | Значение |
+   |---|---|
+   | `SSH_HOST` | `72.60.80.75` |
+   | `SSH_PORT` | `22` (или свой) |
+   | `SSH_USER` | `deploy` |
+   | `SSH_KEY` | содержимое приватного `creon_deploy` целиком, с первой и последней строкой |
+   | `SSH_KNOWN_HOSTS` | вывод `ssh-keyscan -p <порт> 72.60.80.75` со своей машины |
+
+   По желанию там же — Required reviewers: выкатка ждёт подтверждения. После этого `creon_deploy` удалить с машины.

@@ -32,6 +32,10 @@ export function buildOrderReport(
   const views = approved.reduce((total, s) => total + (s.views ?? 0), 0);
   // лайки известны не по всем роликам (вне YouTube их вводит модератор по желанию)
   const likes = approved.reduce((total, s) => total + (s.likes ?? 0), 0);
+  // без страницы товара переходов не бывает — «0» вводил бы в заблуждение
+  const clicks = order.targetUrl
+    ? approved.reduce((total, s) => total + s.clicks, 0)
+    : null;
 
   const byPlatform = new Map<Platform, { videos: number; views: number }>();
   const items = approved.map((s) => {
@@ -49,6 +53,7 @@ export function buildOrderReport(
       creatorId: s.creatorId,
       views: s.views ?? 0,
       likes: s.likes,
+      clicks: order.targetUrl ? s.clicks : null,
       rating: s.rating,
       approvedAt: s.decidedAt,
     };
@@ -64,6 +69,8 @@ export function buildOrderReport(
       left: fromMinor(Math.max(0, order.budgetMinor - spent - reserved)),
       views,
       likes,
+      /** Переходы по ссылкам на товар из одобренных роликов; null — у заказа нет страницы товара. */
+      clicks,
       videos: approved.length,
       creators: new Set(approved.map((s) => s.creatorId)).size,
       /** Фактическая цена 1000 просмотров для рекламодателя; нет просмотров — null. */
@@ -89,13 +96,22 @@ export function reportCsv(report: Report): string {
     return `"${safe.replace(/"/g, '""')}"`;
   };
   const rows = [
-    ['Креатор', 'Площадка', 'Ссылка', 'Просмотры', 'Лайки', 'Одобрено'],
+    [
+      'Креатор',
+      'Площадка',
+      'Ссылка',
+      'Просмотры',
+      'Лайки',
+      'Переходы',
+      'Одобрено',
+    ],
     ...report.items.map((i) => [
       i.creator,
       i.platform === 'OTHER' ? 'Другое' : PLATFORMS[i.platform].name,
       i.videoUrl ?? '',
       i.views,
       i.likes ?? '',
+      i.clicks ?? '',
       i.approvedAt ? i.approvedAt.toISOString().slice(0, 10) : '',
     ]),
   ];

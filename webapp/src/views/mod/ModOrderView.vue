@@ -109,6 +109,11 @@ watch(() => props.id, load, { immediate: true });
         <a v-if="safeUrl(order.referenceUrl)" :href="safeUrl(order.referenceUrl)" target="_blank" rel="noopener noreferrer">{{ order.referenceUrl }}</a>
         <template v-else>{{ order.referenceUrl }}</template>
       </p>
+      <p v-if="order.targetUrl" class="reference">
+        Товар:
+        <a v-if="safeUrl(order.targetUrl)" :href="safeUrl(order.targetUrl)" target="_blank" rel="noopener noreferrer">{{ order.targetUrl }}</a>
+        <template v-else>{{ order.targetUrl }}</template>
+      </p>
 
       <div v-if="order.contacts.length" class="contacts" role="alert">
         <strong>⚠ Похоже на контакты для связи в обход площадки</strong>

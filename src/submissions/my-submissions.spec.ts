@@ -15,6 +15,7 @@ const order = (id: number): Order => ({
   maxDurationSec: null,
   orientation: null,
   referenceUrl: null,
+  targetUrl: null,
   category: 'OTHER',
   deadline: null,
   status: 'OPEN',
@@ -25,6 +26,7 @@ const order = (id: number): Order => ({
   decidedAt: null,
   closedAt: null,
   deadlineReminderSentAt: null,
+  insightsSentAt: null,
 });
 
 const submission = (
@@ -37,6 +39,9 @@ const submission = (
   orderId,
   creatorId: 5,
   videoUrl: null,
+  videoKey: null,
+  trackCode: null,
+  clicks: 0,
   status,
   moderatorId: 888n,
   moderatorComment: null,
@@ -46,6 +51,7 @@ const submission = (
   finalizedAt: null,
   rating: null,
   review: null,
+  reviewQueuedAt: null,
   portfolioAllowed: false,
   createdAt: new Date(id * 1000),
   submittedAt: null,

@@ -14,6 +14,8 @@ import { TelegramPhotosService } from './telegram-photos.service';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         token: config.get<string>('BOT_TOKEN')!,
+        // запускает StartUpdate.launch: сам модуль не ждёт запуск и не видит, что polling встал
+        launchOptions: false,
       }),
     }),
     SupportModule,

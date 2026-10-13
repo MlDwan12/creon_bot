@@ -95,6 +95,8 @@ export interface MySubmission {
   payout: number;
   /** Итог просмотров после добора зафиксирован. */
   finalized: boolean;
+  /** Ссылка на товар для описания ролика — путь `/r/<код>` от адреса мини-аппа; null — у заказа нет товара. */
+  trackPath: string | null;
   order: {
     id: number;
     title: string;
@@ -111,6 +113,7 @@ export interface MyOrder extends VideoFormat {
   title: string;
   description: string;
   referenceUrl: string | null;
+  targetUrl: string | null;
   /** Весь бюджет, USDT. */
   budget: number;
   minViews: number;
@@ -136,6 +139,8 @@ export interface NewOrderInput extends VideoFormat {
   description: string;
   /** Ссылка на референс или материалы; null — без ссылки. */
   referenceUrl: string | null;
+  /** Страница товара: креаторы ставят в описание ролика свою ссылку на неё, считаем переходы. */
+  targetUrl: string | null;
   /** Весь бюджет, USDT, включая комиссию площадки. */
   budget: number;
   /** Порог просмотров для сдачи; null — по умолчанию (250). */
@@ -168,12 +173,18 @@ export interface OrderReport {
     views: number;
     /** Сумма известных лайков: вне YouTube их вводит модератор по желанию. */
     likes: number;
+    /** Переходы по ссылкам на товар; null — у заказа нет страницы товара. */
+    clicks: number | null;
     videos: number;
     creators: number;
     /** Фактическая цена 1000 просмотров; null — просмотров ещё нет. */
     cpm: number | null;
   };
   platforms: { platform: Platform; videos: number; views: number }[];
+  /** Воронка: открыли карточку → взяли → не успели / на проверке / отклонено / одобрено. */
+  funnel: { viewers: number; taken: number; expired: number; onReview: number; rejected: number; approved: number };
+  /** Советы, что поправить в заказе. */
+  insights: { code: string; text: string }[];
   /** Одобренные ролики, больше просмотров — выше. */
   items: {
     id: number;
@@ -184,6 +195,7 @@ export interface OrderReport {
     views: number;
     /** null — неизвестно. */
     likes: number | null;
+    clicks: number | null;
     rating: number | null;
     approvedAt: string | null;
   }[];
@@ -205,6 +217,17 @@ export interface ModQueue {
   videos: { id: number; orderTitle: string; creator: string; submittedAt: string | null }[];
   /** Добор закончился — зафиксировать итог просмотров. */
   topups: { id: number; orderTitle: string; creator: string; decidedAt: string | null }[];
+  /** Отзывы рекламодателей с текстом — в профиле креатора только после проверки. */
+  reviews: {
+    submissionId: number;
+    orderTitle: string;
+    advertiser: string;
+    creator: string;
+    rating: number;
+    review: string;
+    queuedAt: string;
+    hasContacts: boolean;
+  }[];
 }
 
 export interface ModStats {
@@ -230,8 +253,27 @@ export interface ModFunnel {
     accepted: number;
   };
   users: { new: number; activeAdvertisers: number; activeCreators: number };
-  /** Начислено креаторам за одобренные ролики, USDT. */
-  turnover: { amount: number };
+  /** Начислено креаторам за одобренные ролики и комиссия площадки сверх этого, USDT. */
+  turnover: { amount: number; fee: number };
+  /** Частые причины отклонения роликов — текстом, как написал модератор. */
+  rejectReasons: { reason: string; count: number }[];
+  /** Бизнес-метрики — см. AnalyticsService.business. Деньги — USDT. */
+  business: {
+    /** Бюджеты опубликованных заказов, с комиссией. */
+    placed: number;
+    avgBudget: number | null;
+    /** Доля бюджета, освоенная завершёнными заказами, %; null — завершённых нет. */
+    utilization: number | null;
+    finished: number;
+    /** Завершённые, освоившие меньше половины бюджета. */
+    underused: number;
+    /** Медиана от публикации до первого отклика, часы. */
+    firstClaimHours: number | null;
+    advertisers: { total: number; repeat: number };
+    creators: { total: number; repeat: number };
+    /** На сейчас, не за период: начислено креаторам и не выплачено; из этого — в заявках. */
+    debt: { owed: number; requested: number };
+  };
 }
 
 export interface ModOrderRow {
@@ -249,6 +291,7 @@ export interface ModOrder extends VideoFormat {
   title: string;
   description: string;
   referenceUrl: string | null;
+  targetUrl: string | null;
   budget: number;
   feePercent: number;
   /** Фонд выплат креаторам (бюджет без комиссии), USDT — от него считается ставка. */
@@ -305,6 +348,10 @@ export interface ModVideo {
 /** Ответ `GET /api/balance` — см. src/api/balance.controller.ts. Суммы в USDT. */
 export interface Balance {
   earned: number;
+  /** Начислено, но ждёт итога просмотров (холд) — вывести пока нельзя. */
+  held: number;
+  /** Когда ближайший ролик выйдет из холда; null — в холде ничего нет. */
+  nextReleaseAt: string | null;
   paid: number;
   /** В открытой заявке на вывод. */
   requested: number;
@@ -496,8 +543,13 @@ export function sendReportCsv(orderId: number) {
   return request<{ ok: true }>('POST', `/api/my-orders/${orderId}/report/csv`);
 }
 
+/** `onModeration` — отзыв с текстом ушёл на проверку и появится в профиле креатора после неё. */
 export function rateVideo(submissionId: number, feedback: Feedback) {
-  return request<{ ok: true }>('POST', `/api/submissions/${submissionId}/rate`, feedback);
+  return request<{ ok: true; onModeration: boolean }>(
+    'POST',
+    `/api/submissions/${submissionId}/rate`,
+    feedback,
+  );
 }
 
 export function fetchMyProfile() {
@@ -540,7 +592,12 @@ export function updateWallet(wallet: string) {
   return request<{ ok: true }>('PUT', '/api/profile/wallet', { wallet });
 }
 
-/** Модератор: удалить отзыв (оценку и текст). */
+/** Модератор: опубликовать отзыв с проверки в профиле креатора. */
+export function approveReview(submissionId: number) {
+  return request<{ ok: true }>('POST', `/api/mod/reviews/${submissionId}/approve`);
+}
+
+/** Модератор: удалить отзыв (оценку и текст) — опубликованный или с проверки. */
 export function removeReview(submissionId: number) {
   return request<{ ok: true }>('DELETE', `/api/mod/reviews/${submissionId}`);
 }
@@ -637,6 +694,11 @@ export function decidePayout(id: number, decision: 'paid' | 'reject', comment?: 
 /** Итог просмотров после добора. */
 export function finalizeVideo(id: number, views: number, likes: number | null) {
   return request<{ ok: true }>('POST', `/api/mod/videos/${id}/finalize`, { views, likes });
+}
+
+/** При итоге публикации нет — начисление из холда отменяется. */
+export function markPublicationDeleted(id: number) {
+  return request<{ ok: true }>('POST', `/api/mod/videos/${id}/deleted`);
 }
 
 /** На что жалоба: VIDEO и REVIEW — по id отклика, PROFILE — по id пользователя. */

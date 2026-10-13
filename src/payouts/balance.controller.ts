@@ -28,6 +28,10 @@ export class BalanceController {
     ]);
     return {
       earned: fromMinor(balance.earnedMinor),
+      /** Начислено, но ждёт итога просмотров — вывести пока нельзя. */
+      held: fromMinor(balance.heldMinor),
+      /** Когда ближайший ролик выйдет из холда (если модератор зафиксирует итог). */
+      nextReleaseAt: balance.nextReleaseAt,
       paid: fromMinor(balance.paidMinor),
       requested: fromMinor(balance.requestedMinor),
       available: fromMinor(balance.availableMinor),
