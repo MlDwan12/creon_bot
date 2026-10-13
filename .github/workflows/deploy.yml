@@ -7,24 +7,64 @@ on:
     types: [completed]
     branches: [main]
 
+# GITHUB_TOKEN — только читать код; больше workflow ничего не нужно
+permissions:
+  contents: read
+
 jobs:
   deploy:
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    # только CI этого репозитория (не форка), на пуше и только зелёный
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     environment: production
-    # два мержа подряд не выкатываются одновременно — второй ждёт первый
+    # одна выкатка за раз; порядок ожидающих не гарантирован — устаревший коммит отсекает шаг ниже
     concurrency:
       group: deploy-production
       cancel-in-progress: false
+    defaults:
+      run:
+        shell: bash # = bash -eo pipefail: код возврата ssh не теряется в пайпе
     env:
+      SHA: ${{ github.event.workflow_run.head_sha }}
       TAG: sha-${{ github.event.workflow_run.head_sha }}
+      BRANCH: ${{ github.event.workflow_run.head_branch }}
+      APP: creon_bot
+      # куда и что выкатывать на сервере — переменные deploy/remote-deploy.sh
+      REMOTE_ENV: APP=creon_bot DIR=/var/www/site SERVICE=creon_bot PG=postgres DB=creon_bot DB_USER=creon
     steps:
       # именно тот коммит, который прошёл CI, а не то, что успело прийти в main после
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ env.SHA }}
+          persist-credentials: false
 
+      # CI коммита B может закончиться раньше CI коммита A — тогда A, выкатившись последним, вернул бы
+      # стенд назад. Выкатываем только вершину ветки; устаревший пропускаем — вершину выкатит её CI.
+      - name: Is latest commit
+        id: latest
+        env:
+          # токен с правом contents: read — ls-remote работает и для приватного репозитория
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tip="$(git ls-remote "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}" "refs/heads/$BRANCH" | cut -f1)"
+          [ -n "$tip" ] || { echo "не удалось узнать вершину $BRANCH" >&2; exit 1; }
+          if [ "$tip" = "$SHA" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::$SHA уже не вершина $BRANCH ($tip) — пропускаем, выкатит свежий"
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build image
+        if: steps.latest.outputs.deploy == 'true'
+        run: docker build -t "$APP:$TAG" .
+
+      # ключ появляется на раннере только после сборки — код сборки его не застанет
       - name: SSH key
+        if: steps.latest.outputs.deploy == 'true'
         run: |
           install -m 700 -d ~/.ssh
           echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_deploy
@@ -37,61 +77,21 @@ jobs:
             Port ${{ secrets.SSH_PORT }}
             User ${{ secrets.SSH_USER }}
             IdentityFile ~/.ssh/id_deploy
+            IdentitiesOnly yes
             StrictHostKeyChecking yes
           EOF
 
-      - name: Build image
-        run: docker build -t "creon_bot:$TAG" .
-
-      - name: Upload image
-        run: docker save "creon_bot:$TAG" | gzip | ssh prod docker load
-
-      # На сервере: бэкап базы → current становится previous, новый образ — current → up → ждём healthy.
-      # Не поднялся — откат на previous, job падает. Трогаем только сервис creon_bot и образы creon_bot.
-      - name: Deploy
+      - name: Upload image and script
+        if: steps.latest.outputs.deploy == 'true'
         run: |
-          # Скрипт идёт в stdin `bash -s`: команды, которые сами читают stdin (docker compose exec), —
-          # только с </dev/null, иначе съедят остаток скрипта и bash молча выйдет с кодом 0. Поэтому успех —
-          # только если дошли до последней строки.
-          ssh prod "TAG=$TAG bash -s" <<'EOF' | tee deploy.log
-          set -euo pipefail
-          cd /var/www/site
-          mkdir -p _backups
+          docker save "$APP:$TAG" | gzip | ssh prod docker load
+          scp -q deploy/remote-deploy.sh prod:remote-deploy.sh
 
-          echo "→ бэкап базы"
-          backup="_backups/creon_bot_$(date +%Y%m%d-%H%M%S)_before_${TAG:0:11}.sql.gz"
-          docker compose exec -T postgres pg_dump -U creon -d creon_bot </dev/null | gzip > "$backup"
-          [ -n "$(gzip -dc "$backup" | head -c 1)" ] || { echo "бэкап пустой: $backup" >&2; exit 1; }
+      # итог — код возврата скрипта: 0, только если новая версия на своём образе и healthy
+      - name: Deploy
+        if: steps.latest.outputs.deploy == 'true'
+        run: ssh -n prod "$REMOTE_ENV bash remote-deploy.sh $TAG"
 
-          if docker image inspect creon_bot:current >/dev/null 2>&1; then
-            docker tag creon_bot:current creon_bot:previous
-          fi
-          docker tag "creon_bot:$TAG" creon_bot:current
-
-          echo "→ запуск creon_bot"
-          docker compose up -d --no-deps creon_bot </dev/null
-          # start-period HEALTHCHECK — 60 с на миграции; ждём до 3 минут
-          for _ in $(seq 36); do
-            status="$(docker inspect -f '{{.State.Health.Status}}' creon_bot 2>/dev/null || echo starting)"
-            [ "$status" = healthy ] && break
-            sleep 5
-          done
-          if [ "$status" != healthy ]; then
-            echo "✗ creon_bot не стал healthy — откат на previous" >&2
-            docker compose logs --tail 80 creon_bot >&2 || true
-            if docker image inspect creon_bot:previous >/dev/null 2>&1; then
-              docker tag creon_bot:previous creon_bot:current
-              docker compose up -d --no-deps creon_bot </dev/null
-              echo "Откат выполнен. Миграции, если успели примениться, остались; бэкап до них: $backup" >&2
-            fi
-            exit 1
-          fi
-
-          echo "→ уборка: остаются current и previous, последние 5 бэкапов"
-          docker images creon_bot --format '{{.Tag}}' | { grep '^sha-' || true; } | xargs -r -I{} docker rmi "creon_bot:{}" >/dev/null
-          # только образы creon (LABEL в Dockerfile): висячие образы соседних проектов не трогаем
-          docker image prune -f --filter label=app=creon_bot >/dev/null
-          ls -1t _backups/*.sql.gz | tail -n +6 | xargs -r rm -f
-          echo "✓ выкачено $TAG"
-          EOF
-          grep -q '✓ выкачено' deploy.log || { echo "скрипт выкатки не дошёл до конца" >&2; exit 1; }
+      - name: Remove key
+        if: always()
+        run: rm -f ~/.ssh/id_deploy
