@@ -348,6 +348,10 @@ export interface ModVideo {
 /** Ответ `GET /api/balance` — см. src/api/balance.controller.ts. Суммы в USDT. */
 export interface Balance {
   earned: number;
+  /** Начислено, но ждёт итога просмотров (холд) — вывести пока нельзя. */
+  held: number;
+  /** Когда ближайший ролик выйдет из холда; null — в холде ничего нет. */
+  nextReleaseAt: string | null;
   paid: number;
   /** В открытой заявке на вывод. */
   requested: number;
@@ -690,6 +694,11 @@ export function decidePayout(id: number, decision: 'paid' | 'reject', comment?: 
 /** Итог просмотров после добора. */
 export function finalizeVideo(id: number, views: number, likes: number | null) {
   return request<{ ok: true }>('POST', `/api/mod/videos/${id}/finalize`, { views, likes });
+}
+
+/** При итоге публикации нет — начисление из холда отменяется. */
+export function markPublicationDeleted(id: number) {
+  return request<{ ok: true }>('POST', `/api/mod/videos/${id}/deleted`);
 }
 
 /** На что жалоба: VIDEO и REVIEW — по id отклика, PROFILE — по id пользователя. */

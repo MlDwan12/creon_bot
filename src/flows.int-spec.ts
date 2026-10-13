@@ -4,6 +4,8 @@ import { AnalyticsService } from './moderation/analytics.service';
 import { BansService } from './moderation/bans.service';
 import { ProfilesService } from './profiles/profiles.service';
 import { PayoutsService } from './payouts/payouts.service';
+import { VIEWS_TOPUP_DAYS } from './orders/budget';
+import { PUBLICATION_DELETED } from './submissions/submissions.service';
 import { ReportsService } from './reports/reports.service';
 import { MAX_ACTIVE_ORDERS, OrdersService } from './orders/orders.service';
 import { PrismaService } from './prisma/prisma.service';
@@ -766,7 +768,7 @@ describe('бюджет и просмотры', () => {
     await rejectOrder(order.id, 1n, 'контакты в названии');
     await prisma.submission.update({
       where: { id: s.id },
-      data: { decidedAt: new Date(Date.now() - 3 * DAY - 1000) },
+      data: { decidedAt: new Date(Date.now() - VIEWS_TOPUP_DAYS * DAY - 1000) },
     });
     const res = await submissions.finalizeViews(s.id, 5000);
     expect(res.extraMinor).toBe(0);
@@ -799,11 +801,11 @@ describe('бюджет и просмотры', () => {
     const s = await sent(order.id, a.id, 1000);
     await submissions.moderatorApprove(s.id, 1n, 1000, 40); // 100 USDT
     await expect(submissions.finalizeViews(s.id, 3000)).rejects.toThrow(
-      'через 3 дня',
+      `через ${VIEWS_TOPUP_DAYS} дн.`,
     );
     await prisma.submission.update({
       where: { id: s.id },
-      data: { decidedAt: new Date(Date.now() - 3 * DAY - 1000) },
+      data: { decidedAt: new Date(Date.now() - VIEWS_TOPUP_DAYS * DAY - 1000) },
     });
     expect((await submissions.listTopupDue()).map((x) => x.id)).toEqual([s.id]);
 
@@ -852,13 +854,89 @@ describe('баланс и вывод', () => {
     });
   }
 
-  /** Одобренный ролик креатора на `views` просмотров: 100 USDT за 1000. */
-  async function earned(creatorId: number, views: number) {
+  /** Одобренный ролик креатора на `views` просмотров (100 USDT за 1000), ещё в холде. */
+  async function approved(creatorId: number, views: number) {
     const order = await openOrder((await user()).id);
     const s = await submissions.claim(order.id, creatorId);
     await submissions.attachVideo(s.id, creatorId, videoUrl(), views);
     await submissions.moderatorApprove(s.id, 1n, views);
+    return s;
   }
+
+  /** Добор прошёл — сдвигаем одобрение в прошлое на срок холда. */
+  const topupOver = (submissionId: number) =>
+    prisma.submission.update({
+      where: { id: submissionId },
+      data: { decidedAt: new Date(Date.now() - VIEWS_TOPUP_DAYS * DAY - 1000) },
+    });
+
+  /** Одобренный ролик с зафиксированным итогом — деньги вышли из холда. */
+  async function earned(creatorId: number, views: number) {
+    const s = await approved(creatorId, views);
+    await topupOver(s.id);
+    await submissions.finalizeViews(s.id, views);
+  }
+
+  it('холд: начисленное до итога просмотров не выводится, после итога — доступно', async () => {
+    const creator = await creatorWithWallet();
+    const s = await approved(creator.id, 5000); // 500 USDT
+    expect(await payouts.balance(creator.id)).toMatchObject({
+      earnedMinor: 50_000,
+      heldMinor: 50_000,
+      availableMinor: 0,
+    });
+    expect(
+      (await payouts.balance(creator.id)).nextReleaseAt!.getTime(),
+    ).toBeGreaterThan(Date.now() + (VIEWS_TOPUP_DAYS - 1) * DAY);
+    await expect(payouts.requestPayout(creator.id, 10_000)).rejects.toThrow(
+      'больше доступного',
+    );
+
+    await topupOver(s.id);
+    await submissions.finalizeViews(s.id, 5000);
+    expect(await payouts.balance(creator.id)).toMatchObject({
+      heldMinor: 0,
+      availableMinor: 50_000,
+      nextReleaseAt: null,
+    });
+  });
+
+  it('публикацию удалили до итога — начисление отменено, деньги вернулись в фонд', async () => {
+    const creator = await creatorWithWallet();
+    const s = await approved(creator.id, 5000);
+    const { orderId } = s;
+    const freeBefore = (
+      await submissions.orderBudget(
+        await prisma.order.findUniqueOrThrow({ where: { id: orderId } }),
+      )
+    ).free;
+
+    const rejected = await submissions.publicationDeleted(s.id, 1n);
+    expect(rejected).toMatchObject({
+      status: 'MODERATOR_REJECTED',
+      payoutMinor: 0,
+      moderatorComment: PUBLICATION_DELETED,
+    });
+    expect(await payouts.balance(creator.id)).toMatchObject({
+      earnedMinor: 0,
+      heldMinor: 0,
+    });
+    const freeAfter = (
+      await submissions.orderBudget(
+        await prisma.order.findUniqueOrThrow({ where: { id: orderId } }),
+      )
+    ).free;
+    expect(freeAfter - freeBefore).toBe(50_000);
+    expect(await submissions.listTopupDue()).toEqual([]);
+
+    // после итога деньги уже вышли из холда — отменить нельзя
+    const done = await approved(creator.id, 5000);
+    await topupOver(done.id);
+    await submissions.finalizeViews(done.id, 5000);
+    await expect(submissions.publicationDeleted(done.id, 1n)).rejects.toThrow(
+      'вышли из холда',
+    );
+  });
 
   it('баланс — начисленное минус заявки; ролик на проверке не в балансе', async () => {
     const creator = await creatorWithWallet();
@@ -868,9 +946,11 @@ describe('баланс и вывод', () => {
     await submissions.attachVideo(pending.id, creator.id, videoUrl(), 5000);
     expect(await payouts.balance(creator.id)).toEqual({
       earnedMinor: 50_000,
+      heldMinor: 0,
       paidMinor: 0,
       requestedMinor: 0,
       availableMinor: 50_000,
+      nextReleaseAt: null,
     });
 
     const p = await payouts.requestPayout(creator.id, 30_000);
@@ -1048,6 +1128,12 @@ describe('бизнес-метрики', () => {
     const s = await submissions.claim(done.id, creator.id);
     await submissions.attachVideo(s.id, creator.id, videoUrl(), 30_000);
     await submissions.moderatorApprove(s.id, 1n, 30_000); // креатору 3000 USDT
+    // итог зафиксирован — деньги вышли из холда, можно подать заявку
+    await prisma.submission.update({
+      where: { id: s.id },
+      data: { decidedAt: new Date(Date.now() - VIEWS_TOPUP_DAYS * DAY - 1000) },
+    });
+    await submissions.finalizeViews(s.id, 30_000);
     await orders.close(done.id, advertiser.id);
     await openOrder(advertiser.id);
 

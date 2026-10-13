@@ -207,7 +207,7 @@ export class NotificationsService
     const views = (submission.views ?? 0).toLocaleString('ru-RU');
     this.send(
       submission.creator.telegramId,
-      `✅ Ролик по заказу ${forCreator(submission.order)} одобрен: ${views} просмотров, начислено ${formatMoney(fromMinor(submission.payoutMinor))}.\n\nЧерез ${VIEWS_TOPUP_DAYS} дня зафиксируем итог просмотров и доплатим за новые, пока в заказе есть бюджет. Вывести деньги — «Профиль» → «Баланс».`,
+      `✅ Ролик по заказу ${forCreator(submission.order)} одобрен: ${views} просмотров, начислено ${formatMoney(fromMinor(submission.payoutMinor))}.\n\nЧерез ${VIEWS_TOPUP_DAYS} дней зафиксируем итог просмотров и доплатим за новые, пока в заказе есть бюджет. После итога деньги можно вывести — «Профиль» → «Баланс». Не удаляйте публикацию: если её не будет на месте, начисление отменится.`,
       '/submissions',
       true,
     );
@@ -231,8 +231,18 @@ export class NotificationsService
     this.send(
       submission.creator.telegramId,
       extraMinor > 0
-        ? `📈 Итог по ролику (заказ ${forCreator(submission.order)}): ${views} просмотров, доплачено ${formatMoney(fromMinor(extraMinor))}.`
-        : `📈 Итог по ролику (заказ ${forCreator(submission.order)}): ${views} просмотров. Доплаты нет — новых просмотров нет или бюджет заказа исчерпан.`,
+        ? `📈 Итог по ролику (заказ ${forCreator(submission.order)}): ${views} просмотров, доплачено ${formatMoney(fromMinor(extraMinor))}. Деньги за ролик можно вывести.`
+        : `📈 Итог по ролику (заказ ${forCreator(submission.order)}): ${views} просмотров. Доплаты нет — новых просмотров нет или бюджет заказа исчерпан. Деньги за ролик можно вывести.`,
+      '/submissions',
+      true,
+    );
+  }
+
+  /** Креатору: при итоге публикации не оказалось — начисление отменено. */
+  publicationDeleted(submission: SubmissionWithParties) {
+    this.send(
+      submission.creator.telegramId,
+      `❌ Ролик по заказу ${forCreator(submission.order)} не найден по ссылке при итоге просмотров — публикацию удалили или скрыли. Начисление за него отменено.\n\nЕсли это ошибка — напишите в поддержку.`,
       '/submissions',
       true,
     );
