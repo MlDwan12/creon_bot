@@ -50,14 +50,17 @@ jobs:
       # Не поднялся — откат на previous, job падает. Трогаем только сервис creon_bot и образы creon_bot.
       - name: Deploy
         run: |
-          ssh prod "TAG=$TAG bash -s" <<'EOF'
+          # Скрипт идёт в stdin `bash -s`: команды, которые сами читают stdin (docker compose exec), —
+          # только с </dev/null, иначе съедят остаток скрипта и bash молча выйдет с кодом 0. Поэтому успех —
+          # только если дошли до последней строки.
+          ssh prod "TAG=$TAG bash -s" <<'EOF' | tee deploy.log
           set -euo pipefail
           cd /var/www/site
           mkdir -p _backups
 
           echo "→ бэкап базы"
           backup="_backups/creon_bot_$(date +%Y%m%d-%H%M%S)_before_${TAG:0:11}.sql.gz"
-          docker compose exec -T postgres pg_dump -U creon -d creon_bot | gzip > "$backup"
+          docker compose exec -T postgres pg_dump -U creon -d creon_bot </dev/null | gzip > "$backup"
           [ -n "$(gzip -dc "$backup" | head -c 1)" ] || { echo "бэкап пустой: $backup" >&2; exit 1; }
 
           if docker image inspect creon_bot:current >/dev/null 2>&1; then
@@ -66,7 +69,7 @@ jobs:
           docker tag "creon_bot:$TAG" creon_bot:current
 
           echo "→ запуск creon_bot"
-          docker compose up -d --no-deps creon_bot
+          docker compose up -d --no-deps creon_bot </dev/null
           # start-period HEALTHCHECK — 60 с на миграции; ждём до 3 минут
           for _ in $(seq 36); do
             status="$(docker inspect -f '{{.State.Health.Status}}' creon_bot 2>/dev/null || echo starting)"
@@ -78,7 +81,7 @@ jobs:
             docker compose logs --tail 80 creon_bot >&2 || true
             if docker image inspect creon_bot:previous >/dev/null 2>&1; then
               docker tag creon_bot:previous creon_bot:current
-              docker compose up -d --no-deps creon_bot
+              docker compose up -d --no-deps creon_bot </dev/null
               echo "Откат выполнен. Миграции, если успели примениться, остались; бэкап до них: $backup" >&2
             fi
             exit 1
@@ -91,3 +94,4 @@ jobs:
           ls -1t _backups/*.sql.gz | tail -n +6 | xargs -r rm -f
           echo "✓ выкачено $TAG"
           EOF
+          grep -q '✓ выкачено' deploy.log || { echo "скрипт выкатки не дошёл до конца" >&2; exit 1; }
