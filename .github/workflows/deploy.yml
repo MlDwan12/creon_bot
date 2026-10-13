@@ -1,0 +1,93 @@
+name: Deploy
+
+# Выкатка в прод: после зелёного CI на пуше в main (мерж релиза). Сервер и порядок шагов — DEPLOY.md.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    environment: production
+    # два мержа подряд не выкатываются одновременно — второй ждёт первый
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    env:
+      TAG: sha-${{ github.event.workflow_run.head_sha }}
+    steps:
+      # именно тот коммит, который прошёл CI, а не то, что успело прийти в main после
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: SSH key
+        run: |
+          install -m 700 -d ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          # отпечаток сервера — из секрета, а не ssh-keyscan: иначе подменённый хост примем за свой
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host prod
+            HostName ${{ secrets.SSH_HOST }}
+            Port ${{ secrets.SSH_PORT }}
+            User ${{ secrets.SSH_USER }}
+            IdentityFile ~/.ssh/id_deploy
+            StrictHostKeyChecking yes
+          EOF
+
+      - name: Build image
+        run: docker build -t "creon_bot:$TAG" .
+
+      - name: Upload image
+        run: docker save "creon_bot:$TAG" | gzip | ssh prod docker load
+
+      # На сервере: бэкап базы → current становится previous, новый образ — current → up → ждём healthy.
+      # Не поднялся — откат на previous, job падает. Трогаем только сервис creon_bot и образы creon_bot.
+      - name: Deploy
+        run: |
+          ssh prod "TAG=$TAG bash -s" <<'EOF'
+          set -euo pipefail
+          cd /var/www/site
+          mkdir -p _backups
+
+          echo "→ бэкап базы"
+          backup="_backups/creon_bot_$(date +%Y%m%d-%H%M%S)_before_${TAG:0:11}.sql.gz"
+          docker compose exec -T postgres pg_dump -U creon -d creon_bot | gzip > "$backup"
+          [ -n "$(gzip -dc "$backup" | head -c 1)" ] || { echo "бэкап пустой: $backup" >&2; exit 1; }
+
+          if docker image inspect creon_bot:current >/dev/null 2>&1; then
+            docker tag creon_bot:current creon_bot:previous
+          fi
+          docker tag "creon_bot:$TAG" creon_bot:current
+
+          echo "→ запуск creon_bot"
+          docker compose up -d --no-deps creon_bot
+          # start-period HEALTHCHECK — 60 с на миграции; ждём до 3 минут
+          for _ in $(seq 36); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' creon_bot 2>/dev/null || echo starting)"
+            [ "$status" = healthy ] && break
+            sleep 5
+          done
+          if [ "$status" != healthy ]; then
+            echo "✗ creon_bot не стал healthy — откат на previous" >&2
+            docker compose logs --tail 80 creon_bot >&2 || true
+            if docker image inspect creon_bot:previous >/dev/null 2>&1; then
+              docker tag creon_bot:previous creon_bot:current
+              docker compose up -d --no-deps creon_bot
+              echo "Откат выполнен. Миграции, если успели примениться, остались; бэкап до них: $backup" >&2
+            fi
+            exit 1
+          fi
+
+          echo "→ уборка: остаются current и previous, последние 5 бэкапов"
+          docker images creon_bot --format '{{.Tag}}' | { grep '^sha-' || true; } | xargs -r -I{} docker rmi "creon_bot:{}" >/dev/null
+          # только образы creon (LABEL в Dockerfile): висячие образы соседних проектов не трогаем
+          docker image prune -f --filter label=app=creon_bot >/dev/null
+          ls -1t _backups/*.sql.gz | tail -n +6 | xargs -r rm -f
+          echo "✓ выкачено $TAG"
+          EOF
