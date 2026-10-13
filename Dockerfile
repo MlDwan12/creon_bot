@@ -25,6 +25,8 @@ RUN yarn build
 
 # --- runtime: run pending migrations, then start the compiled app ---
 FROM node:22-alpine AS runtime
+# по метке скрипт выкатки чистит только свои старые образы, не трогая другие проекты на сервере
+LABEL app=creon_bot
 WORKDIR /app
 ENV NODE_ENV=production
 RUN addgroup -S app && adduser -S app -G app
