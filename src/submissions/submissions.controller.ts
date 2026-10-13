@@ -62,7 +62,10 @@ export class SubmissionsController {
       req.user.id,
       parseFeedback(body),
     );
-    this.notifications.videoRated(submission);
-    return { ok: true };
+    // отзыв с текстом — сначала модератору, креатору — после проверки
+    if (submission.reviewQueuedAt)
+      this.notifications.reviewSubmitted(submission);
+    else this.notifications.videoRated(submission);
+    return { ok: true, onModeration: submission.reviewQueuedAt !== null };
   }
 }

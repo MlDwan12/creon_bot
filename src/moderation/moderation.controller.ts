@@ -79,10 +79,11 @@ export class ModerationController {
   /** Обе очереди сразу: заказы и видео на проверке, старые первыми. */
   @Get('queue')
   async queue() {
-    const [orders, videos, topups] = await Promise.all([
+    const [orders, videos, topups, reviews] = await Promise.all([
       this.ordersService.listPending(),
       this.submissionsService.listPendingModeration(),
       this.submissionsService.listTopupDue(),
+      this.submissionsService.listPendingReviews(),
     ]);
     return {
       orders: orders.map((o) => ({
@@ -109,6 +110,17 @@ export class ModerationController {
         orderTitle: s.order.title,
         creator: creatorLabel(s.creator),
         decidedAt: s.decidedAt,
+      })),
+      // отзывы рекламодателей с текстом — до публикации в профиле креатора
+      reviews: reviews.map((s) => ({
+        submissionId: s.id,
+        orderTitle: s.order.title,
+        advertiser: creatorLabel(s.order.advertiser),
+        creator: creatorLabel(s.creator),
+        rating: s.rating,
+        review: s.review,
+        queuedAt: s.reviewQueuedAt,
+        hasContacts: findContacts(s.review).length > 0,
       })),
     };
   }
@@ -308,7 +320,18 @@ export class ModerationController {
     return { ok: true };
   }
 
-  /** Удалить отзыв креатору (оскорбления и т.п.); приёмка видео остаётся. */
+  /** Опубликовать отзыв с проверки в профиле креатора — креатору приходит уведомление об оценке. */
+  @Post('reviews/:submissionId/approve')
+  async approveReview(
+    @Param('submissionId', ParseIdPipe) submissionId: number,
+  ) {
+    this.notifications.videoRated(
+      await this.submissionsService.approveReview(submissionId),
+    );
+    return { ok: true };
+  }
+
+  /** Удалить отзыв креатору (оскорбления и т.п.) или отклонить с проверки; приёмка видео остаётся. */
   @Delete('reviews/:submissionId')
   async removeReview(@Param('submissionId', ParseIdPipe) submissionId: number) {
     await this.submissionsService.removeReview(submissionId);

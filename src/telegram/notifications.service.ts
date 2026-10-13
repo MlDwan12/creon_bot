@@ -156,6 +156,18 @@ export class NotificationsService
     this.toModerators(text, `/mod/videos/${submission.id}`);
   }
 
+  /** Модераторам: рекламодатель оставил отзыв с текстом — проверить до публикации. */
+  reviewSubmitted(submission: SubmissionWithParties) {
+    const text = [
+      '🆕 <b>Отзыв на проверку</b>',
+      '',
+      `Заказ #${submission.order.id}: <b>${escapeHtml(submission.order.title)}</b>`,
+      `Креатор: ${escapeHtml(creatorLabel(submission.creator))}`,
+      `${'★'.repeat(submission.rating ?? 0)} ${escapeHtml(submission.review ?? '')}`,
+    ].join('\n');
+    this.toModerators(text, '/mod');
+  }
+
   /** Рекламодателю: модератор опубликовал заказ. */
   orderApproved(order: Order & { advertiser: User }) {
     this.send(
@@ -353,7 +365,13 @@ export class NotificationsService
 
   /** Модераторам: в очереди есть то, что ждёт дольше положенного. */
   moderationQueueStale(
-    stale: { orders: number; videos: number; topups: number; payouts: number },
+    stale: {
+      orders: number;
+      videos: number;
+      topups: number;
+      payouts: number;
+      reviews: number;
+    },
     hours: number,
   ) {
     const parts = [
@@ -361,6 +379,7 @@ export class NotificationsService
       stale.videos ? `видео: ${stale.videos}` : '',
       stale.topups ? `итогов просмотров: ${stale.topups}` : '',
       stale.payouts ? `заявок на вывод: ${stale.payouts}` : '',
+      stale.reviews ? `отзывов: ${stale.reviews}` : '',
     ].filter(Boolean);
     this.toModerators(
       `🕓 Дольше ${hours} ч ждут проверки — ${parts.join(', ')}.`,

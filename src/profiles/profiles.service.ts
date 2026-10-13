@@ -43,15 +43,21 @@ export class ProfilesService {
       creatorId,
       status: SubmissionStatus.MODERATOR_APPROVED,
     };
+    // отзыв с текстом виден только после проверки модератором
+    const published = {
+      creatorId,
+      rating: { not: null },
+      reviewQueuedAt: null,
+    };
     const [ratings, completed, reviews, portfolio] = await Promise.all([
       this.prisma.submission.aggregate({
-        where: { creatorId, rating: { not: null } },
+        where: published,
         _avg: { rating: true },
         _count: { rating: true },
       }),
       this.prisma.submission.count({ where: accepted }),
       this.prisma.submission.findMany({
-        where: { creatorId, rating: { not: null } },
+        where: published,
         orderBy: { decidedAt: 'desc' },
         take: PROFILE_LIST_LIMIT,
         include: { order: { select: { title: true } } },

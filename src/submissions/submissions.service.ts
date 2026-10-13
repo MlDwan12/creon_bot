@@ -447,7 +447,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
 
   /** Сколько видео и итогов добора ждут модератора с момента раньше `before` — для напоминания. */
   async countStaleBefore(before: Date) {
-    const [videos, topups] = await Promise.all([
+    const [videos, topups, reviews] = await Promise.all([
       this.prisma.submission.count({
         where: {
           status: SubmissionStatus.SUBMITTED,
@@ -464,8 +464,11 @@ export class SubmissionsService implements OnApplicationBootstrap {
           },
         },
       }),
+      this.prisma.submission.count({
+        where: { reviewQueuedAt: { lt: before } },
+      }),
     ]);
-    return { videos, topups };
+    return { videos, topups, reviews };
   }
 
   /**
@@ -525,7 +528,11 @@ export class SubmissionsService implements OnApplicationBootstrap {
     });
   }
 
-  /** Рекламодатель по желанию оценивает одобренный ролик; оценку не меняют. */
+  /**
+   * Рекламодатель по желанию оценивает одобренный ролик; оценку не меняют. Отзыв с текстом уходит
+   * модератору (`reviewQueuedAt`) и появится в профиле креатора после проверки: в тексте могут быть
+   * оскорбления или контакты в обход площадки. Одни звёзды публикуются сразу.
+   */
   async rate(
     submissionId: number,
     advertiserId: number,
@@ -544,17 +551,42 @@ export class SubmissionsService implements OnApplicationBootstrap {
         status: SubmissionStatus.MODERATOR_APPROVED,
         rating: null,
       },
-      data: feedback,
+      data: {
+        ...feedback,
+        reviewQueuedAt: feedback.review ? new Date() : null,
+      },
     });
     if (count === 0) throw new ForbiddenException('Этот ролик уже оценён');
     return this.mustFind(submissionId);
   }
 
-  /** Модератор удаляет отзыв (оскорбления и т.п.): оценка и текст пропадают, ролик остаётся одобренным. */
+  /** Отзывы, ждущие модератора, — старые первыми. */
+  listPendingReviews() {
+    return this.prisma.submission.findMany({
+      where: { reviewQueuedAt: { not: null } },
+      orderBy: { reviewQueuedAt: 'asc' },
+      include: { order: { include: { advertiser: true } }, creator: true },
+    });
+  }
+
+  /** Модератор публикует отзыв в профиле креатора; второй модератор получит ошибку, а не двойное уведомление. */
+  async approveReview(submissionId: number) {
+    const { count } = await this.prisma.submission.updateMany({
+      where: { id: submissionId, reviewQueuedAt: { not: null } },
+      data: { reviewQueuedAt: null },
+    });
+    if (count === 0) throw new NotFoundException('Отзыв уже проверен');
+    return this.mustFind(submissionId);
+  }
+
+  /**
+   * Модератор удаляет отзыв (оскорбления и т.п.) — опубликованный или ещё на проверке: оценка и текст
+   * пропадают, ролик остаётся одобренным.
+   */
   async removeReview(submissionId: number) {
     const { count } = await this.prisma.submission.updateMany({
       where: { id: submissionId, rating: { not: null } },
-      data: { rating: null, review: null },
+      data: { rating: null, review: null, reviewQueuedAt: null },
     });
     if (count === 0) throw new NotFoundException('Отзыв не найден');
   }

@@ -1072,13 +1072,8 @@ describe('бизнес-метрики', () => {
 });
 
 describe('профиль креатора', () => {
-  /** Ролик креатора одобрен модератором, рекламодатель ставит оценку. */
-  async function acceptedVideo(
-    advertiserId: number,
-    creatorId: number,
-    rating: number,
-    portfolioAllowed = false,
-  ) {
+  /** Ролик креатора одобрен модератором, оценки ещё нет. */
+  async function approvedVideo(advertiserId: number, creatorId: number) {
     const order = await openOrder(advertiserId);
     const s = await submissions.claim(order.id, creatorId);
     await submissions.attachVideo(
@@ -1088,11 +1083,23 @@ describe('профиль креатора', () => {
       VIEWS,
     );
     await submissions.moderatorApprove(s.id, 1n, VIEWS);
+    return s;
+  }
+
+  /** Ролик креатора одобрен, рекламодатель оставил отзыв, модератор его опубликовал. */
+  async function acceptedVideo(
+    advertiserId: number,
+    creatorId: number,
+    rating: number,
+    portfolioAllowed = false,
+  ) {
+    const s = await approvedVideo(advertiserId, creatorId);
     await submissions.rate(s.id, advertiserId, {
       rating,
       review: `отзыв ${rating}`,
       portfolioAllowed,
     });
+    await submissions.approveReview(s.id);
     return s;
   }
 
@@ -1157,6 +1164,71 @@ describe('профиль креатора', () => {
     expect(full.name).toBe('@secret_creator');
     expect(full.links.tiktokUrl).toContain('secret_creator');
     expect(full.portfolio[0].videoUrl).not.toBeNull();
+  });
+
+  it('отзыв с текстом — в профиле только после проверки, звёзды без текста — сразу', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const s = await approvedVideo(advertiser.id, creator.id);
+    const rated = await submissions.rate(s.id, advertiser.id, {
+      rating: 2,
+      review: 'пишите мне в личку',
+      portfolioAllowed: false,
+    });
+    expect(rated.reviewQueuedAt).not.toBeNull();
+
+    expect(await profiles.profile(creator.id, true)).toMatchObject({
+      rating: null,
+      reviewsCount: 0,
+      reviews: [],
+    });
+    expect((await submissions.listPendingReviews()).map((r) => r.id)).toContain(
+      s.id,
+    );
+    // креатор ещё не видел отзыв — пожаловаться не на что
+    await expect(
+      reports.create(
+        creator,
+        reports.parse({ target: 'REVIEW', targetId: s.id, reason: 'INSULT' }),
+      ),
+    ).rejects.toThrow('Не найдено');
+
+    await submissions.approveReview(s.id);
+    expect(await profiles.profile(creator.id, true)).toMatchObject({
+      rating: 2,
+      reviewsCount: 1,
+    });
+    // второй модератор не опубликует повторно
+    await expect(submissions.approveReview(s.id)).rejects.toThrow('проверен');
+
+    const starsOnly = await approvedVideo(advertiser.id, creator.id);
+    const noText = await submissions.rate(starsOnly.id, advertiser.id, {
+      rating: 4,
+      review: null,
+      portfolioAllowed: false,
+    });
+    expect(noText.reviewQueuedAt).toBeNull();
+    expect(await profiles.profile(creator.id, true)).toMatchObject({
+      rating: 3,
+      reviewsCount: 2,
+    });
+  });
+
+  it('модератор отклоняет отзыв с проверки — оценка не попадает в рейтинг', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const s = await approvedVideo(advertiser.id, creator.id);
+    await submissions.rate(s.id, advertiser.id, {
+      rating: 1,
+      review: 'ужас',
+      portfolioAllowed: false,
+    });
+
+    await submissions.removeReview(s.id);
+
+    expect(await submissions.listPendingReviews()).toHaveLength(0);
+    expect(await profiles.profile(creator.id, true)).toMatchObject({
+      rating: null,
+      completed: 1,
+    });
   });
 
   it('модератор удаляет отзыв — одобрение и счётчик выполненных остаются', async () => {
@@ -1271,6 +1343,7 @@ describe('жалобы', () => {
       review: 'ужас',
       portfolioAllowed: false,
     });
+    await submissions.approveReview(s.id);
 
     await expect(
       reports.create(advertiser, report('REVIEW', s.id, 'INSULT')),

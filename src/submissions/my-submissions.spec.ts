@@ -51,6 +51,7 @@ const submission = (
   finalizedAt: null,
   rating: null,
   review: null,
+  reviewQueuedAt: null,
   portfolioAllowed: false,
   createdAt: new Date(id * 1000),
   submittedAt: null,
