@@ -11,6 +11,9 @@
 # up --force-recreate → ждём healthy именно нового образа. Не поднялся — откат на previous и
 # проверка, что поднялся он. Миграции откат не отменяет — для этого бэкап до выкатки.
 set -euo pipefail
+# Сервер общий с другими проектами, а в дампе — кошельки, Telegram ID, заказы: папка бэкапов и
+# дампы — только для владельца (700/600), остальные пользователи сервера их не прочитают.
+umask 077
 
 TAG="${1:-}"
 [[ "$TAG" =~ ^sha-[0-9a-f]{40}$ ]] || { echo "тег — sha-<40 hex>, получено: '$TAG'" >&2; exit 2; }
@@ -77,6 +80,7 @@ echo "→ уборка: остаются current и previous, последние
 docker rmi "$APP:$TAG" >/dev/null # тег сборки; сам образ остаётся под current
 # только образы этого приложения (LABEL в Dockerfile): висячие образы соседних проектов не трогаем
 docker image prune -f --filter "label=app=$APP" >/dev/null
-ls -1t _backups/*.dump | tail -n +$((KEEP_BACKUPS + 1)) | xargs -r rm -f
+# только свои бэкапы (по имени базы): /var/www/site общий, чужие дампы в _backups не трогаем
+ls -1t "_backups/${DB}_"*.dump | tail -n +$((KEEP_BACKUPS + 1)) | xargs -r rm -f
 
 echo "✓ выкачено $TAG"
