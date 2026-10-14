@@ -1,3 +1,4 @@
+import { tr } from '../i18n/request-lang';
 import { BadRequestException } from '@nestjs/common';
 import { findExactContacts } from '../common/contacts';
 import { isOnHosts, PLATFORMS } from '../common/platforms';
@@ -12,12 +13,12 @@ export function parseFeedback(body: unknown) {
     (rating as number) < 1 ||
     (rating as number) > 5
   )
-    throw new BadRequestException('Поставьте оценку от 1 до 5');
+    throw new BadRequestException(tr('errors.ratingRange'));
 
   const review = typeof b.review === 'string' ? b.review.trim() : '';
   if (review.length > MAX_COMMENT_LENGTH)
     throw new BadRequestException(
-      `Отзыв длиннее ${MAX_COMMENT_LENGTH} символов`,
+      tr('errors.reviewTooLong', { max: MAX_COMMENT_LENGTH }),
     );
   assertNoContacts(review);
 
@@ -35,9 +36,7 @@ export function parseFeedback(body: unknown) {
 export function assertNoContacts(text: string) {
   const [found] = findExactContacts(text);
   if (found)
-    throw new BadRequestException(
-      `Уберите контакты (${found}) — общение между сторонами только через поддержку Fixum`,
-    );
+    throw new BadRequestException(tr('errors.removeContacts', { found }));
 }
 
 const MAX_LINK_LENGTH = 200;
@@ -86,7 +85,7 @@ export function parseLinks(body: unknown): ProfileLinks {
       isOnHosts(url.hostname, hosts);
     if (!ok)
       throw new BadRequestException(
-        `Ссылка на ${name} должна начинаться с https:// и вести на ${hosts.join(' или ')}`,
+        tr('errors.profileLink', { name, hosts: hosts.join(tr('errors.or')) }),
       );
     result[field] = url!.toString();
   }

@@ -1,3 +1,4 @@
+import { tr } from '../i18n/request-lang';
 import { type Order, type Submission, SubmissionStatus } from '@prisma/client';
 import { fromMinor } from '../common/money';
 import { titleVisibleToCreators } from '../common/format';
@@ -46,7 +47,7 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
         id: row.order.id,
         title: titleVisibleToCreators(row.order)
           ? row.order.title
-          : `Заказ #${row.order.id} — на проверке у модератора`,
+          : tr('errors.orderUnderReview', { id: row.order.id }),
         cpm: fromMinor(row.order.cpmMinor),
         minViews: row.order.minViews,
         deadline: row.order.deadline,

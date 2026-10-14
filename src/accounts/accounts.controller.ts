@@ -1,3 +1,5 @@
+import { userLang } from '../i18n/i18n';
+import { requestLang, setRequestLang, tr } from '../i18n/request-lang';
 import {
   Controller,
   Delete,
@@ -24,7 +26,7 @@ import { AccountsService } from './accounts.service';
 function parsePlatform(raw: string): SocialPlatform {
   const platform = raw.toUpperCase() as SocialPlatform;
   if (!Object.values(SocialPlatform).includes(platform))
-    throw new NotFoundException('Нет такой площадки');
+    throw new NotFoundException(tr('errors.noPlatform'));
   return platform;
 }
 
@@ -82,23 +84,28 @@ export class OAuthCallbackController {
         query,
       );
       this.notifications.socialAccountConnected(user, name);
+      // страница — на языке пользователя, а не только браузера: теперь мы знаем, кто это
+      setRequestLang(userLang(user));
       res
         .type('html')
-        .send(page(`${name} подключён`, 'Можно вернуться в Telegram.'));
+        .send(
+          page(
+            tr('errors.oauthConnected', { platform: name }),
+            tr('errors.oauthBackToTelegram'),
+          ),
+        );
     } catch (err) {
       const status = err instanceof HttpException ? err.getStatus() : 500;
       const message =
-        err instanceof HttpException
-          ? err.message
-          : 'Что-то пошло не так — попробуйте позже';
+        err instanceof HttpException ? err.message : tr('errors.oauthUnknown');
       res
         .status(status)
         .type('html')
-        .send(page('Не получилось подключить', message));
+        .send(page(tr('errors.oauthFailedTitle'), message));
     }
   }
 }
 
 function page(title: string, text: string) {
-  return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title></head><body style="font-family:system-ui,sans-serif;max-width:28rem;margin:4rem auto;padding:0 1rem;text-align:center"><h1 style="font-size:1.4rem">${escapeHtml(title)}</h1><p>${escapeHtml(text)}</p></body></html>`;
+  return `<!doctype html><html lang="${requestLang()}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title></head><body style="font-family:system-ui,sans-serif;max-width:28rem;margin:4rem auto;padding:0 1rem;text-align:center"><h1 style="font-size:1.4rem">${escapeHtml(title)}</h1><p>${escapeHtml(text)}</p></body></html>`;
 }

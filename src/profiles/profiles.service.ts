@@ -1,3 +1,4 @@
+import { tr } from '../i18n/request-lang';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { SubmissionStatus, type User } from '@prisma/client';
 import { creatorLabel, publicName } from '../common/format';
@@ -37,7 +38,7 @@ export class ProfilesService {
     const creator = await this.prisma.user.findUnique({
       where: { id: creatorId },
     });
-    if (!creator) throw new NotFoundException('Креатор не найден');
+    if (!creator) throw new NotFoundException(tr('errors.creatorNotFound'));
 
     const accepted = {
       creatorId,

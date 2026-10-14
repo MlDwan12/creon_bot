@@ -1,3 +1,4 @@
+import { tr } from '../i18n/request-lang';
 import {
   BadRequestException,
   ConflictException,
@@ -92,7 +93,10 @@ export class AccountsService {
     });
     if (count >= MAX_PER_PLATFORM)
       throw new ForbiddenException(
-        `Можно подключить до ${MAX_PER_PLATFORM} аккаунтов ${provider.name} — отключите ненужный`,
+        tr('errors.accountLimit', {
+          max: MAX_PER_PLATFORM,
+          platform: provider.name,
+        }),
       );
     // брошенные входы — заодно убираем
     await this.prisma.oAuthPending.deleteMany({
@@ -146,9 +150,7 @@ export class AccountsService {
       pending.platform !== platform ||
       pending.expiresAt.getTime() < Date.now()
     )
-      throw new BadRequestException(
-        'Ссылка устарела — нажмите «Подключить» в приложении ещё раз',
-      );
+      throw new BadRequestException(tr('errors.oauthExpired'));
 
     let tokens: Tokens;
     try {
@@ -163,8 +165,8 @@ export class AccountsService {
       );
       throw new BadRequestException(
         err instanceof ProviderRejected
-          ? `${provider.name} не дал доступ к видео. Попробуйте ещё раз и разрешите доступ`
-          : `${provider.name} не ответил — попробуйте позже`,
+          ? tr('errors.oauthDenied', { platform: provider.name })
+          : tr('errors.oauthDown', { platform: provider.name }),
       );
     }
 
@@ -179,7 +181,7 @@ export class AccountsService {
       });
       if (existing && existing.userId !== pending.userId)
         throw new ConflictException(
-          `Этот аккаунт ${provider.name} уже подключён к другому профилю`,
+          tr('errors.accountTaken', { platform: provider.name }),
         );
       if (existing)
         await this.prisma.socialAccount.update({
@@ -196,7 +198,7 @@ export class AccountsService {
         err.code === 'P2002'
       )
         throw new ConflictException(
-          `Этот аккаунт ${provider.name} уже подключён к другому профилю`,
+          tr('errors.accountTaken', { platform: provider.name }),
         );
       throw err;
     }
@@ -299,8 +301,7 @@ export class AccountsService {
 
   private mustProvider(platform: SocialPlatform) {
     const provider = this.providers.get(platform);
-    if (!provider)
-      throw new NotFoundException('Эта площадка пока не подключается');
+    if (!provider) throw new NotFoundException(tr('errors.platformOff'));
     return provider;
   }
 

@@ -1,3 +1,4 @@
+import { tr } from '../i18n/request-lang';
 import { BadRequestException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 
@@ -27,8 +28,6 @@ export function parseWallet(body: unknown): string | null {
   const wallet = typeof raw === 'string' ? raw.trim() : '';
   if (!wallet) return null;
   if (!isTrc20Address(wallet))
-    throw new BadRequestException(
-      'Адрес не прошёл проверку: в нём опечатка или это не сеть TRC20. Скопируйте адрес USDT (TRC20) из кошелька целиком — вручную легко ошибиться в одном символе',
-    );
+    throw new BadRequestException(tr('errors.badWallet'));
   return wallet;
 }
