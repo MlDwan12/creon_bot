@@ -383,7 +383,11 @@
     "stars": "Rated {{rating}} out of 5",
     "removeReview": "Delete review",
     "reportReview": "Report this review",
-    "reportProfile": "Report this profile"
+    "reportProfile": "Report this profile",
+    "linkPlaceholder": "Profile link: https://…",
+    "addLink": "Add",
+    "removeLink": "Remove link",
+    "linksHint": "TikTok, YouTube, VK, Instagram or X — you can add several accounts on one platform, up to 10 links."
   },
   "myOrders": {
     "loadError": "Couldn't load your orders",
@@ -555,8 +559,6 @@
     "ratingRange": "Give a rating from 1 to 5",
     "reviewTooLong": "The review is longer than {{max}} characters",
     "removeContacts": "Remove the contacts ({{found}}) — the parties communicate only through Fixum support",
-    "profileLink": "The {{name}} link must start with https:// and lead to {{hosts}}",
-    "or": " or ",
     "notALink": "That doesn't look like a link: it must start with http:// or https://",
     "linkTooLong": "The link is too long (maximum {{max}} characters)",
     "videoPlatform": "Send a link to a post on {{platforms}}",
@@ -645,7 +647,10 @@
     "csvLikes": "Likes",
     "csvClicks": "Clicks",
     "csvApproved": "Approved",
-    "csvOther": "Other"
+    "csvOther": "Other",
+    "linksList": "Links must be a list",
+    "socialLink": "The link “{{link}}” must start with https:// and lead to {{platforms}}",
+    "tooManyLinks": "No more than {{max}} links"
   },
   "insights": {
     "notTaken": "{{viewers}} creators opened the order, but {{taken}} took it. The terms don't attract them: lower the view threshold, relax the duration and format requirements, attach an example video.",

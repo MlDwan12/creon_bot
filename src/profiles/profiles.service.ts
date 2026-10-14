@@ -3,7 +3,6 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { SubmissionStatus, type User } from '@prisma/client';
 import { creatorLabel, publicName } from '../common/format';
 import { PrismaService } from '../prisma/prisma.service';
-import { NO_LINKS, type ProfileLinks } from './profile-input';
 
 /** Сколько последних отзывов и видео портфолио показывать в профиле. */
 const PROFILE_LIST_LIMIT = 20;
@@ -82,15 +81,8 @@ export class ProfilesService {
       ban: creator.bannedAt
         ? { at: creator.bannedAt, reason: creator.banReason }
         : null,
-      links: full
-        ? {
-            tiktokUrl: creator.tiktokUrl,
-            youtubeUrl: creator.youtubeUrl,
-            vkUrl: creator.vkUrl,
-            instagramUrl: creator.instagramUrl,
-            xUrl: creator.xUrl,
-          }
-        : NO_LINKS,
+      /** Ссылки на соцсети — контакты: только самому креатору и модератору. */
+      links: full ? creator.socialLinks : [],
       /** Кошелёк для выплат — только самому креатору и модератору. */
       wallet: full ? creator.payoutWallet : null,
       /** Сообщения о новых заказах — переключатель в своём профиле. */
@@ -119,8 +111,11 @@ export class ProfilesService {
     return user?.telegramId ?? null;
   }
 
-  updateLinks(userId: number, links: ProfileLinks) {
-    return this.prisma.user.update({ where: { id: userId }, data: links });
+  updateLinks(userId: number, links: string[]) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { socialLinks: links },
+    });
   }
 
   updateLanguage(userId: number, language: string | null) {

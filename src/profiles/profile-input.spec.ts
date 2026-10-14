@@ -36,31 +36,43 @@ describe('parseFeedback', () => {
 });
 
 describe('parseLinks', () => {
-  it('принимает ссылки своих соцсетей, пустое — удаляет', () => {
+  it('несколько аккаунтов на одной площадке; пустые пропускает, повторы убирает', () => {
     expect(
       parseLinks({
-        tiktokUrl: 'https://www.tiktok.com/@creator',
-        youtubeUrl: ' https://youtu.be/abc ',
-        vkUrl: '',
-        instagramUrl: 'https://www.instagram.com/creator',
-        xUrl: 'https://twitter.com/creator',
+        links: [
+          'https://www.tiktok.com/@creator',
+          'https://www.tiktok.com/@creator_second',
+          ' https://youtu.be/abc ',
+          '',
+          'https://www.tiktok.com/@creator',
+          'https://twitter.com/creator',
+        ],
       }),
-    ).toEqual({
-      tiktokUrl: 'https://www.tiktok.com/@creator',
-      youtubeUrl: 'https://youtu.be/abc',
-      vkUrl: null,
-      instagramUrl: 'https://www.instagram.com/creator',
-      xUrl: 'https://twitter.com/creator',
-    });
+    ).toEqual([
+      'https://www.tiktok.com/@creator',
+      'https://www.tiktok.com/@creator_second',
+      'https://youtu.be/abc',
+      'https://twitter.com/creator',
+    ]);
+    expect(parseLinks({ links: [] })).toEqual([]);
   });
 
   it.each([
-    ['http вместо https', { vkUrl: 'http://vk.com/id1' }],
-    ['чужой домен', { tiktokUrl: 'https://evil.com/tiktok.com' }],
-    ['похожий домен', { vkUrl: 'https://notvk.com/id1' }],
-    ['X на чужом домене', { xUrl: 'https://box.com/creator' }],
-    ['javascript-ссылка', { youtubeUrl: 'javascript:alert(1)' }],
-    ['не ссылка', { vkUrl: 'vk.com/id1' }],
+    ['не список', { links: 'https://vk.com/id1' }],
+    ['http вместо https', { links: ['http://vk.com/id1'] }],
+    ['чужой домен', { links: ['https://evil.com/tiktok.com'] }],
+    ['похожий домен', { links: ['https://notvk.com/id1'] }],
+    ['javascript-ссылка', { links: ['javascript:alert(1)'] }],
+    ['не ссылка', { links: ['vk.com/id1'] }],
+    [
+      'больше 10',
+      {
+        links: Array.from(
+          { length: 11 },
+          (_, i) => `https://www.tiktok.com/@c${i}`,
+        ),
+      },
+    ],
   ])('отклоняет: %s', (_name, body) => {
     expect(() => parseLinks(body)).toThrow(BadRequestException);
   });
