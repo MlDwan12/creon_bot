@@ -13,6 +13,7 @@ import {
 import SupportLink from '../components/SupportLink.vue';
 import UserAvatar from '../components/UserAvatar.vue';
 import { formatDate, formatMoney, formatViews } from '../format';
+import { i18next } from '../i18n';
 import { safeUrl } from '../telegram';
 
 // `id` заказа из адреса /my-orders/:id/review.
@@ -38,7 +39,7 @@ async function sendCsv() {
     csvState.value = 'sent';
   } catch (err) {
     csvState.value = 'idle';
-    csvError.value = err instanceof ApiError ? err.userMessage : 'Не удалось отправить файл';
+    csvError.value = err instanceof ApiError ? err.userMessage : i18next.t('review.csvError');
   }
 }
 const loadError = ref('');
@@ -54,7 +55,7 @@ async function load() {
   try {
     data.value = await fetchOrderReport(Number(props.id));
   } catch (err) {
-    loadError.value = err instanceof ApiError ? err.userMessage : 'Не удалось загрузить ролики';
+    loadError.value = err instanceof ApiError ? err.userMessage : i18next.t('review.loadError');
   }
 }
 
@@ -74,7 +75,7 @@ async function rate() {
     if (item) item.rating = feedback.rating;
     rating.value = undefined;
   } catch (err) {
-    error.value = err instanceof ApiError ? err.userMessage : 'Не получилось, попробуйте ещё раз';
+    error.value = err instanceof ApiError ? err.userMessage : i18next.t('review.error');
   } finally {
     busy.value = false;
   }
@@ -86,41 +87,42 @@ void load();
 <template>
   <main class="page">
     <p v-if="loadError" class="hint">{{ loadError }}</p>
-    <p v-else-if="!data" class="hint">Загрузка…</p>
+    <p v-else-if="!data" class="hint">{{ $t('common.loading') }}</p>
 
     <template v-else>
       <header class="head">
         <span class="hint">{{ data.order.title }}</span>
-        <h1>Отчёт по заказу</h1>
+        <h1>{{ $t('review.title') }}</h1>
       </header>
 
       <section class="tiles">
         <div class="tile">
-          <strong>{{ formatViews(data.summary.views) }}</strong><span>просмотров · лайков {{ formatViews(data.summary.likes) }}</span>
+          <strong>{{ formatViews(data.summary.views) }}</strong><span>{{ $t('review.viewsLikes', { likes: formatViews(data.summary.likes) }) }}</span>
         </div>
-        <div class="tile"><strong>{{ data.summary.videos }}</strong><span>роликов · креаторов {{ data.summary.creators }}</span></div>
+        <div class="tile"><strong>{{ data.summary.videos }}</strong><span>{{ $t('review.videosCreators', { creators: data.summary.creators }) }}</span></div>
         <div class="tile">
-          <strong>{{ formatMoney(data.summary.spent) }}</strong><span>потрачено из {{ formatMoney(data.summary.budget) }}</span>
+          <strong>{{ formatMoney(data.summary.spent) }}</strong><span>{{ $t('review.spentOf', { budget: formatMoney(data.summary.budget) }) }}</span>
         </div>
         <div class="tile">
-          <strong>{{ data.summary.cpm === null ? '—' : formatMoney(data.summary.cpm) }}</strong><span>за 1000 просмотров</span>
+          <strong>{{ data.summary.cpm === null ? '—' : formatMoney(data.summary.cpm) }}</strong><span>{{ $t('review.perThousand') }}</span>
         </div>
         <div v-if="data.summary.clicks !== null" class="tile">
-          <strong>{{ formatViews(data.summary.clicks) }}</strong><span>переходов на товар</span>
+          <strong>{{ formatViews(data.summary.clicks) }}</strong><span>{{ $t('review.clicks') }}</span>
         </div>
       </section>
       <p class="hint">
-        Осталось {{ formatMoney(data.summary.left) }}<template v-if="data.summary.reserved">
-          · ещё {{ formatMoney(data.summary.reserved) }} зарезервировано под ролики на проверке</template
-        >. Суммы — вместе с комиссией площадки.
+        {{ $t('review.left', { amount: formatMoney(data.summary.left) })
+        }}<template v-if="data.summary.reserved">{{
+          $t('review.reserved', { amount: formatMoney(data.summary.reserved) })
+        }}</template>{{ $t('review.withFee') }}
       </p>
 
-      <section class="rows" aria-label="Воронка">
-        <div class="row"><span>Открыли заказ</span><span>{{ data.funnel.viewers }}</span></div>
-        <div class="row"><span>Взяли в работу</span><span>{{ data.funnel.taken }}</span></div>
-        <div class="row"><span>Не прислали вовремя</span><span>{{ data.funnel.expired }}</span></div>
-        <div class="row"><span>Отклонено модератором</span><span>{{ data.funnel.rejected }}</span></div>
-        <div class="row"><span>На проверке · одобрено</span><span>{{ data.funnel.onReview }} · {{ data.funnel.approved }}</span></div>
+      <section class="rows" :aria-label="$t('review.funnel')">
+        <div class="row"><span>{{ $t('review.viewers') }}</span><span>{{ data.funnel.viewers }}</span></div>
+        <div class="row"><span>{{ $t('review.taken') }}</span><span>{{ data.funnel.taken }}</span></div>
+        <div class="row"><span>{{ $t('review.expired') }}</span><span>{{ data.funnel.expired }}</span></div>
+        <div class="row"><span>{{ $t('review.rejected') }}</span><span>{{ data.funnel.rejected }}</span></div>
+        <div class="row"><span>{{ $t('review.onReview') }}</span><span>{{ data.funnel.onReview }} · {{ data.funnel.approved }}</span></div>
       </section>
 
       <article v-for="i in data.insights" :key="i.code" class="insight">
@@ -130,28 +132,27 @@ void load();
       <section v-if="data.platforms.length" class="rows">
         <div v-for="p in data.platforms" :key="p.platform" class="row">
           <span>{{ PLATFORM_NAMES[p.platform] }}</span>
-          <span>{{ p.videos }} · {{ formatViews(p.views) }} просмотров</span>
+          <span>{{ $t('review.platformViews', { videos: p.videos, views: formatViews(p.views) }) }}</span>
         </div>
       </section>
 
       <button type="button" class="secondary" :disabled="csvState !== 'idle'" @click="sendCsv">
-        {{ csvState === 'sent' ? 'Файл отправлен в чат с ботом' : csvState === 'sending' ? 'Отправляем…' : 'Отчёт CSV — в чат с ботом' }}
+        {{ csvState === 'sent' ? $t('review.csvSent') : csvState === 'sending' ? $t('common.sending') : $t('review.csv') }}
       </button>
       <p v-if="csvError" class="error" role="alert">{{ csvError }}</p>
 
       <div class="title-row">
-        <h2 class="section-title flush">Ролики</h2>
-        <div class="segmented" role="radiogroup" aria-label="Порядок">
-          <button type="button" role="radio" :aria-checked="sort === 'views'" @click="sort = 'views'">По просмотрам</button>
-          <button type="button" role="radio" :aria-checked="sort === 'date'" @click="sort = 'date'">Новые</button>
+        <h2 class="section-title flush">{{ $t('review.videos') }}</h2>
+        <div class="segmented" role="radiogroup" :aria-label="$t('review.order')">
+          <button type="button" role="radio" :aria-checked="sort === 'views'" @click="sort = 'views'">{{ $t('review.byViews') }}</button>
+          <button type="button" role="radio" :aria-checked="sort === 'date'" @click="sort = 'date'">{{ $t('review.newest') }}</button>
         </div>
       </div>
       <p class="hint">
-        Модератор проверил каждый ролик на соответствие заданию и зафиксировал просмотры. Оценка — по желанию: она попадёт
-        в рейтинг креатора.
+        {{ $t('review.hint') }}
       </p>
 
-      <p v-if="data.items.length === 0" class="hint">Одобренных роликов пока нет. Бот сообщит, когда появятся.</p>
+      <p v-if="data.items.length === 0" class="hint">{{ $t('review.empty') }}</p>
 
       <article v-for="item in items" :key="item.id" class="item">
         <RouterLink :to="`/creators/${item.creatorId}`" class="creator">
@@ -159,10 +160,9 @@ void load();
           <div class="who">
             <div class="name">{{ item.creator }}</div>
             <div class="hint">
-              {{ PLATFORM_NAMES[item.platform] }} · {{ formatViews(item.views) }} просмотров<template v-if="item.likes !== null">
-                · {{ formatViews(item.likes) }} лайков</template
-              ><template v-if="item.clicks !== null">
-                · {{ formatViews(item.clicks) }} переходов</template
+              {{ PLATFORM_NAMES[item.platform] }} · {{ $t('review.itemViews', { views: formatViews(item.views) })
+              }}<template v-if="item.likes !== null">{{ $t('review.itemLikes', { likes: formatViews(item.likes) }) }}</template
+              ><template v-if="item.clicks !== null">{{ $t('review.itemClicks', { clicks: formatViews(item.clicks) }) }}</template
               ><template v-if="item.approvedAt">
                 · {{ formatDate(item.approvedAt) }}</template
               >
@@ -175,27 +175,27 @@ void load();
           <span class="play" aria-hidden="true">▶</span>
           <span class="link">
             <span class="url">{{ item.videoUrl }}</span>
-            <strong>Открыть ролик</strong>
+            <strong>{{ $t('review.open') }}</strong>
           </span>
         </a>
-        <p v-else class="hint">Ссылка на ролик некорректна: {{ item.videoUrl }}</p>
+        <p v-else class="hint">{{ $t('review.badUrl', { url: item.videoUrl }) }}</p>
 
-        <p v-if="item.rating" class="rated" :aria-label="`Ваша оценка: ${item.rating} из 5`">
+        <p v-if="item.rating" class="rated" :aria-label="$t('review.yourRating', { rating: item.rating })">
           {{ '★'.repeat(item.rating) }}{{ '☆'.repeat(5 - item.rating) }}
         </p>
         <p v-if="onModeration.has(item.id)" class="hint">
-          Спасибо! Отзыв появится в профиле креатора после проверки модератором.
+          {{ $t('review.thanks') }}
         </p>
         <fieldset v-else-if="rating === item.id" class="feedback">
-          <legend class="section-title">Оцените работу креатора</legend>
-          <div class="stars" role="radiogroup" aria-label="Оценка">
+          <legend class="section-title">{{ $t('review.rateTitle') }}</legend>
+          <div class="stars" role="radiogroup" :aria-label="$t('review.rating')">
             <button
               v-for="n in 5"
               :key="n"
               type="button"
               role="radio"
               :aria-checked="feedback.rating === n"
-              :aria-label="`${n} из 5`"
+              :aria-label="$t('review.outOf', { n })"
               :class="{ on: n <= feedback.rating }"
               @click="feedback.rating = n"
             >
@@ -206,33 +206,33 @@ void load();
             v-model="feedback.review"
             rows="3"
             maxlength="500"
-            placeholder="Отзыв — по желанию. После проверки модератором его увидят в профиле креатора"
+            :placeholder="$t('review.reviewPlaceholder')"
           />
           <label class="check">
             <input v-model="feedback.portfolioAllowed" type="checkbox" />
-            Разрешить показать ролик в портфолио креатора
+            {{ $t('review.portfolio') }}
           </label>
           <p v-if="error" class="error" role="alert">{{ error }}</p>
           <div class="two">
-            <button type="button" class="secondary" :disabled="busy" @click="rating = undefined">Отмена</button>
+            <button type="button" class="secondary" :disabled="busy" @click="rating = undefined">{{ $t('common.cancel') }}</button>
             <button type="button" class="main-button" :disabled="busy || !feedback.rating" @click="rate">
-              Оценить
+              {{ $t('review.rate') }}
             </button>
           </div>
         </fieldset>
-        <button v-else type="button" class="secondary" @click="startRating(item.id)">Оценить</button>
+        <button v-else type="button" class="secondary" @click="startRating(item.id)">{{ $t('review.rate') }}</button>
 
         <RouterLink
-          :to="{ path: '/report', query: { target: 'VIDEO', id: item.id, title: `Видео от ${item.creator}` } }"
+          :to="{ path: '/report', query: { target: 'VIDEO', id: item.id, title: $t('review.videoFrom', { name: item.creator }) } }"
           class="quiet-link"
         >
-          Пожаловаться на ролик
+          {{ $t('review.reportVideo') }}
         </RouterLink>
       </article>
 
       <SupportLink
-        :label="`Вопрос по заказу #${data.order.id} — написать менеджеру`"
-        :about="`Вопрос по заказу #${data.order.id} «${data.order.title}»`"
+        :label="$t('order.supportLabel', { id: data.order.id })"
+        :about="$t('order.supportAbout', { id: data.order.id, title: data.order.title })"
       />
     </template>
   </main>
