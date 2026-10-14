@@ -175,6 +175,16 @@ body:has(.bottom-bar) .tabbar {
   text-decoration: none;
 }
 
+/* Подпись для экранных дикторов, глазами не видна. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

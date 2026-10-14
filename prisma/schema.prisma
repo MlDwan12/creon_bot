@@ -13,12 +13,9 @@ model User {
   username   String?
   firstName  String?
   createdAt  DateTime @default(now())
-  /// Ссылки креатора на свои соцсети — в профиле (проверка домена: src/api/profile-input.ts).
-  tiktokUrl  String?
-  youtubeUrl String?
-  vkUrl      String?
-  instagramUrl String?
-  xUrl       String?
+  /// Ссылки креатора на свои соцсети, по порядку; на одной площадке может быть несколько аккаунтов.
+  /// Площадка — по домену ссылки (src/profiles/profile-input.ts, parseLinks).
+  socialLinks String[] @default([])
   /// Кошелёк USDT (TRC20) для выплат — видят только сам креатор и модераторы (src/payouts/trc20.ts).
   payoutWallet String?
   /// Присылать ли сообщение о каждом новом заказе в каталоге — переключатель в профиле.
