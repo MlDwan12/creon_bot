@@ -395,6 +395,16 @@ hookable@^5.5.3:
   resolved "https://registry.yarnpkg.com/hookable/-/hookable-5.5.3.tgz#6cfc358984a1ef991e2518cb9ed4a778bbd3215d"
   integrity sha512-Yc+BQe8SvoXH1643Qez1zqLRmbA5rCL+sSmk6TVos0LWVfNIB7PGncdlId77WzLGSIB5KaWgTaNTs2lNVEI6VQ==
 
+i18next-vue@^5.4.0:
+  version "5.4.0"
+  resolved "https://registry.yarnpkg.com/i18next-vue/-/i18next-vue-5.4.0.tgz#df5bb04bc24b6a1913a2008c09e359a440dcb02d"
+  integrity sha512-GDj0Xvmis5Xgcvo9gMBJMgJCtewYMLZP6gAEPDDGCMjA+QeB4uS4qUf1MK79mkz/FukhaJdC+nlj0y1qk6NO2Q==
+
+i18next@^26.4.4:
+  version "26.4.4"
+  resolved "https://registry.yarnpkg.com/i18next/-/i18next-26.4.4.tgz#adea13e4349ec06fd27eb3b0db7ff47f96d98ea1"
+  integrity sha512-O+rqmQUi54OwAgnZ4SAwO6aRrbXZt36VZXWt6zvq0FpC3vJbH46oQRs6u4Uwm1vf8ZI7UqOXQiJhQVTor7vRiQ==
+
 lightningcss-android-arm64@1.33.0:
   version "1.33.0"
   resolved "https://registry.yarnpkg.com/lightningcss-android-arm64/-/lightningcss-android-arm64-1.33.0.tgz#9a6841f88ae50fc83502903892b41af41bc2b907"

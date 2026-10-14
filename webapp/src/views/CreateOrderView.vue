@@ -7,6 +7,7 @@ import {
   fetchMyOrders,
   fetchRate,
   type MyOrder,
+  categoryLabel,
   ORDER_CATEGORIES,
   type NewOrderInput,
   PLATFORM_NAMES,
@@ -257,12 +258,12 @@ void prefill();
         <div class="chips">
           <button
             v-for="c in ORDER_CATEGORIES"
-            :key="c.code"
+            :key="c"
             type="button"
-            :aria-pressed="form.category === c.code"
-            @click="form.category = c.code"
+            :aria-pressed="form.category === c"
+            @click="form.category = c"
           >
-            {{ c.label }}
+            {{ categoryLabel(c) }}
           </button>
         </div>
       </fieldset>

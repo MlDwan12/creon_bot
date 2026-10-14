@@ -10,5 +10,7 @@ export default defineConfig({
     // Telegram открывает мини-апп только по HTTPS — в dev это туннель ngrok на :5173.
     // Vite по умолчанию отвечает только на localhost, домены туннеля разрешаем явно.
     allowedHosts: ['.ngrok-free.app', '.ngrok-free.dev'],
+    // словари i18n/*.json лежат в корне репозитория, на уровень выше webapp
+    fs: { allow: ['..'] },
   },
 });

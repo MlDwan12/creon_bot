@@ -122,6 +122,13 @@ export class ProfilesService {
     return this.prisma.user.update({ where: { id: userId }, data: links });
   }
 
+  updateLanguage(userId: number, language: string | null) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { language },
+    });
+  }
+
   updateNotifications(userId: number, notifyNewOrders: boolean) {
     return this.prisma.user.update({
       where: { id: userId },

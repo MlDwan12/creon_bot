@@ -1,0 +1,95 @@
+{
+  "tabs": {
+    "orders": "Orders",
+    "submissions": "My videos",
+    "myOrders": "My campaigns",
+    "learn": "Learn",
+    "profile": "Profile",
+    "modQueue": "Queue",
+    "modOrders": "All orders",
+    "modStats": "Stats",
+    "aria": "Sections"
+  },
+  "categories": {
+    "PRODUCT_REVIEW": "Product review",
+    "BEAUTY": "Beauty",
+    "FOOD": "Food",
+    "FASHION": "Fashion",
+    "GAMING": "Gaming",
+    "FITNESS": "Sports & fitness",
+    "ENTERTAINMENT": "Entertainment",
+    "TECH": "Tech",
+    "OTHER": "Other"
+  },
+  "money": {
+    "perThousand": "per 1,000 views",
+    "perEveryThousand": "for every 1,000 views",
+    "cpmPending": "rate set by a moderator"
+  },
+  "catalog": {
+    "title": "Orders",
+    "subtitle": "Pick a task, shoot a video and get paid",
+    "platformsAria": "Platforms",
+    "allPlatforms": "All platforms",
+    "categoriesAria": "Categories",
+    "allCategories": "All",
+    "loadError": "Couldn't load orders",
+    "empty": "No orders here yet — try another category or platform.",
+    "openCount_one": "{{count}} open order",
+    "openCount_other": "{{count}} open orders",
+    "more": "Show more",
+    "loading": "Loading…",
+    "howItWorks": "How it works",
+    "privacy": "Privacy policy"
+  },
+  "orderCard": {
+    "anyPlatform": "Any platform",
+    "until": "until {{date}}",
+    "left": "{{amount}} left",
+    "hurry": " — hurry up",
+    "minViews": "from {{views}} views"
+  },
+  "onboarding": {
+    "aria": "Welcome to Fixum",
+    "back": "‹ Back",
+    "skip": "Skip",
+    "title": "Welcome",
+    "intro": "What would you like to do? You can do both later — the tabs are at the bottom.",
+    "advertiserLabel": "For brands",
+    "advertiserTitle": "Order ads",
+    "advertiserText": "Set a budget — creators make videos, and you pay only for the views they get.",
+    "creatorLabel": "For creators",
+    "creatorTitle": "Earn with videos",
+    "creatorText": "Take an order, post on your TikTok, Instagram or YouTube — get paid in USDT for views.",
+    "advertiser": {
+      "title": "How to order ads",
+      "steps": [
+        "Describe the task and set a budget",
+        "A moderator reviews the order and sets the rate per 1,000 views",
+        "Creators post videos on their accounts — you pay only for views",
+        "When the budget runs out, the order closes by itself — you never overspend"
+      ],
+      "action": "Create an order"
+    },
+    "creator": {
+      "title": "How to earn",
+      "steps": [
+        "Pick an order and apply",
+        "Post a video on your social media — you have 7 days",
+        "Once it reaches the view threshold, send us the link",
+        "A moderator checks the video and we pay you; 5 days later we top up for new views"
+      ],
+      "action": "Browse orders"
+    },
+    "note": "The parties don't see each other's contacts: questions, disputes and payments go through support (menu ⋯ → “Settings”)."
+  },
+  "settings": {
+    "themeTitle": "Appearance",
+    "themeAuto": "Same as Telegram",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "languageTitle": "Language",
+    "languageAuto": "Same as Telegram",
+    "languageError": "Couldn't change the language"
+  }
+}

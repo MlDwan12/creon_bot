@@ -1,4 +1,5 @@
 import { ref } from 'vue';
+import { i18next, type Lang } from './i18n';
 import { getInitData } from './telegram';
 
 /** Аккаунт заблокирован — App.vue показывает экран блокировки вместо любого экрана. */
@@ -15,22 +16,21 @@ export type OrderCategory =
   | 'TECH'
   | 'OTHER';
 
-// ponytail: копия ORDER_CATEGORIES из src/bot/utils/format.ts (там с эмодзи для чата) — фронт и бэк
-// пока отдельные пакеты. Если копий станет больше, вынести общие типы в пакет, который импортируют оба.
-export const ORDER_CATEGORIES: { code: OrderCategory; label: string }[] = [
-  { code: 'PRODUCT_REVIEW', label: 'Обзор товара' },
-  { code: 'BEAUTY', label: 'Красота' },
-  { code: 'FOOD', label: 'Еда' },
-  { code: 'FASHION', label: 'Мода' },
-  { code: 'GAMING', label: 'Игры' },
-  { code: 'FITNESS', label: 'Спорт и фитнес' },
-  { code: 'ENTERTAINMENT', label: 'Развлечения' },
-  { code: 'TECH', label: 'Техника' },
-  { code: 'OTHER', label: 'Другое' },
+/** Категории заказа по порядку в фильтрах; названия — в словаре (i18n/*.json, categories). */
+export const ORDER_CATEGORIES: OrderCategory[] = [
+  'PRODUCT_REVIEW',
+  'BEAUTY',
+  'FOOD',
+  'FASHION',
+  'GAMING',
+  'FITNESS',
+  'ENTERTAINMENT',
+  'TECH',
+  'OTHER',
 ];
 
 export function categoryLabel(code: OrderCategory): string {
-  return ORDER_CATEGORIES.find((c) => c.code === code)?.label ?? code;
+  return i18next.t(`categories.${code}`);
 }
 
 /** Требования к ролику в заказе; null — любая длительность или ориентация, пустые platforms — любая площадка. */
@@ -634,10 +634,22 @@ export function removeReview(submissionId: number) {
   return request<{ ok: true }>('DELETE', `/api/mod/reviews/${submissionId}`);
 }
 
-type Me = { isModerator: boolean; supportUrl: string | null };
+type Me = {
+  isModerator: boolean;
+  supportUrl: string | null;
+  /** Язык интерфейса: выбранный в профиле или по Telegram; languageChosen — выбран ли вручную. */
+  language: Lang;
+  languageChosen: boolean;
+};
 let me: Promise<Me> | undefined;
 
 /** Один запрос на запуск: initData, а с ним и ответ, до перезапуска Mini App не меняется. */
+/** Язык интерфейса и бота; null — снова по языку Telegram. */
+export function updateLanguage(language: Lang | null) {
+  me = undefined; // /api/me вернёт уже новый язык
+  return request<{ ok: true }>('PUT', '/api/profile/language', { language });
+}
+
 export function fetchMe() {
   // неудачный запрос не запоминаем — иначе сбой сети считался бы ответом до перезапуска
   return (me ??= request<Me>('GET', '/api/me').catch((err) => {

@@ -23,6 +23,10 @@ model User {
   payoutWallet String?
   /// Присылать ли сообщение о каждом новом заказе в каталоге — переключатель в профиле.
   notifyNewOrders Boolean @default(true)
+  /// Язык интерфейса, выбранный в профиле (src/i18n/i18n.ts, LANGS); null — по языку Telegram.
+  language        String?
+  /// language_code из Telegram — по нему язык, пока человек сам не выбрал; бот пишет на нём же.
+  telegramLanguage String?
   /// Заблокирован модератором: мини-апп показывает только экран блокировки, бот не пишет.
   bannedAt   DateTime?
   banReason  String?

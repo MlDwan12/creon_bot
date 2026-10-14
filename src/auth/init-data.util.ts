@@ -4,6 +4,8 @@ export interface InitDataUser {
   id: number;
   username?: string;
   first_name?: string;
+  /** Язык интерфейса Telegram: «ru», «en», «uk»…; бывает не у всех. */
+  language_code?: string;
 }
 
 /**

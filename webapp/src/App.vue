@@ -1,12 +1,18 @@
 <script setup lang="ts">
-import { watch } from 'vue';
+import { ref, watch } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import OnboardingOverlay from './components/OnboardingOverlay.vue';
 import TabBar from './components/TabBar.vue';
 import { banned, fetchMe } from './api';
+import { i18next, setLang } from './i18n';
 import { inTelegram, openTelegramLink, webApp } from './telegram';
 
 const route = useRoute();
+
+// Сменили язык — перерисовываем всё: так обновятся и тексты, и числа с датами из format.ts.
+const lang = ref(i18next.language);
+i18next.on('languageChanged', (l) => (lang.value = l));
+
 const router = useRouter();
 
 /** Назад по истории; если экран открыли сразу по ссылке (истории нет) — в каталог. */
@@ -20,7 +26,9 @@ if (inTelegram) {
   webApp!.BackButton.onClick(goBack);
   // «⋯ → Настройки» в шапке Telegram ведёт в поддержку — на любом экране, не занимая места.
   void fetchMe()
-    .then(({ supportUrl, isModerator }) => {
+    .then(({ supportUrl, isModerator, language }) => {
+      // язык с сервера главнее догадки при запуске (выбран в профиле на другом устройстве)
+      if (language !== i18next.language) setLang(language);
       if (!supportUrl) return;
       // форма в мини-аппе, а не переход в чат: так приложение не сворачивается
       const path = isModerator ? '/mod/support' : '/support';
@@ -50,8 +58,8 @@ if (inTelegram) {
       Поддержка
     </button>
   </main>
-  <RouterView v-else />
-  <TabBar v-if="!banned" />
+  <RouterView v-else :key="lang" />
+  <TabBar v-if="!banned" :key="lang" />
   <!-- matched пуст, пока роутер не решил, куда вести: иначе модератор мельком увидит онбординг. -->
   <OnboardingOverlay
     v-if="!banned && route.matched.length && !route.path.startsWith('/mod') && route.path !== '/privacy'"

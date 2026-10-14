@@ -10,12 +10,14 @@ import {
   disconnectSocialAccount,
   fetchBalance,
   fetchCreator,
+  fetchMe,
   fetchMyProfile,
   fetchSocialAccounts,
   type ProfileLinks,
   type SocialAccount,
   removeReview,
   unbanUser,
+  updateLanguage,
   updateNotifications,
   updateProfileLinks,
   updateWallet,
@@ -23,19 +25,39 @@ import {
 import PlatformIcon from '../components/PlatformIcon.vue';
 import UserAvatar from '../components/UserAvatar.vue';
 import { formatDate, formatMoney } from '../format';
+import { i18next, LANG_NAMES, LANGS, setLang, type Lang } from '../i18n';
 import { confirmAction, openExternalLink, safeUrl, setThemePref, themePref, type ThemePref } from '../telegram';
 
 // Без id — свой профиль (/profile, ссылки можно редактировать); с id — чужой, только просмотр.
 // Тема — только для этого устройства (localStorage), как и сам выбор в Telegram.
 const THEMES: { value: ThemePref; label: string }[] = [
-  { value: 'auto', label: 'Как в Telegram' },
-  { value: 'light', label: 'Светлая' },
-  { value: 'dark', label: 'Тёмная' },
+  { value: 'auto', label: 'settings.themeAuto' },
+  { value: 'light', label: 'settings.themeLight' },
+  { value: 'dark', label: 'settings.themeDark' },
 ];
 const theme = ref<ThemePref>(themePref());
 function pickTheme(pref: ThemePref) {
   theme.value = pref;
   setThemePref(pref);
+}
+
+// Язык — на сервере (User.language): на нём же пишет бот. auto — по языку Telegram.
+type LangPref = Lang | 'auto';
+const langPref = ref<LangPref>();
+const langError = ref('');
+void fetchMe()
+  .then((me) => (langPref.value = me.languageChosen ? me.language : 'auto'))
+  .catch(() => {});
+async function pickLang(pref: LangPref) {
+  langError.value = '';
+  try {
+    await updateLanguage(pref === 'auto' ? null : pref);
+    const me = await fetchMe();
+    langPref.value = pref;
+    setLang(me.language);
+  } catch {
+    langError.value = i18next.t('settings.languageError');
+  }
 }
 
 const props = defineProps<{ id?: string }>();
@@ -340,7 +362,7 @@ void load();
       </section>
 
       <section v-if="own" class="block">
-        <h2 id="theme-label" class="section-title">Оформление</h2>
+        <h2 id="theme-label" class="section-title">{{ $t('settings.themeTitle') }}</h2>
         <div class="segmented" role="radiogroup" aria-labelledby="theme-label">
           <button
             v-for="t in THEMES"
@@ -350,9 +372,31 @@ void load();
             :aria-checked="theme === t.value"
             @click="pickTheme(t.value)"
           >
-            {{ t.label }}
+            {{ $t(t.label) }}
           </button>
         </div>
+      </section>
+
+      <section v-if="own" class="block">
+        <h2 id="lang-label" class="section-title">{{ $t('settings.languageTitle') }}</h2>
+        <div class="segmented" role="radiogroup" aria-labelledby="lang-label">
+          <button type="button" role="radio" :aria-checked="langPref === 'auto'" @click="pickLang('auto')">
+            {{ $t('settings.languageAuto') }}
+          </button>
+          <!-- названия языков — на самих языках: найдёт и тот, кто не понимает текущий -->
+          <button
+            v-for="l in LANGS"
+            :key="l"
+            type="button"
+            role="radio"
+            :lang="l"
+            :aria-checked="langPref === l"
+            @click="pickLang(l)"
+          >
+            {{ LANG_NAMES[l] }}
+          </button>
+        </div>
+        <p v-if="langError" class="error" role="alert">{{ langError }}</p>
       </section>
 
       <section class="block">

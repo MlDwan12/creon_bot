@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
+import { useTranslation } from 'i18next-vue';
 import { useRouter } from 'vue-router';
 import { closeOnboarding, onboardingOpen } from '../onboarding';
 
@@ -9,30 +10,11 @@ type Role = 'advertiser' | 'creator';
  * Приветствие: сначала выбор роли — бренд или креатор, потом короткие шаги для неё и кнопка сразу
  * к делу. Выбор ничего не запоминает: быть можно и тем и другим, вкладки внизу для обоих.
  */
-const ROLES: Record<Role, { title: string; steps: string[]; action: string; to: string }> = {
-  advertiser: {
-    title: 'Как заказать рекламу',
-    steps: [
-      'Опишите задание и укажите бюджет',
-      'Модератор проверит заказ и назначит ставку за 1000 просмотров',
-      'Креаторы публикуют ролики у себя — вы платите только за просмотры',
-      'Бюджет закончится — заказ закроется сам, сверх бюджета не потратите',
-    ],
-    action: 'Создать заказ',
-    to: '/my-orders/new',
-  },
-  creator: {
-    title: 'Как зарабатывать',
-    steps: [
-      'Выберите заказ и откликнитесь',
-      'Опубликуйте ролик у себя в соцсети — на всё 7 дней',
-      'Набрал порог просмотров — пришлите ссылку',
-      'Модератор проверит ролик — начислим оплату, через 5 дней доплатим за новые просмотры',
-    ],
-    action: 'Смотреть заказы',
-    to: '/',
-  },
-};
+const ROLE_TO: Record<Role, string> = { advertiser: '/my-orders/new', creator: '/' };
+
+const { t } = useTranslation();
+/** Шаги роли — массив строк из словаря (onboarding.<роль>.steps). */
+const steps = (r: Role) => t(`onboarding.${r}.steps`, { returnObjects: true }) as unknown as string[];
 
 const router = useRouter();
 const role = ref<Role>();
@@ -40,27 +22,27 @@ const role = ref<Role>();
 watch(onboardingOpen, (open) => open && (role.value = undefined));
 
 function start() {
-  const to = ROLES[role.value!].to;
+  const to = ROLE_TO[role.value!];
   closeOnboarding();
   void router.push(to);
 }
 </script>
 
 <template>
-  <div v-if="onboardingOpen" class="onboarding" role="dialog" aria-modal="true" aria-label="Добро пожаловать в Fixum">
+  <div v-if="onboardingOpen" class="onboarding" role="dialog" aria-modal="true" :aria-label="$t('onboarding.aria')">
     <div class="top">
-      <button v-if="role" type="button" class="link" @click="role = undefined">‹ Назад</button>
+      <button v-if="role" type="button" class="link" @click="role = undefined">{{ $t('onboarding.back') }}</button>
       <span v-else class="logo" aria-hidden="true">
         Fixum
         <span class="logo-bar"><span /></span>
       </span>
-      <button type="button" class="link" @click="closeOnboarding">Пропустить</button>
+      <button type="button" class="link" @click="closeOnboarding">{{ $t('onboarding.skip') }}</button>
     </div>
 
     <template v-if="!role">
       <div class="intro">
-        <h1>Добро пожаловать</h1>
-        <p>Что вы хотите сделать? Потом можно и то и другое — вкладки внизу.</p>
+        <h1>{{ $t('onboarding.title') }}</h1>
+        <p>{{ $t('onboarding.intro') }}</p>
       </div>
 
       <button type="button" class="role advertiser" @click="role = 'advertiser'">
@@ -70,10 +52,10 @@ function start() {
               <path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
             </svg>
           </span>
-          <span class="role-label">Брендам</span>
+          <span class="role-label">{{ $t('onboarding.advertiserLabel') }}</span>
         </span>
-        <strong>Заказать рекламу</strong>
-        <span class="role-text">Задаёте бюджет — креаторы снимают ролики, вы платите только за набранные просмотры.</span>
+        <strong>{{ $t('onboarding.advertiserTitle') }}</strong>
+        <span class="role-text">{{ $t('onboarding.advertiserText') }}</span>
       </button>
 
       <button type="button" class="role creator" @click="role = 'creator'">
@@ -84,27 +66,27 @@ function start() {
               <path d="M10 9.5v5l4.5-2.5z" />
             </svg>
           </span>
-          <span class="role-label">Креаторам</span>
+          <span class="role-label">{{ $t('onboarding.creatorLabel') }}</span>
         </span>
-        <strong>Зарабатывать на роликах</strong>
-        <span class="role-text">Берёте заказ, публикуете в своём TikTok, Instagram или YouTube — получаете USDT за просмотры.</span>
+        <strong>{{ $t('onboarding.creatorTitle') }}</strong>
+        <span class="role-text">{{ $t('onboarding.creatorText') }}</span>
       </button>
     </template>
 
     <template v-else>
       <div class="intro">
-        <h1>{{ ROLES[role].title }}</h1>
+        <h1>{{ $t(`onboarding.${role}.title`) }}</h1>
       </div>
       <ol class="steps">
-        <li v-for="(s, i) in ROLES[role].steps" :key="s">
+        <li v-for="(s, i) in steps(role)" :key="s">
           <span class="num" aria-hidden="true">{{ i + 1 }}</span>
           <span>{{ s }}</span>
         </li>
       </ol>
       <p class="note">
-        Стороны не видят контактов друг друга: вопросы, споры и оплата — через поддержку (меню ⋯ → «Настройки»).
+        {{ $t('onboarding.note') }}
       </p>
-      <button type="button" class="main-button start" @click="start">{{ ROLES[role].action }}</button>
+      <button type="button" class="main-button start" @click="start">{{ $t(`onboarding.${role}.action`) }}</button>
     </template>
   </div>
 </template>
