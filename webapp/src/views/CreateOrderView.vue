@@ -9,7 +9,10 @@ import {
   type MyOrder,
   ORDER_CATEGORIES,
   type NewOrderInput,
+  PLATFORM_NAMES,
   updateOrder,
+  VIDEO_PLATFORMS,
+  type VideoPlatform,
 } from '../api';
 import { approxRub } from '../format';
 
@@ -70,6 +73,7 @@ const form = reactive<
   minDurationSec: 15,
   maxDurationSec: 60,
   orientation: 'VERTICAL',
+  platforms: [],
   category: 'OTHER',
   deadlineDays: props.id ? undefined : 7,
 });
@@ -98,7 +102,13 @@ async function prefill() {
   form.minDurationSec = source.minDurationSec ?? '';
   form.maxDurationSec = source.maxDurationSec ?? '';
   form.orientation = source.orientation;
+  form.platforms = [...source.platforms];
   form.category = source.category;
+}
+
+/** Отметить площадку или снять отметку. */
+function togglePlatform(p: VideoPlatform) {
+  form.platforms = form.platforms.includes(p) ? form.platforms.filter((x) => x !== p) : [...form.platforms, p];
 }
 
 async function submit() {
@@ -222,6 +232,22 @@ void prefill();
           </label>
         </div>
       </div>
+
+      <fieldset class="field">
+        <legend class="section-title">Площадки</legend>
+        <div class="chips">
+          <button
+            v-for="p in VIDEO_PLATFORMS"
+            :key="p"
+            type="button"
+            :aria-pressed="form.platforms.includes(p)"
+            @click="togglePlatform(p)"
+          >
+            {{ PLATFORM_NAMES[p] }}
+          </button>
+        </div>
+        <span class="hint">Где публиковать ролик. Ничего не выбрано — на любой площадке.</span>
+      </fieldset>
 
       <fieldset class="field">
         <legend class="section-title">Категория</legend>

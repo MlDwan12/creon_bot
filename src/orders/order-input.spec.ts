@@ -29,11 +29,12 @@ describe('parseOrderInput', () => {
     expect(Math.round(days)).toBe(7);
   });
 
-  it('требования к ролику: пусто — любые, иначе секунды и ориентация', () => {
+  it('требования к ролику: пусто — любые, иначе секунды, ориентация и площадки (без повторов)', () => {
     expect(parseOrderInput(valid)).toMatchObject({
       minDurationSec: null,
       maxDurationSec: null,
       orientation: null,
+      platforms: [],
     });
     expect(
       parseOrderInput({
@@ -41,11 +42,13 @@ describe('parseOrderInput', () => {
         minDurationSec: 15,
         maxDurationSec: 60,
         orientation: 'VERTICAL',
+        platforms: ['TIKTOK', 'TIKTOK', 'INSTAGRAM'],
       }),
     ).toMatchObject({
       minDurationSec: 15,
       maxDurationSec: 60,
       orientation: 'VERTICAL',
+      platforms: ['TIKTOK', 'INSTAGRAM'],
     });
   });
 
@@ -54,6 +57,8 @@ describe('parseOrderInput', () => {
     ['дробные секунды', { maxDurationSec: 1.5 }],
     ['больше 10 минут', { maxDurationSec: 601 }],
     ['неизвестная ориентация', { orientation: 'SQUARE' }],
+    ['неизвестная площадка', { platforms: ['ONLYFANS'] }],
+    ['площадки не списком', { platforms: 'TIKTOK' }],
   ])('требования к ролику — отклоняет: %s', (_name, extra) => {
     expect(() => parseOrderInput({ ...valid, ...extra })).toThrow(
       BadRequestException,

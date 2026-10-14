@@ -13,7 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ParseIdPipe } from '../common/parse-id.pipe';
-import { OrderCategory } from '@prisma/client';
+import { OrderCategory, VideoPlatform } from '@prisma/client';
 import { Throttle } from '@nestjs/throttler';
 import { fromMinor } from '../common/money';
 import { OrdersService } from './orders.service';
@@ -62,6 +62,8 @@ export class OrdersController {
   async listOpen(
     @Query('category', new ParseEnumPipe(OrderCategory, { optional: true }))
     category: OrderCategory | undefined,
+    @Query('platform', new ParseEnumPipe(VideoPlatform, { optional: true }))
+    platform: VideoPlatform | undefined,
     @Query('afterId', new ParseIntPipe({ optional: true })) afterId?: number,
     @Query('afterCreatedAt') afterCreatedAt?: string,
   ) {
@@ -74,6 +76,7 @@ export class OrdersController {
     }
     const { items, hasMore, total } = await this.ordersService.listOpen(
       category,
+      platform,
       after,
       PAGE_SIZE,
     );

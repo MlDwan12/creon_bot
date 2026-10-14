@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { OrderCategory, VideoOrientation } from '@prisma/client';
+import { OrderCategory, VideoOrientation, VideoPlatform } from '@prisma/client';
 import {
   isMeaningfulText,
   MAX_COMMENT_LENGTH,
@@ -91,6 +91,16 @@ export function parseOrderInput(body: unknown) {
   )
     throw new BadRequestException('Неизвестная ориентация ролика');
 
+  // Пусто — любая площадка.
+  const platforms = b.platforms ?? [];
+  if (
+    !Array.isArray(platforms) ||
+    !platforms.every((p) =>
+      Object.values(VideoPlatform).includes(p as VideoPlatform),
+    )
+  )
+    throw new BadRequestException('Неизвестная площадка');
+
   const category = b.category as OrderCategory;
   if (!Object.values(OrderCategory).includes(category)) {
     throw new BadRequestException('Выберите категорию');
@@ -111,6 +121,7 @@ export function parseOrderInput(body: unknown) {
     minDurationSec,
     maxDurationSec,
     orientation,
+    platforms: [...new Set(platforms as VideoPlatform[])],
     category,
     deadline,
   };
@@ -139,11 +150,13 @@ export function videoFormat(o: {
   minDurationSec: number | null;
   maxDurationSec: number | null;
   orientation: VideoOrientation | null;
+  platforms: VideoPlatform[];
 }) {
   return {
     minDurationSec: o.minDurationSec,
     maxDurationSec: o.maxDurationSec,
     orientation: o.orientation,
+    platforms: o.platforms,
   };
 }
 
@@ -217,6 +230,7 @@ export function parseOrderEdit(body: unknown) {
     minDurationSec: input.minDurationSec,
     maxDurationSec: input.maxDurationSec,
     orientation: input.orientation,
+    platforms: input.platforms,
     category: input.category,
     deadline:
       b.deadlineDays === undefined

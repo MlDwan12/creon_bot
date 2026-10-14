@@ -63,6 +63,15 @@ enum VideoOrientation {
   HORIZONTAL
 }
 
+/** Площадки роликов — коды из src/common/platforms.ts (PLATFORMS). */
+enum VideoPlatform {
+  TIKTOK
+  YOUTUBE
+  VK
+  INSTAGRAM
+  X
+}
+
 enum OrderCategory {
   PRODUCT_REVIEW
   BEAUTY
@@ -101,6 +110,8 @@ model Order {
   minDurationSec   Int?
   maxDurationSec   Int?
   orientation      VideoOrientation?
+  /// Где можно публиковать ролик; пусто — на любой площадке.
+  platforms        VideoPlatform[] @default([])
   deadline         DateTime?
   status           OrderStatus   @default(PENDING_MODERATION)
   moderatorId      BigInt?

@@ -1,4 +1,4 @@
-import type { VideoFormat } from './api';
+import { PLATFORM_NAMES, type VideoFormat } from './api';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const relative = new Intl.RelativeTimeFormat('ru', { numeric: 'auto' });
@@ -47,14 +47,19 @@ export function formatViews(views: number): string {
   return views.toLocaleString('ru-RU');
 }
 
-/** «Вертикальное · 15–60 сек»; пусто — требований нет. */
+/** «TikTok, Instagram · Вертикальное · 15–60 сек»; пусто — требований нет. */
 export function formatVideoFormat(f: VideoFormat): string {
   const { minDurationSec: min, maxDurationSec: max } = f;
   const duration =
     min && max ? `${min}–${max} сек` : min ? `от ${min} сек` : max ? `до ${max} сек` : '';
   const orientation =
     f.orientation === 'VERTICAL' ? 'Вертикальное' : f.orientation === 'HORIZONTAL' ? 'Горизонтальное' : '';
-  return [orientation, duration].filter(Boolean).join(' · ');
+  return [formatPlatforms(f.platforms), orientation, duration].filter(Boolean).join(' · ');
+}
+
+/** «TikTok, Instagram»; пусто — любая площадка. */
+export function formatPlatforms(platforms: VideoFormat['platforms']): string {
+  return platforms.map((p) => PLATFORM_NAMES[p]).join(', ');
 }
 
 /** Сколько ждёт в очереди: «40 мин», «6 ч», «2 дн». */

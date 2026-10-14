@@ -10,6 +10,7 @@ import {
   Prisma,
   SubmissionStatus,
   VideoOrientation,
+  VideoPlatform,
 } from '@prisma/client';
 import { formatMoney } from '../common/format';
 import { fromMinor } from '../common/money';
@@ -48,6 +49,7 @@ const PUBLIC_ORDER_FIELDS = {
   minDurationSec: true,
   maxDurationSec: true,
   orientation: true,
+  platforms: true,
   category: true,
   deadline: true,
   createdAt: true,
@@ -90,6 +92,7 @@ export class OrdersService {
       minDurationSec?: number | null;
       maxDurationSec?: number | null;
       orientation?: VideoOrientation | null;
+      platforms?: VideoPlatform[];
       category: OrderCategory;
       deadline?: Date;
     },
@@ -118,6 +121,7 @@ export class OrdersService {
         minDurationSec: data.minDurationSec,
         maxDurationSec: data.maxDurationSec,
         orientation: data.orientation,
+        platforms: data.platforms,
         category: data.category,
         deadline: data.deadline,
       },
@@ -134,12 +138,24 @@ export class OrdersService {
    */
   async listOpen(
     category: OrderCategory | undefined,
+    platform: VideoPlatform | undefined,
     after: { createdAt: Date; id: number } | undefined,
     take: number,
   ) {
-    const where = {
+    const where: Prisma.OrderWhereInput = {
       status: OrderStatus.OPEN,
       ...(category ? { category } : {}),
+      // Заказ без площадок подходит для любой.
+      ...(platform
+        ? {
+            AND: {
+              OR: [
+                { platforms: { isEmpty: true } },
+                { platforms: { has: platform } },
+              ],
+            },
+          }
+        : {}),
     };
     const [rows, total] = await Promise.all([
       this.prisma.order.findMany({
@@ -156,7 +172,7 @@ export class OrdersService {
         take: take + 1,
         select: PUBLIC_ORDER_FIELDS,
       }),
-      this.countOpen(category ?? 'ALL', where),
+      this.countOpen(`${category ?? 'ALL'}:${platform ?? 'ALL'}`, where),
     ]);
     return {
       items: await this.withFree(rows.slice(0, take)),
@@ -472,6 +488,7 @@ export class OrdersService {
       minDurationSec?: number | null;
       maxDurationSec?: number | null;
       orientation?: VideoOrientation | null;
+      platforms?: VideoPlatform[];
       category: OrderCategory;
       deadline?: Date | null;
     },

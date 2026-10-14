@@ -5,6 +5,9 @@ import {
   ORDER_CATEGORIES,
   type OrderCategory,
   type OrderSummary,
+  PLATFORM_NAMES,
+  VIDEO_PLATFORMS,
+  type VideoPlatform,
 } from '../api';
 import { RouterLink } from 'vue-router';
 import OrderCard from '../components/OrderCard.vue';
@@ -13,6 +16,17 @@ import { onboardingOpen } from '../onboarding';
 
 // ref() — реактивное значение: поменяли `.value` в коде, и шаблон ниже перерисовался сам.
 const category = ref<OrderCategory>();
+// Площадку запоминаем: креатор обычно снимает для одной-двух, не выбирать каждый раз.
+const PLATFORM_KEY = 'catalog.platform';
+const platform = ref<VideoPlatform | undefined>(readPlatform());
+function readPlatform() {
+  try {
+    const saved = localStorage.getItem(PLATFORM_KEY);
+    return VIDEO_PLATFORMS.find((p) => p === saved);
+  } catch {
+    return undefined;
+  }
+}
 const orders = ref<OrderSummary[]>([]);
 const total = ref(0);
 const hasMore = ref(false);
@@ -30,7 +44,7 @@ async function load(reset: boolean) {
   error.value = '';
   try {
     // Следующая страница — заказы старше последнего показанного (курсор, а не номер страницы).
-    const res = await fetchOpenOrders(reset ? undefined : orders.value.at(-1), category.value);
+    const res = await fetchOpenOrders(reset ? undefined : orders.value.at(-1), category.value, platform.value);
     if (requestId !== lastRequest) return;
     orders.value = reset ? res.items : [...orders.value, ...res.items];
     total.value = res.total;
@@ -42,8 +56,16 @@ async function load(reset: boolean) {
   }
 }
 
-// Сменилась категория — грузим заново; immediate — и сразу при открытии экрана.
-watch(category, () => load(true), { immediate: true });
+// Сменилась категория или площадка — грузим заново; immediate — и сразу при открытии экрана.
+watch([category, platform], () => load(true), { immediate: true });
+watch(platform, (p) => {
+  try {
+    if (p) localStorage.setItem(PLATFORM_KEY, p);
+    else localStorage.removeItem(PLATFORM_KEY);
+  } catch {
+    // без хранилища просто не запомним
+  }
+});
 </script>
 
 <template>
@@ -52,6 +74,19 @@ watch(category, () => load(true), { immediate: true });
       <h1>Заказы</h1>
       <p>Выберите задание, снимите видео и получите оплату</p>
     </header>
+
+    <nav class="chips" aria-label="Площадки">
+      <button type="button" :aria-pressed="!platform" @click="platform = undefined">Все площадки</button>
+      <button
+        v-for="p in VIDEO_PLATFORMS"
+        :key="p"
+        type="button"
+        :aria-pressed="platform === p"
+        @click="platform = p"
+      >
+        {{ PLATFORM_NAMES[p] }}
+      </button>
+    </nav>
 
     <nav class="chips" aria-label="Категории">
       <button type="button" :aria-pressed="!category" @click="category = undefined">Все</button>
@@ -68,7 +103,7 @@ watch(category, () => load(true), { immediate: true });
 
     <p v-if="error" class="hint">{{ error }}</p>
     <p v-else-if="!loading && orders.length === 0" class="hint">
-      Заказов в этой категории пока нет.
+      Здесь пока нет заказов — попробуйте другую категорию или площадку.
     </p>
     <h2 v-else-if="total > 0" class="section-title count">{{ total }} открытых заказов</h2>
 

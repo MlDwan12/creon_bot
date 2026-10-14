@@ -1,11 +1,19 @@
-/** Площадки, где креаторы публикуют ролики: код → название и домены (с поддоменами). */
+import type { VideoPlatform } from '@prisma/client';
+
+/**
+ * Площадки, где креаторы публикуют ролики: код → название и домены (с поддоменами). Коды — те же,
+ * что в enum VideoPlatform (площадки заказа): satisfies не даст им разойтись.
+ */
 export const PLATFORMS = {
   TIKTOK: { name: 'TikTok', hosts: ['tiktok.com'] },
   YOUTUBE: { name: 'YouTube', hosts: ['youtube.com', 'youtu.be'] },
   VK: { name: 'VK', hosts: ['vk.com', 'vk.ru', 'vkvideo.ru'] },
   INSTAGRAM: { name: 'Instagram', hosts: ['instagram.com'] },
   X: { name: 'X', hosts: ['x.com', 'twitter.com'] },
-} as const;
+} as const satisfies Record<
+  VideoPlatform,
+  { name: string; hosts: readonly string[] }
+>;
 
 export type Platform = keyof typeof PLATFORMS | 'OTHER';
 

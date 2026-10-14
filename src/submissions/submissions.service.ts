@@ -6,7 +6,12 @@ import {
   NotFoundException,
   OnApplicationBootstrap,
 } from '@nestjs/common';
-import { Prisma, OrderStatus, SubmissionStatus } from '@prisma/client';
+import {
+  Prisma,
+  OrderStatus,
+  SubmissionStatus,
+  VideoPlatform,
+} from '@prisma/client';
 import {
   ACCRUED,
   budgetState,
@@ -15,7 +20,7 @@ import {
   VIEWS_TOPUP_DAYS,
 } from '../orders/budget';
 import { DAY_MS } from '../orders/deadline';
-import { videoKey } from '../common/platforms';
+import { PLATFORMS, platformOf, videoKey } from '../common/platforms';
 import { closeOpenOrders, lockOrder } from '../orders/order-status';
 import {
   transitionSubmission,
@@ -173,10 +178,15 @@ export class SubmissionsService implements OnApplicationBootstrap {
   }
 
   /**
-   * Можно ли сдать видео по отклику: он ваш, «в работе», заказ ещё принимает видео. Проверка до
+   * Можно ли сдать это видео по отклику: он ваш, «в работе», заказ ещё принимает видео, площадка —
+   * из разрешённых в заказе. Проверка до
    * обращения к API площадки (квота YouTube) — attachVideo всё равно повторит её под блокировкой.
    */
-  private async assertCanSubmit(submissionId: number, creatorId: number) {
+  private async assertCanSubmit(
+    submissionId: number,
+    creatorId: number,
+    videoUrl: string,
+  ) {
     const submission = await this.mustFind(submissionId);
     if (submission.creatorId !== creatorId)
       throw new ForbiddenException('Это не ваш отклик');
@@ -192,6 +202,14 @@ export class SubmissionsService implements OnApplicationBootstrap {
       throw new ForbiddenException(
         'Заказ снят модератором — видео по нему не принимаются',
       );
+    const { platforms } = submission.order;
+    if (
+      platforms.length &&
+      !platforms.includes(platformOf(videoUrl) as VideoPlatform)
+    )
+      throw new ForbiddenException(
+        `Ролик для этого заказа — только в ${platforms.map((p) => PLATFORMS[p].name).join(', ')}`,
+      );
     return submission;
   }
 
@@ -204,7 +222,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
     creatorId: number,
     video: { url: string; views: number },
   ) {
-    await this.assertCanSubmit(submissionId, creatorId);
+    await this.assertCanSubmit(submissionId, creatorId, video.url);
     const counted = (
       await this.viewCounter.fetchViews([{ url: video.url, creatorId }])
     ).get(video.url)?.views;
@@ -228,7 +246,11 @@ export class SubmissionsService implements OnApplicationBootstrap {
     videoUrl: string,
     views: number,
   ) {
-    const submission = await this.assertCanSubmit(submissionId, creatorId);
+    const submission = await this.assertCanSubmit(
+      submissionId,
+      creatorId,
+      videoUrl,
+    );
     if (views < submission.order.minViews)
       throw new ForbiddenException(
         `Ролик можно сдать, когда он наберёт ${submission.order.minViews.toLocaleString('ru-RU')} просмотров`,
