@@ -1,3 +1,5 @@
+import { userLang } from '../i18n/i18n';
+import { setRequestLang, tr } from '../i18n/request-lang';
 import {
   CanActivate,
   ForbiddenException,
@@ -49,10 +51,11 @@ export class InitDataGuard implements CanActivate {
       firstName: tgUser.first_name,
       telegramLanguage: tgUser.language_code,
     });
+    setRequestLang(userLang(req.user));
     // `banned` — мини-апп по нему показывает экран блокировки вместо любого экрана.
     if (req.user.bannedAt)
       throw new ForbiddenException({
-        message: 'Ваш аккаунт заблокирован',
+        message: tr('errors.banned'),
         banned: true,
         reason: req.user.banReason,
         // /api/me заблокированному недоступен — ссылку на поддержку отдаём прямо здесь

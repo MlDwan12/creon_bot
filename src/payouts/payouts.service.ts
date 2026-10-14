@@ -1,3 +1,4 @@
+import { tr } from '../i18n/request-lang';
 import {
   BadRequestException,
   ForbiddenException,
@@ -23,7 +24,7 @@ const HOLDS_BALANCE: PayoutStatus[] = [
 export function parsePayoutAmount(value: unknown): number {
   if (!Number.isInteger(value) || (value as number) < MIN_PAYOUT)
     throw new BadRequestException(
-      `Сумма вывода — целое число USDT от ${MIN_PAYOUT}`,
+      tr('errors.payoutAmount', { min: MIN_PAYOUT }),
     );
   return toMinor(value as number);
 }
@@ -100,12 +101,10 @@ export class PayoutsService {
         const [user] = await tx.$queryRaw<{ payoutWallet: string | null }[]>`
           SELECT "payoutWallet" FROM "User" WHERE id = ${creatorId} FOR UPDATE`;
         if (!user?.payoutWallet)
-          throw new BadRequestException(
-            'Укажите кошелёк USDT (TRC20) в профиле — на него придёт выплата',
-          );
+          throw new BadRequestException(tr('errors.payoutNeedWallet'));
         const { availableMinor } = await this.balance(creatorId, tx);
         if (amountMinor > availableMinor)
-          throw new ForbiddenException('Сумма больше доступного баланса');
+          throw new ForbiddenException(tr('errors.payoutTooMuch'));
         return tx.payout.create({
           data: {
             creatorId,
@@ -121,9 +120,7 @@ export class PayoutsService {
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === 'P2002'
       )
-        throw new ForbiddenException(
-          'У вас уже есть заявка на вывод — дождитесь, пока менеджер её обработает',
-        );
+        throw new ForbiddenException(tr('errors.payoutPending'));
       throw err;
     }
   }

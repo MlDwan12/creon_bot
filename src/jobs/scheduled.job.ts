@@ -1,3 +1,5 @@
+import { userLang } from '../i18n/i18n';
+import { withLang } from '../i18n/request-lang';
 import {
   Injectable,
   Logger,
@@ -158,7 +160,12 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
    */
   private async sendInsights() {
     for (const order of await this.ordersService.listInsightsPending()) {
-      const [first] = (await this.ordersService.report(order)).insights;
+      // совет — на языке рекламодателя: запроса здесь нет, язык задаём явно
+      const [first] = (
+        await withLang(userLang(order.advertiser), () =>
+          this.ordersService.report(order),
+        )
+      ).insights;
       if (first && (await this.ordersService.markInsightsSent(order.id)))
         this.notifications.orderInsight(order, first.text);
     }

@@ -1,3 +1,4 @@
+import { requestLangMiddleware } from './i18n/request-lang';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -26,6 +27,8 @@ async function bootstrap() {
   });
   // не подсказываем снаружи, на чём сервер
   app.disable('x-powered-by');
+  // язык запроса для текстов ошибок (src/i18n/request-lang.ts) — до всех обработчиков
+  app.use(requestLangMiddleware);
   serveWebapp(app);
   // На SIGTERM (docker stop / редеплой) останавливает polling и закрывает соединение Prisma.
   app.enableShutdownHooks();

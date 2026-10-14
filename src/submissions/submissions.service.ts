@@ -1,3 +1,4 @@
+import { tr, trNum } from '../i18n/request-lang';
 import { randomBytes } from 'node:crypto';
 import {
   ForbiddenException,
@@ -48,21 +49,17 @@ const ACCEPTS_VIDEOS: Prisma.OrderWhereInput = {
 };
 
 // Свободного остатка может не хватать и из-за резерва роликов на проверке — тогда он ещё вернётся.
-const EXHAUSTED_MESSAGE =
-  'Свободного бюджета в заказе сейчас не хватает на ролик — новые ролики по нему не принимаются';
+const EXHAUSTED_MESSAGE = () => tr('errors.budgetShort');
 
-const ALREADY_CLAIMED_MESSAGE =
-  'По этому заказу у вас уже есть отклик в работе — отправьте по нему видео в «Мои отклики»';
+const ALREADY_CLAIMED_MESSAGE = () => tr('errors.alreadyClaimed');
 
 /** Причина отклонения, когда публикацию удалили до конца холда — креатор увидит её. */
 export const PUBLICATION_DELETED =
   'Публикация удалена до итога просмотров — начисление отменено';
 
-const ON_REVIEW_MESSAGE =
-  'Ваш ролик по этому заказу ещё на проверке — следующий можно будет прислать после решения модератора';
+const ON_REVIEW_MESSAGE = () => tr('errors.onReview');
 
-const DUPLICATE_VIDEO_MESSAGE =
-  'Этот ролик уже сдан — по этому или другому заказу. Один ролик оплачивается один раз';
+const DUPLICATE_VIDEO_MESSAGE = () => tr('errors.duplicateVideo');
 
 const isDuplicate = (err: unknown) =>
   err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
@@ -137,14 +134,14 @@ export class SubmissionsService implements OnApplicationBootstrap {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
     });
-    if (!order) throw new NotFoundException('Заказ не найден');
+    if (!order) throw new NotFoundException(tr('errors.orderNotFound'));
     if (order.status !== OrderStatus.OPEN)
-      throw new ForbiddenException('Заказ сейчас недоступен');
+      throw new ForbiddenException(tr('errors.orderUnavailable'));
     if (order.advertiserId === creatorId)
-      throw new ForbiddenException('Нельзя откликнуться на свой заказ');
+      throw new ForbiddenException(tr('errors.ownOrder'));
     // без блокировки: сдачу всё равно проверит attachVideo, здесь — не брать слот впустую
     if ((await this.orderBudget(order)).exhausted)
-      throw new ForbiddenException(EXHAUSTED_MESSAGE);
+      throw new ForbiddenException(EXHAUSTED_MESSAGE());
     // По ролику на проверке за раз: каждый резервирует часть фонда, и поток пустых сдач
     // (просмотры заявляет сам креатор) занял бы весь заказ до решения модератора.
     // ponytail: проверка без блокировки — двойной тап по разным откликам даст два ролика, не больше.
@@ -152,7 +149,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
       where: { orderId, creatorId, status: SubmissionStatus.SUBMITTED },
       select: { id: true },
     });
-    if (onReview) throw new ForbiddenException(ON_REVIEW_MESSAGE);
+    if (onReview) throw new ForbiddenException(ON_REVIEW_MESSAGE());
     // ponytail: заказ могут закрыть между проверкой и вставкой — отклик на только что закрытый
     // заказ безвреден (видео по закрытому принимаются), блокировать ради этого незачем.
     try {
@@ -172,7 +169,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === 'P2002'
       )
-        throw new ForbiddenException(ALREADY_CLAIMED_MESSAGE);
+        throw new ForbiddenException(ALREADY_CLAIMED_MESSAGE());
       throw err;
     }
   }
@@ -189,26 +186,24 @@ export class SubmissionsService implements OnApplicationBootstrap {
   ) {
     const submission = await this.mustFind(submissionId);
     if (submission.creatorId !== creatorId)
-      throw new ForbiddenException('Это не ваш отклик');
+      throw new ForbiddenException(tr('errors.notYourSubmission'));
     if (submission.status !== SubmissionStatus.IN_PROGRESS)
-      throw new ForbiddenException('Этот отклик уже обработан');
+      throw new ForbiddenException(tr('errors.submissionProcessed'));
     // После срока видео не принимаются. После ручного закрытия — принимаются, пока есть бюджет.
     if (submission.order.status === OrderStatus.EXPIRED)
-      throw new ForbiddenException(
-        'Срок заказа истёк — видео больше не принимаются',
-      );
+      throw new ForbiddenException(tr('errors.orderExpired'));
     // Изменённый открытый заказ модератор отклонил — он снят с площадки.
     if (submission.order.status === OrderStatus.REJECTED)
-      throw new ForbiddenException(
-        'Заказ снят модератором — видео по нему не принимаются',
-      );
+      throw new ForbiddenException(tr('errors.orderRemovedByMod'));
     const { platforms } = submission.order;
     if (
       platforms.length &&
       !platforms.includes(platformOf(videoUrl) as VideoPlatform)
     )
       throw new ForbiddenException(
-        `Ролик для этого заказа — только в ${platforms.map((p) => PLATFORMS[p].name).join(', ')}`,
+        tr('errors.videoOnlyOn', {
+          platforms: platforms.map((p) => PLATFORMS[p].name).join(', '),
+        }),
       );
     return submission;
   }
@@ -253,12 +248,14 @@ export class SubmissionsService implements OnApplicationBootstrap {
     );
     if (views < submission.order.minViews)
       throw new ForbiddenException(
-        `Ролик можно сдать, когда он наберёт ${submission.order.minViews.toLocaleString('ru-RU')} просмотров`,
+        tr('errors.belowThreshold', {
+          views: trNum(submission.order.minViews),
+        }),
       );
     try {
       return await this.prisma.$transaction(async (tx) => {
         const { order, budget } = await this.lockBudget(tx, submission.orderId);
-        if (budget.exhausted) throw new ForbiddenException(EXHAUSTED_MESSAGE);
+        if (budget.exhausted) throw new ForbiddenException(EXHAUSTED_MESSAGE());
         await transitionSubmission(
           tx,
           submissionId,
@@ -277,7 +274,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
       });
     } catch (err) {
       if (isDuplicate(err))
-        throw new ForbiddenException(DUPLICATE_VIDEO_MESSAGE);
+        throw new ForbiddenException(DUPLICATE_VIDEO_MESSAGE());
       throw err;
     }
   }
@@ -599,7 +596,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
   ) {
     const submission = await this.mustFind(submissionId);
     if (submission.order.advertiserId !== advertiserId)
-      throw new ForbiddenException('Это не ваш заказ');
+      throw new ForbiddenException(tr('errors.notYourOrder'));
     const { count } = await this.prisma.submission.updateMany({
       where: {
         id: submissionId,
@@ -611,7 +608,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
         reviewQueuedAt: feedback.review ? new Date() : null,
       },
     });
-    if (count === 0) throw new ForbiddenException('Этот ролик уже оценён');
+    if (count === 0) throw new ForbiddenException(tr('errors.alreadyRated'));
     return this.mustFind(submissionId);
   }
 
@@ -703,7 +700,8 @@ export class SubmissionsService implements OnApplicationBootstrap {
       where: { id },
       include: { order: true, creator: true },
     });
-    if (!submission) throw new NotFoundException('Отклик не найден');
+    if (!submission)
+      throw new NotFoundException(tr('errors.submissionNotFound'));
     return submission;
   }
 }

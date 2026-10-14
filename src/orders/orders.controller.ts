@@ -1,3 +1,4 @@
+import { tr } from '../i18n/request-lang';
 import {
   BadRequestException,
   Controller,
@@ -79,7 +80,7 @@ export class OrdersController {
     if (afterId !== undefined) {
       const createdAt = new Date(afterCreatedAt ?? '');
       if (Number.isNaN(createdAt.getTime()))
-        throw new BadRequestException('Некорректная страница');
+        throw new BadRequestException(tr('errors.badPage'));
       after = { createdAt, id: afterId };
     }
     const { items, hasMore, total } = await this.ordersService.listOpen(
@@ -95,7 +96,7 @@ export class OrdersController {
   @Get(':id')
   async findOpen(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
     const order = await this.ordersService.findOpenById(id);
-    if (!order) throw new NotFoundException('Заказ не найден или уже закрыт');
+    if (!order) throw new NotFoundException(tr('errors.orderClosedOrMissing'));
     const claimed = await this.submissionsService.hasInProgress(
       id,
       req.user.id,

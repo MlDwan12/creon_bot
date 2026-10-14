@@ -1,3 +1,4 @@
+import { tr } from '../i18n/request-lang';
 import { BadRequestException, Injectable, PipeTransform } from '@nestjs/common';
 import { isDbId } from './validation';
 
@@ -6,7 +7,7 @@ import { isDbId } from './validation';
 export class ParseIdPipe implements PipeTransform<string, number> {
   transform(value: string): number {
     const id = /^\d+$/.test(value) ? Number(value) : NaN;
-    if (!isDbId(id)) throw new BadRequestException('Некорректный id');
+    if (!isDbId(id)) throw new BadRequestException(tr('errors.badId'));
     return id;
   }
 }

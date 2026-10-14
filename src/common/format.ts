@@ -1,3 +1,4 @@
+import { tr } from '../i18n/request-lang';
 import {
   type Order,
   OrderCategory,
@@ -58,7 +59,7 @@ export function formatMoney(amount: number): string {
  * creatorLabel (с username) — только модераторам и поддержке.
  */
 export function publicName(user: User): string {
-  return stripContacts(user.firstName ?? '') || 'Креатор';
+  return stripContacts(user.firstName ?? '') || tr('errors.anonCreator');
 }
 
 export function creatorLabel(user: User): string {

@@ -1,3 +1,4 @@
+import { tr } from '../i18n/request-lang';
 import {
   type Order,
   type Submission,
@@ -97,17 +98,19 @@ export function reportCsv(report: Report): string {
   };
   const rows = [
     [
-      'Креатор',
-      'Площадка',
-      'Ссылка',
-      'Просмотры',
-      'Лайки',
-      'Переходы',
-      'Одобрено',
+      tr('errors.csvCreator'),
+      tr('errors.csvPlatform'),
+      tr('errors.csvLink'),
+      tr('errors.csvViews'),
+      tr('errors.csvLikes'),
+      tr('errors.csvClicks'),
+      tr('errors.csvApproved'),
     ],
     ...report.items.map((i) => [
       i.creator,
-      i.platform === 'OTHER' ? 'Другое' : PLATFORMS[i.platform].name,
+      i.platform === 'OTHER'
+        ? tr('errors.csvOther')
+        : PLATFORMS[i.platform].name,
       i.videoUrl ?? '',
       i.views,
       i.likes ?? '',

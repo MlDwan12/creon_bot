@@ -1,3 +1,4 @@
+import { tr } from '../i18n/request-lang';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Prisma, SubmissionStatus } from '@prisma/client';
 
@@ -36,8 +37,8 @@ export async function transitionSubmission(
   if (await tryTransitionSubmission(db, submissionId, from, data, order))
     return;
   if (!(await db.submission.findUnique({ where: { id: submissionId } })))
-    throw new NotFoundException('Отклик не найден');
-  throw new ForbiddenException('Этот отклик уже обработан');
+    throw new NotFoundException(tr('errors.submissionNotFound'));
+  throw new ForbiddenException(tr('errors.submissionProcessed'));
 }
 
 /**
