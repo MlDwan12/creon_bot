@@ -1,3 +1,4 @@
+import { recordExternalApi } from '../monitoring/metrics';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { SocialPlatform } from '@prisma/client';
@@ -112,6 +113,7 @@ export class ViewCounterService {
           statistics?: { viewCount?: string; likeCount?: string };
         }[];
       }>(
+        'YOUTUBE',
         `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${batch.join(',')}&key=${this.youtubeKey}`,
       );
       for (const item of data?.items ?? []) {
@@ -149,6 +151,7 @@ export class ViewCounterService {
           }[];
         };
       }>(
+        'X',
         `https://api.x.com/2/tweets?ids=${batch.join(',')}&tweet.fields=public_metrics&expansions=attachments.media_keys&media.fields=public_metrics,type`,
         { Authorization: `Bearer ${this.xToken}` },
       );
@@ -170,6 +173,7 @@ export class ViewCounterService {
 
   /** Сбой сети или API — не ошибка для вызывающего: просмотры введёт модератор. */
   private async get<T>(
+    platform: string,
     url: string,
     headers?: Record<string, string>,
   ): Promise<T | null> {
@@ -187,11 +191,14 @@ export class ViewCounterService {
         this.logger.warn(
           `API просмотров: ${body.error?.message ?? body.title ?? res.status}`,
         );
+        recordExternalApi(platform, false);
         return null;
       }
+      recordExternalApi(platform, true);
       return body;
     } catch (err) {
       this.logger.warn(`API просмотров недоступно: ${String(err)}`);
+      recordExternalApi(platform, false);
       return null;
     }
   }

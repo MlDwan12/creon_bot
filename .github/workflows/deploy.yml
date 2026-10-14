@@ -60,7 +60,8 @@ jobs:
 
       - name: Build image
         if: steps.latest.outputs.deploy == 'true'
-        run: docker build -t "$APP:$TAG" .
+        # адрес Sentry мини-аппа — не секрет (виден в браузере): переменная окружения GitHub, пусто — выключен
+        run: docker build --build-arg VITE_SENTRY_DSN="${{ vars.VITE_SENTRY_DSN }}" -t "$APP:$TAG" .
 
       # ключ появляется на раннере только после сборки — код сборки его не застанет
       - name: SSH key
@@ -95,3 +96,22 @@ jobs:
       - name: Remove key
         if: always()
         run: rm -f ~/.ssh/id_deploy
+
+      # Итог выкатки — в Telegram отдельным ботом алертов (MONITORING.md). Нет секретов — шаг молчит.
+      - name: Notify
+        if: always() && steps.latest.outputs.deploy == 'true'
+        env:
+          ALERT_BOT_TOKEN: ${{ secrets.ALERT_BOT_TOKEN }}
+          ALERT_CHAT_ID: ${{ secrets.ALERT_CHAT_ID }}
+          STATUS: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ -n "$ALERT_BOT_TOKEN" ] && [ -n "$ALERT_CHAT_ID" ] || exit 0
+          if [ "$STATUS" = success ]; then
+            text="✓ Fixum выкачен: ${SHA:0:7}"; silent=true
+          else
+            text="✗ Выкатка Fixum ${SHA:0:7} не удалась (откат на прошлую версию, если был возможен) — лог: $RUN_URL"; silent=false
+          fi
+          curl -fsS --max-time 10 "https://api.telegram.org/bot$ALERT_BOT_TOKEN/sendMessage" \
+            --data-urlencode "chat_id=$ALERT_CHAT_ID" --data-urlencode "text=$text" \
+            --data "disable_notification=$silent" >/dev/null || echo "::warning::не удалось отправить итог в Telegram"
