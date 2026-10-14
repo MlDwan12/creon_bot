@@ -14,22 +14,12 @@ import {
   Update,
 } from 'nestjs-telegraf';
 import { Context, Markup, Telegraf, TelegramError } from 'telegraf';
+import { translator, userLang } from '../i18n/i18n';
+import { PrismaService } from '../prisma/prisma.service';
 import { SupportService } from '../support/support.service';
-
-const INTRO = [
-  '👋 Fixum — биржа заказов на видео.',
-  '',
-  'Рекламодатели публикуют задания, креаторы берутся за них и получают оплату за готовую работу.',
-  '',
-  'Заказы, отклики и модерация — в приложении 👇',
-  'Вопросы — просто напишите сюда сообщение, ответит менеджер Fixum.',
-].join('\n');
 
 /** Пауза перед повтором, если Telegram недоступен при запуске. */
 const LAUNCH_RETRY_MS = 10_000;
-
-const MOVED =
-  'Бот обновился — всё теперь в приложении. Откройте его кнопкой «Fixum» слева от поля ввода.';
 
 /**
  * Вход в Mini App и поддержка: любое другое сообщение боту уходит менеджеру (SupportService),
@@ -45,6 +35,7 @@ export class StartUpdate
   constructor(
     @InjectBot() private readonly bot: Telegraf<Context>,
     private readonly support: SupportService,
+    private readonly prisma: PrismaService,
     config: ConfigService,
   ) {
     this.webAppUrl = config.get<string>('WEBAPP_URL')!.replace(/\/$/, '');
@@ -97,12 +88,32 @@ export class StartUpdate
     }
   }
 
+  /**
+   * Перевод на язык собеседника: выбранный в профиле мини-аппа, иначе язык его Telegram. Человек мог
+   * ещё ни разу не открывать мини-апп — тогда в базе его нет, берём язык из сообщения.
+   */
+  private async t(ctx: Context) {
+    const user = ctx.from
+      ? await this.prisma.user.findUnique({
+          where: { telegramId: BigInt(ctx.from.id) },
+          select: { language: true },
+        })
+      : null;
+    return translator(
+      userLang({
+        language: user?.language ?? null,
+        telegramLanguage: ctx.from?.language_code ?? null,
+      }),
+    );
+  }
+
   @Start()
   async onStart(@Ctx() ctx: Context) {
+    const t = await this.t(ctx);
     await ctx.reply(
-      INTRO,
+      t('bot.intro'),
       Markup.inlineKeyboard([
-        Markup.button.webApp('Открыть Fixum', this.webAppUrl),
+        Markup.button.webApp(t('bot.openApp'), this.webAppUrl),
       ]),
     );
   }
@@ -110,10 +121,11 @@ export class StartUpdate
   /** Telegram ждёт от ботов команду /privacy. Обработчик — до @On('message'), иначе тот перехватит. */
   @Command('privacy')
   async onPrivacy(@Ctx() ctx: Context) {
+    const t = await this.t(ctx);
     await ctx.reply(
-      'Политика конфиденциальности Fixum:',
+      t('bot.privacy'),
       Markup.inlineKeyboard([
-        Markup.button.webApp('Открыть', `${this.webAppUrl}/privacy`),
+        Markup.button.webApp(t('bot.open'), `${this.webAppUrl}/privacy`),
       ]),
     );
   }
@@ -127,7 +139,9 @@ export class StartUpdate
   /** Кнопки в старых сообщениях — их обработчиков больше нет. */
   @Action(/.*/)
   async onOldButton(@Ctx() ctx: Context) {
-    await ctx.answerCbQuery(MOVED, { show_alert: true });
+    await ctx.answerCbQuery((await this.t(ctx))('bot.moved'), {
+      show_alert: true,
+    });
   }
 
   /**
@@ -141,18 +155,20 @@ export class StartUpdate
       return;
     }
     if (ctx.chat!.type !== 'private') return;
+    const t = await this.t(ctx);
     if (!this.support.chatId) {
-      await ctx.reply(MOVED, Markup.removeKeyboard());
+      await ctx.reply(t('bot.moved'), Markup.removeKeyboard());
       return;
     }
     const result = await this.support.fromUser(ctx);
     await ctx.reply(
-      {
-        sent: '✅ Передали менеджеру — ответ придёт сюда.',
-        unsupported: 'Менеджер принимает текст, фото, видео и файлы.',
-        flood:
-          'Слишком много сообщений подряд — подождите минуту и напишите снова.',
-      }[result],
+      t(
+        {
+          sent: 'bot.supportSent',
+          unsupported: 'bot.supportUnsupported',
+          flood: 'bot.supportFlood',
+        }[result],
+      ),
       Markup.removeKeyboard(),
     );
   }
