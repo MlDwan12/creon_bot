@@ -150,6 +150,34 @@ describe('подключение аккаунта', () => {
     expect(await prisma.socialAccount.count()).toBe(0);
   });
 
+  it('вход начат в одной копии бота, вернулся в другую — подключаем; просроченный — нет', async () => {
+    const creator = await user();
+    const other = new AccountsService(
+      { get: (k: string) => env[k] } as unknown as ConfigService,
+      prisma,
+    );
+    const start = new URL(await accounts.start(creator.id, 'TIKTOK'));
+    replies(tiktokTokens(1), tiktokName('Аня'));
+    await other.complete('TIKTOK', {
+      code: 'c',
+      state: start.searchParams.get('state')!,
+    });
+    expect(await prisma.socialAccount.count()).toBe(1);
+    expect(await prisma.oAuthPending.count()).toBe(0);
+
+    const late = new URL(await accounts.start(creator.id, 'VK'));
+    await prisma.oAuthPending.updateMany({
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    await expect(
+      other.complete('VK', {
+        code: 'c',
+        device_id: 'd',
+        state: late.searchParams.get('state')!,
+      }),
+    ).rejects.toThrow('устарела');
+  });
+
   it('креатор не дал доступ к видео — не подключаем', async () => {
     const creator = await user();
     const start = new URL(await accounts.start(creator.id, 'TIKTOK'));
