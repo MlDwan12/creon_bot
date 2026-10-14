@@ -30,6 +30,7 @@
     "@nestjs/throttler": "^6",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
+    "i18next": "^26.4.4",
     "nestjs-telegraf": "^2.9.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",

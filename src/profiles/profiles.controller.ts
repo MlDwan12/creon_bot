@@ -1,3 +1,4 @@
+import { isLang, LANGS } from '../i18n/i18n';
 import {
   BadRequestException,
   Body,
@@ -53,6 +54,18 @@ export class ProfilesController {
     if (typeof newOrders !== 'boolean')
       throw new BadRequestException('newOrders — true или false');
     await this.profiles.updateNotifications(req.user.id, newOrders);
+    return { ok: true };
+  }
+
+  /** Язык интерфейса и сообщений бота; null — снова по языку Telegram. */
+  @Put('profile/language')
+  async updateLanguage(
+    @Body('language') language: unknown,
+    @Req() req: ApiRequest,
+  ) {
+    if (language !== null && !isLang(language))
+      throw new BadRequestException(`language — ${LANGS.join(', ')} или null`);
+    await this.profiles.updateLanguage(req.user.id, language);
     return { ok: true };
   }
 

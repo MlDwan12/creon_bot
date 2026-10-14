@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue';
 import {
   fetchOpenOrders,
+  categoryLabel,
   ORDER_CATEGORIES,
   type OrderCategory,
   type OrderSummary,
@@ -10,6 +11,7 @@ import {
   type VideoPlatform,
 } from '../api';
 import { RouterLink } from 'vue-router';
+import { i18next } from '../i18n';
 import OrderCard from '../components/OrderCard.vue';
 import PlatformIcon from '../components/PlatformIcon.vue';
 import SupportLink from '../components/SupportLink.vue';
@@ -51,7 +53,7 @@ async function load(reset: boolean) {
     total.value = res.total;
     hasMore.value = res.hasMore;
   } catch {
-    if (requestId === lastRequest) error.value = 'Не удалось загрузить заказы';
+    if (requestId === lastRequest) error.value = i18next.t('catalog.loadError');
   } finally {
     if (requestId === lastRequest) loading.value = false;
   }
@@ -72,12 +74,12 @@ watch(platform, (p) => {
 <template>
   <main class="catalog">
     <header class="head">
-      <h1>Заказы</h1>
-      <p>Выберите задание, снимите видео и получите оплату</p>
+      <h1>{{ $t('catalog.title') }}</h1>
+      <p>{{ $t('catalog.subtitle') }}</p>
     </header>
 
-    <nav class="chips" aria-label="Площадки">
-      <button type="button" :aria-pressed="!platform" @click="platform = undefined">Все площадки</button>
+    <nav class="chips" :aria-label="$t('catalog.platformsAria')">
+      <button type="button" :aria-pressed="!platform" @click="platform = undefined">{{ $t('catalog.allPlatforms') }}</button>
       <button
         v-for="p in VIDEO_PLATFORMS"
         :key="p"
@@ -91,24 +93,24 @@ watch(platform, (p) => {
       </button>
     </nav>
 
-    <nav class="chips soft" aria-label="Категории">
-      <button type="button" :aria-pressed="!category" @click="category = undefined">Все</button>
+    <nav class="chips soft" :aria-label="$t('catalog.categoriesAria')">
+      <button type="button" :aria-pressed="!category" @click="category = undefined">{{ $t('catalog.allCategories') }}</button>
       <button
         v-for="c in ORDER_CATEGORIES"
-        :key="c.code"
+        :key="c"
         type="button"
-        :aria-pressed="category === c.code"
-        @click="category = c.code"
+        :aria-pressed="category === c"
+        @click="category = c"
       >
-        {{ c.label }}
+        {{ categoryLabel(c) }}
       </button>
     </nav>
 
     <p v-if="error" class="hint">{{ error }}</p>
     <p v-else-if="!loading && orders.length === 0" class="hint">
-      Здесь пока нет заказов — попробуйте другую категорию или площадку.
+      {{ $t('catalog.empty') }}
     </p>
-    <h2 v-else-if="total > 0" class="section-title count">{{ total }} открытых заказов</h2>
+    <h2 v-else-if="total > 0" class="section-title count">{{ $t('catalog.openCount', { count: total }) }}</h2>
 
     <!-- Первая загрузка — заготовки карточек вместо пустого экрана. -->
     <template v-if="loading && orders.length === 0">
@@ -127,13 +129,13 @@ watch(platform, (p) => {
       :disabled="loading"
       @click="load(false)"
     >
-      {{ loading ? 'Загрузка…' : 'Показать ещё' }}
+      {{ loading ? $t('catalog.loading') : $t('catalog.more') }}
     </button>
 
     <footer class="footer">
-      <button type="button" class="quiet-link" @click="onboardingOpen = true">Как это работает</button>
+      <button type="button" class="quiet-link" @click="onboardingOpen = true">{{ $t('catalog.howItWorks') }}</button>
       <SupportLink />
-      <RouterLink to="/privacy" class="quiet-link">Политика конфиденциальности</RouterLink>
+      <RouterLink to="/privacy" class="quiet-link">{{ $t('catalog.privacy') }}</RouterLink>
     </footer>
   </main>
 </template>

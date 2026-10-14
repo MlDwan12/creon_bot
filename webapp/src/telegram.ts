@@ -1,6 +1,8 @@
 /** Только то, что мы используем из официального telegram-web-app.js. Полный API: https://core.telegram.org/bots/webapps */
 interface TelegramWebApp {
   initData: string;
+  /** Те же данные, что в initData, но без проверки подписи — только для оформления (язык). */
+  initDataUnsafe?: { user?: { language_code?: string } };
   /** Тема Telegram у пользователя; меняется на лету — событие themeChanged. */
   colorScheme: 'light' | 'dark';
   onEvent(event: 'themeChanged', cb: () => void): void;

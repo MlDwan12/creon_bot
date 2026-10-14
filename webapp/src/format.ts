@@ -1,11 +1,14 @@
 import { PLATFORM_NAMES, type Platform, type VideoFormat } from './api';
+import { i18next, locale } from './i18n';
+
+/** «5 минут назад» / «5 minutes ago» — на текущем языке. */
+const relative = () => new Intl.RelativeTimeFormat(locale(), { numeric: 'auto' });
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const relative = new Intl.RelativeTimeFormat('ru', { numeric: 'auto' });
 
 /** «30 сентября». */
 export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('ru-RU', {
+  return new Date(iso).toLocaleDateString(locale(), {
     day: 'numeric',
     month: 'long',
   });
@@ -21,30 +24,32 @@ export function formatDeadline(iso: string): string {
 export function timeAgo(iso: string): string {
   const seconds = (new Date(iso).getTime() - Date.now()) / 1000;
   const abs = Math.abs(seconds);
-  if (abs < 3600) return relative.format(Math.round(seconds / 60), 'minute');
+  if (abs < 3600) return relative().format(Math.round(seconds / 60), 'minute');
   if (abs < 24 * 3600)
-    return relative.format(Math.round(seconds / 3600), 'hour');
-  return relative.format(Math.round(seconds / (24 * 3600)), 'day');
+    return relative().format(Math.round(seconds / 3600), 'hour');
+  return relative().format(Math.round(seconds / (24 * 3600)), 'day');
 }
 
 /** «12 500 USDT», центы — только если есть: «12,5 USDT». */
 export function formatMoney(amount: number): string {
-  return `${amount.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} USDT`;
+  return `${amount.toLocaleString(locale(), { maximumFractionDigits: 2 })} USDT`;
 }
 
 /** «≈ 8 335 ₽» — подсказка по курсу рядом с суммой в USDT. */
 export function approxRub(usdt: number, rubPerUsdt: number): string {
-  return `≈ ${Math.round(usdt * rubPerUsdt).toLocaleString('ru-RU')} ₽`;
+  return `≈ ${Math.round(usdt * rubPerUsdt).toLocaleString(locale())} ₽`;
 }
 
 /** «1,5 USDT за 1000 просмотров»; ставки ещё нет — до одобрения модератором. */
 export function formatCpm(cpm: number | null): string {
-  return cpm === null ? 'ставку назначит модератор' : `${formatMoney(cpm)} за 1000 просмотров`;
+  return cpm === null
+    ? i18next.t('money.cpmPending')
+    : `${formatMoney(cpm)} ${i18next.t('money.perThousand')}`;
 }
 
 /** «12 500». */
 export function formatViews(views: number): string {
-  return views.toLocaleString('ru-RU');
+  return views.toLocaleString(locale());
 }
 
 /** «TikTok, Instagram · Вертикальное · 15–60 сек»; пусто — требований нет. */

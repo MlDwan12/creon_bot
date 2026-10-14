@@ -47,6 +47,7 @@ export class InitDataGuard implements CanActivate {
       telegramId: BigInt(tgUser.id),
       username: tgUser.username,
       firstName: tgUser.first_name,
+      telegramLanguage: tgUser.language_code,
     });
     // `banned` — мини-апп по нему показывает экран блокировки вместо любого экрана.
     if (req.user.bannedAt)

@@ -17,7 +17,7 @@ defineProps<{ order: OrderSummary }>();
           <PlatformIcon :platform="p" :size="18" round />
           {{ PLATFORM_NAMES[p] }}
         </span>
-        <span v-if="!order.platforms.length" class="tag">Любая площадка</span>
+        <span v-if="!order.platforms.length" class="tag">{{ $t('orderCard.anyPlatform') }}</span>
         <span class="tag">{{ categoryLabel(order.category) }}</span>
       </div>
       <span v-if="order.deadline" class="deadline">
@@ -25,7 +25,7 @@ defineProps<{ order: OrderSummary }>();
           <circle cx="12" cy="12" r="9" />
           <path d="M12 7v5l3 2" />
         </svg>
-        до {{ formatDate(order.deadline) }}
+        {{ $t('orderCard.until', { date: formatDate(order.deadline) }) }}
       </span>
       <span v-else class="ago">{{ timeAgo(order.createdAt) }}</span>
     </div>
@@ -38,16 +38,16 @@ defineProps<{ order: OrderSummary }>();
     <div class="price">
       <template v-if="order.cpm !== null">
         <span class="money cpm">{{ formatMoney(order.cpm) }}</span>
-        <span class="per">за 1000 просмотров</span>
+        <span class="per">{{ $t('money.perThousand') }}</span>
       </template>
-      <span v-else class="per">ставку назначит модератор</span>
+      <span v-else class="per">{{ $t('money.cpmPending') }}</span>
     </div>
 
     <div class="meta">
       <span :class="['free', { low: order.budgetLow }]">
-        осталось {{ formatMoney(order.free) }}<template v-if="order.budgetLow"> — успейте</template>
+        {{ $t('orderCard.left', { amount: formatMoney(order.free) }) }}<template v-if="order.budgetLow">{{ $t('orderCard.hurry') }}</template>
       </span>
-      <span>от {{ formatViews(order.minViews) }} просмотров</span>
+      <span>{{ $t('orderCard.minViews', { views: formatViews(order.minViews) }) }}</span>
     </div>
   </RouterLink>
 </template>
