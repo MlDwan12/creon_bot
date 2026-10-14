@@ -21,7 +21,6 @@ import {
 } from '../common/validation';
 import { OrdersService } from '../orders/orders.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { NO_LINKS } from '../profiles/profile-input';
 import { ProfilesService } from '../profiles/profiles.service';
 
 /** Коды причин по типу объекта; подписи — во фронте (webapp/src/api.ts, REPORT_REASONS). */
@@ -305,7 +304,7 @@ export class ReportsService {
           });
           break;
         case ReportTarget.PROFILE:
-          await this.profiles.updateLinks(group.targetId, NO_LINKS);
+          await this.profiles.updateLinks(group.targetId, []);
           break;
       }
     }

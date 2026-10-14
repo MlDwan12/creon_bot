@@ -1,7 +1,7 @@
 import { tr } from '../i18n/request-lang';
 import { BadRequestException } from '@nestjs/common';
 import { findExactContacts } from '../common/contacts';
-import { isOnHosts, PLATFORMS } from '../common/platforms';
+import { PLATFORMS, platformOf } from '../common/platforms';
 import { isMeaningfulText, MAX_COMMENT_LENGTH } from '../common/validation';
 
 /** Оценка при приёмке видео: звёзды обязательны, отзыв и согласие на портфолио — по желанию. */
@@ -40,39 +40,22 @@ export function assertNoContacts(text: string) {
 }
 
 const MAX_LINK_LENGTH = 200;
+/** Ссылок в профиле — не больше: на площадке бывает несколько аккаунтов, но не десятки. */
+export const MAX_SOCIAL_LINKS = 10;
 
-/** Соцсети креатора: поле → разрешённые домены (с поддоменами) и название для ошибки. */
-const NETWORKS = {
-  tiktokUrl: PLATFORMS.TIKTOK,
-  youtubeUrl: PLATFORMS.YOUTUBE,
-  vkUrl: PLATFORMS.VK,
-  instagramUrl: PLATFORMS.INSTAGRAM,
-  xUrl: PLATFORMS.X,
-} as const;
-
-type LinkField = keyof typeof NETWORKS;
-export type ProfileLinks = Record<LinkField, string | null>;
-
-/** Все ссылки пустые — чужому (без права видеть контакты) и при сбросе профиля по жалобе. */
-export const NO_LINKS: ProfileLinks = {
-  tiktokUrl: null,
-  youtubeUrl: null,
-  vkUrl: null,
-  instagramUrl: null,
-  xUrl: null,
-};
-
-/** Ссылки профиля: пустое — удалить ссылку; иначе https на домен своей соцсети. */
-export function parseLinks(body: unknown): ProfileLinks {
-  const b = (body ?? {}) as Record<string, unknown>;
-  const result = { ...NO_LINKS };
-  for (const field of Object.keys(NETWORKS) as LinkField[]) {
-    const { name, hosts } = NETWORKS[field];
-    const value = typeof b[field] === 'string' ? b[field].trim() : '';
-    if (!value) {
-      result[field] = null;
-      continue;
-    }
+/**
+ * Ссылки профиля на соцсети (`{ links: string[] }`): каждая — https на домен одной из площадок
+ * (src/common/platforms.ts), на одной площадке можно несколько. Пустые строки пропускаем,
+ * повторы убираем, порядок сохраняем.
+ */
+export function parseLinks(body: unknown): string[] {
+  const raw = (body as { links?: unknown } | null)?.links;
+  if (!Array.isArray(raw))
+    throw new BadRequestException(tr('errors.linksList'));
+  const result: string[] = [];
+  for (const item of raw) {
+    const value = typeof item === 'string' ? item.trim() : '';
+    if (!value) continue;
     let url: URL | undefined;
     try {
       url = new URL(value);
@@ -82,12 +65,22 @@ export function parseLinks(body: unknown): ProfileLinks {
     const ok =
       value.length <= MAX_LINK_LENGTH &&
       url?.protocol === 'https:' &&
-      isOnHosts(url.hostname, hosts);
+      platformOf(value) !== 'OTHER';
     if (!ok)
       throw new BadRequestException(
-        tr('errors.profileLink', { name, hosts: hosts.join(tr('errors.or')) }),
+        tr('errors.socialLink', {
+          link: value.slice(0, 60),
+          platforms: Object.values(PLATFORMS)
+            .map((p) => p.name)
+            .join(', '),
+        }),
       );
-    result[field] = url!.toString();
+    const normalized = url!.toString();
+    if (!result.includes(normalized)) result.push(normalized);
   }
+  if (result.length > MAX_SOCIAL_LINKS)
+    throw new BadRequestException(
+      tr('errors.tooManyLinks', { max: MAX_SOCIAL_LINKS }),
+    );
   return result;
 }

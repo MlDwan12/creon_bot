@@ -1264,7 +1264,7 @@ describe('профиль креатора', () => {
         telegramId: nextTelegramId++,
         username: 'secret_creator',
         firstName: 'Аня',
-        tiktokUrl: 'https://www.tiktok.com/@secret_creator',
+        socialLinks: ['https://www.tiktok.com/@secret_creator'],
       },
     });
     await acceptedVideo((await user()).id, creator.id, 5, true);
@@ -1274,14 +1274,12 @@ describe('профиль креатора', () => {
     // портфолио — только названия работ: ссылка обычно ведёт на аккаунт креатора
     expect(forAdvertiser.portfolio).toHaveLength(1);
     expect(forAdvertiser.portfolio[0].videoUrl).toBeNull();
-    expect(Object.values(forAdvertiser.links).every((l) => l === null)).toBe(
-      true,
-    );
+    expect(forAdvertiser.links).toEqual([]);
     expect(JSON.stringify(forAdvertiser)).not.toContain('secret_creator');
 
     const full = await profiles.profile(creator.id, true);
     expect(full.name).toBe('@secret_creator');
-    expect(full.links.tiktokUrl).toContain('secret_creator');
+    expect(full.links[0]).toContain('secret_creator');
     expect(full.portfolio[0].videoUrl).not.toBeNull();
   });
 

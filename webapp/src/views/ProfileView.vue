@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import {
   ApiError,
@@ -13,7 +13,6 @@ import {
   fetchMe,
   fetchMyProfile,
   fetchSocialAccounts,
-  type ProfileLinks,
   type SocialAccount,
   removeReview,
   unbanUser,
@@ -24,7 +23,7 @@ import {
 } from '../api';
 import PlatformIcon from '../components/PlatformIcon.vue';
 import UserAvatar from '../components/UserAvatar.vue';
-import { formatDate, formatMoney } from '../format';
+import { describeVideoUrl, formatDate, formatMoney } from '../format';
 import { i18next, LANG_NAMES, LANGS, setLang, type Lang } from '../i18n';
 import { confirmAction, openExternalLink, safeUrl, setThemePref, themePref, type ThemePref } from '../telegram';
 
@@ -75,29 +74,34 @@ if (own) void fetchBalance().then((b) => (balance.value = b), () => {});
 async function load() {
   try {
     profile.value = own ? await fetchMyProfile() : await fetchCreator(Number(props.id));
-    Object.assign(links, profile.value.links);
+    links.value = [...profile.value.links];
   } catch (err) {
     loadError.value = err instanceof ApiError ? err.userMessage : i18next.t('profile.loadError');
   }
 }
 
-const NETWORKS: { field: keyof ProfileLinks; name: string; placeholder: string }[] = [
-  { field: 'tiktokUrl', name: 'TikTok', placeholder: 'https://www.tiktok.com/@…' },
-  { field: 'youtubeUrl', name: 'YouTube', placeholder: 'https://www.youtube.com/@…' },
-  { field: 'vkUrl', name: 'VK', placeholder: 'https://vk.com/…' },
-  { field: 'instagramUrl', name: 'Instagram', placeholder: 'https://www.instagram.com/…' },
-  { field: 'xUrl', name: 'X', placeholder: 'https://x.com/…' },
-];
-const links = reactive<ProfileLinks>({
-  tiktokUrl: null,
-  youtubeUrl: null,
-  vkUrl: null,
-  instagramUrl: null,
-  xUrl: null,
-});
-const filledLinks = computed(() =>
-  NETWORKS.filter((n) => safeUrl(profile.value?.links[n.field] ?? null)),
-);
+// Ссылки на соцсети — списком: на одной площадке может быть несколько аккаунтов (до 10).
+const MAX_LINKS = 10;
+const links = ref<string[]>([]);
+const newLink = ref('');
+/** Площадка и короткий вид ссылки — для знака и подписи; не распознали — без знака. */
+const linkView = (url: string) => describeVideoUrl(url) ?? { platform: 'OTHER' as const, short: url };
+const shownLinks = computed(() => (profile.value?.links ?? []).filter((l) => safeUrl(l)));
+
+function addLink() {
+  const url = newLink.value.trim();
+  if (url && !links.value.includes(url)) links.value.push(url);
+  newLink.value = '';
+}
+function removeLink(i: number) {
+  links.value.splice(i, 1);
+}
+function startLinks() {
+  links.value = [...(profile.value?.links ?? [])];
+  newLink.value = '';
+  error.value = '';
+  editing.value = true;
+}
 
 const editing = ref(false);
 const busy = ref(false);
@@ -107,7 +111,8 @@ async function saveLinks() {
   busy.value = true;
   error.value = '';
   try {
-    await updateProfileLinks({ ...links });
+    // недописанная ссылка в поле — тоже сохраняем, а не теряем молча
+    await updateProfileLinks(newLink.value.trim() ? [...links.value, newLink.value.trim()] : links.value);
     editing.value = false;
     await load();
   } catch (err) {
@@ -399,10 +404,31 @@ void load();
       <section class="block">
         <h2 class="section-title">{{ $t('profile.linksTitle') }}</h2>
         <form v-if="editing" class="links-form" @submit.prevent="saveLinks">
-          <label v-for="n in NETWORKS" :key="n.field">
-            <span>{{ n.name }}</span>
-            <input v-model.trim="links[n.field]" type="url" inputmode="url" :placeholder="n.placeholder" />
-          </label>
+          <div v-for="(l, i) in links" :key="l" class="link-row">
+            <PlatformIcon :platform="linkView(l).platform" :size="32" />
+            <span class="link-text">{{ linkView(l).short }}</span>
+            <button type="button" class="link-remove" :aria-label="$t('profile.removeLink')" @click="removeLink(i)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+          <div v-if="links.length < MAX_LINKS" class="link-add">
+            <label class="visually-hidden" for="new-link">{{ $t('profile.linkPlaceholder') }}</label>
+            <input
+              id="new-link"
+              v-model="newLink"
+              type="url"
+              inputmode="url"
+              autocomplete="off"
+              :placeholder="$t('profile.linkPlaceholder')"
+              @keydown.enter.prevent="addLink"
+            />
+            <button type="button" class="link-add-button" :disabled="!newLink.trim()" @click="addLink">
+              {{ $t('profile.addLink') }}
+            </button>
+          </div>
+          <p class="hint">{{ $t('profile.linksHint') }}</p>
           <p v-if="error" class="error" role="alert">{{ error }}</p>
           <div class="buttons">
             <button type="button" :disabled="busy" @click="editing = false">{{ $t('common.cancel') }}</button>
@@ -410,20 +436,15 @@ void load();
           </div>
         </form>
         <template v-else>
-          <div v-if="filledLinks.length" class="links">
-            <a
-              v-for="n in filledLinks"
-              :key="n.field"
-              :href="safeUrl(profile.links[n.field])"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {{ n.name }}
+          <div v-if="shownLinks.length" class="links">
+            <a v-for="l in shownLinks" :key="l" :href="safeUrl(l)" target="_blank" rel="noopener noreferrer">
+              <PlatformIcon :platform="linkView(l).platform" :size="24" round />
+              {{ linkView(l).short }}
             </a>
           </div>
           <p v-else class="hint">{{ $t('profile.linksEmpty') }}</p>
-          <button v-if="own" type="button" class="edit" @click="editing = true">
-            {{ filledLinks.length ? $t('profile.linksChange') : $t('profile.linksAdd') }}
+          <button v-if="own" type="button" class="edit" @click="startLinks">
+            {{ shownLinks.length ? $t('profile.linksChange') : $t('profile.linksAdd') }}
           </button>
         </template>
       </section>
@@ -681,8 +702,13 @@ h1 {
 .links a {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   min-height: 36px;
-  padding: 0 14px;
+  max-width: 100%;
+  padding: 0 14px 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   border-radius: 18px;
   background: var(--accent-soft);
   color: var(--link);
@@ -712,6 +738,54 @@ h1 {
   gap: 4px;
   font-size: 14px;
   color: var(--hint);
+}
+.link-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.link-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 600;
+}
+.link-remove {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 12px;
+  background: var(--fill);
+  color: var(--hint);
+}
+.link-add {
+  display: flex;
+  gap: 8px;
+}
+.link-add input {
+  flex: 1;
+  min-width: 0;
+}
+.link-add-button {
+  flex: none;
+  min-height: 44px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--link);
+  font-size: 15px;
+  font-weight: 700;
+}
+.link-add-button:disabled {
+  opacity: 0.5;
 }
 .links-form input {
   min-height: 44px;

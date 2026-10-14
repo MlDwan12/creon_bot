@@ -387,14 +387,6 @@ export interface ModPayout {
   createdAt: string;
 }
 
-/** Ссылки креатора на соцсети; null — не указана. */
-export interface ProfileLinks {
-  tiktokUrl: string | null;
-  youtubeUrl: string | null;
-  vkUrl: string | null;
-  instagramUrl: string | null;
-  xUrl: string | null;
-}
 
 /** Профиль креатора — см. src/api/profiles.service.ts. */
 export interface CreatorProfile {
@@ -406,7 +398,8 @@ export interface CreatorProfile {
   completed: number;
   /** Блокировка — приходит только модератору. */
   ban: { at: string; reason: string | null } | null;
-  links: ProfileLinks;
+  /** Ссылки на соцсети, по порядку; на одной площадке может быть несколько. Чужим — пусто. */
+  links: string[];
   /** Кошелёк USDT (TRC20) для выплат — только в своём профиле и модератору. */
   wallet: string | null;
   /** Сообщения о новых заказах — только в своём профиле и модератору. */
@@ -587,8 +580,8 @@ export function fetchCreatorPhoto(id: number): Promise<string | null> {
   return photo;
 }
 
-export function updateProfileLinks(links: ProfileLinks) {
-  return request<{ ok: true }>('PUT', '/api/profile/links', links);
+export function updateProfileLinks(links: string[]) {
+  return request<{ ok: true }>('PUT', '/api/profile/links', { links });
 }
 
 export function updateNotifications(newOrders: boolean) {
