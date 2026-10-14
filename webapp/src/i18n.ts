@@ -53,3 +53,8 @@ export function locale(): string {
 }
 
 export { i18next };
+
+/** Список строк из словаря (шаги, советы): `tList('order.steps')`. */
+export function tList(key: string): string[] {
+  return i18next.t(key, { returnObjects: true }) as unknown as string[];
+}

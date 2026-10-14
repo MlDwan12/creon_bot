@@ -17,6 +17,6 @@ fetchMe()
 
 <template>
   <RouterLink v-if="enabled" :to="{ path, query: about ? { about } : {} }" class="quiet-link">
-    {{ label ?? 'Поддержка' }}
+    {{ label ?? $t('common.support') }}
   </RouterLink>
 </template>

@@ -17,7 +17,7 @@ export function formatDate(iso: string): string {
 /** «30 сентября · через 6 дн.» — для карточки заказа. */
 export function formatDeadline(iso: string): string {
   const days = Math.ceil((new Date(iso).getTime() - Date.now()) / DAY_MS);
-  return days > 0 ? `${formatDate(iso)} · через ${days} дн.` : formatDate(iso);
+  return days > 0 ? `${formatDate(iso)} · ${i18next.t('time.inDays', { count: days })}` : formatDate(iso);
 }
 
 /** «2 часа назад», «вчера». */
@@ -56,9 +56,19 @@ export function formatViews(views: number): string {
 export function formatVideoFormat(f: VideoFormat): string {
   const { minDurationSec: min, maxDurationSec: max } = f;
   const duration =
-    min && max ? `${min}–${max} сек` : min ? `от ${min} сек` : max ? `до ${max} сек` : '';
+    min && max
+      ? i18next.t('format.secRange', { min, max })
+      : min
+        ? i18next.t('format.secFrom', { min })
+        : max
+          ? i18next.t('format.secTo', { max })
+          : '';
   const orientation =
-    f.orientation === 'VERTICAL' ? 'Вертикальное' : f.orientation === 'HORIZONTAL' ? 'Горизонтальное' : '';
+    f.orientation === 'VERTICAL'
+      ? i18next.t('format.vertical')
+      : f.orientation === 'HORIZONTAL'
+        ? i18next.t('format.horizontal')
+        : '';
   return [formatPlatforms(f.platforms), orientation, duration].filter(Boolean).join(' · ');
 }
 
@@ -70,9 +80,9 @@ export function formatPlatforms(platforms: VideoFormat['platforms']): string {
 /** Сколько ждёт в очереди: «40 мин», «6 ч», «2 дн». */
 export function waitingFor(iso: string): string {
   const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
-  if (minutes < 60) return `${minutes} мин`;
-  if (minutes < 24 * 60) return `${Math.round(minutes / 60)} ч`;
-  return `${Math.round(minutes / (24 * 60))} дн`;
+  if (minutes < 60) return i18next.t('time.minutesShort', { count: minutes });
+  if (minutes < 24 * 60) return i18next.t('time.hoursShort', { count: Math.round(minutes / 60) });
+  return i18next.t('time.daysShort', { count: Math.round(minutes / (24 * 60)) });
 }
 
 /** Ждёт дольше 4 часов — подсвечиваем в очереди модератора. */

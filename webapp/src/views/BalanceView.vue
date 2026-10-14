@@ -4,11 +4,13 @@ import { RouterLink } from 'vue-router';
 import { ApiError, type Balance, fetchBalance, fetchRate, requestPayout } from '../api';
 import SupportLink from '../components/SupportLink.vue';
 import { approxRub, formatDate, formatMoney } from '../format';
+import { i18next, locale } from '../i18n';
 
-const STATUS: Record<Balance['payouts'][number]['status'], { label: string; tone: string }> = {
-  REQUESTED: { label: 'Ждёт перевода', tone: 'warn' },
-  PAID: { label: 'Выплачено', tone: 'success' },
-  REJECTED: { label: 'Отклонено', tone: 'danger' },
+/** Цвет метки заявки; текст — в словаре (balance.status). */
+const TONE: Record<Balance['payouts'][number]['status'], string> = {
+  REQUESTED: 'warn',
+  PAID: 'success',
+  REJECTED: 'danger',
 };
 
 const balance = ref<Balance>();
@@ -28,7 +30,7 @@ async function load() {
     // выводим целые USDT, без центов
     amount.value = Math.floor(balance.value.available) || '';
   } catch (err) {
-    loadError.value = err instanceof ApiError ? err.userMessage : 'Не удалось загрузить баланс';
+    loadError.value = err instanceof ApiError ? err.userMessage : i18next.t('balance.loadError');
   }
 }
 
@@ -40,7 +42,7 @@ async function withdraw() {
     sent.value = true;
     await load();
   } catch (err) {
-    error.value = err instanceof ApiError ? err.userMessage : 'Не получилось, попробуйте ещё раз';
+    error.value = err instanceof ApiError ? err.userMessage : i18next.t('balance.error');
   } finally {
     busy.value = false;
   }
@@ -51,41 +53,42 @@ void load();
 
 <template>
   <main class="page">
-    <h1>Баланс</h1>
+    <h1>{{ $t('balance.title') }}</h1>
 
     <p v-if="loadError" class="hint">{{ loadError }}</p>
-    <p v-else-if="!balance" class="hint">Загрузка…</p>
+    <p v-else-if="!balance" class="hint">{{ $t('common.loading') }}</p>
 
     <template v-else>
       <section class="total">
-        <span class="hint">Доступно к выводу</span>
+        <span class="hint">{{ $t('balance.available') }}</span>
         <strong>{{ formatMoney(balance.available) }}</strong>
         <span class="hint">
-          Начислено {{ formatMoney(balance.earned) }} · выплачено {{ formatMoney(balance.paid) }}
-          <template v-if="balance.requested"> · в заявке {{ formatMoney(balance.requested) }}</template>
+          {{ $t('balance.summary', { earned: formatMoney(balance.earned), paid: formatMoney(balance.paid) }) }}
+          <template v-if="balance.requested">{{ $t('balance.inRequest', { amount: formatMoney(balance.requested) }) }}</template>
         </span>
         <span v-if="balance.held" class="hint">
-          В холде {{ formatMoney(balance.held) }} — станет доступно после итога просмотров<template
-            v-if="balance.nextReleaseAt"
-          >, ближайшее — {{ formatDate(balance.nextReleaseAt) }}</template>
+          {{ $t('balance.held', { amount: formatMoney(balance.held) })
+          }}<template v-if="balance.nextReleaseAt">{{
+            $t('balance.nextRelease', { date: formatDate(balance.nextReleaseAt) })
+          }}</template>
         </span>
         <span v-if="rubPerUsdt" class="hint">
-          {{ approxRub(balance.available, rubPerUsdt) }} · курс {{ rubPerUsdt.toLocaleString('ru-RU') }} ₽ за USDT
+          {{ $t('balance.rate', { rub: approxRub(balance.available, rubPerUsdt), rate: rubPerUsdt.toLocaleString(locale()) }) }}
         </span>
       </section>
 
       <p v-if="sent" class="notice" role="status">
-        Заявка отправлена. Менеджер переведёт USDT на ваш кошелёк — придёт уведомление.
+        {{ $t('balance.sent') }}
       </p>
       <p v-else-if="balance.requested" class="hint">
-        Заявка на {{ formatMoney(balance.requested) }} ждёт перевода. Новую можно отправить после неё.
+        {{ $t('balance.pending', { amount: formatMoney(balance.requested) }) }}
       </p>
       <p v-else-if="!balance.wallet" class="notice ask">
-        Укажите кошелёк USDT (TRC20) — на него придёт выплата.
-        <RouterLink to="/profile">Добавить в профиле</RouterLink>
+        {{ $t('balance.needWallet') }}
+        <RouterLink to="/profile">{{ $t('balance.addWallet') }}</RouterLink>
       </p>
       <form v-else-if="balance.available >= balance.minPayout" class="withdraw" @submit.prevent="withdraw">
-        <label for="amount" class="section-title">Сумма вывода, USDT</label>
+        <label for="amount" class="section-title">{{ $t('balance.amount') }}</label>
         <input
           id="amount"
           v-model.number="amount"
@@ -97,29 +100,29 @@ void load();
           required
         />
         <p class="hint">
-          Менеджер переведёт USDT в сети TRC20 на кошелёк {{ balance.wallet }}. Сменить его можно в профиле.
+          {{ $t('balance.walletHint', { wallet: balance.wallet }) }}
         </p>
         <p v-if="error" class="error" role="alert">{{ error }}</p>
         <button type="submit" class="main-button" :disabled="busy || !amount">
-          {{ busy ? 'Отправляем…' : 'Вывести' }}
+          {{ busy ? $t('common.sending') : $t('balance.withdraw') }}
         </button>
       </form>
-      <p v-else class="hint">Вывести можно от {{ formatMoney(balance.minPayout) }}.</p>
+      <p v-else class="hint">{{ $t('balance.minPayout', { amount: formatMoney(balance.minPayout) }) }}</p>
 
       <template v-if="balance.payouts.length">
-        <h2 class="section-title flush">История выплат</h2>
+        <h2 class="section-title flush">{{ $t('balance.history') }}</h2>
         <article v-for="p in balance.payouts" :key="p.id" class="payout">
           <div class="row">
             <strong>{{ formatMoney(p.amount) }}</strong>
-            <span :class="['badge', STATUS[p.status].tone]">{{ STATUS[p.status].label }}</span>
+            <span :class="['badge', TONE[p.status]]">{{ $t(`balance.status.${p.status}`) }}</span>
           </div>
           <span class="hint">{{ formatDate(p.createdAt) }}</span>
-          <p v-if="p.comment" class="hint">Причина: «{{ p.comment }}»</p>
+          <p v-if="p.comment" class="hint">{{ $t('balance.reason', { reason: p.comment }) }}</p>
         </article>
       </template>
 
-      <p class="hint">Начисления по каждому ролику — в «Мои отклики».</p>
-      <SupportLink label="Вопрос по выплате — написать менеджеру" about="Вопрос по выплате" />
+      <p class="hint">{{ $t('balance.perVideo') }}</p>
+      <SupportLink :label="$t('balance.supportLabel')" :about="$t('balance.supportAbout')" />
     </template>
   </main>
 </template>
@@ -144,14 +147,21 @@ h1 {
 .total {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 16px;
-  border-radius: 14px;
-  background: var(--surface);
+  gap: 6px;
+  padding: 20px;
+  border-radius: 26px;
+  background: var(--ink);
+  color: var(--ink-text);
+}
+.total .hint {
+  color: var(--ink-hint);
 }
 .total strong {
-  font-size: 32px;
+  font-family: var(--font-display);
+  font-size: 36px;
   font-weight: 700;
+  letter-spacing: -1px;
+  color: var(--lime);
 }
 .notice {
   margin: 0;

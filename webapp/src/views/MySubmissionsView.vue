@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { type Balance, fetchBalance, fetchMySubmissions, type MySubmission } from '../api';
 import { formatMoney } from '../format';
+import { i18next } from '../i18n';
 import SubmissionCard from '../components/SubmissionCard.vue';
 
 const items = ref<MySubmission[]>([]);
@@ -33,7 +34,7 @@ async function load() {
   try {
     items.value = await fetchMySubmissions();
   } catch {
-    error.value = 'Не удалось загрузить отклики';
+    error.value = i18next.t('submissions.loadError');
   } finally {
     loading.value = false;
   }
@@ -44,42 +45,42 @@ void load();
 
 <template>
   <main class="page">
-    <h1>Мои отклики</h1>
+    <h1>{{ $t('submissions.title') }}</h1>
 
     <RouterLink v-if="balance" to="/balance" class="balance">
       <span>
-        <small>Баланс</small>
+        <small>{{ $t('submissions.balance') }}</small>
         <strong>{{ formatMoney(balance.available) }}</strong>
       </span>
-      <span class="balance-action">Вывести ›</span>
+      <span class="balance-action">{{ $t('submissions.withdraw') }}</span>
     </RouterLink>
 
-    <div class="segmented" role="tablist" aria-label="Фильтр откликов">
+    <div class="segmented" role="tablist" :aria-label="$t('submissions.filterAria')">
       <button type="button" role="tab" :aria-selected="tab === 'active'" @click="tab = 'active'">
-        Активные · {{ active.length + attention.length }}
+        {{ $t('submissions.active', { count: active.length + attention.length }) }}
       </button>
       <button type="button" role="tab" :aria-selected="tab === 'done'" @click="tab = 'done'">
-        Завершённые · {{ done.length }}
+        {{ $t('submissions.done', { count: done.length }) }}
       </button>
     </div>
 
-    <p v-if="loading" class="hint">Загрузка…</p>
+    <p v-if="loading" class="hint">{{ $t('common.loading') }}</p>
     <p v-else-if="error" class="hint">{{ error }}</p>
 
     <template v-else-if="tab === 'active'">
       <p v-if="active.length + attention.length === 0" class="hint">
-        Активных откликов нет.
-        <RouterLink to="/">Выберите заказ в каталоге</RouterLink>
+        {{ $t('submissions.emptyActive') }}
+        <RouterLink to="/">{{ $t('submissions.toCatalog') }}</RouterLink>
       </p>
       <SubmissionCard v-for="s in active" :key="s.id" :submission="s" />
       <template v-if="attention.length">
-        <h2 class="section-title flush">Требуют внимания</h2>
+        <h2 class="section-title flush">{{ $t('submissions.attention') }}</h2>
         <SubmissionCard v-for="s in attention" :key="s.id" :submission="s" />
       </template>
     </template>
 
     <template v-else>
-      <p v-if="done.length === 0" class="hint">Здесь появятся принятые и закрытые отклики.</p>
+      <p v-if="done.length === 0" class="hint">{{ $t('submissions.emptyDone') }}</p>
       <SubmissionCard v-for="s in done" :key="s.id" :submission="s" />
     </template>
   </main>
@@ -124,30 +125,39 @@ h1 {
   margin: 0;
   color: var(--hint);
 }
+/* Баланс — тёмная плашка с лаймовой суммой, как в макете. */
 .balance {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  border-radius: 14px;
-  background: var(--surface);
-  color: var(--text);
+  padding: 16px 18px;
+  border-radius: var(--radius-card);
+  background: var(--ink);
+  color: var(--ink-text);
   text-decoration: none;
 }
 .balance span:first-child {
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 .balance small {
   font-size: 13px;
-  color: var(--hint);
+  font-weight: 700;
+  color: var(--ink-hint);
 }
 .balance strong {
-  font-size: 20px;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--lime);
 }
 .balance-action {
-  color: var(--link);
-  font-weight: 600;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--lime);
+  color: var(--lime-text);
+  font-weight: 800;
 }
 .hint a {
   color: var(--link);
