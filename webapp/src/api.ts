@@ -54,6 +54,8 @@ export interface OrderSummary extends VideoFormat {
   minViews: number;
   /** Сколько ещё осталось на выплаты креаторам, USDT. */
   free: number;
+  /** Осталось меньше 30% фонда — подсвечиваем «успейте». */
+  budgetLow: boolean;
   category: OrderCategory;
   deadline: string | null;
   createdAt: string;

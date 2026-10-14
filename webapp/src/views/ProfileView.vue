@@ -20,11 +20,24 @@ import {
   updateProfileLinks,
   updateWallet,
 } from '../api';
+import PlatformIcon from '../components/PlatformIcon.vue';
 import UserAvatar from '../components/UserAvatar.vue';
 import { formatDate, formatMoney } from '../format';
-import { confirmAction, openExternalLink, safeUrl } from '../telegram';
+import { confirmAction, openExternalLink, safeUrl, setThemePref, themePref, type ThemePref } from '../telegram';
 
 // Без id — свой профиль (/profile, ссылки можно редактировать); с id — чужой, только просмотр.
+// Тема — только для этого устройства (localStorage), как и сам выбор в Telegram.
+const THEMES: { value: ThemePref; label: string }[] = [
+  { value: 'auto', label: 'Как в Telegram' },
+  { value: 'light', label: 'Светлая' },
+  { value: 'dark', label: 'Тёмная' },
+];
+const theme = ref<ThemePref>(themePref());
+function pickTheme(pref: ThemePref) {
+  theme.value = pref;
+  setThemePref(pref);
+}
+
 const props = defineProps<{ id?: string }>();
 const route = useRoute();
 /** В окне модератора (/mod/creators/:id) отзывы можно удалять. */
@@ -291,14 +304,16 @@ void load();
           несколько на одной площадке: на странице входа выберите другой аккаунт. Рекламодатель их не увидит.
         </p>
         <template v-for="a in accounts" :key="a.platform">
-          <div v-for="acc in a.accounts" :key="acc.id" class="switch-row">
+          <div v-for="acc in a.accounts" :key="acc.id" class="switch-row account-row">
+            <PlatformIcon :platform="a.platform" :size="40" />
             <span>
               {{ a.name }}{{ acc.label ? ` · ${acc.label}` : '' }}
               <small>Подключён — просмотры считаются автоматически</small>
             </span>
             <button type="button" class="account-action quiet" @click="disconnectAccount(a, acc)">Отключить</button>
           </div>
-          <div v-if="!a.accounts.length" class="switch-row">
+          <div v-if="!a.accounts.length" class="switch-row account-row">
+            <PlatformIcon :platform="a.platform" :size="40" />
             <span>
               {{ a.name }}
               <small>Не подключён</small>
@@ -322,6 +337,22 @@ void load();
           <input type="checkbox" role="switch" :checked="profile.notifyNewOrders ?? true" @change="toggleNewOrders" />
         </label>
         <p v-if="notifyError" class="error" role="alert">{{ notifyError }}</p>
+      </section>
+
+      <section v-if="own" class="block">
+        <h2 id="theme-label" class="section-title">Оформление</h2>
+        <div class="segmented" role="radiogroup" aria-labelledby="theme-label">
+          <button
+            v-for="t in THEMES"
+            :key="t.value"
+            type="button"
+            role="radio"
+            :aria-checked="theme === t.value"
+            @click="pickTheme(t.value)"
+          >
+            {{ t.label }}
+          </button>
+        </div>
       </section>
 
       <section class="block">
@@ -488,6 +519,30 @@ h1 {
   color: var(--link);
   font-weight: 600;
 }
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 16px;
+  background: var(--fill);
+}
+.segmented button {
+  min-height: 44px;
+  border: none;
+  border-radius: 12px;
+  background: none;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.segmented button[aria-checked='true'] {
+  background: var(--surface);
+  font-weight: 800;
+}
+.account-row > span {
+  flex: 1;
+}
 .account-action {
   flex: none;
   min-height: 36px;
@@ -652,7 +707,7 @@ h1 {
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: #1c1c22;
+  background: var(--ink);
   color: #fff;
   display: flex;
   align-items: center;
@@ -661,7 +716,7 @@ h1 {
 }
 .play.done {
   background: var(--success-soft);
-  color: #1e7b34;
+  color: var(--success-text);
 }
 .review {
   display: flex;
@@ -678,7 +733,7 @@ h1 {
   gap: 8px;
 }
 .stars {
-  color: #d99a00;
+  color: var(--orange);
   font-size: 17px;
   letter-spacing: 1px;
 }

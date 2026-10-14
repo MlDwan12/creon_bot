@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PlatformIcon from '../../components/PlatformIcon.vue';
 import { computed, ref, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import {
@@ -120,10 +121,10 @@ watch(() => props.id, load, { immediate: true });
       </header>
 
       <a v-if="safeUrl(video.videoUrl)" :href="safeUrl(video.videoUrl)" target="_blank" rel="noopener noreferrer" class="video">
-        <span class="play" aria-hidden="true">▶</span>
+        <PlatformIcon :platform="video.platform" :size="48" inverse />
         <span class="link">
+          <strong>Открыть ролик{{ video.platform !== 'OTHER' ? ` в ${PLATFORM_NAMES[video.platform]}` : '' }}</strong>
           <span class="url">{{ video.videoUrl }}</span>
-          <strong>Открыть видео</strong>
         </span>
       </a>
       <p v-else class="hint">Ссылка на видео некорректна: {{ video.videoUrl }}</p>
@@ -252,22 +253,10 @@ h1 {
   align-items: center;
   gap: 14px;
   padding: 14px;
-  border-radius: 14px;
-  background: var(--surface);
-  color: var(--text);
+  border-radius: 20px;
+  background: var(--ink);
+  color: var(--ink-text);
   text-decoration: none;
-}
-.play {
-  flex: none;
-  width: 52px;
-  height: 52px;
-  border-radius: 12px;
-  background: #1c1c22;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
 }
 .link {
   display: flex;
@@ -276,8 +265,8 @@ h1 {
   min-width: 0;
 }
 .url {
-  font-size: 14px;
-  color: var(--hint);
+  font-size: 13px;
+  color: var(--ink-hint);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -328,7 +317,7 @@ h1 {
   color: #fff;
 }
 .approve {
-  background: #1e7b34;
+  background: var(--success);
   color: #fff;
 }
 </style>

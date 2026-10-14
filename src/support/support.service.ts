@@ -153,7 +153,7 @@ export class SupportService {
       if ('text' in msg)
         await this.bot.telegram.sendMessage(
           String(user.telegramId),
-          `💬 Поддержка CreON:\n\n${msg.text}`,
+          `💬 Поддержка Fixum:\n\n${msg.text}`,
         );
       else if (
         'photo' in msg ||
@@ -244,7 +244,7 @@ export class SupportService {
     ]);
     const card = [
       `👤 <b>${escapeHtml(creatorLabel(user))}</b>${user.firstName && user.username ? ` (${escapeHtml(user.firstName)})` : ''}`,
-      `Telegram id: <code>${user.telegramId}</code> · id в CreON: ${user.id}`,
+      `Telegram id: <code>${user.telegramId}</code> · id в Fixum: ${user.id}`,
       `Заказов создал: ${orders} · откликов: ${submissions}`,
       user.bannedAt
         ? `🚫 Заблокирован: ${escapeHtml(user.banReason ?? '')}`

@@ -1,25 +1,99 @@
-/* Токены дизайна. Внутри Telegram цвета берутся из его темы (--tg-theme-*, их задаёт SDK) —
-   поэтому тёмная тема работает сама; после запятой — цвета макета для обычного браузера. */
+/* Шрифты — свои файлы (public/fonts), а не Google Fonts: заставка и текст не ждут чужой сервер.
+   Manrope — текст, Unbounded — заголовки и суммы. Лицензия обоих — SIL Open Font License. */
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/manrope-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/manrope-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Unbounded';
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+  src: url('/fonts/unbounded-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Unbounded';
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+  src: url('/fonts/unbounded-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Токены дизайна Fixum. Цвета свои, не из темы Telegram; тёмную тему включает data-theme="dark"
+   на <html> — его ставит telegram.ts по colorScheme Telegram (в браузере — по настройке системы). */
 :root {
-  --bg: var(--tg-theme-secondary-bg-color, #efeff4);
-  --surface: var(--tg-theme-section-bg-color, #ffffff);
-  --text: var(--tg-theme-text-color, #111114);
-  --hint: var(--tg-theme-hint-color, #6d6d72);
-  --accent: var(--tg-theme-button-color, #1f72b8);
-  --accent-text: var(--tg-theme-button-text-color, #ffffff);
-  --link: var(--tg-theme-link-color, #1f72b8);
-  --separator: var(--tg-theme-section-separator-color, #e2e2e7);
-  --danger: var(--tg-theme-destructive-text-color, #c4291f);
-  /* Подложки чипов/переключателей — полупрозрачный текст, чтобы работали в любой теме. */
-  --fill: color-mix(in srgb, var(--text) 8%, transparent);
-  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
-  --success-soft: color-mix(in srgb, #1e7b34 14%, transparent);
+  --bg: #f4f2ec;
+  --surface: #ffffff;
+  --text: #17141f;
+  --hint: #6a6575;
+  /* фиолетовый — главное действие и ставка */
+  --accent: #5a2dff;
+  --accent-text: #ffffff;
+  --accent-soft: #ece6ff;
+  --link: #4a1fe6;
+  /* лаймовый — деньги и активная вкладка; текст на нём всегда тёмный */
+  --lime: #d6f44c;
+  --lime-text: #17141f;
+  /* тёмная плашка: баланс, нижняя панель */
+  --ink: #17141f;
+  --ink-text: #ffffff;
+  --ink-hint: #bdb8c8;
+  --orange: #ff7a1a;
+  --orange-soft: #ffebd9;
+  --orange-text: #9a3f00;
+  --success: #1c7c45;
+  --success-soft: #ddf5e5;
+  --success-text: #145c33;
+  --danger: #c4291f;
+  --danger-soft: #fde2e0;
+  --separator: #e6e2da;
+  /* Подложки чипов и полей — полупрозрачный текст, чтобы работали в любой теме. */
+  --fill: color-mix(in srgb, var(--text) 6%, transparent);
+  --font-text: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Unbounded', var(--font-text);
+  --radius-card: 22px;
+  --radius-button: 18px;
   --safe-bottom: max(env(safe-area-inset-bottom), 12px);
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg: #0f0d14;
+  --surface: #1c1924;
+  --text: #f3f1f7;
+  --hint: #a7a2b3;
+  --accent: #6b42ff;
+  --accent-soft: #2a2140;
+  --link: #a994ff;
+  --ink: #2a2633;
+  --ink-hint: #a7a2b3;
+  --orange-soft: #3a2310;
+  --orange-text: #ffb27a;
+  --success-soft: #12301f;
+  --success-text: #7fd8a2;
+  --danger: #ff8a80;
+  --danger-soft: #3a1614;
+  --separator: #2e2a38;
+  color-scheme: dark;
 }
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--font-text);
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -30,14 +104,27 @@ button {
   cursor: pointer;
 }
 
+/* Заголовки экранов — Unbounded. */
+h1 {
+  font-family: var(--font-display);
+  letter-spacing: -0.4px;
+}
+
+/* Суммы и ставки — тоже Unbounded: деньги видно сразу. */
+.money {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.4px;
+}
+
 /* Заголовок секции: «ЗАДАНИЕ», «12 ОТКРЫТЫХ ЗАКАЗОВ». */
 .section-title {
   margin: 0;
   padding: 0 16px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.6px;
   color: var(--hint);
 }
 
@@ -47,8 +134,8 @@ button {
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 10px 16px var(--safe-bottom);
-  background: var(--surface);
+  padding: 12px 16px var(--safe-bottom);
+  background: var(--bg);
   border-top: 1px solid var(--separator);
   /* Поверх вкладок, даже если :has() ниже не поддерживается. */
   z-index: 1;
@@ -61,14 +148,15 @@ body:has(.bottom-bar) .tabbar {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   width: 100%;
-  height: 50px;
+  height: 54px;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius-button);
   background: var(--accent);
   color: var(--accent-text);
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 800;
   text-decoration: none;
 }
 .main-button:disabled {
@@ -85,4 +173,13 @@ body:has(.bottom-bar) .tabbar {
   color: var(--hint);
   font-size: 14px;
   text-decoration: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }

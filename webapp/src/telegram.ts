@@ -1,6 +1,12 @@
 /** Только то, что мы используем из официального telegram-web-app.js. Полный API: https://core.telegram.org/bots/webapps */
 interface TelegramWebApp {
   initData: string;
+  /** Тема Telegram у пользователя; меняется на лету — событие themeChanged. */
+  colorScheme: 'light' | 'dark';
+  onEvent(event: 'themeChanged', cb: () => void): void;
+  /** Цвет шапки и фона Telegram вокруг мини-аппа — под наш фон, без серой полосы. */
+  setHeaderColor(color: string): void;
+  setBackgroundColor(color: string): void;
   ready(): void;
   expand(): void;
   showConfirm(message: string, callback: (ok: boolean) => void): void;
@@ -29,6 +35,48 @@ export const webApp = window.Telegram?.WebApp;
 
 /** SDK грузится и в обычном браузере, но initData есть только внутри Telegram. */
 export const inTelegram = Boolean(webApp?.initData);
+
+export type ThemePref = 'auto' | 'light' | 'dark';
+const THEME_KEY = 'theme';
+
+/** Выбор темы в профиле; auto — как в Telegram (в браузере — как в системе). Хранится на устройстве. */
+export function themePref(): ThemePref {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    return saved === 'light' || saved === 'dark' ? saved : 'auto';
+  } catch {
+    return 'auto';
+  }
+}
+
+export function setThemePref(pref: ThemePref) {
+  try {
+    if (pref === 'auto') localStorage.removeItem(THEME_KEY);
+    else localStorage.setItem(THEME_KEY, pref);
+  } catch {
+    // без хранилища тема продержится до перезапуска
+  }
+  applyTheme(pref);
+}
+
+/**
+ * Светлая или тёмная тема (style.css, data-theme на <html>): выбор из профиля, иначе в Telegram —
+ * как у пользователя в Telegram, в браузере — как в системе. Шапку Telegram красим в цвет фона.
+ */
+export function applyTheme(pref: ThemePref = themePref()) {
+  const dark =
+    pref !== 'auto'
+      ? pref === 'dark'
+      : inTelegram
+        ? webApp!.colorScheme === 'dark'
+        : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  if (inTelegram) {
+    const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+    webApp!.setHeaderColor(bg);
+    webApp!.setBackgroundColor(bg);
+  }
+}
 
 /** «Точно удалить?» — внутри Telegram его родным диалогом, в браузере — обычным confirm. */
 export function confirmAction(message: string): Promise<boolean> {

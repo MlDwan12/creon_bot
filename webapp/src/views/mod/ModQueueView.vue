@@ -317,11 +317,11 @@ h1 {
   color: var(--hint);
 }
 .tile.warn {
-  background: color-mix(in srgb, #9a5200 14%, transparent);
+  background: var(--orange-soft);
 }
 .tile.warn strong,
 .tile.warn span {
-  color: #9a5200;
+  color: var(--orange-text);
 }
 .segmented {
   display: grid;
@@ -441,10 +441,10 @@ a.subject {
   color: var(--danger);
 }
 .flag {
-  color: #9a5200;
+  color: var(--orange-text);
 }
 .stars {
-  color: #d99a00;
+  color: var(--orange);
   letter-spacing: 1px;
 }
 .list {
@@ -487,8 +487,8 @@ a.subject {
 .wait.long {
   padding: 3px 8px;
   border-radius: 8px;
-  background: color-mix(in srgb, #9a5200 14%, transparent);
-  color: #9a5200;
+  background: var(--orange-soft);
+  color: var(--orange-text);
   font-weight: 600;
 }
 .chevron {
