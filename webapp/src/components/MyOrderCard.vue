@@ -179,11 +179,11 @@ const remove = () =>
 }
 .badge.success {
   background: var(--success-soft);
-  color: #1e7b34;
+  color: var(--success-text);
 }
 .badge.warn {
-  background: color-mix(in srgb, #9a5200 14%, transparent);
-  color: #9a5200;
+  background: var(--orange-soft);
+  color: var(--orange-text);
 }
 .badge.danger {
   background: color-mix(in srgb, var(--danger) 12%, transparent);
@@ -204,7 +204,7 @@ const remove = () =>
   min-height: 48px;
   padding: 6px 12px;
   border-radius: 10px;
-  background: color-mix(in srgb, #9a5200 14%, transparent);
+  background: var(--orange-soft);
   color: var(--text);
   text-decoration: none;
   font-size: 20px;

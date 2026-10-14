@@ -1,4 +1,4 @@
-import { PLATFORM_NAMES, type VideoFormat } from './api';
+import { PLATFORM_NAMES, type Platform, type VideoFormat } from './api';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const relative = new Intl.RelativeTimeFormat('ru', { numeric: 'auto' });
@@ -73,4 +73,32 @@ export function waitingFor(iso: string): string {
 /** Ждёт дольше 4 часов — подсвечиваем в очереди модератора. */
 export function isWaitingLong(iso: string): boolean {
   return Date.now() - new Date(iso).getTime() > 4 * 60 * 60 * 1000;
+}
+
+// ponytail: копия доменов из src/common/platforms.ts — только для подсказки на экране; правильность
+// ссылки всё равно проверяет бэкенд.
+const PLATFORM_HOSTS: Record<Exclude<Platform, 'OTHER'>, string[]> = {
+  TIKTOK: ['tiktok.com'],
+  YOUTUBE: ['youtube.com', 'youtu.be'],
+  VK: ['vk.com', 'vk.ru', 'vkvideo.ru'],
+  INSTAGRAM: ['instagram.com'],
+  X: ['x.com', 'twitter.com'],
+};
+
+/** Площадка и короткий вид ссылки («tiktok.com/@anya/video/7312…») — для карточки ролика; не ссылка — null. */
+export function describeVideoUrl(url: string): { platform: Platform; short: string } | null {
+  let u: URL;
+  try {
+    u = new URL(url.trim());
+  } catch {
+    return null;
+  }
+  if (!/^https?:$/.test(u.protocol)) return null;
+  const host = u.hostname.toLowerCase().replace(/^(?:www|m)\./, '');
+  const platform =
+    (Object.keys(PLATFORM_HOSTS) as Exclude<Platform, 'OTHER'>[]).find((p) =>
+      PLATFORM_HOSTS[p].some((h) => host === h || host.endsWith(`.${h}`)),
+    ) ?? 'OTHER';
+  const full = `${host}${u.pathname.replace(/\/+$/, '')}`;
+  return { platform, short: full.length > 34 ? `${full.slice(0, 33)}…` : full };
 }

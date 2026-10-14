@@ -36,7 +36,7 @@ export function assertNoContacts(text: string) {
   const [found] = findExactContacts(text);
   if (found)
     throw new BadRequestException(
-      `Уберите контакты (${found}) — общение между сторонами только через поддержку CreON`,
+      `Уберите контакты (${found}) — общение между сторонами только через поддержку Fixum`,
     );
 }
 

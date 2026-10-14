@@ -1,73 +1,111 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { closeOnboarding, onboardingOpen } from '../onboarding';
 
-const slides = [
-  {
-    icon: '👋',
-    title: 'Добро пожаловать в CreON',
-    text: 'Рекламодатели платят за просмотры рекламных роликов, а креаторы публикуют ролики у себя в соцсетях и зарабатывают на просмотрах. Можно быть и тем и другим.',
-  },
-  {
-    icon: '🎬',
-    title: 'Креаторам',
+type Role = 'advertiser' | 'creator';
+
+/**
+ * Приветствие: сначала выбор роли — бренд или креатор, потом короткие шаги для неё и кнопка сразу
+ * к делу. Выбор ничего не запоминает: быть можно и тем и другим, вкладки внизу для обоих.
+ */
+const ROLES: Record<Role, { title: string; steps: string[]; action: string; to: string }> = {
+  advertiser: {
+    title: 'Как заказать рекламу',
     steps: [
-      'Выберите задание во вкладке «Заказы» и откликнитесь',
-      'Опубликуйте ролик у себя в соцсети — на всё 7 дней с отклика',
-      'Набрал порог просмотров — пришлите ссылку и число просмотров',
-      'Модератор проверит ролик и зафиксирует просмотры — начислим оплату',
-      'Через 5 дней доплатим за новые просмотры, пока в заказе есть бюджет, — и деньги можно вывести',
-    ],
-  },
-  {
-    icon: '📢',
-    title: 'Рекламодателям',
-    steps: [
-      'Во вкладке «Мои заказы» опишите задание и укажите бюджет',
-      'Модератор проверит заказ и назначит ставку за просмотры',
-      'Креаторы публикуют ролики, вы платите только за просмотры',
+      'Опишите задание и укажите бюджет',
+      'Модератор проверит заказ и назначит ставку за 1000 просмотров',
+      'Креаторы публикуют ролики у себя — вы платите только за просмотры',
       'Бюджет закончится — заказ закроется сам, сверх бюджета не потратите',
     ],
+    action: 'Создать заказ',
+    to: '/my-orders/new',
   },
-  {
-    icon: '🔒',
-    title: 'Всё через CreON',
-    text: 'Стороны не видят контактов друг друга. Вопросы, споры и оплата — через поддержку: меню ⋯ → «Настройки». Подробные инструкции — во вкладке «Обучение».',
+  creator: {
+    title: 'Как зарабатывать',
+    steps: [
+      'Выберите заказ и откликнитесь',
+      'Опубликуйте ролик у себя в соцсети — на всё 7 дней',
+      'Набрал порог просмотров — пришлите ссылку',
+      'Модератор проверит ролик — начислим оплату, через 5 дней доплатим за новые просмотры',
+    ],
+    action: 'Смотреть заказы',
+    to: '/',
   },
-];
+};
 
-const index = ref(0);
-// Открыли заново ссылкой «Как это работает» — с первого слайда.
-watch(onboardingOpen, (open) => open && (index.value = 0));
+const router = useRouter();
+const role = ref<Role>();
+// Открыли заново ссылкой «Как это работает» — с выбора роли.
+watch(onboardingOpen, (open) => open && (role.value = undefined));
 
-function next() {
-  if (index.value < slides.length - 1) index.value++;
-  else closeOnboarding();
+function start() {
+  const to = ROLES[role.value!].to;
+  closeOnboarding();
+  void router.push(to);
 }
 </script>
 
 <template>
-  <div v-if="onboardingOpen" class="onboarding" role="dialog" aria-modal="true" aria-label="Как работает CreON">
-    <button type="button" class="skip" @click="closeOnboarding">Пропустить</button>
-
-    <section class="slide">
-      <div class="icon" aria-hidden="true">{{ slides[index].icon }}</div>
-      <h1>{{ slides[index].title }}</h1>
-      <p v-if="slides[index].text">{{ slides[index].text }}</p>
-      <ol v-else class="steps">
-        <li v-for="s in slides[index].steps" :key="s">{{ s }}</li>
-      </ol>
-    </section>
-
-    <div class="dots" aria-hidden="true">
-      <span v-for="(_, i) in slides" :key="i" :class="{ active: i === index }" />
+  <div v-if="onboardingOpen" class="onboarding" role="dialog" aria-modal="true" aria-label="Добро пожаловать в Fixum">
+    <div class="top">
+      <button v-if="role" type="button" class="link" @click="role = undefined">‹ Назад</button>
+      <span v-else class="logo" aria-hidden="true">
+        Fixum
+        <span class="logo-bar"><span /></span>
+      </span>
+      <button type="button" class="link" @click="closeOnboarding">Пропустить</button>
     </div>
-    <div class="actions">
-      <button v-if="index > 0" type="button" class="back" @click="index--">Назад</button>
-      <button type="button" class="main-button" @click="next">
-        {{ index < slides.length - 1 ? 'Далее' : 'Начать' }}
+
+    <template v-if="!role">
+      <div class="intro">
+        <h1>Добро пожаловать</h1>
+        <p>Что вы хотите сделать? Потом можно и то и другое — вкладки внизу.</p>
+      </div>
+
+      <button type="button" class="role advertiser" @click="role = 'advertiser'">
+        <span class="role-head">
+          <span class="role-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
+            </svg>
+          </span>
+          <span class="role-label">Брендам</span>
+        </span>
+        <strong>Заказать рекламу</strong>
+        <span class="role-text">Задаёте бюджет — креаторы снимают ролики, вы платите только за набранные просмотры.</span>
       </button>
-    </div>
+
+      <button type="button" class="role creator" @click="role = 'creator'">
+        <span class="role-head">
+          <span class="role-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="14" rx="3" />
+              <path d="M10 9.5v5l4.5-2.5z" />
+            </svg>
+          </span>
+          <span class="role-label">Креаторам</span>
+        </span>
+        <strong>Зарабатывать на роликах</strong>
+        <span class="role-text">Берёте заказ, публикуете в своём TikTok, Instagram или YouTube — получаете USDT за просмотры.</span>
+      </button>
+    </template>
+
+    <template v-else>
+      <div class="intro">
+        <h1>{{ ROLES[role].title }}</h1>
+      </div>
+      <ol class="steps">
+        <li v-for="(s, i) in ROLES[role].steps" :key="s">
+          <span class="num" aria-hidden="true">{{ i + 1 }}</span>
+          <span>{{ s }}</span>
+        </li>
+      </ol>
+      <p class="note">
+        Стороны не видят контактов друг друга: вопросы, споры и оплата — через поддержку (меню ⋯ → «Настройки»).
+      </p>
+      <button type="button" class="main-button start" @click="start">{{ ROLES[role].action }}</button>
+    </template>
   </div>
 </template>
 
@@ -79,90 +117,155 @@ function next() {
   z-index: 10;
   display: flex;
   flex-direction: column;
-  padding: 12px 16px var(--safe-bottom);
+  gap: 18px;
+  padding: 16px 16px var(--safe-bottom);
   background: var(--bg);
   overflow-y: auto;
 }
-.skip {
-  align-self: flex-end;
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   min-height: 44px;
-  padding: 0 8px;
+}
+.logo {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.8px;
+  line-height: 1;
+}
+.logo-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--separator);
+}
+.logo-bar span {
+  display: block;
+  width: 60%;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+}
+.link {
+  min-height: 44px;
+  padding: 0 4px;
   border: none;
   background: none;
   color: var(--hint);
   font-size: 15px;
+  font-weight: 600;
 }
-.slide {
-  flex: 1;
+.intro {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 12px;
-  max-width: 420px;
-  width: 100%;
-  margin: 0 auto;
-  text-align: center;
+  gap: 8px;
 }
-.icon {
-  font-size: 56px;
-}
-.slide h1 {
+.intro h1 {
   margin: 0;
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
-  letter-spacing: -0.3px;
+  line-height: 1.15;
 }
-.slide p {
+.intro p {
   margin: 0;
-  font-size: 16px;
-  line-height: 1.45;
+  font-size: 15px;
+  line-height: 1.5;
   color: var(--hint);
+}
+.role {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px;
+  border: none;
+  border-radius: 26px;
+  text-align: left;
+}
+.role.advertiser {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.role.creator {
+  background: var(--ink);
+  color: var(--ink-text);
+}
+.role-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  align-self: stretch;
+}
+.role-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: rgb(255 255 255 / 16%);
+}
+.creator .role-icon {
+  background: var(--lime);
+  color: var(--lime-text);
+}
+.role-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+.role strong {
+  font-size: 20px;
+  font-weight: 800;
+}
+.role-text {
+  font-size: 14px;
+  line-height: 1.5;
+  opacity: 0.85;
 }
 .steps {
   margin: 0;
-  padding: 16px 16px 16px 36px;
-  border-radius: 12px;
+  padding: 18px;
+  border-radius: var(--radius-card);
   background: var(--surface);
-  text-align: left;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.steps li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
   font-size: 15px;
-  line-height: 1.4;
+  line-height: 1.45;
 }
-.steps li + li {
-  margin-top: 8px;
-}
-.dots {
-  display: flex;
-  justify-content: center;
-  gap: 6px;
-  margin: 20px 0 16px;
-}
-.dots span {
-  width: 6px;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--separator);
-  transition: width 0.2s;
-}
-.dots .active {
-  width: 18px;
-  background: var(--accent);
-}
-.actions {
-  display: flex;
-  gap: 10px;
-  max-width: 420px;
-  width: 100%;
-  margin: 0 auto;
-}
-.back {
+.num {
   flex: none;
-  height: 50px;
-  padding: 0 18px;
-  border: none;
-  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
   background: var(--accent-soft);
   color: var(--link);
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 800;
+}
+.note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--hint);
+}
+.start {
+  margin-top: auto;
 }
 </style>

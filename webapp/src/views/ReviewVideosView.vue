@@ -378,7 +378,7 @@ h1 {
   width: 52px;
   height: 52px;
   border-radius: 12px;
-  background: #1c1c22;
+  background: var(--ink);
   color: #fff;
   display: flex;
   align-items: center;
@@ -403,7 +403,7 @@ h1 {
 }
 .rated {
   margin: 0;
-  color: #d99a00;
+  color: var(--orange);
   font-size: 22px;
 }
 .feedback {
@@ -434,7 +434,7 @@ h1 {
   line-height: 1;
 }
 .stars button.on {
-  color: #d99a00;
+  color: var(--orange);
 }
 .feedback textarea {
   padding: 10px 12px;

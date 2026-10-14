@@ -142,7 +142,7 @@ export class MyOrdersController {
     const sent = await this.notifications.sendFile(
       req.user.telegramId,
       reportCsv(report),
-      `creon-order-${id}.csv`,
+      `fixum-order-${id}.csv`,
     );
     if (!sent)
       throw new BadRequestException(

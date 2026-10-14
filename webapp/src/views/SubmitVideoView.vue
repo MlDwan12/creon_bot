@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { RouterLink } from 'vue-router';
-import { ApiError, fetchMySubmissions, type MySubmission, submitVideo } from '../api';
-import { formatCpm, formatDeadline, formatMoney, formatViews } from '../format';
+import { ApiError, fetchMySubmissions, type MySubmission, PLATFORM_NAMES, submitVideo } from '../api';
+import PlatformIcon from '../components/PlatformIcon.vue';
+import { describeVideoUrl, formatCpm, formatDeadline, formatMoney, formatViews } from '../format';
 
 // `id` отклика приходит из адреса /submissions/:id/video.
 const props = defineProps<{ id: string }>();
@@ -17,6 +18,28 @@ const estimate = computed(() => {
   const cpm = submission.value?.order.cpm;
   return cpm && views.value ? formatMoney(Math.floor((views.value * cpm) / 10) / 100) : '';
 });
+/** Распознанная ссылка — вместо длинного адреса показываем карточку ролика. */
+const video = computed(() => {
+  const d = describeVideoUrl(url.value);
+  return d && d.platform !== 'OTHER' ? d : null;
+});
+const urlInput = ref<HTMLInputElement>();
+
+/** «Изменить» в карточке — снова поле ввода, с курсором в нём. */
+async function editUrl() {
+  url.value = '';
+  await nextTick();
+  urlInput.value?.focus();
+}
+
+/** «Вставить ссылку»: из буфера, если Telegram разрешит; нет — курсор в поле, вставят сами. */
+async function pasteUrl() {
+  try {
+    url.value = (await navigator.clipboard.readText()).trim();
+  } catch {
+    urlInput.value?.focus();
+  }
+}
 const sending = ref(false);
 const sendError = ref('');
 const sent = ref(false);
@@ -78,15 +101,33 @@ void load();
       <!-- @submit.prevent — отправка формы без перезагрузки страницы (Enter на клавиатуре тоже работает). -->
       <form id="video-form" class="field" @submit.prevent="send">
         <label for="video-url" class="section-title">Ссылка на публикацию</label>
-        <input
-          id="video-url"
-          v-model="url"
-          type="url"
-          inputmode="url"
-          placeholder="https://…"
-          autocomplete="off"
-          required
-        />
+        <div v-if="video" class="video-card">
+          <PlatformIcon :platform="video.platform" :size="48" />
+          <span class="video-text">
+            <strong>Ролик в {{ PLATFORM_NAMES[video.platform] }}</strong>
+            <span>{{ video.short }}</span>
+          </span>
+          <button type="button" class="video-edit" @click="editUrl">Изменить</button>
+        </div>
+        <template v-else>
+          <input
+            id="video-url"
+            ref="urlInput"
+            v-model="url"
+            type="url"
+            inputmode="url"
+            placeholder="https://…"
+            autocomplete="off"
+            required
+          />
+          <button v-if="!url" type="button" class="paste" @click="pasteUrl">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true">
+              <rect x="6" y="4" width="12" height="17" rx="2.5" />
+              <path d="M9 4.5V3h6v1.5" />
+            </svg>
+            Вставить ссылку
+          </button>
+        </template>
         <p class="hint help">
           Ролик, опубликованный у вас в TikTok, YouTube, VK, Instagram или X. Публикация должна быть открыта для всех.
           По YouTube просмотры посчитаем сами, по остальным площадкам — сверит модератор.
@@ -160,16 +201,66 @@ input {
   min-height: 50px;
   box-sizing: border-box;
   padding: 0 14px;
-  border: 2px solid transparent;
-  border-radius: 14px;
+  border: 2px solid var(--separator);
+  border-radius: 16px;
   background: var(--surface);
   color: var(--text);
   font: inherit;
   font-size: 16px;
+  font-weight: 600;
 }
 input:focus {
   outline: none;
   border-color: var(--accent);
+}
+.video-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 2px solid var(--accent);
+  border-radius: 18px;
+  background: var(--surface);
+}
+.video-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--hint);
+  overflow-wrap: anywhere;
+}
+.video-text strong {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+}
+.video-edit {
+  flex: none;
+  min-height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 12px;
+  background: var(--fill);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+.paste {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  border: 2px dashed var(--accent);
+  border-radius: 18px;
+  background: var(--accent-soft);
+  color: var(--link);
+  font-size: 16px;
+  font-weight: 800;
 }
 .help {
   padding: 0 16px;

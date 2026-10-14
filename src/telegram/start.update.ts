@@ -17,19 +17,19 @@ import { Context, Markup, Telegraf, TelegramError } from 'telegraf';
 import { SupportService } from '../support/support.service';
 
 const INTRO = [
-  '👋 CreON — биржа заказов на видео.',
+  '👋 Fixum — биржа заказов на видео.',
   '',
   'Рекламодатели публикуют задания, креаторы берутся за них и получают оплату за готовую работу.',
   '',
   'Заказы, отклики и модерация — в приложении 👇',
-  'Вопросы — просто напишите сюда сообщение, ответит менеджер CreON.',
+  'Вопросы — просто напишите сюда сообщение, ответит менеджер Fixum.',
 ].join('\n');
 
 /** Пауза перед повтором, если Telegram недоступен при запуске. */
 const LAUNCH_RETRY_MS = 10_000;
 
 const MOVED =
-  'Бот обновился — всё теперь в приложении. Откройте его кнопкой «CreON» слева от поля ввода.';
+  'Бот обновился — всё теперь в приложении. Откройте его кнопкой «Fixum» слева от поля ввода.';
 
 /**
  * Вход в Mini App и поддержка: любое другое сообщение боту уходит менеджеру (SupportService),
@@ -59,7 +59,7 @@ export class StartUpdate
       await this.bot.telegram.setChatMenuButton({
         menuButton: {
           type: 'web_app',
-          text: 'CreON',
+          text: 'Fixum',
           web_app: { url: this.webAppUrl },
         },
       });
@@ -102,7 +102,7 @@ export class StartUpdate
     await ctx.reply(
       INTRO,
       Markup.inlineKeyboard([
-        Markup.button.webApp('Открыть CreON', this.webAppUrl),
+        Markup.button.webApp('Открыть Fixum', this.webAppUrl),
       ]),
     );
   }
@@ -111,7 +111,7 @@ export class StartUpdate
   @Command('privacy')
   async onPrivacy(@Ctx() ctx: Context) {
     await ctx.reply(
-      'Политика конфиденциальности CreON:',
+      'Политика конфиденциальности Fixum:',
       Markup.inlineKeyboard([
         Markup.button.webApp('Открыть', `${this.webAppUrl}/privacy`),
       ]),

@@ -219,12 +219,12 @@ h1 {
   font-weight: 600;
 }
 .badge.warn {
-  background: color-mix(in srgb, #9a5200 14%, transparent);
-  color: #9a5200;
+  background: var(--orange-soft);
+  color: var(--orange-text);
 }
 .badge.success {
   background: var(--success-soft);
-  color: #1e7b34;
+  color: var(--success-text);
 }
 .badge.danger {
   background: color-mix(in srgb, var(--danger) 12%, transparent);

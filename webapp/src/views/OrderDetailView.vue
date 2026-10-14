@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { onUnmounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
-import { ApiError, categoryLabel, claimOrder, fetchOrder, type OrderDetail } from '../api';
+import { ApiError, categoryLabel, claimOrder, fetchOrder, PLATFORM_NAMES, type OrderDetail } from '../api';
+import PlatformIcon from '../components/PlatformIcon.vue';
 import SupportLink from '../components/SupportLink.vue';
-import { formatCpm, formatDeadline, formatMoney, formatVideoFormat, formatViews } from '../format';
+import { formatDeadline, formatMoney, formatVideoFormat, formatViews } from '../format';
 import { safeUrl } from '../telegram';
 
 // `id` приходит из адреса /orders/:id (в router.ts у маршрута `props: true`).
@@ -54,20 +55,28 @@ onUnmounted(() => clearInterval(refresh));
     <p v-else-if="!order" class="hint">Загрузка…</p>
 
     <template v-else>
-      <header class="head">
-        <span class="category">{{ categoryLabel(order.category) }}</span>
+      <!-- Главное о заказе — в одном ярком блоке: площадки, название, ставка, остаток. -->
+      <header class="hero">
+        <div class="tags">
+          <span v-for="p in order.platforms" :key="p" class="tag platform">
+            <PlatformIcon :platform="p" :size="18" round inverse />
+            {{ PLATFORM_NAMES[p] }}
+          </span>
+          <span v-if="!order.platforms.length" class="tag">Любая площадка</span>
+          <span class="tag">{{ categoryLabel(order.category) }}</span>
+        </div>
         <h1>{{ order.title }}</h1>
+        <div v-if="order.cpm !== null" class="price">
+          <span class="money cpm">{{ formatMoney(order.cpm) }}</span>
+          <span>за каждые 1000 просмотров</span>
+        </div>
+        <span v-else>Ставку назначит модератор</span>
+        <span :class="['free', { low: order.budgetLow }]">
+          Осталось {{ formatMoney(order.free) }}<template v-if="order.budgetLow"> — успейте</template>
+        </span>
       </header>
 
       <section class="rows">
-        <div class="row">
-          <span>Оплата</span>
-          <strong>{{ formatCpm(order.cpm) }}</strong>
-        </div>
-        <div class="row">
-          <span>Осталось в бюджете</span>
-          <span class="value">{{ formatMoney(order.free) }}</span>
-        </div>
         <div class="row">
           <span>Сдать можно</span>
           <span class="value">от {{ formatViews(order.minViews) }} просмотров</span>
@@ -78,7 +87,7 @@ onUnmounted(() => clearInterval(refresh));
         </div>
         <div class="row">
           <span>Выплата</span>
-          <span class="value">через CreON, после проверки модератором</span>
+          <span class="value">через Fixum, после проверки модератором</span>
         </div>
       </section>
 
@@ -141,23 +150,63 @@ onUnmounted(() => clearInterval(refresh));
   /* Снизу место под фиксированную нижнюю кнопку. */
   padding: 16px 16px calc(96px + var(--safe-bottom));
 }
-.head {
+.hero {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 14px;
+  padding: 20px;
+  border-radius: 26px;
+  background: var(--accent);
+  color: var(--accent-text);
 }
-.category {
-  align-self: flex-start;
-  padding: 4px 10px;
-  border-radius: 12px;
-  background: var(--fill);
-  font-size: 13px;
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  background: rgb(255 255 255 / 18%);
+  font-size: 12px;
+  font-weight: 700;
+}
+.tag.platform {
+  padding-left: 4px;
 }
 h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   line-height: 1.25;
+}
+.price {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+.cpm {
+  font-size: 34px;
+  letter-spacing: -1px;
+}
+.free {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: var(--lime);
+  color: var(--lime-text);
+  font-size: 14px;
+  font-weight: 800;
+}
+.free.low {
+  background: var(--orange);
 }
 .rows {
   border-radius: 14px;

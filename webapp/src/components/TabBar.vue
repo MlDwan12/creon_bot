@@ -74,18 +74,20 @@ const moderator = computed(() => route.path.startsWith('/mod'));
 </template>
 
 <style scoped>
+/* Плавающая тёмная плашка над краем экрана; активная вкладка — лаймовая «таблетка». */
 .tabbar {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 12px;
+  right: 12px;
+  bottom: var(--safe-bottom);
   display: grid;
   /* 3 вкладки у модератора, 5 у остальных. */
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
-  padding: 6px 0 var(--safe-bottom);
-  background: var(--surface);
-  border-top: 1px solid var(--separator);
+  padding: 6px;
+  border-radius: 26px;
+  background: var(--ink);
+  box-shadow: 0 10px 30px rgb(23 20 31 / 25%);
 }
 .tab {
   display: flex;
@@ -93,15 +95,17 @@ const moderator = computed(() => route.path.startsWith('/mod'));
   align-items: center;
   justify-content: center;
   gap: 3px;
-  min-height: 44px;
-  color: var(--hint);
+  min-height: 48px;
+  border-radius: 20px;
+  color: var(--ink-hint);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
 }
 .tab.active {
-  color: var(--accent);
-  font-weight: 600;
+  background: var(--lime);
+  color: var(--lime-text);
+  font-weight: 800;
 }
 </style>

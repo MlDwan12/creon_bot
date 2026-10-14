@@ -11,6 +11,7 @@ import {
 } from '../api';
 import { RouterLink } from 'vue-router';
 import OrderCard from '../components/OrderCard.vue';
+import PlatformIcon from '../components/PlatformIcon.vue';
 import SupportLink from '../components/SupportLink.vue';
 import { onboardingOpen } from '../onboarding';
 
@@ -81,14 +82,16 @@ watch(platform, (p) => {
         v-for="p in VIDEO_PLATFORMS"
         :key="p"
         type="button"
+        class="with-icon"
         :aria-pressed="platform === p"
         @click="platform = p"
       >
+        <PlatformIcon :platform="p" :size="24" round :inverse="platform === p" />
         {{ PLATFORM_NAMES[p] }}
       </button>
     </nav>
 
-    <nav class="chips" aria-label="Категории">
+    <nav class="chips soft" aria-label="Категории">
       <button type="button" :aria-pressed="!category" @click="category = undefined">Все</button>
       <button
         v-for="c in ORDER_CATEGORIES"
@@ -107,6 +110,14 @@ watch(platform, (p) => {
     </p>
     <h2 v-else-if="total > 0" class="section-title count">{{ total }} открытых заказов</h2>
 
+    <!-- Первая загрузка — заготовки карточек вместо пустого экрана. -->
+    <template v-if="loading && orders.length === 0">
+      <div v-for="i in 3" :key="i" class="skeleton" aria-hidden="true">
+        <span class="bone short"></span>
+        <span class="bone"></span>
+        <span class="bone mid"></span>
+      </div>
+    </template>
     <OrderCard v-for="o in orders" :key="o.id" :order="o" />
 
     <button
@@ -131,15 +142,14 @@ watch(platform, (p) => {
 .catalog {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  /* Снизу место под фиксированные вкладки. */
-  padding: 16px 16px calc(96px + var(--safe-bottom));
+  gap: 16px;
+  /* Снизу место под плавающие вкладки. */
+  padding: 20px 16px calc(96px + var(--safe-bottom));
 }
 .head h1 {
   margin: 0 0 4px;
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
-  letter-spacing: -0.3px;
 }
 .head p {
   margin: 0;
@@ -156,34 +166,89 @@ watch(platform, (p) => {
 }
 .chips button {
   flex: none;
-  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
   padding: 0 14px;
-  border: none;
-  border-radius: 18px;
+  border: 1.5px solid var(--separator);
+  border-radius: 20px;
   background: var(--surface);
   color: var(--text);
   font-size: 14px;
+  font-weight: 600;
+}
+.chips button.with-icon {
+  padding-left: 6px;
 }
 .chips button[aria-pressed='true'] {
-  background: var(--accent);
-  color: var(--accent-text);
-  font-weight: 600;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--ink-text);
+  font-weight: 800;
+}
+/* Категории — второй уровень фильтра: тише площадок. */
+.chips.soft {
+  gap: 6px;
+}
+.chips.soft button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--hint);
+  font-size: 13px;
+}
+.chips.soft button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--link);
 }
 .count {
   padding: 0;
+  font-size: 15px;
+  font-weight: 800;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
 }
 .hint {
   margin: 0;
   color: var(--hint);
 }
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.bone {
+  height: 16px;
+  border-radius: 8px;
+  background: var(--fill);
+}
+.bone.short {
+  width: 40%;
+}
+.bone.mid {
+  width: 65%;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
 .more {
-  min-height: 44px;
+  min-height: 48px;
   border: none;
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--accent-soft);
   color: var(--link);
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
 }
 .footer {
   display: flex;

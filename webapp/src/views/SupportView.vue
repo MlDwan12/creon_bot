@@ -31,7 +31,7 @@ async function send() {
   <main class="page">
     <template v-if="sent">
       <h1>Сообщение отправлено</h1>
-      <p class="hint">Менеджер ответит в чате с ботом CreON — там же можно продолжить разговор.</p>
+      <p class="hint">Менеджер ответит в чате с ботом Fixum — там же можно продолжить разговор.</p>
       <div class="bottom-bar">
         <button type="button" class="main-button" @click="router.back()">Готово</button>
       </div>

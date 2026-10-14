@@ -189,10 +189,10 @@ async function resubmit() {
   color: var(--link);
 }
 .label.warn {
-  color: #9a5200;
+  color: var(--orange-text);
 }
 .label.success {
-  color: #1e7b34;
+  color: var(--success-text);
 }
 .label.danger {
   color: var(--danger);

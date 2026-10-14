@@ -130,7 +130,7 @@ h1 {
   color: var(--hint);
 }
 .wait.long {
-  color: #9a5200;
+  color: var(--orange-text);
   font-weight: 600;
 }
 .creator {
@@ -190,7 +190,7 @@ textarea {
   color: var(--text);
 }
 .approve {
-  background: #1e7b34;
+  background: var(--success);
   color: #fff;
 }
 .reject {

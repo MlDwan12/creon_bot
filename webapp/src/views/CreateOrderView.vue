@@ -14,6 +14,7 @@ import {
   VIDEO_PLATFORMS,
   type VideoPlatform,
 } from '../api';
+import PlatformIcon from '../components/PlatformIcon.vue';
 import { approxRub } from '../format';
 
 // Лимиты — те же, что проверяет бэкенд (src/common/validation.ts); здесь только подсказка браузеру.
@@ -240,9 +241,11 @@ void prefill();
             v-for="p in VIDEO_PLATFORMS"
             :key="p"
             type="button"
+            class="with-icon"
             :aria-pressed="form.platforms.includes(p)"
             @click="togglePlatform(p)"
           >
+            <PlatformIcon :platform="p" :size="26" round :inverse="form.platforms.includes(p)" />
             {{ PLATFORM_NAMES[p] }}
           </button>
         </div>
@@ -399,18 +402,27 @@ legend {
   gap: 8px;
 }
 .chips button {
-  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
   padding: 0 14px;
-  border: none;
-  border-radius: 18px;
+  border: 1.5px solid var(--separator);
+  border-radius: 20px;
   background: var(--surface);
   color: var(--text);
   font-size: 14px;
+  font-weight: 600;
+}
+.chips button.with-icon {
+  min-height: 44px;
+  padding-left: 8px;
 }
 .chips button[aria-pressed='true'] {
-  background: var(--accent);
-  color: var(--accent-text);
-  font-weight: 600;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--ink-text);
+  font-weight: 800;
 }
 .group {
   border-radius: 14px;

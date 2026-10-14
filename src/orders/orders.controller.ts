@@ -21,12 +21,14 @@ import { SubmissionsService } from '../submissions/submissions.service';
 import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
 import { videoFormat } from './order-input';
+import { payoutPool } from './budget';
 
 const PAGE_SIZE = 20;
 
 /**
- * Креатору — ставка и свободный остаток фонда выплат в USDT. Бюджет рекламодателя и комиссию
- * площадки не показываем.
+ * Креатору — ставка, свободный остаток фонда выплат в USDT и «осталось мало» (подсветка «успейте»).
+ * Бюджет рекламодателя и комиссию площадки не показываем, поэтому и долю остатка — только флаг:
+ * по остатку и проценту фонд, а с ним и бюджет, вычисляется.
  */
 function toPublic(
   order: Awaited<ReturnType<OrdersService['listOpen']>>['items'][number],
@@ -40,10 +42,16 @@ function toPublic(
     minViews: order.minViews,
     cpm: fromMinor(order.cpmMinor),
     free: fromMinor(order.freeMinor),
+    budgetLow: isBudgetLow(order.freeMinor, payoutPool(order)),
     category: order.category,
     deadline: order.deadline,
     createdAt: order.createdAt,
   };
+}
+
+/** Свободно меньше 30% фонда выплат — в каталоге подсвечиваем «успейте». */
+export function isBudgetLow(freeMinor: number, poolMinor: number): boolean {
+  return freeMinor < poolMinor * 0.3;
 }
 
 @Controller('api/orders')
