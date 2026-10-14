@@ -336,21 +336,30 @@ export class NotificationsService
     );
   }
 
-  /** Тем, кто жаловался: модератор рассмотрел жалобу. Язык — из базы, по telegramId. */
-  reportResolved(telegramIds: bigint[], actioned: boolean) {
+  /**
+   * Тем, кто жаловался: модератор рассмотрел жалобу. Язык — из базы, по telegramId. Промис —
+   * когда сообщения уже в очереди: ждать его не обязательно (сбой — только в лог), но можно (тесты).
+   */
+  async reportResolved(telegramIds: bigint[], actioned: boolean) {
     if (!telegramIds.length) return;
-    this.prisma.user
-      .findMany({ where: { telegramId: { in: telegramIds } } })
-      .then((users) => {
-        for (const user of users)
-          this.send(
+    try {
+      const users = await this.prisma.user.findMany({
+        where: { telegramId: { in: telegramIds } },
+      });
+      if (!users.length) return;
+      await this.prisma.notification.createMany({
+        data: users.map((user) =>
+          this.row(
             user,
             (t) =>
               t(actioned ? 'notify.reportActioned' : 'notify.reportDismissed'),
             '/',
-          );
-      })
-      .catch((err) => this.logger.error(err));
+          ),
+        ),
+      });
+    } catch (err) {
+      this.logger.error(err);
+    }
   }
 
   /** Креаторам с откликами на заказ: рекламодатель его удалил. */
@@ -543,16 +552,24 @@ export class NotificationsService
 
   /** Пользователю — на его языке (выбранном в профиле или языке Telegram). */
   private send(to: Recipient, compose: Compose, path: string, asHtml = false) {
+    this.enqueue([this.row(to, compose, path, asHtml)]);
+  }
+
+  /** Строка очереди для пользователя — текст на его языке. */
+  private row(
+    to: Recipient,
+    compose: Compose,
+    path: string,
+    asHtml = false,
+  ): Outgoing {
     const lang = userLang(to);
-    this.enqueue([
-      {
-        chatId: to.telegramId,
-        text: compose(translator(lang), lang),
-        html: asHtml,
-        path,
-        lang,
-      },
-    ]);
+    return {
+      chatId: to.telegramId,
+      text: compose(translator(lang), lang),
+      html: asHtml,
+      path,
+      lang,
+    };
   }
 
   private async work() {

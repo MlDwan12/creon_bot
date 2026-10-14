@@ -126,7 +126,7 @@ it('рассылка о новом заказе — всем, кроме авт�
     minViews: 250,
   } as never);
   await flushWrites();
-  service.reportResolved([30n], true);
+  await service.reportResolved([30n], true);
   await flushWrites();
 
   await service.processBatch();

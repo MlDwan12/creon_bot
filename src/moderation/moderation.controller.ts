@@ -302,7 +302,8 @@ export class ModerationController {
     if (closedOrder) this.notifications.orderClosedByModerator(closedOrder);
     for (const order of bannedOrders)
       this.notifications.orderClosedByModerator(order);
-    this.notifications.reportResolved(reporters, decision.actioned);
+    // не ждём: решение уже принято, уведомления — в фоне
+    void this.notifications.reportResolved(reporters, decision.actioned);
     return { ok: true };
   }
 
