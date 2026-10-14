@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { ApiError, claimOrder, type MySubmission, type SubmissionStatus } from '../api';
 import { formatCpm, formatDeadline, formatMoney, formatViews } from '../format';
+import { i18next } from '../i18n';
 
 const props = defineProps<{ submission: MySubmission }>();
 const router = useRouter();
@@ -16,25 +17,34 @@ const STEPS: Record<SubmissionStatus, number> = {
   SLOT_EXPIRED: 0,
 };
 
-const STATUS: Record<SubmissionStatus, { label: string; tone: string }> = {
-  IN_PROGRESS: { label: 'В работе', tone: 'accent' },
-  SUBMITTED: { label: 'На проверке у модератора', tone: 'warn' },
-  MODERATOR_APPROVED: { label: 'Одобрено — идёт добор, деньги в холде', tone: 'success' },
-  MODERATOR_REJECTED: { label: 'Отклонено модератором', tone: 'danger' },
-  SLOT_EXPIRED: { label: 'Слот сгорел — видео не прислали за 7 дней', tone: 'danger' },
+/** Цвет метки статуса; текст — в словаре (submissionCard.status). */
+const TONE: Record<SubmissionStatus, string> = {
+  IN_PROGRESS: 'accent',
+  SUBMITTED: 'warn',
+  MODERATOR_APPROVED: 'success',
+  MODERATOR_REJECTED: 'danger',
+  SLOT_EXPIRED: 'danger',
 };
 
 // computed — значение, которое пересчитывается само, когда меняются props.
 const steps = computed(() => (props.submission.finalized ? 4 : STEPS[props.submission.status]));
 const status = computed(() =>
-  props.submission.finalized ? { label: 'Итог зафиксирован', tone: 'success' } : STATUS[props.submission.status],
+  props.submission.finalized
+    ? { label: i18next.t('submissionCard.status.FINALIZED'), tone: 'success' }
+    : {
+        label: i18next.t(`submissionCard.status.${props.submission.status}`),
+        tone: TONE[props.submission.status],
+      },
 );
 /** Просмотры и деньги по сданному ролику: на проверке — резерв, после одобрения — начислено. */
 const earnings = computed(() => {
   const { status: st, views, payout } = props.submission;
   if (views === null || (st !== 'SUBMITTED' && st !== 'MODERATOR_APPROVED')) return '';
-  const money = st === 'SUBMITTED' ? `в резерве ${formatMoney(payout)}` : `начислено ${formatMoney(payout)}`;
-  return `${formatViews(views)} просмотров · ${money}`;
+  const money = i18next.t(st === 'SUBMITTED' ? 'submissionCard.reserved' : 'submissionCard.accrued', {
+    amount: formatMoney(payout),
+  });
+  // count — для формы слова («просмотр/просмотра/просмотров»), views — число с разделителями
+  return `${i18next.t('submissionCard.views', { count: views, views: formatViews(views) })} · ${money}`;
 });
 const rejected = computed(() => steps.value === 0);
 const canResubmit = computed(
@@ -67,7 +77,7 @@ async function resubmit() {
     const { submissionId } = await claimOrder(props.submission.order.id);
     await router.push(`/submissions/${submissionId}/video`);
   } catch (err) {
-    error.value = err instanceof ApiError ? err.userMessage : 'Не удалось начать новую попытку';
+    error.value = err instanceof ApiError ? err.userMessage : i18next.t('submissionCard.resubmitError');
   } finally {
     resubmitting.value = false;
   }
@@ -88,16 +98,16 @@ async function resubmit() {
     <div class="status">
       <span :class="['label', status.tone]">{{ status.label }}</span>
       <span v-if="submission.dueAt" class="hint">
-        сдать до {{ formatDeadline(submission.dueAt) }}
+        {{ $t('submissionCard.dueAt', { date: formatDeadline(submission.dueAt) }) }}
       </span>
-      <span v-else-if="submission.attempt > 1" class="hint">видео {{ submission.attempt }}</span>
+      <span v-else-if="submission.attempt > 1" class="hint">{{ $t('submissionCard.attempt', { n: submission.attempt }) }}</span>
     </div>
 
     <p v-if="earnings" class="earnings">{{ earnings }}</p>
     <div v-if="trackUrl" class="track">
-      <span class="hint">Ссылка на товар — поставьте в описание ролика:</span>
+      <span class="hint">{{ $t('submissionCard.trackHint') }}</span>
       <code>{{ trackUrl }}</code>
-      <button type="button" class="copy" @click="copyTrackUrl">{{ copied ? 'Скопировано' : 'Скопировать' }}</button>
+      <button type="button" class="copy" @click="copyTrackUrl">{{ copied ? $t('submissionCard.copied') : $t('submissionCard.copy') }}</button>
     </div>
     <p v-if="submission.comment" class="comment">«{{ submission.comment }}»</p>
 
@@ -106,13 +116,13 @@ async function resubmit() {
       :to="`/submissions/${submission.id}/video`"
       class="action"
     >
-      Отправить видео
+      {{ $t('submissionCard.sendVideo') }}
     </RouterLink>
     <button v-else-if="canResubmit" type="button" class="action" :disabled="resubmitting" @click="resubmit">
-      {{ resubmitting ? 'Секунду…' : 'Отправить новую работу' }}
+      {{ resubmitting ? $t('submissionCard.wait') : $t('submissionCard.resubmit') }}
     </button>
     <p v-else-if="submission.status === 'IN_PROGRESS' || (rejected && submission.latest)" class="hint">
-      {{ expired ? 'Срок заказа истёк' : 'Заказ закрыт' }} — новые видео по нему не принимаются.
+      {{ expired ? $t('submissionCard.orderExpired') : $t('submissionCard.orderClosed') }}
     </p>
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -143,8 +153,8 @@ async function resubmit() {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px;
-  border-radius: 14px;
+  padding: 16px;
+  border-radius: var(--radius-card);
   background: var(--surface);
 }
 .top {
@@ -154,13 +164,15 @@ async function resubmit() {
 }
 .title {
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 800;
   line-height: 1.3;
 }
 .price {
   flex: none;
-  font-size: 16px;
+  font-family: var(--font-display);
+  font-size: 15px;
   font-weight: 700;
+  color: var(--link);
 }
 .steps {
   display: grid;
@@ -182,19 +194,27 @@ async function resubmit() {
   gap: 12px;
   font-size: 14px;
 }
+/* Статус — цветная плашка: цвет вместе со словом, не одним цветом. */
 .label {
-  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 13px;
+  font-size: 12px;
+  font-weight: 800;
 }
 .label.accent {
+  background: var(--accent-soft);
   color: var(--link);
 }
 .label.warn {
+  background: var(--orange-soft);
   color: var(--orange-text);
 }
 .label.success {
+  background: var(--success-soft);
   color: var(--success-text);
 }
 .label.danger {
+  background: var(--danger-soft);
   color: var(--danger);
 }
 .hint {
@@ -219,13 +239,13 @@ async function resubmit() {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 44px;
+  min-height: 48px;
   border: none;
-  border-radius: 10px;
-  background: var(--accent-soft);
-  color: var(--link);
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--accent-text);
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 800;
   text-decoration: none;
 }
 .error {

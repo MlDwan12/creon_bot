@@ -3,7 +3,7 @@ import { ref } from 'vue';
 
 // defineModel — значение, которое родитель связывает через v-model="comment" (двусторонняя связь).
 const comment = defineModel<string>({ required: true });
-withDefaults(defineProps<{ presets: string[]; title?: string }>(), { title: 'Если отклоняете — причина' });
+defineProps<{ presets: string[]; title?: string }>();
 
 const textarea = ref<HTMLTextAreaElement>();
 
@@ -16,7 +16,7 @@ function pick(preset: string | null) {
 
 <template>
   <section class="reasons">
-    <h2 class="section-title">{{ title }}</h2>
+    <h2 class="section-title">{{ title ?? $t('reasonPicker.title') }}</h2>
     <div class="chips">
       <button
         v-for="p in presets"
@@ -27,16 +27,16 @@ function pick(preset: string | null) {
       >
         {{ p }}
       </button>
-      <button type="button" :aria-pressed="false" @click="pick(null)">Другое…</button>
+      <button type="button" :aria-pressed="false" @click="pick(null)">{{ $t('reasonPicker.other') }}</button>
     </div>
-    <label class="visually-hidden" for="reason">Причина отклонения</label>
+    <label class="visually-hidden" for="reason">{{ $t('reasonPicker.label') }}</label>
     <textarea
       id="reason"
       ref="textarea"
       v-model="comment"
       rows="2"
       maxlength="500"
-      placeholder="Автор увидит этот текст"
+      :placeholder="$t('reasonPicker.placeholder')"
     />
   </section>
 </template>

@@ -462,7 +462,7 @@ async function request<T>(
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!res.ok) {
-    let userMessage = 'Что-то пошло не так, попробуйте ещё раз';
+    let userMessage = i18next.t('common.genericError');
     if ([400, 403, 404, 429].includes(res.status)) {
       const data = (await res.json().catch(() => null)) as {
         message?: unknown;
@@ -748,42 +748,16 @@ export function markPublicationDeleted(id: number) {
 /** На что жалоба: VIDEO и REVIEW — по id отклика, PROFILE — по id пользователя. */
 export type ReportTarget = 'ORDER' | 'VIDEO' | 'REVIEW' | 'PROFILE';
 
-/** Причины жалоб по типу объекта; коды проверяет бэкенд (src/api/reports.service.ts). */
-export const REPORT_REASONS: Record<ReportTarget, { code: string; label: string }[]> = {
-  ORDER: [
-    { code: 'FRAUD', label: 'Мошенничество' },
-    { code: 'PROHIBITED', label: 'Запрещённая тематика' },
-    { code: 'FAKE_REVIEWS', label: 'Фейковые отзывы, обман покупателей' },
-    { code: 'PERSONAL_DATA', label: 'Просят личные данные' },
-    { code: 'SPAM', label: 'Спам' },
-    { code: 'OFF_PLATFORM', label: 'Предлагает связь или оплату вне площадки' },
-    { code: 'OTHER', label: 'Другое' },
-  ],
-  VIDEO: [
-    { code: 'STOLEN', label: 'Чужое или краденое видео' },
-    { code: 'UNAVAILABLE', label: 'Видео удалено или недоступно' },
-    { code: 'BRAND_NEGATIVE', label: 'Негатив о бренде' },
-    { code: 'BLACKMAIL', label: 'Шантаж, вымогательство' },
-    { code: 'OFF_PLATFORM', label: 'Предлагает связь или оплату вне площадки' },
-    { code: 'OTHER', label: 'Другое' },
-  ],
-  REVIEW: [
-    { code: 'INSULT', label: 'Оскорбления' },
-    { code: 'FALSE', label: 'Ложный отзыв' },
-    { code: 'PERSONAL_DATA', label: 'Раскрывает личные данные' },
-    { code: 'OFF_PLATFORM', label: 'Предлагает связь или оплату вне площадки' },
-    { code: 'OTHER', label: 'Другое' },
-  ],
-  PROFILE: [
-    { code: 'IMPERSONATION', label: 'Выдаёт себя за другого' },
-    { code: 'OFFENSIVE', label: 'Оскорбительное имя или фото' },
-    { code: 'OFF_PLATFORM', label: 'Предлагает связь или оплату вне площадки' },
-    { code: 'OTHER', label: 'Другое' },
-  ],
+/** Причины жалоб по типу объекта; коды проверяет бэкенд (src/reports), названия — в словаре (reportReasons). */
+export const REPORT_REASONS: Record<ReportTarget, string[]> = {
+  ORDER: ['FRAUD', 'PROHIBITED', 'FAKE_REVIEWS', 'PERSONAL_DATA', 'SPAM', 'OFF_PLATFORM', 'OTHER'],
+  VIDEO: ['STOLEN', 'UNAVAILABLE', 'BRAND_NEGATIVE', 'BLACKMAIL', 'OFF_PLATFORM', 'OTHER'],
+  REVIEW: ['INSULT', 'FALSE', 'PERSONAL_DATA', 'OFF_PLATFORM', 'OTHER'],
+  PROFILE: ['IMPERSONATION', 'OFFENSIVE', 'OFF_PLATFORM', 'OTHER'],
 };
 
 export function reasonLabel(target: ReportTarget, code: string): string {
-  return REPORT_REASONS[target].find((r) => r.code === code)?.label ?? code;
+  return REPORT_REASONS[target].includes(code) ? i18next.t(`reportReasons.${target}.${code}`) : code;
 }
 
 /** Сообщение менеджеру из мини-аппа; ответ придёт в чат с ботом. */

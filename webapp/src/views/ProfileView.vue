@@ -77,7 +77,7 @@ async function load() {
     profile.value = own ? await fetchMyProfile() : await fetchCreator(Number(props.id));
     Object.assign(links, profile.value.links);
   } catch (err) {
-    loadError.value = err instanceof ApiError ? err.userMessage : 'Не удалось загрузить профиль';
+    loadError.value = err instanceof ApiError ? err.userMessage : i18next.t('profile.loadError');
   }
 }
 
@@ -111,7 +111,7 @@ async function saveLinks() {
     editing.value = false;
     await load();
   } catch (err) {
-    error.value = err instanceof ApiError ? err.userMessage : 'Не удалось сохранить';
+    error.value = err instanceof ApiError ? err.userMessage : i18next.t('profile.saveError');
   } finally {
     busy.value = false;
   }
@@ -136,7 +136,7 @@ async function saveWallet() {
     editingWallet.value = false;
     await load();
   } catch (err) {
-    walletError.value = err instanceof ApiError ? err.userMessage : 'Не удалось сохранить';
+    walletError.value = err instanceof ApiError ? err.userMessage : i18next.t('profile.saveError');
   } finally {
     busy.value = false;
   }
@@ -165,20 +165,20 @@ async function connectAccount(a: SocialAccount) {
   try {
     openExternalLink((await connectSocialAccount(a.platform)).url);
   } catch (err) {
-    accountsError.value = err instanceof ApiError ? err.userMessage : 'Не удалось начать подключение';
+    accountsError.value = err instanceof ApiError ? err.userMessage : i18next.t('profile.connectError');
   }
 }
 
 async function disconnectAccount(a: SocialAccount, account: SocialAccount['accounts'][number]) {
   const name = account.label ? `${a.name} ${account.label}` : a.name;
-  if (!(await confirmAction(`Отключить ${name}? Просмотры роликов оттуда снова будет вводить модератор.`)))
+  if (!(await confirmAction(i18next.t('profile.disconnectConfirm', { name }))))
     return;
   accountsError.value = '';
   try {
     await disconnectSocialAccount(account.id);
     await loadAccounts();
   } catch (err) {
-    accountsError.value = err instanceof ApiError ? err.userMessage : 'Не удалось отключить';
+    accountsError.value = err instanceof ApiError ? err.userMessage : i18next.t('profile.disconnectError');
   }
 }
 
@@ -192,17 +192,17 @@ async function toggleNewOrders(event: Event) {
     profile.value!.notifyNewOrders = input.checked;
   } catch (err) {
     input.checked = !input.checked;
-    notifyError.value = err instanceof ApiError ? err.userMessage : 'Не удалось сохранить';
+    notifyError.value = err instanceof ApiError ? err.userMessage : i18next.t('profile.saveError');
   }
 }
 
 async function remove(submissionId: number) {
-  if (!(await confirmAction('Удалить отзыв? Оценка тоже пропадёт из рейтинга.'))) return;
+  if (!(await confirmAction(i18next.t('profile.removeReviewConfirm')))) return;
   try {
     await removeReview(submissionId);
     await load();
   } catch (err) {
-    error.value = err instanceof ApiError ? err.userMessage : 'Не удалось удалить отзыв';
+    error.value = err instanceof ApiError ? err.userMessage : i18next.t('profile.removeReviewError');
   }
 }
 
@@ -211,7 +211,7 @@ const banning = ref(false);
 const banReason = ref('');
 
 async function ban() {
-  if (!(await confirmAction('Заблокировать? Его открытые заказы закроются, отклики без видео удалятся.'))) return;
+  if (!(await confirmAction(i18next.t('profile.banConfirm')))) return;
   busy.value = true;
   error.value = '';
   try {
@@ -220,19 +220,19 @@ async function ban() {
     banReason.value = '';
     await load();
   } catch (err) {
-    error.value = err instanceof ApiError ? err.userMessage : 'Не удалось заблокировать';
+    error.value = err instanceof ApiError ? err.userMessage : i18next.t('profile.banError');
   } finally {
     busy.value = false;
   }
 }
 
 async function unban() {
-  if (!(await confirmAction('Разблокировать? Закрытые заказы не откроются сами.'))) return;
+  if (!(await confirmAction(i18next.t('profile.unbanConfirm')))) return;
   try {
     await unbanUser(profile.value!.id);
     await load();
   } catch (err) {
-    error.value = err instanceof ApiError ? err.userMessage : 'Не удалось разблокировать';
+    error.value = err instanceof ApiError ? err.userMessage : i18next.t('profile.unbanError');
   }
 }
 
@@ -244,56 +244,56 @@ void load();
 <template>
   <main class="page">
     <p v-if="loadError" class="hint">{{ loadError }}</p>
-    <p v-else-if="!profile" class="hint">Загрузка…</p>
+    <p v-else-if="!profile" class="hint">{{ $t('common.loading') }}</p>
 
     <template v-else>
       <header class="head">
         <UserAvatar :user-id="profile.id" :name="profile.name" :size="72" />
         <div class="who">
-          <span class="hint">{{ own ? 'Мой профиль' : 'Профиль креатора' }}</span>
+          <span class="hint">{{ own ? $t('profile.mine') : $t('profile.creator') }}</span>
           <h1>{{ profile.name }}</h1>
         </div>
       </header>
 
       <section v-if="moderator" class="ban">
         <template v-if="profile.ban">
-          <p><strong>Заблокирован</strong> {{ formatDate(profile.ban.at) }}<template v-if="profile.ban.reason">: {{ profile.ban.reason }}</template></p>
-          <button type="button" class="edit" @click="unban">Разблокировать</button>
+          <p><strong>{{ $t('profile.banned') }}</strong> {{ formatDate(profile.ban.at) }}<template v-if="profile.ban.reason">: {{ profile.ban.reason }}</template></p>
+          <button type="button" class="edit" @click="unban">{{ $t('profile.unban') }}</button>
         </template>
         <template v-else-if="banning">
-          <textarea v-model="banReason" rows="2" maxlength="500" placeholder="Причина — пользователь её увидит" />
+          <textarea v-model="banReason" rows="2" maxlength="500" :placeholder="$t('profile.banReason')" />
           <div class="buttons">
-            <button type="button" :disabled="busy" @click="banning = false">Отмена</button>
-            <button type="button" class="danger" :disabled="busy || !banReason.trim()" @click="ban">Заблокировать</button>
+            <button type="button" :disabled="busy" @click="banning = false">{{ $t('common.cancel') }}</button>
+            <button type="button" class="danger" :disabled="busy || !banReason.trim()" @click="ban">{{ $t('profile.ban') }}</button>
           </div>
         </template>
-        <button v-else type="button" class="remove" @click="banning = true">Заблокировать пользователя</button>
+        <button v-else type="button" class="remove" @click="banning = true">{{ $t('profile.banUser') }}</button>
       </section>
 
       <div class="tiles">
         <div class="tile">
           <strong>{{ profile.rating ?? '—' }}</strong>
-          <span>{{ profile.reviewsCount ? `рейтинг · отзывов: ${profile.reviewsCount}` : 'отзывов пока нет' }}</span>
+          <span>{{ profile.reviewsCount ? $t('profile.ratingReviews', { count: profile.reviewsCount }) : $t('profile.noReviewsYet') }}</span>
         </div>
         <div class="tile">
           <strong>{{ profile.completed }}</strong>
-          <span>роликов одобрено</span>
+          <span>{{ $t('profile.approved') }}</span>
         </div>
       </div>
 
       <RouterLink v-if="balance" to="/balance" class="balance">
         <span>
-          <small>Баланс</small>
+          <small>{{ $t('submissions.balance') }}</small>
           <strong>{{ formatMoney(balance.available) }}</strong>
         </span>
-        <span class="balance-action">Вывести ›</span>
+        <span class="balance-action">{{ $t('submissions.withdraw') }}</span>
       </RouterLink>
 
       <section v-if="own" class="block">
-        <h2 class="section-title">Кошелёк для выплат</h2>
+        <h2 class="section-title">{{ $t('profile.walletTitle') }}</h2>
         <form v-if="editingWallet" class="links-form" @submit.prevent="saveWallet">
           <label>
-            <span>Адрес USDT в сети TRC20</span>
+            <span>{{ $t('profile.walletLabel') }}</span>
             <input
               v-model.trim="wallet"
               autocomplete="off"
@@ -303,58 +303,55 @@ void load();
               placeholder="T…"
             />
           </label>
-          <p class="hint">Только сеть TRC20 (TRON): перевод на адрес другой сети потеряется. Пусто — убрать кошелёк.</p>
+          <p class="hint">{{ $t('profile.walletHint') }}</p>
           <p v-if="walletError" class="error" role="alert">{{ walletError }}</p>
           <div class="buttons">
-            <button type="button" :disabled="busy" @click="editingWallet = false">Отмена</button>
-            <button type="submit" class="primary" :disabled="busy">Сохранить</button>
+            <button type="button" :disabled="busy" @click="editingWallet = false">{{ $t('common.cancel') }}</button>
+            <button type="submit" class="primary" :disabled="busy">{{ $t('common.save') }}</button>
           </div>
         </form>
         <template v-else>
           <p v-if="profile.wallet" class="wallet">{{ profile.wallet }}</p>
-          <p v-else class="hint">Не указан — без него вывести деньги нельзя.</p>
+          <p v-else class="hint">{{ $t('profile.walletEmpty') }}</p>
           <button type="button" class="edit" @click="startWallet">
-            {{ profile.wallet ? 'Изменить кошелёк' : 'Добавить кошелёк' }}
+            {{ profile.wallet ? $t('profile.walletChange') : $t('profile.walletAdd') }}
           </button>
         </template>
       </section>
 
       <section v-if="own && accounts.length" class="block">
-        <h2 class="section-title">Подключённые аккаунты</h2>
-        <p class="hint">
-          Подключите аккаунты, с которых публикуете ролики, — просмотры будут считаться сами. Можно
-          несколько на одной площадке: на странице входа выберите другой аккаунт. Рекламодатель их не увидит.
-        </p>
+        <h2 class="section-title">{{ $t('profile.accountsTitle') }}</h2>
+        <p class="hint">{{ $t('profile.accountsHint') }}</p>
         <template v-for="a in accounts" :key="a.platform">
           <div v-for="acc in a.accounts" :key="acc.id" class="switch-row account-row">
             <PlatformIcon :platform="a.platform" :size="40" />
             <span>
               {{ a.name }}{{ acc.label ? ` · ${acc.label}` : '' }}
-              <small>Подключён — просмотры считаются автоматически</small>
+              <small>{{ $t('profile.connected') }}</small>
             </span>
-            <button type="button" class="account-action quiet" @click="disconnectAccount(a, acc)">Отключить</button>
+            <button type="button" class="account-action quiet" @click="disconnectAccount(a, acc)">{{ $t('profile.disconnect') }}</button>
           </div>
           <div v-if="!a.accounts.length" class="switch-row account-row">
             <PlatformIcon :platform="a.platform" :size="40" />
             <span>
               {{ a.name }}
-              <small>Не подключён</small>
+              <small>{{ $t('profile.notConnected') }}</small>
             </span>
-            <button type="button" class="account-action" @click="connectAccount(a)">Подключить</button>
+            <button type="button" class="account-action" @click="connectAccount(a)">{{ $t('profile.connect') }}</button>
           </div>
           <button v-else-if="a.canAdd" type="button" class="add-account" @click="connectAccount(a)">
-            + Ещё аккаунт {{ a.name }}
+            {{ $t('profile.addAccount', { name: a.name }) }}
           </button>
         </template>
         <p v-if="accountsError" class="error" role="alert">{{ accountsError }}</p>
       </section>
 
       <section v-if="own" class="block">
-        <h2 class="section-title">Уведомления</h2>
+        <h2 class="section-title">{{ $t('profile.notificationsTitle') }}</h2>
         <label class="switch-row">
           <span>
-            Новые заказы
-            <small>Бот напишет, когда в каталоге появится заказ</small>
+            {{ $t('profile.newOrders') }}
+            <small>{{ $t('profile.newOrdersHint') }}</small>
           </span>
           <input type="checkbox" role="switch" :checked="profile.notifyNewOrders ?? true" @change="toggleNewOrders" />
         </label>
@@ -400,7 +397,7 @@ void load();
       </section>
 
       <section class="block">
-        <h2 class="section-title">Соцсети</h2>
+        <h2 class="section-title">{{ $t('profile.linksTitle') }}</h2>
         <form v-if="editing" class="links-form" @submit.prevent="saveLinks">
           <label v-for="n in NETWORKS" :key="n.field">
             <span>{{ n.name }}</span>
@@ -408,8 +405,8 @@ void load();
           </label>
           <p v-if="error" class="error" role="alert">{{ error }}</p>
           <div class="buttons">
-            <button type="button" :disabled="busy" @click="editing = false">Отмена</button>
-            <button type="submit" class="primary" :disabled="busy">Сохранить</button>
+            <button type="button" :disabled="busy" @click="editing = false">{{ $t('common.cancel') }}</button>
+            <button type="submit" class="primary" :disabled="busy">{{ $t('common.save') }}</button>
           </div>
         </form>
         <template v-else>
@@ -424,15 +421,15 @@ void load();
               {{ n.name }}
             </a>
           </div>
-          <p v-else class="hint">Ссылки не указаны.</p>
+          <p v-else class="hint">{{ $t('profile.linksEmpty') }}</p>
           <button v-if="own" type="button" class="edit" @click="editing = true">
-            {{ filledLinks.length ? 'Изменить ссылки' : 'Добавить ссылки' }}
+            {{ filledLinks.length ? $t('profile.linksChange') : $t('profile.linksAdd') }}
           </button>
         </template>
       </section>
 
       <section v-if="profile.portfolio.length" class="block">
-        <h2 class="section-title">Портфолио</h2>
+        <h2 class="section-title">{{ $t('profile.portfolio') }}</h2>
         <!-- рекламодателю ссылки не приходят (ведут на аккаунт креатора) — только названия работ -->
         <template v-for="p in profile.portfolio" :key="p.submissionId">
           <a v-if="safeUrl(p.videoUrl)" :href="safeUrl(p.videoUrl)" target="_blank" rel="noopener noreferrer" class="item">
@@ -447,24 +444,24 @@ void load();
       </section>
 
       <section class="block">
-        <h2 class="section-title">Отзывы</h2>
-        <p v-if="!profile.reviews.length" class="hint">Отзывов пока нет.</p>
+        <h2 class="section-title">{{ $t('profile.reviews') }}</h2>
+        <p v-if="!profile.reviews.length" class="hint">{{ $t('profile.noReviews') }}</p>
         <article v-for="r in profile.reviews" :key="r.submissionId" class="review">
           <div class="review-top">
-            <span class="stars" :aria-label="`Оценка ${r.rating} из 5`">{{ stars(r.rating) }}</span>
+            <span class="stars" :aria-label="$t('profile.stars', { rating: r.rating })">{{ stars(r.rating) }}</span>
             <span v-if="r.decidedAt" class="hint">{{ formatDate(r.decidedAt) }}</span>
           </div>
           <p v-if="r.review" class="review-text">{{ r.review }}</p>
           <span class="hint">{{ r.orderTitle }}</span>
           <button v-if="moderator" type="button" class="remove" @click="remove(r.submissionId)">
-            Удалить отзыв
+            {{ $t('profile.removeReview') }}
           </button>
           <RouterLink
             v-else-if="own"
             :to="{ path: '/report', query: { target: 'REVIEW', id: r.submissionId, title: r.orderTitle } }"
             class="quiet-link start"
           >
-            Пожаловаться на отзыв
+            {{ $t('profile.reportReview') }}
           </RouterLink>
         </article>
         <p v-if="error && !editing" class="error" role="alert">{{ error }}</p>
@@ -475,7 +472,7 @@ void load();
         :to="{ path: '/report', query: { target: 'PROFILE', id: profile.id, title: profile.name } }"
         class="quiet-link"
       >
-        Пожаловаться на профиль
+        {{ $t('profile.reportProfile') }}
       </RouterLink>
     </template>
   </main>
@@ -538,30 +535,39 @@ h1 {
 .block .section-title {
   padding: 0;
 }
+/* Баланс — тёмная плашка с лаймовой суммой, как в макете. */
 .balance {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  border-radius: 14px;
-  background: var(--surface);
-  color: var(--text);
+  padding: 16px 18px;
+  border-radius: var(--radius-card);
+  background: var(--ink);
+  color: var(--ink-text);
   text-decoration: none;
 }
 .balance span:first-child {
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 .balance small {
   font-size: 13px;
-  color: var(--hint);
+  font-weight: 700;
+  color: var(--ink-hint);
 }
 .balance strong {
-  font-size: 20px;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--lime);
 }
 .balance-action {
-  color: var(--link);
-  font-weight: 600;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--lime);
+  color: var(--lime-text);
+  font-weight: 800;
 }
 .segmented {
   display: grid;

@@ -47,15 +47,15 @@ if (inTelegram) {
 <template>
   <!-- В обычном браузере (dev) шапки Telegram нет — рисуем свою кнопку «Назад». -->
   <button v-if="!inTelegram && route.meta.back && !banned" type="button" class="browser-back" @click="goBack">
-    ‹ Назад
+    {{ $t('common.back') }}
   </button>
   <main v-if="banned" class="banned">
     <div class="banned-icon" aria-hidden="true">🚫</div>
-    <h1>Аккаунт заблокирован</h1>
-    <p v-if="banned.reason">Причина: {{ banned.reason }}</p>
-    <p class="hint">Если это ошибка — напишите в поддержку.</p>
+    <h1>{{ $t('banned.title') }}</h1>
+    <p v-if="banned.reason">{{ $t('banned.reason', { reason: banned.reason }) }}</p>
+    <p class="hint">{{ $t('banned.hint') }}</p>
     <button v-if="banned.supportUrl" type="button" class="main-button" @click="openTelegramLink(banned.supportUrl)">
-      Поддержка
+      {{ $t('common.support') }}
     </button>
   </main>
   <RouterView v-else :key="lang" />
