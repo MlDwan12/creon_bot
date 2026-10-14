@@ -9,7 +9,7 @@ export type { VideoStats } from '../accounts/providers';
 
 const TIMEOUT_MS = 10_000;
 
-/** Ролик и его автор: TikTok и VK отдают просмотры только по токену самого креатора. */
+/** Ролик и его автор: TikTok, VK и Instagram отдают просмотры только по токену самого креатора. */
 export interface VideoRef {
   url: string;
   creatorId: number;
@@ -18,7 +18,7 @@ export interface VideoRef {
 /**
  * Просмотры публикаций из API площадок. Каждая площадка включается своим ключом в env:
  * YouTube — YOUTUBE_API_KEY (Data API), X — X_BEARER_TOKEN (API v2, оплата за чтение поста),
- * TikTok и VK — ключами приложения (src/accounts) и аккаунтом, который креатор подключил в профиле.
+ * TikTok, VK и Instagram — ключами приложения (src/accounts) и аккаунтами, которые креатор подключил в профиле.
  * Ключа нет, аккаунт не подключён, ссылка не распознана или API не ответило — просмотры вводит
  * модератор по ссылке, поэтому площадку можно включить в любой момент, просто добавив ключи.
  */
@@ -64,7 +64,7 @@ export class ViewCounterService {
     return result;
   }
 
-  /** TikTok и VK: ролики группируем по креатору и площадке — по одному токену на группу. */
+  /** TikTok, VK и Instagram: ролики группируем по креатору и площадке — его аккаунты на ней спрашивает AccountsService. */
   private async fetchByCreator(
     videos: VideoRef[],
     result: Map<string, VideoStats>,

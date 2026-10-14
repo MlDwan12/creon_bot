@@ -1,4 +1,9 @@
-import { tiktokVideoId, videoKey, vkVideoId } from './platforms';
+import {
+  instagramShortcode,
+  tiktokVideoId,
+  videoKey,
+  vkVideoId,
+} from './platforms';
 
 describe('videoKey', () => {
   it.each([
@@ -31,6 +36,19 @@ describe('tiktokVideoId', () => {
     ['https://example.com/video/7312345678901234567', null],
   ])('%s → %s', (url, id) => {
     expect(tiktokVideoId(url)).toBe(id);
+  });
+});
+
+describe('instagramShortcode', () => {
+  it.each([
+    ['https://www.instagram.com/reel/C8abc_D-12/?igsh=xyz', 'C8abc_D-12'],
+    ['https://instagram.com/reels/C8abcD12', 'C8abcD12'],
+    ['https://www.instagram.com/p/C8abcD12/', 'C8abcD12'],
+    ['https://www.instagram.com/anya/reel/C8abcD12/', 'C8abcD12'],
+    ['https://www.instagram.com/anya/', null],
+    ['https://example.com/reel/C8abcD12', null],
+  ])('%s → %s', (url, code) => {
+    expect(instagramShortcode(url)).toBe(code);
   });
 });
 

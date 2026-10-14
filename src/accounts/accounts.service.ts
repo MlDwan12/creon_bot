@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -23,6 +24,8 @@ import { TokenCrypto } from './token-crypto';
 const PENDING_TTL_MS = 15 * 60 * 1000;
 /** Обновляем access-токен заранее, чтобы он не протух посреди запроса. */
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
+/** Аккаунтов одной площадки у креатора: по каждому — запрос к площадке при подсчёте просмотров. */
+export const MAX_PER_PLATFORM = 5;
 
 interface Pending {
   userId: number;
@@ -32,7 +35,8 @@ interface Pending {
 }
 
 /**
- * Аккаунты креаторов на площадках, подключённые через OAuth (TikTok, VK). По токену креатора
+ * Аккаунты креаторов на площадках, подключённые через OAuth (TikTok, VK, Instagram); на площадке
+ * их может быть несколько (MAX_PER_PLATFORM). По токену креатора
  * читаем просмотры его роликов — ViewCounterService. Площадка без ключей в env выключена: кнопки
  * подключения нет, её ролики считает модератор.
  */
@@ -68,23 +72,38 @@ export class AccountsService {
     return null;
   }
 
-  /** Включённые площадки и подключены ли они у креатора — для экрана профиля. */
+  /** Включённые площадки и подключённые на них аккаунты креатора — для экрана профиля. */
   async list(userId: number) {
     const accounts = await this.prisma.socialAccount.findMany({
       where: { userId },
-      select: { platform: true },
+      orderBy: { id: 'asc' },
+      select: { id: true, platform: true, label: true },
     });
-    return [...this.providers.values()].map((p) => ({
-      platform: p.platform,
-      name: p.name,
-      connected: accounts.some((a) => a.platform === p.platform),
-    }));
+    return [...this.providers.values()].map((p) => {
+      const mine = accounts
+        .filter((a) => a.platform === p.platform)
+        .map(({ id, label }) => ({ id, label }));
+      return {
+        platform: p.platform,
+        name: p.name,
+        accounts: mine,
+        canAdd: mine.length < MAX_PER_PLATFORM,
+      };
+    });
   }
 
   /** Начать подключение: ссылка на вход на площадке. Вернётся креатор на callback. */
-  start(userId: number, platform: SocialPlatform) {
+  async start(userId: number, platform: SocialPlatform) {
     const provider = this.mustProvider(platform);
     const now = Date.now();
+    // ponytail: лимит проверяем только здесь — две вкладки входа сразу дадут лишний аккаунт; не страшно
+    const count = await this.prisma.socialAccount.count({
+      where: { userId, platform },
+    });
+    if (count >= MAX_PER_PLATFORM)
+      throw new ForbiddenException(
+        `Можно подключить до ${MAX_PER_PLATFORM} аккаунтов ${provider.name} — отключите ненужный`,
+      );
     for (const [k, p] of this.pending)
       if (p.expiresAt < now) this.pending.delete(k);
     const state = randomState();
@@ -104,7 +123,8 @@ export class AccountsService {
 
   /**
    * Callback площадки: проверяем state (одноразовый, ваш ли это вход), меняем код на токены и
-   * сохраняем. Аккаунт площадки уже у другого креатора — отказ: чужие ролики за свои не выдать.
+   * сохраняем. Тот же аккаунт подключили снова — обновляем его. Аккаунт площадки уже у другого
+   * креатора — отказ: чужие ролики за свои не выдать.
    */
   async complete(
     platform: SocialPlatform,
@@ -141,12 +161,28 @@ export class AccountsService {
       );
     }
 
+    // имя — только для профиля: не отдали — подключаем без него
+    const label = await provider.label(tokens.accessToken).catch(() => null);
+    const data = { ...this.encrypted(tokens), label };
     try {
-      await this.prisma.socialAccount.upsert({
-        where: { userId_platform: { userId: pending.userId, platform } },
-        create: { userId: pending.userId, platform, ...this.encrypted(tokens) },
-        update: this.encrypted(tokens),
+      const existing = await this.prisma.socialAccount.findUnique({
+        where: {
+          platform_externalId: { platform, externalId: tokens.externalId },
+        },
       });
+      if (existing && existing.userId !== pending.userId)
+        throw new ConflictException(
+          `Этот аккаунт ${provider.name} уже подключён к другому профилю`,
+        );
+      if (existing)
+        await this.prisma.socialAccount.update({
+          where: { id: existing.id },
+          data,
+        });
+      else
+        await this.prisma.socialAccount.create({
+          data: { userId: pending.userId, platform, ...data },
+        });
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -163,30 +199,46 @@ export class AccountsService {
     return { user, name: provider.name };
   }
 
-  async disconnect(userId: number, platform: SocialPlatform) {
-    await this.prisma.socialAccount.deleteMany({ where: { userId, platform } });
+  /** Отключить свой аккаунт; чужой id — ничего не происходит. */
+  async disconnect(userId: number, accountId: number) {
+    await this.prisma.socialAccount.deleteMany({
+      where: { id: accountId, userId },
+    });
   }
 
   /**
-   * Просмотры роликов креатора по его токену; нет в карте — посчитать не удалось. Аккаунт не
-   * подключён, площадка отозвала доступ или не ответила — пусто, ролик посчитает модератор.
+   * Просмотры роликов креатора по его токенам; нет в карте — посчитать не удалось. Аккаунтов на
+   * площадке несколько — спрашиваем по очереди, пока не найдём все ролики: каждый аккаунт отдаёт
+   * только свои. Аккаунт не подключён, площадка отозвала доступ или не ответила — ролика нет в
+   * карте, его посчитает модератор.
    */
   async stats(
     userId: number,
     platform: SocialPlatform,
     videoIds: string[],
   ): Promise<Map<string, VideoStats>> {
+    const out = new Map<string, VideoStats>();
     const provider = this.providers.get(platform);
-    if (!provider || !videoIds.length) return new Map();
-    try {
-      const token = await this.accessToken(userId, provider);
-      return token ? await provider.stats(token, videoIds) : new Map();
-    } catch (err) {
-      this.logger.warn(
-        `${provider.name}: просмотры не получены — ${String(err)}`,
-      );
-      return new Map();
+    if (!provider || !videoIds.length) return out;
+    const accounts = await this.prisma.socialAccount.findMany({
+      where: { userId, platform },
+      orderBy: { id: 'asc' },
+    });
+    let left = videoIds;
+    for (const account of accounts) {
+      if (!left.length) break;
+      try {
+        const token = await this.accessToken(account, provider);
+        if (!token) continue;
+        for (const [id, s] of await provider.stats(token, left)) out.set(id, s);
+        left = left.filter((id) => !out.has(id));
+      } catch (err) {
+        this.logger.warn(
+          `${provider.name}: просмотры по аккаунту #${account.id} не получены — ${String(err)}`,
+        );
+      }
     }
+    return out;
   }
 
   /**
@@ -195,17 +247,14 @@ export class AccountsService {
    * ponytail: два одновременных обновления одного аккаунта не сериализуются — при смене refresh
    * второе может получить отказ; тогда ролик посчитает модератор, а аккаунт останется.
    */
-  private async accessToken(userId: number, provider: Provider) {
-    const account = await this.prisma.socialAccount.findUnique({
-      where: { userId_platform: { userId, platform: provider.platform } },
-    });
-    if (!account) return null;
+  private async accessToken(account: SocialAccount, provider: Provider) {
     if (account.accessExpiresAt.getTime() - REFRESH_MARGIN_MS > Date.now())
       return this.crypto!.decrypt(account.accessToken);
     try {
       const tokens = await provider.refresh({
         refreshToken: this.crypto!.decrypt(account.refreshToken),
         deviceId: account.deviceId,
+        externalId: account.externalId,
       });
       await this.prisma.socialAccount.update({
         where: { id: account.id },

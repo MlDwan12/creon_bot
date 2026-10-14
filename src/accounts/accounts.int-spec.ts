@@ -1,11 +1,11 @@
 import type { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { AccountsService } from './accounts.service';
+import { AccountsService, MAX_PER_PLATFORM } from './accounts.service';
 import { TokenCrypto } from './token-crypto';
 
 /**
- * Подключение аккаунтов TikTok и VK: OAuth, хранение токенов в зашифрованном виде, обновление,
+ * Подключение аккаунтов TikTok, VK и Instagram: OAuth, хранение токенов в зашифрованном виде, обновление,
  * просмотры по токену креатора. Площадки подменены через fetch — настоящих ключей в тестах нет.
  */
 const url = process.env.DATABASE_URL ?? '';
@@ -24,6 +24,8 @@ const env: Record<string, string> = {
   TIKTOK_CLIENT_KEY: 'tt-key',
   TIKTOK_CLIENT_SECRET: 'tt-secret',
   VK_CLIENT_ID: '123',
+  INSTAGRAM_APP_ID: 'ig-app',
+  INSTAGRAM_APP_SECRET: 'ig-secret',
 };
 const accounts = new AccountsService(
   { get: (k: string) => env[k] } as unknown as ConfigService,
@@ -53,18 +55,26 @@ const sent = (spy: jest.SpyInstance, i: number) => {
   return { url, init, body: init.body as string };
 };
 
-const tiktokTokens = (n: number) => ({
+const tiktokTokens = (n: number, openId = 'tt-user-1') => ({
   access_token: `act.${n}`,
   refresh_token: `rft.${n}`,
   expires_in: 86400,
-  open_id: 'tt-user-1',
+  open_id: openId,
   scope: 'user.info.basic,video.list',
+});
+const tiktokName = (name: string) => ({
+  data: { user: { display_name: name } },
 });
 
 /** Креатор нажал «Подключить TikTok» и вернулся с кодом. */
-async function connectTiktok(userId: number, code = 'code-1') {
-  const start = new URL(accounts.start(userId, 'TIKTOK'));
-  replies(tiktokTokens(1));
+async function connectTiktok(
+  userId: number,
+  code = 'code-1',
+  openId = 'tt-user-1',
+  n = 1,
+) {
+  const start = new URL(await accounts.start(userId, 'TIKTOK'));
+  replies(tiktokTokens(n, openId), tiktokName(`Аня ${n}`));
   await accounts.complete('TIKTOK', {
     code,
     state: start.searchParams.get('state')!,
@@ -87,6 +97,7 @@ describe('подключение аккаунта', () => {
       'https://www.tiktok.com/v2/auth/authorize/',
     );
     expect(start.searchParams.get('scope')).toBe('user.info.basic,video.list');
+    expect(start.searchParams.get('disable_auto_auth')).toBe('1');
     expect(start.searchParams.get('redirect_uri')).toBe(
       'https://app.example/oauth/tiktok/callback',
     );
@@ -98,8 +109,14 @@ describe('подключение аккаунта', () => {
     expect(stored.accessToken).not.toContain('act.1');
     expect(crypto.decrypt(stored.accessToken)).toBe('act.1');
     expect(await accounts.list(creator.id)).toEqual([
-      { platform: 'TIKTOK', name: 'TikTok', connected: true },
-      { platform: 'VK', name: 'VK', connected: false },
+      {
+        platform: 'TIKTOK',
+        name: 'TikTok',
+        accounts: [{ id: stored.id, label: 'Аня 1' }],
+        canAdd: true,
+      },
+      { platform: 'VK', name: 'VK', accounts: [], canAdd: true },
+      { platform: 'INSTAGRAM', name: 'Instagram', accounts: [], canAdd: true },
     ]);
 
     const spy = replies({
@@ -118,7 +135,7 @@ describe('подключение аккаунта', () => {
 
   it('state одноразовый и только свой; чужая площадка или выдуманный — отказ', async () => {
     const creator = await user();
-    const start = new URL(accounts.start(creator.id, 'TIKTOK'));
+    const start = new URL(await accounts.start(creator.id, 'TIKTOK'));
     const state = start.searchParams.get('state')!;
     await expect(
       accounts.complete('VK', { code: 'x', state, device_id: 'd' }),
@@ -135,7 +152,7 @@ describe('подключение аккаунта', () => {
 
   it('креатор не дал доступ к видео — не подключаем', async () => {
     const creator = await user();
-    const start = new URL(accounts.start(creator.id, 'TIKTOK'));
+    const start = new URL(await accounts.start(creator.id, 'TIKTOK'));
     replies({ ...tiktokTokens(1), scope: 'user.info.basic' });
     await expect(
       accounts.complete('TIKTOK', {
@@ -154,15 +171,18 @@ describe('подключение аккаунта', () => {
 
   it('VK: PKCE, device_id из payload, scope video', async () => {
     const creator = await user();
-    const start = new URL(accounts.start(creator.id, 'VK'));
+    const start = new URL(await accounts.start(creator.id, 'VK'));
     expect(start.searchParams.get('scope')).toBe('video');
-    const spy = replies({
-      access_token: 'vk-act',
-      refresh_token: 'vk-rft',
-      expires_in: 3600,
-      user_id: 42,
-      scope: 'video',
-    });
+    const spy = replies(
+      {
+        access_token: 'vk-act',
+        refresh_token: 'vk-rft',
+        expires_in: 3600,
+        user_id: 42,
+        scope: 'video',
+      },
+      { user: { first_name: 'Аня', last_name: 'Котова' } },
+    );
     await accounts.complete('VK', {
       payload: JSON.stringify({
         code: 'vk-code',
@@ -184,7 +204,130 @@ describe('подключение аккаунта', () => {
       platform: 'VK',
       externalId: '42',
       deviceId: 'dev-1',
+      label: 'Аня Котова',
     });
+  });
+
+  it('несколько аккаунтов площадки: просмотры ищем по всем, отключается только свой', async () => {
+    const [creator, stranger] = [await user(), await user()];
+    await connectTiktok(creator.id, 'c1', 'tt-a', 1);
+    await connectTiktok(creator.id, 'c2', 'tt-b', 2);
+    // тот же аккаунт подключили снова — не дубль, а обновление
+    await connectTiktok(creator.id, 'c3', 'tt-a', 3);
+    const [a, b] = await prisma.socialAccount.findMany({
+      orderBy: { id: 'asc' },
+    });
+    expect([a.label, b.label]).toEqual(['Аня 3', 'Аня 2']);
+
+    // ролик 111 — с первого аккаунта, 222 — со второго
+    const spy = replies(
+      {
+        data: { videos: [{ id: '111', view_count: 10 }] },
+        error: { code: 'ok' },
+      },
+      {
+        data: { videos: [{ id: '222', view_count: 20 }] },
+        error: { code: 'ok' },
+      },
+    );
+    const stats = await accounts.stats(creator.id, 'TIKTOK', ['111', '222']);
+    expect(stats.get('111')?.views).toBe(10);
+    expect(stats.get('222')?.views).toBe(20);
+    // второй аккаунт спрашиваем только о том, что не нашёл первый
+    expect(JSON.parse(sent(spy, 1).body)).toEqual({
+      filters: { video_ids: ['222'] },
+    });
+
+    await accounts.disconnect(stranger.id, a.id);
+    expect(await prisma.socialAccount.count()).toBe(2);
+    await accounts.disconnect(creator.id, a.id);
+    expect(await prisma.socialAccount.count()).toBe(1);
+  });
+
+  it(`больше ${MAX_PER_PLATFORM} аккаунтов одной площадки — нельзя`, async () => {
+    const creator = await user();
+    for (let i = 0; i < MAX_PER_PLATFORM; i++)
+      await connectTiktok(creator.id, `c${i}`, `tt-${i}`, i);
+    const [tiktok] = await accounts.list(creator.id);
+    expect(tiktok.canAdd).toBe(false);
+    await expect(accounts.start(creator.id, 'TIKTOK')).rejects.toThrow(
+      `до ${MAX_PER_PLATFORM} аккаунтов`,
+    );
+    // другая площадка — своя квота
+    await accounts.start(creator.id, 'VK');
+  });
+
+  it('Instagram: короткий токен → долгий, ник в профиле, просмотры по коду из ссылки', async () => {
+    const creator = await user();
+    const start = new URL(await accounts.start(creator.id, 'INSTAGRAM'));
+    expect(start.origin + start.pathname).toBe(
+      'https://www.instagram.com/oauth/authorize',
+    );
+    const spy = replies(
+      {
+        data: [
+          {
+            access_token: 'ig-short',
+            user_id: 777,
+            permissions:
+              'instagram_business_basic,instagram_business_manage_insights',
+          },
+        ],
+      },
+      { access_token: 'ig-long', expires_in: 5_184_000 },
+      { username: 'anya.reels' },
+    );
+    await accounts.complete('INSTAGRAM', {
+      code: 'ig-code#_',
+      state: start.searchParams.get('state')!,
+    });
+    expect(new URLSearchParams(sent(spy, 0).body).get('code')).toBe('ig-code');
+    expect(sent(spy, 1).url).toContain('ig_exchange_token');
+    const stored = await prisma.socialAccount.findFirstOrThrow();
+    expect(stored).toMatchObject({
+      platform: 'INSTAGRAM',
+      externalId: '777',
+      label: '@anya.reels',
+    });
+    expect(crypto.decrypt(stored.accessToken)).toBe('ig-long');
+
+    const statsSpy = replies(
+      {
+        data: [
+          { id: 'm1', shortcode: 'OTHER1', like_count: 1 },
+          { id: 'm2', shortcode: 'C8abcD12', like_count: 9 },
+        ],
+        paging: {},
+      },
+      { data: [{ name: 'views', values: [{ value: 1234 }] }] },
+    );
+    const stats = await accounts.stats(creator.id, 'INSTAGRAM', ['C8abcD12']);
+    expect([...stats]).toEqual([['C8abcD12', { views: 1234, likes: 9 }]]);
+    expect(sent(statsSpy, 1).url).toContain('/m2/insights?metric=views');
+  });
+
+  it('Instagram: протух — продлеваем сам долгий токен', async () => {
+    const creator = await user();
+    await prisma.socialAccount.create({
+      data: {
+        userId: creator.id,
+        platform: 'INSTAGRAM',
+        externalId: '777',
+        accessToken: crypto.encrypt('ig-old'),
+        refreshToken: crypto.encrypt('ig-old'),
+        accessExpiresAt: new Date(Date.now() - 1000),
+      },
+    });
+    const spy = replies(
+      { access_token: 'ig-new', expires_in: 5_184_000 },
+      { data: [], paging: {} },
+    );
+    await accounts.stats(creator.id, 'INSTAGRAM', ['C8abcD12']);
+    expect(sent(spy, 0).url).toContain('ig_refresh_token');
+    expect(sent(spy, 0).url).toContain('access_token=ig-old');
+    const stored = await prisma.socialAccount.findFirstOrThrow();
+    expect(crypto.decrypt(stored.refreshToken)).toBe('ig-new');
+    expect(stored.externalId).toBe('777');
   });
 });
 

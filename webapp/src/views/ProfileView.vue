@@ -134,12 +134,13 @@ async function connectAccount(a: SocialAccount) {
   }
 }
 
-async function disconnectAccount(a: SocialAccount) {
-  if (!(await confirmAction(`Отключить ${a.name}? Просмотры роликов оттуда снова будет вводить модератор.`)))
+async function disconnectAccount(a: SocialAccount, account: SocialAccount['accounts'][number]) {
+  const name = account.label ? `${a.name} ${account.label}` : a.name;
+  if (!(await confirmAction(`Отключить ${name}? Просмотры роликов оттуда снова будет вводить модератор.`)))
     return;
   accountsError.value = '';
   try {
-    await disconnectSocialAccount(a.platform);
+    await disconnectSocialAccount(account.id);
     await loadAccounts();
   } catch (err) {
     accountsError.value = err instanceof ApiError ? err.userMessage : 'Не удалось отключить';
@@ -285,17 +286,29 @@ void load();
 
       <section v-if="own && accounts.length" class="block">
         <h2 class="section-title">Подключённые аккаунты</h2>
-        <p class="hint">Подключите аккаунт, с которого публикуете ролики, — просмотры будут считаться сами. Рекламодатель его не увидит.</p>
-        <div v-for="a in accounts" :key="a.platform" class="switch-row">
-          <span>
-            {{ a.name }}
-            <small>{{ a.connected ? 'Подключён — просмотры считаются автоматически' : 'Не подключён' }}</small>
-          </span>
-          <button v-if="a.connected" type="button" class="account-action quiet" @click="disconnectAccount(a)">
-            Отключить
+        <p class="hint">
+          Подключите аккаунты, с которых публикуете ролики, — просмотры будут считаться сами. Можно
+          несколько на одной площадке: на странице входа выберите другой аккаунт. Рекламодатель их не увидит.
+        </p>
+        <template v-for="a in accounts" :key="a.platform">
+          <div v-for="acc in a.accounts" :key="acc.id" class="switch-row">
+            <span>
+              {{ a.name }}{{ acc.label ? ` · ${acc.label}` : '' }}
+              <small>Подключён — просмотры считаются автоматически</small>
+            </span>
+            <button type="button" class="account-action quiet" @click="disconnectAccount(a, acc)">Отключить</button>
+          </div>
+          <div v-if="!a.accounts.length" class="switch-row">
+            <span>
+              {{ a.name }}
+              <small>Не подключён</small>
+            </span>
+            <button type="button" class="account-action" @click="connectAccount(a)">Подключить</button>
+          </div>
+          <button v-else-if="a.canAdd" type="button" class="add-account" @click="connectAccount(a)">
+            + Ещё аккаунт {{ a.name }}
           </button>
-          <button v-else type="button" class="account-action" @click="connectAccount(a)">Подключить</button>
-        </div>
+        </template>
         <p v-if="accountsError" class="error" role="alert">{{ accountsError }}</p>
       </section>
 
@@ -485,6 +498,14 @@ h1 {
   color: var(--link);
   font-size: 15px;
   font-weight: 600;
+}
+.add-account {
+  align-self: flex-start;
+  padding: 4px 2px;
+  border: none;
+  background: none;
+  color: var(--link);
+  font-size: 15px;
 }
 .account-action.quiet {
   color: var(--hint);
