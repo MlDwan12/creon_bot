@@ -87,6 +87,7 @@ Alerting → Alert rules → New. У каждого правила — метк�
 
 ## 4. Итог выкатки в Telegram
 
-GitHub → Settings → Environments → `production` → **Secrets**: `ALERT_BOT_TOKEN`, `ALERT_CHAT_ID`.
+GitHub → Settings → Environments → `production` → **Secrets**: `ALERT_BOT_TOKEN`, `ALERT_CHAT_ID` и,
+если алерты идут в группу с темами, `ALERT_THREAD_ID` — номер темы проекта (без него — в общий чат).
 После каждой выкатки: «✓ Fixum выкачен» (без звука) или «✗ Выкатка не удалась» со ссылкой на лог.
 Без секретов шаг пропускается.
