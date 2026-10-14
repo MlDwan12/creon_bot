@@ -5,6 +5,8 @@ interface TelegramUserInput {
   telegramId: bigint;
   username?: string;
   firstName?: string;
+  /** language_code из Telegram; не прислали — не трогаем то, что уже знаем. */
+  telegramLanguage?: string;
 }
 
 @Injectable()
@@ -17,7 +19,7 @@ export class UsersService {
 
   /**
    * Вызывается на каждый запрос к API (InitDataGuard), поэтому сначала читаем: пишем в базу, только
-   * если человек новый или сменил имя/username в Telegram.
+   * если человек новый или сменил имя/username или язык в Telegram.
    */
   async findOrCreate(input: TelegramUserInput) {
     const existing = await this.prisma.user.findUnique({
@@ -26,7 +28,9 @@ export class UsersService {
     if (
       existing &&
       existing.username === (input.username ?? null) &&
-      existing.firstName === (input.firstName ?? null)
+      existing.firstName === (input.firstName ?? null) &&
+      (input.telegramLanguage === undefined ||
+        existing.telegramLanguage === input.telegramLanguage)
     )
       return existing;
     return this.prisma.user.upsert({
@@ -36,6 +40,7 @@ export class UsersService {
       update: {
         username: input.username ?? null,
         firstName: input.firstName ?? null,
+        telegramLanguage: input.telegramLanguage,
       },
       create: input,
     });

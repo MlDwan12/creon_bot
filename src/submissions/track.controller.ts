@@ -1,3 +1,4 @@
+import { tr } from '../i18n/request-lang';
 import { Controller, Get, NotFoundException, Param, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { SubmissionsService } from './submissions.service';
@@ -17,7 +18,7 @@ export class TrackController {
     const url = /^[\w-]{1,32}$/.test(code)
       ? await this.submissionsService.click(code)
       : null;
-    if (!url) throw new NotFoundException('Ссылка не найдена');
+    if (!url) throw new NotFoundException(tr('errors.linkNotFound'));
     res.redirect(302, url);
   }
 }

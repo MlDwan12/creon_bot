@@ -30,11 +30,21 @@ import {
   titleVisibleToCreators,
 } from '../common/format';
 import { parseModeratorIds } from '../auth/moderator.util';
+import { type Lang, translator, userLang } from '../i18n/i18n';
+import type { TFunction } from 'i18next';
 
 type SubmissionWithParties = Submission & { order: Order; creator: User };
 
-/** Строка очереди: кому, текст, экран для кнопки «Открыть». */
-type Outgoing = Pick<Notification, 'chatId' | 'text' | 'html' | 'path'>;
+/** Строка очереди: кому, текст, экран для кнопки «Открыть» и язык её подписи. */
+type Outgoing = Pick<Notification, 'chatId' | 'text' | 'html' | 'path'> & {
+  lang?: Lang;
+};
+
+/** Получатель уведомления: кому писать и на каком языке (src/i18n, userLang). */
+type Recipient = Pick<User, 'telegramId' | 'language' | 'telegramLanguage'>;
+
+/** Текст на языке получателя: t — перевод, lang — для чисел и названий заказа. */
+type Compose = (t: TFunction, lang: Lang) => string;
 
 /** Сколько сообщений воркер берёт за раз и как часто смотрит в пустую очередь. */
 const BATCH = 20;
@@ -101,7 +111,7 @@ export class NotificationsService
       this.toCreators(
         order,
         // по номеру, не по названию: новое название ещё не проверено модератором — в нём может быть контакт
-        `✏️ Рекламодатель изменил условия заказа #${order.id}. Заказ снова на проверке у модератора — после одобрения новые условия будут в карточке заказа.`,
+        (t) => t('notify.orderEditedCreators', { id: order.id }),
       );
   }
 
@@ -125,23 +135,29 @@ export class NotificationsService
    * Название уже проверено модератором. Бюджет не пишем — только ставку и порог.
    */
   newOrderPublished(order: Order) {
-    const text = [
-      `🆕 Новый заказ: «${order.title}»`,
-      `${formatMoney(fromMinor(order.cpmMinor ?? 0))} за 1000 просмотров · сдать можно от ${order.minViews.toLocaleString('ru-RU')} просмотров`,
-      '',
-      'Отключить такие сообщения — «Профиль» → «Уведомления».',
-    ].join('\n');
-    // Получатели — одним INSERT … SELECT: тысячи строк не идут через память процесса.
+    // Получатели — одним INSERT … SELECT на язык: тысячи строк не идут через память процесса.
+    // Язык — как userLang: выбранный в профиле, иначе русский только при русском Telegram.
     const notModerator = this.moderatorIds.length
       ? Prisma.sql`AND "telegramId" NOT IN (${Prisma.join(this.moderatorIds)})`
       : Prisma.empty;
-    this.prisma.$executeRaw`
-      INSERT INTO "Notification" ("chatId", "text", "path", "priority")
-      SELECT "telegramId", ${text}, ${`/orders/${order.id}`}, ${PRIORITY_BROADCAST}
-      FROM "User"
-      WHERE id <> ${order.advertiserId} AND "bannedAt" IS NULL AND "notifyNewOrders" ${notModerator}`.catch(
-      (err) => this.logger.error(err),
-    );
+    // COALESCE: без него NULL в «language» дал бы NULL во всём условии, и NOT не вернул бы русских
+    const isEn = Prisma.sql`(COALESCE("language", '') = 'en' OR ("language" IS NULL AND COALESCE("telegramLanguage", '') NOT ILIKE 'ru%'))`;
+    for (const lang of ['ru', 'en'] as const) {
+      const t = translator(lang);
+      const text = t('notify.newOrder', {
+        title: order.title,
+        cpm: money(lang, order.cpmMinor ?? 0),
+        minViews: num(lang, order.minViews),
+      });
+      this.prisma.$executeRaw`
+        INSERT INTO "Notification" ("chatId", "text", "path", "priority", "lang")
+        SELECT "telegramId", ${text}, ${`/orders/${order.id}`}, ${PRIORITY_BROADCAST}, ${lang}
+        FROM "User"
+        WHERE id <> ${order.advertiserId} AND "bannedAt" IS NULL AND "notifyNewOrders"
+          AND ${lang === 'en' ? isEn : Prisma.sql`NOT ${isEn}`} ${notModerator}`.catch(
+        (err) => this.logger.error(err),
+      );
+    }
   }
 
   /** Модераторам: креатор прислал видео. */
@@ -171,8 +187,8 @@ export class NotificationsService
   /** Рекламодателю: модератор опубликовал заказ. */
   orderApproved(order: Order & { advertiser: User }) {
     this.send(
-      order.advertiser.telegramId,
-      `✅ Ваш заказ «${order.title}» прошёл модерацию и опубликован — креаторы уже видят его в каталоге.`,
+      order.advertiser,
+      (t) => t('notify.orderApproved', { title: order.title }),
       '/my-orders',
     );
   }
@@ -186,14 +202,14 @@ export class NotificationsService
     comment: string,
   ) {
     this.send(
-      order.advertiser.telegramId,
-      `❌ Ваш заказ «${order.title}» отклонён модератором.\nПричина: ${comment}\n\nВы можете разместить заказ заново, учтя замечания.`,
+      order.advertiser,
+      (t) => t('notify.orderRejected', { title: order.title, reason: comment }),
       `/my-orders/new?from=${order.id}`,
     );
     this.toCreators(
       order,
       // название — непроверенное (его и отклонили), поэтому по номеру
-      `🔒 Заказ #${order.id} после изменений не прошёл модерацию и снят — не продолжайте работу по нему.`,
+      (t) => t('notify.orderRejectedCreators', { id: order.id }),
     );
   }
 
@@ -204,22 +220,27 @@ export class NotificationsService
   videoApprovedByModerator(
     submission: SubmissionWithParties & { order: { advertiser: User } },
   ) {
-    const views = (submission.views ?? 0).toLocaleString('ru-RU');
+    const views = submission.views ?? 0;
     this.send(
-      submission.creator.telegramId,
-      `✅ Ролик по заказу ${forCreator(submission.order)} одобрен: ${views} просмотров, начислено ${formatMoney(fromMinor(submission.payoutMinor))}.\n\nЧерез ${VIEWS_TOPUP_DAYS} дней зафиксируем итог просмотров и доплатим за новые, пока в заказе есть бюджет. После итога деньги можно вывести — «Профиль» → «Баланс». Не удаляйте публикацию: если её не будет на месте, начисление отменится.`,
+      submission.creator,
+      (t, lang) =>
+        t('notify.videoApproved', {
+          order: forCreator(submission.order, lang),
+          views: num(lang, views),
+          amount: money(lang, submission.payoutMinor),
+          days: VIEWS_TOPUP_DAYS,
+        }),
       '/submissions',
       true,
     );
     this.send(
-      submission.order.advertiser.telegramId,
-      [
-        '🎬 Новый ролик по вашему заказу',
-        '',
-        `Заказ: ${escapeHtml(submission.order.title)}`,
-        `Просмотров: ${views}`,
-        `Видео: ${escapeHtml(submission.videoUrl ?? '')}`,
-      ].join('\n'),
+      submission.order.advertiser,
+      (t, lang) =>
+        t('notify.newVideo', {
+          title: escapeHtml(submission.order.title),
+          views: num(lang, views),
+          url: escapeHtml(submission.videoUrl ?? ''),
+        }),
       `/my-orders/${submission.order.id}/review`,
       true,
     );
@@ -227,12 +248,17 @@ export class NotificationsService
 
   /** Креатору: итог просмотров после добора и доплата. */
   viewsFinalized(submission: SubmissionWithParties, extraMinor: number) {
-    const views = (submission.views ?? 0).toLocaleString('ru-RU');
     this.send(
-      submission.creator.telegramId,
-      extraMinor > 0
-        ? `📈 Итог по ролику (заказ ${forCreator(submission.order)}): ${views} просмотров, доплачено ${formatMoney(fromMinor(extraMinor))}. Деньги за ролик можно вывести.`
-        : `📈 Итог по ролику (заказ ${forCreator(submission.order)}): ${views} просмотров. Доплаты нет — новых просмотров нет или бюджет заказа исчерпан. Деньги за ролик можно вывести.`,
+      submission.creator,
+      (t, lang) =>
+        t(
+          extraMinor > 0 ? 'notify.finalizedExtra' : 'notify.finalizedNoExtra',
+          {
+            order: forCreator(submission.order, lang),
+            views: num(lang, submission.views ?? 0),
+            amount: money(lang, extraMinor),
+          },
+        ),
       '/submissions',
       true,
     );
@@ -241,8 +267,11 @@ export class NotificationsService
   /** Креатору: при итоге публикации не оказалось — начисление отменено. */
   publicationDeleted(submission: SubmissionWithParties) {
     this.send(
-      submission.creator.telegramId,
-      `❌ Ролик по заказу ${forCreator(submission.order)} не найден по ссылке при итоге просмотров — публикацию удалили или скрыли. Начисление за него отменено.\n\nЕсли это ошибка — напишите в поддержку.`,
+      submission.creator,
+      (t, lang) =>
+        t('notify.publicationDeleted', {
+          order: forCreator(submission.order, lang),
+        }),
       '/submissions',
       true,
     );
@@ -251,8 +280,12 @@ export class NotificationsService
   /** Креатору: модератор отклонил видео. */
   videoRejectedByModerator(submission: SubmissionWithParties, comment: string) {
     this.send(
-      submission.creator.telegramId,
-      `❌ Ваш отклик на заказ ${forCreator(submission.order)} отклонён модератором.\nПричина: ${escapeHtml(comment)}\n\nВы можете отправить новый отклик на этот заказ.`,
+      submission.creator,
+      (t, lang) =>
+        t('notify.videoRejected', {
+          order: forCreator(submission.order, lang),
+          reason: escapeHtml(comment),
+        }),
       '/submissions',
       true,
     );
@@ -260,9 +293,8 @@ export class NotificationsService
 
   /** Креаторам с откликами на заказ: рекламодатель его закрыл. */
   orderClosed(order: OrderWithCreators) {
-    this.toCreators(
-      order,
-      `🔒 Заказ ${forCreator(order)} закрыт рекламодателем. Новые отклики по нему больше не принимаются.`,
+    this.toCreators(order, (t, lang) =>
+      t('notify.orderClosed', { order: forCreator(order, lang) }),
     );
   }
 
@@ -271,14 +303,13 @@ export class NotificationsService
     order: Order & { advertiser: User } & OrderWithCreators,
   ) {
     this.send(
-      order.advertiser.telegramId,
-      `💸 Бюджет заказа «${escapeHtml(order.title)}» израсходован — заказ закрыт. Отчёт по роликам — в «Мои заказы».`,
+      order.advertiser,
+      (t) => t('notify.budgetExhausted', { title: escapeHtml(order.title) }),
       '/my-orders',
       true,
     );
-    this.toCreators(
-      order,
-      `🔒 Бюджет заказа ${forCreator(order)} исчерпан — новые ролики по нему не принимаются.`,
+    this.toCreators(order, (t, lang) =>
+      t('notify.budgetExhaustedCreators', { order: forCreator(order, lang) }),
     );
   }
 
@@ -287,14 +318,13 @@ export class NotificationsService
     order: Order & { advertiser: User } & OrderWithCreators,
   ) {
     this.send(
-      order.advertiser.telegramId,
-      `🚫 Ваш заказ «${escapeHtml(order.title)}» закрыт модератором: он нарушает правила площадки. Если это ошибка — напишите в поддержку.`,
+      order.advertiser,
+      (t) => t('notify.closedByModerator', { title: escapeHtml(order.title) }),
       '/my-orders',
       true,
     );
-    this.toCreators(
-      order,
-      `🔒 Заказ ${forCreator(order)} закрыт модератором за нарушение правил площадки — не продолжайте работу по нему.`,
+    this.toCreators(order, (t, lang) =>
+      t('notify.closedByModeratorCreators', { order: forCreator(order, lang) }),
     );
   }
 
@@ -306,58 +336,67 @@ export class NotificationsService
     );
   }
 
-  /** Тем, кто жаловался: модератор рассмотрел жалобу. */
+  /** Тем, кто жаловался: модератор рассмотрел жалобу. Язык — из базы, по telegramId. */
   reportResolved(telegramIds: bigint[], actioned: boolean) {
-    const text = actioned
-      ? '✅ Мы рассмотрели вашу жалобу и приняли меры. Спасибо, что помогаете площадке.'
-      : '👌 Мы рассмотрели вашу жалобу — нарушений не нашли. Спасибо, что сообщили.';
-    for (const id of telegramIds) this.send(id, text, '/');
+    if (!telegramIds.length) return;
+    this.prisma.user
+      .findMany({ where: { telegramId: { in: telegramIds } } })
+      .then((users) => {
+        for (const user of users)
+          this.send(
+            user,
+            (t) =>
+              t(actioned ? 'notify.reportActioned' : 'notify.reportDismissed'),
+            '/',
+          );
+      })
+      .catch((err) => this.logger.error(err));
   }
 
   /** Креаторам с откликами на заказ: рекламодатель его удалил. */
   orderRemoved(order: OrderWithCreators) {
-    this.toCreators(
-      order,
-      `🗑 Заказ ${forCreator(order)} удалён рекламодателем. Отклик по нему больше не актуален.`,
+    this.toCreators(order, (t, lang) =>
+      t('notify.orderRemoved', { order: forCreator(order, lang) }),
     );
   }
 
   /** Срок заказа истёк: рекламодателю — что можно продлить, креаторам с откликом «в работе» — что видео уже не примут. */
   orderExpired(order: Order & { advertiser: User } & OrderWithCreators) {
     this.send(
-      order.advertiser.telegramId,
-      `⏰ Срок заказа «${escapeHtml(order.title)}» истёк — заказ закрыт, новые видео не принимаются.\n\nУже присланные ролики модератор проверит и оплатит из бюджета. Чтобы собрать ещё, продлите срок в «Мои заказы».`,
+      order.advertiser,
+      (t) => t('notify.orderExpired', { title: escapeHtml(order.title) }),
       '/my-orders',
       true,
     );
-    this.toCreators(
-      order,
-      `⏰ Срок заказа ${forCreator(order)} истёк — видео по нему больше не принимаются.`,
+    this.toCreators(order, (t, lang) =>
+      t('notify.orderExpiredCreators', { order: forCreator(order, lang) }),
     );
   }
 
   /** Рекламодателю: совет по заказу (src/orders/order-insights.ts) — подробности в отчёте. */
   orderInsight(order: Order & { advertiser: User }, text: string) {
     this.send(
-      order.advertiser.telegramId,
-      `💡 Совет по заказу «${order.title}»\n\n${text}\n\nВоронка и все советы — в отчёте по заказу.`,
+      order.advertiser,
+      (t) => t('notify.insight', { title: order.title, text }),
       `/my-orders/${order.id}/review`,
     );
   }
 
   /** Креаторам с откликом «в работе»: срок заказа истекает меньше чем через сутки. */
   deadlineSoon(order: OrderWithCreators & Order) {
-    this.toCreators(
-      order,
-      `⏳ Меньше чем через сутки истекает срок заказа ${forCreator(order)} — успейте отправить видео. После срока его не примут.`,
+    this.toCreators(order, (t, lang) =>
+      t('notify.deadlineSoon', { order: forCreator(order, lang) }),
     );
   }
 
   /** Креатору: слот по отклику сгорит меньше чем через сутки. */
   slotEndingSoon(submission: SubmissionWithParties) {
     this.send(
-      submission.creator.telegramId,
-      `⏳ Меньше чем через сутки сгорит ваш слот по заказу ${forCreator(submission.order)} — успейте отправить видео.`,
+      submission.creator,
+      (t, lang) =>
+        t('notify.slotEndingSoon', {
+          order: forCreator(submission.order, lang),
+        }),
       `/submissions/${submission.id}/video`,
       true,
     );
@@ -366,8 +405,12 @@ export class NotificationsService
   /** Креатору: видео не прислали вовремя, слот сгорел. */
   slotExpired(submission: SubmissionWithParties) {
     this.send(
-      submission.creator.telegramId,
-      `⌛ Слот по заказу ${forCreator(submission.order)} сгорел: видео не прислали за ${SLOT_DAYS} дней. Если заказ ещё открыт, можно откликнуться снова.`,
+      submission.creator,
+      (t, lang) =>
+        t('notify.slotExpired', {
+          order: forCreator(submission.order, lang),
+          days: SLOT_DAYS,
+        }),
       '/submissions',
       true,
     );
@@ -397,14 +440,26 @@ export class NotificationsService
     );
   }
 
+  /** Креатору: аккаунт площадки подключён — просмотры его роликов там считаются сами. */
+  socialAccountConnected(user: User, platformName: string) {
+    this.send(
+      user,
+      (t) => t('notify.accountConnected', { platform: platformName }),
+      '/profile',
+    );
+  }
+
   /** Креатору: заявку на вывод выполнили или отклонили. */
   payoutDecided(payout: Payout & { creator: User }) {
-    const amount = formatMoney(fromMinor(payout.amountMinor));
     this.send(
-      payout.creator.telegramId,
-      payout.status === PayoutStatus.PAID
-        ? `💸 Выплата ${amount} отправлена. Если деньги не пришли — напишите в поддержку.`
-        : `❌ Заявка на вывод ${amount} отклонена.\nПричина: ${escapeHtml(payout.comment ?? '')}\n\nСумма вернулась на баланс.`,
+      payout.creator,
+      (t, lang) =>
+        payout.status === PayoutStatus.PAID
+          ? t('notify.payoutPaid', { amount: money(lang, payout.amountMinor) })
+          : t('notify.payoutRejected', {
+              amount: money(lang, payout.amountMinor),
+              reason: escapeHtml(payout.comment ?? ''),
+            }),
       '/balance',
       true,
     );
@@ -430,9 +485,14 @@ export class NotificationsService
   /** Креатору: рекламодатель оценил ролик. */
   videoRated(submission: SubmissionWithParties & { rating: number | null }) {
     if (!submission.rating) return;
+    const rating = submission.rating;
     this.send(
-      submission.creator.telegramId,
-      `⭐ Рекламодатель оценил ваш ролик по заказу ${forCreator(submission.order)}: ${'★'.repeat(submission.rating)}${'☆'.repeat(5 - submission.rating)}`,
+      submission.creator,
+      (t, lang) =>
+        t('notify.videoRated', {
+          order: forCreator(submission.order, lang),
+          stars: '★'.repeat(rating) + '☆'.repeat(5 - rating),
+        }),
       '/profile',
       true,
     );
@@ -462,21 +522,37 @@ export class NotificationsService
     );
   }
 
-  /** Каждому креатору один раз, даже если у него несколько попыток по заказу. */
-  private toCreators(order: OrderWithCreators, text: string) {
-    const ids = new Set(order.submissions.map((s) => s.creator.telegramId));
+  /** Каждому креатору один раз, даже если у него несколько попыток по заказу; на его языке. */
+  private toCreators(order: OrderWithCreators, compose: Compose) {
+    const creators = new Map(
+      order.submissions.map((s) => [s.creator.telegramId, s.creator]),
+    );
     this.enqueue(
-      [...ids].map((chatId) => ({
-        chatId,
-        text,
-        html: true,
-        path: '/submissions',
-      })),
+      [...creators.values()].map((creator) => {
+        const lang = userLang(creator);
+        return {
+          chatId: creator.telegramId,
+          text: compose(translator(lang), lang),
+          html: true,
+          path: '/submissions',
+          lang,
+        };
+      }),
     );
   }
 
-  private send(chatId: bigint, text: string, path: string, asHtml = false) {
-    this.enqueue([{ chatId, text, html: asHtml, path }]);
+  /** Пользователю — на его языке (выбранном в профиле или языке Telegram). */
+  private send(to: Recipient, compose: Compose, path: string, asHtml = false) {
+    const lang = userLang(to);
+    this.enqueue([
+      {
+        chatId: to.telegramId,
+        text: compose(translator(lang), lang),
+        html: asHtml,
+        path,
+        lang,
+      },
+    ]);
   }
 
   private async work() {
@@ -549,7 +625,7 @@ export class NotificationsService
     n: Notification,
   ): Promise<{ inMs: number; counts: boolean } | null> {
     try {
-      const kb = this.openButton(n.path);
+      const kb = this.openButton(n.path, n.lang);
       await this.bot.telegram.callApi(
         'sendMessage',
         {
@@ -587,22 +663,35 @@ export class NotificationsService
   }
 
   /** Кнопка web_app работает только в личных чатах — все уведомления как раз туда. */
-  private openButton(path: string) {
+  private openButton(path: string, lang: string) {
     return Markup.inlineKeyboard([
-      Markup.button.webApp('Открыть', this.webAppUrl + path),
+      Markup.button.webApp(
+        translator(lang === 'en' ? 'en' : 'ru')('bot.open'),
+        this.webAppUrl + path,
+      ),
     ]);
   }
 }
 
 /** Заказ в тексте креатору (HTML): название — только проверенное модератором, иначе номер. */
-function forCreator(order: Order) {
-  return titleVisibleToCreators(order)
-    ? `«${escapeHtml(order.title)}»`
-    : `#${order.id}`;
+function forCreator(order: Order, lang: Lang) {
+  if (!titleVisibleToCreators(order)) return `#${order.id}`;
+  const title = escapeHtml(order.title);
+  return lang === 'en' ? `“${title}”` : `«${title}»`;
+}
+
+/** Число с разделителями по языку: «12 500» / «12,500». */
+function num(lang: Lang, n: number) {
+  return n.toLocaleString(lang === 'en' ? 'en-US' : 'ru-RU');
+}
+
+/** Сумма из центов: «12,5 USDT» / «12.5 USDT». */
+function money(lang: Lang, minor: number) {
+  return `${fromMinor(minor).toLocaleString(lang === 'en' ? 'en-US' : 'ru-RU', { maximumFractionDigits: 2 })} USDT`;
 }
 
 type OrderWithCreators = Order & {
-  submissions: { creator: { telegramId: bigint } }[];
+  submissions: { creator: Recipient }[];
 };
 
 function sleep(ms: number) {

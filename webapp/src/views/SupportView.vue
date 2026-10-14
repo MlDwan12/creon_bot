@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError, sendSupportMessage } from '../api';
+import { i18next } from '../i18n';
 
 // /support?about=… — «Вопрос по заказу #12»: тема уходит менеджеру вместе с текстом.
 const route = useRoute();
@@ -20,7 +21,7 @@ async function send() {
     await sendSupportMessage(about ? `${about}\n\n${text.value}` : text.value);
     sent.value = true;
   } catch (err) {
-    error.value = err instanceof ApiError ? err.userMessage : 'Не удалось отправить';
+    error.value = err instanceof ApiError ? err.userMessage : i18next.t('support.sendError');
   } finally {
     busy.value = false;
   }
@@ -30,23 +31,23 @@ async function send() {
 <template>
   <main class="page">
     <template v-if="sent">
-      <h1>Сообщение отправлено</h1>
-      <p class="hint">Менеджер ответит в чате с ботом CreON — там же можно продолжить разговор.</p>
+      <h1>{{ $t('support.sentTitle') }}</h1>
+      <p class="hint">{{ $t('support.sentText') }}</p>
       <div class="bottom-bar">
-        <button type="button" class="main-button" @click="router.back()">Готово</button>
+        <button type="button" class="main-button" @click="router.back()">{{ $t('common.done') }}</button>
       </div>
     </template>
 
     <template v-else>
       <header class="head">
-        <h1>Написать менеджеру</h1>
-        <span class="hint">{{ about || 'Вопрос, проблема, оплата — ответим в чате с ботом' }}</span>
+        <h1>{{ $t('support.title') }}</h1>
+        <span class="hint">{{ about || $t('support.hint') }}</span>
       </header>
-      <textarea v-model="text" rows="6" maxlength="1000" placeholder="Ваше сообщение" />
+      <textarea v-model="text" rows="6" maxlength="1000" :placeholder="$t('support.placeholder')" />
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <div class="bottom-bar">
         <button type="button" class="main-button" :disabled="busy || !text.trim()" @click="send">
-          {{ busy ? 'Отправляем…' : 'Отправить' }}
+          {{ busy ? $t('common.sending') : $t('common.send') }}
         </button>
       </div>
     </template>

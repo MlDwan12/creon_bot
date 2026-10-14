@@ -7,10 +7,16 @@ import {
   fetchMyOrders,
   fetchRate,
   type MyOrder,
+  categoryLabel,
   ORDER_CATEGORIES,
   type NewOrderInput,
+  PLATFORM_NAMES,
   updateOrder,
+  VIDEO_PLATFORMS,
+  type VideoPlatform,
 } from '../api';
+import PlatformIcon from '../components/PlatformIcon.vue';
+import { i18next, locale } from '../i18n';
 import { approxRub } from '../format';
 
 // Лимиты — те же, что проверяет бэкенд (src/common/validation.ts); здесь только подсказка браузеру.
@@ -21,9 +27,9 @@ const MAX_BUDGET = 100_000;
 const DEFAULT_MIN_VIEWS = 250;
 const MAX_DURATION = 600;
 const ORIENTATIONS: { value: NewOrderInput['orientation']; label: string }[] = [
-  { value: 'VERTICAL', label: 'Вертикальное' },
-  { value: 'HORIZONTAL', label: 'Горизонтальное' },
-  { value: null, label: 'Любое' },
+  { value: 'VERTICAL', label: 'createOrder.vertical' },
+  { value: 'HORIZONTAL', label: 'createOrder.horizontal' },
+  { value: null, label: 'createOrder.anyOrientation' },
 ];
 // С `id` (/my-orders/:id/edit) — правка своего заказа, без — новый.
 const props = defineProps<{ id?: string }>();
@@ -32,14 +38,13 @@ const rubPerUsdt = ref<number | null>(null);
 void fetchRate().then((r) => (rubPerUsdt.value = r));
 
 /** undefined — «не менять» (только при правке), null — без срока. */
-const KEEP_DEADLINE = { days: undefined, label: 'как было' };
-const DEADLINES: { days: number | null | undefined; label: string }[] = [
-  { days: 3, label: '3 дн' },
-  { days: 7, label: '7 дн' },
-  { days: 14, label: '14 дн' },
-  { days: 30, label: '30 дн' },
-  { days: null, label: 'нет' },
-];
+const DEADLINES: (number | null | undefined)[] = [3, 7, 14, 30, null];
+/** Подпись варианта срока: «7 дн», «нет», при правке — «как было». */
+function deadlineLabel(days: number | null | undefined): string {
+  if (days === undefined) return i18next.t('createOrder.keepDeadline');
+  if (days === null) return i18next.t('createOrder.noDeadline');
+  return i18next.t('createOrder.days', { count: days });
+}
 
 const route = useRoute();
 const router = useRouter();
@@ -70,12 +75,13 @@ const form = reactive<
   minDurationSec: 15,
   maxDurationSec: 60,
   orientation: 'VERTICAL',
+  platforms: [],
   category: 'OTHER',
   deadlineDays: props.id ? undefined : 7,
 });
 /** Редактируемый заказ — для подсказки, что открытый уйдёт на повторную проверку. */
 const editing = ref<MyOrder>();
-const deadlines = computed(() => (props.id ? [KEEP_DEADLINE, ...DEADLINES] : DEADLINES));
+const deadlines = computed(() => (props.id ? [undefined, ...DEADLINES] : DEADLINES));
 const sending = ref(false);
 const error = ref('');
 
@@ -98,7 +104,13 @@ async function prefill() {
   form.minDurationSec = source.minDurationSec ?? '';
   form.maxDurationSec = source.maxDurationSec ?? '';
   form.orientation = source.orientation;
+  form.platforms = [...source.platforms];
   form.category = source.category;
+}
+
+/** Отметить площадку или снять отметку. */
+function togglePlatform(p: VideoPlatform) {
+  form.platforms = form.platforms.includes(p) ? form.platforms.filter((x) => x !== p) : [...form.platforms, p];
 }
 
 async function submit() {
@@ -118,7 +130,7 @@ async function submit() {
     await router.replace('/my-orders');
   } catch (err) {
     // Тексты ошибок проверки пишет бэкенд.
-    error.value = err instanceof ApiError ? err.userMessage : 'Не удалось отправить заказ';
+    error.value = err instanceof ApiError ? err.userMessage : i18next.t('createOrder.sendError');
   } finally {
     sending.value = false;
   }
@@ -129,60 +141,60 @@ void prefill();
 
 <template>
   <main class="page">
-    <h1>{{ props.id ? 'Изменить заказ' : 'Новый заказ' }}</h1>
+    <h1>{{ props.id ? $t('createOrder.titleEdit') : $t('createOrder.titleNew') }}</h1>
 
     <form id="order-form" class="form" @submit.prevent="submit">
       <div class="field">
         <div class="label-row">
-          <label for="title" class="section-title">Название</label>
+          <label for="title" class="section-title">{{ $t('createOrder.name') }}</label>
           <span class="counter">{{ form.title.length }} / {{ MAX_TITLE }}</span>
         </div>
         <!-- v-model — двусторонняя связь: ввод в поле сразу попадает в form.title и обратно. -->
-        <input id="title" v-model="form.title" :maxlength="MAX_TITLE" required placeholder="Например: распаковка наушников" />
+        <input id="title" v-model="form.title" :maxlength="MAX_TITLE" required :placeholder="$t('createOrder.namePlaceholder')" />
       </div>
 
       <div class="field">
-        <label for="description" class="section-title">Что снять</label>
+        <label for="description" class="section-title">{{ $t('createOrder.brief') }}</label>
         <textarea
           id="description"
           v-model="form.description"
           rows="5"
           :maxlength="MAX_DESCRIPTION"
           required
-          placeholder="Что обязательно показать или сказать, стиль, чего избегать"
+          :placeholder="$t('createOrder.briefPlaceholder')"
         />
       </div>
 
       <div class="field">
-        <label for="reference" class="section-title">Референс или материалы</label>
+        <label for="reference" class="section-title">{{ $t('createOrder.reference') }}</label>
         <input
           id="reference"
           v-model="form.referenceUrl"
           type="url"
           inputmode="url"
           maxlength="500"
-          placeholder="Ссылка на пример ролика или файлы — по желанию"
+          :placeholder="$t('createOrder.referencePlaceholder')"
         />
       </div>
 
       <div class="field">
-        <label for="target" class="section-title">Ссылка на товар</label>
+        <label for="target" class="section-title">{{ $t('createOrder.target') }}</label>
         <input
           id="target"
           v-model="form.targetUrl"
           type="url"
           inputmode="url"
           maxlength="500"
-          placeholder="Сайт или страница в магазине — по желанию"
+          :placeholder="$t('createOrder.targetPlaceholder')"
         />
-        <span class="hint">Каждый креатор получит свою ссылку для описания ролика — в отчёте увидите переходы.</span>
+        <span class="hint">{{ $t('createOrder.targetHint') }}</span>
       </div>
 
       <div class="field">
-        <span class="section-title">Требования к ролику</span>
+        <span class="section-title">{{ $t('createOrder.requirements') }}</span>
         <div class="group">
           <div class="row column">
-            <span id="orientation-label">Ориентация</span>
+            <span id="orientation-label">{{ $t('createOrder.orientation') }}</span>
             <div class="segmented" role="radiogroup" aria-labelledby="orientation-label">
               <button
                 v-for="o in ORIENTATIONS"
@@ -192,12 +204,12 @@ void prefill();
                 :aria-checked="form.orientation === o.value"
                 @click="form.orientation = o.value"
               >
-                {{ o.label }}
+                {{ $t(o.label) }}
               </button>
             </div>
           </div>
           <label class="row bordered">
-            Длительность от, сек
+            {{ $t('createOrder.durationFrom') }}
             <input
               v-model.number="form.minDurationSec"
               type="number"
@@ -205,11 +217,11 @@ void prefill();
               min="1"
               :max="MAX_DURATION"
               step="1"
-              placeholder="любая"
+              :placeholder="$t('createOrder.any')"
             />
           </label>
           <label class="row bordered">
-            до, сек
+            {{ $t('createOrder.durationTo') }}
             <input
               v-model.number="form.maxDurationSec"
               type="number"
@@ -217,30 +229,48 @@ void prefill();
               min="1"
               :max="MAX_DURATION"
               step="1"
-              placeholder="любая"
+              :placeholder="$t('createOrder.any')"
             />
           </label>
         </div>
       </div>
 
       <fieldset class="field">
-        <legend class="section-title">Категория</legend>
+        <legend class="section-title">{{ $t('createOrder.platforms') }}</legend>
+        <div class="chips">
+          <button
+            v-for="p in VIDEO_PLATFORMS"
+            :key="p"
+            type="button"
+            class="with-icon"
+            :aria-pressed="form.platforms.includes(p)"
+            @click="togglePlatform(p)"
+          >
+            <PlatformIcon :platform="p" :size="26" round :inverse="form.platforms.includes(p)" />
+            {{ PLATFORM_NAMES[p] }}
+          </button>
+        </div>
+        <span class="hint">{{ $t('createOrder.platformsHint') }}</span>
+      </fieldset>
+
+      <fieldset class="field">
+        <legend class="section-title">{{ $t('createOrder.category') }}</legend>
         <div class="chips">
           <button
             v-for="c in ORDER_CATEGORIES"
-            :key="c.code"
+            :key="c"
             type="button"
-            :aria-pressed="form.category === c.code"
-            @click="form.category = c.code"
+            :aria-pressed="form.category === c"
+            @click="form.category = c"
           >
-            {{ c.label }}
+            {{ categoryLabel(c) }}
           </button>
         </div>
       </fieldset>
 
       <div class="group">
         <label class="row">
-          Бюджет, USDT
+          {{ $t('createOrder.budget') }}
           <input
             v-model.number="form.budget"
             type="number"
@@ -249,11 +279,11 @@ void prefill();
             :max="MAX_BUDGET"
             step="1"
             required
-            :placeholder="`от ${MIN_BUDGET.toLocaleString('ru-RU')}`"
+            :placeholder="$t('createOrder.budgetPlaceholder', { min: MIN_BUDGET.toLocaleString(locale()) })"
           />
         </label>
         <label class="row bordered">
-          Сдать ролик можно от, просмотров
+          {{ $t('createOrder.minViews') }}
           <input
             v-model.number="form.minViews"
             type="number"
@@ -264,40 +294,38 @@ void prefill();
           />
         </label>
         <div class="row column">
-          <span id="deadline-label">Срок сдачи</span>
+          <span id="deadline-label">{{ $t('createOrder.deadline') }}</span>
           <div class="segmented" role="radiogroup" aria-labelledby="deadline-label">
             <button
               v-for="d in deadlines"
-              :key="d.label"
+              :key="String(d)"
               type="button"
               role="radio"
-              :aria-checked="form.deadlineDays === d.days"
-              @click="form.deadlineDays = d.days"
+              :aria-checked="form.deadlineDays === d"
+              @click="form.deadlineDays = d"
             >
-              {{ d.label }}
+              {{ deadlineLabel(d) }}
             </button>
           </div>
         </div>
       </div>
 
       <p v-if="rubPerUsdt && form.budget" class="hint">
-        {{ approxRub(form.budget, rubPerUsdt) }} по курсу {{ rubPerUsdt.toLocaleString('ru-RU') }} ₽ за USDT
+        {{ $t('createOrder.rate', { rub: approxRub(form.budget, rubPerUsdt), rate: rubPerUsdt.toLocaleString(locale()) }) }}
       </p>
       <p class="hint">
-        Вы платите за просмотры: креаторы публикуют ролики у себя, модератор проверяет их и фиксирует просмотры.
-        Ставку за 1000 просмотров назначит модератор. Бюджет закончится — заказ закроется сам, больше бюджета вы не
-        потратите.
+        {{ $t('createOrder.howPay') }}
       </p>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </form>
 
     <div class="bottom-bar">
       <p v-if="editing?.status === 'OPEN'" class="note">
-        Заказ снова уйдёт на проверку и пропадёт из каталога до одобрения. Креаторы, которые уже взялись за него, получат уведомление.
+        {{ $t('createOrder.editNote') }}
       </p>
-      <p v-else class="note">Заказ увидят креаторы после проверки модератором</p>
+      <p v-else class="note">{{ $t('createOrder.newNote') }}</p>
       <button type="submit" form="order-form" class="main-button" :disabled="sending">
-        {{ sending ? 'Отправляем…' : props.id ? 'Сохранить и отправить на проверку' : 'Отправить на модерацию' }}
+        {{ sending ? $t('common.sending') : props.id ? $t('createOrder.saveAndSend') : $t('createOrder.send') }}
       </button>
     </div>
   </main>
@@ -373,18 +401,27 @@ legend {
   gap: 8px;
 }
 .chips button {
-  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
   padding: 0 14px;
-  border: none;
-  border-radius: 18px;
+  border: 1.5px solid var(--separator);
+  border-radius: 20px;
   background: var(--surface);
   color: var(--text);
   font-size: 14px;
+  font-weight: 600;
+}
+.chips button.with-icon {
+  min-height: 44px;
+  padding-left: 8px;
 }
 .chips button[aria-pressed='true'] {
-  background: var(--accent);
-  color: var(--accent-text);
-  font-weight: 600;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--ink-text);
+  font-weight: 800;
 }
 .group {
   border-radius: 14px;

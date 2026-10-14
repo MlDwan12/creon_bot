@@ -1,9 +1,14 @@
+import { userLang } from '../i18n/i18n';
+import { withLang } from '../i18n/request-lang';
 import {
   Injectable,
   Logger,
   OnApplicationBootstrap,
   OnModuleDestroy,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { PrismaService } from '../prisma/prisma.service';
+import { acquireLease } from './job-lease';
 import { NotificationsService } from '../telegram/notifications.service';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
@@ -11,6 +16,8 @@ import { ViewCounterService } from '../submissions/view-counter.service';
 import { PayoutsService } from '../payouts/payouts.service';
 
 const INTERVAL_MS = 5 * 60 * 1000;
+/** Аренда — на три прохода: держатель упал — задачи заберёт другая копия не позже чем через 15 мин. */
+const LEASE_MS = 3 * INTERVAL_MS;
 /** Сколько заказ или видео может ждать модератора, прежде чем напомним. И не чаще, чем раз в столько же. */
 const STALE_HOURS = 12;
 const STALE_MS = STALE_HOURS * 60 * 60 * 1000;
@@ -19,8 +26,8 @@ const STALE_MS = STALE_HOURS * 60 * 60 * 1000;
  * Фоновые задачи раз в 5 минут: закрыть заказы с истёкшим сроком, напомнить креаторам о близком
  * сроке, сжечь просроченные слоты и напомнить о них, напомнить модераторам о застрявшей очереди,
  * прислать рекламодателю совет по заказу.
- * ponytail: setInterval в одном процессе — хватает, пока инстанс один. Станет несколько —
- * cron (@nestjs/schedule) на одном из них или advisory lock в Postgres, иначе уведомления задвоятся.
+ * Копий бота может быть несколько — задачи выполняет одна, держатель аренды (JobLease), иначе
+ * уведомления задвоились бы. Пока он жив, аренда за ним: и lastQueueReminder в памяти не теряется.
  */
 @Injectable()
 export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
@@ -30,8 +37,11 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
   private lastQueueReminder = 0;
   /** Прошлый проход ещё идёт (медленная база, сотни уведомлений) — следующий пропускаем. */
   private running = false;
+  /** Этот процесс в аренде задач. */
+  private readonly holder = randomUUID();
 
   constructor(
+    private readonly prisma: PrismaService,
     private readonly ordersService: OrdersService,
     private readonly submissionsService: SubmissionsService,
     private readonly notifications: NotificationsService,
@@ -52,7 +62,11 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
     if (this.running) return;
     this.running = true;
     try {
-      await this.runTasks();
+      if (await acquireLease(this.prisma, 'scheduled', this.holder, LEASE_MS))
+        await this.runTasks();
+    } catch (err) {
+      // база недоступна — попробуем в следующий проход
+      this.logger.error(err);
     } finally {
       this.running = false;
     }
@@ -107,7 +121,8 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   /**
-   * Итог добора по роликам, чьи просмотры отдаёт API площадки (YouTube), — без модератора.
+   * Итог добора по роликам, чьи просмотры отдаёт API площадки (YouTube, X, а TikTok и VK — если
+   * креатор подключил аккаунт), — без модератора.
    * API не ответило — ролик остаётся в очереди «Итоги», итог введёт модератор.
    */
   private async finalizeAutomatic() {
@@ -116,7 +131,7 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
     );
     if (!due.length) return;
     const counted = await this.viewCounter.fetchViews(
-      due.map((s) => s.videoUrl!),
+      due.map((s) => ({ url: s.videoUrl!, creatorId: s.creatorId })),
     );
     for (const s of due) {
       const stats = counted.get(s.videoUrl!);
@@ -145,7 +160,12 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
    */
   private async sendInsights() {
     for (const order of await this.ordersService.listInsightsPending()) {
-      const [first] = (await this.ordersService.report(order)).insights;
+      // совет — на языке рекламодателя: запроса здесь нет, язык задаём явно
+      const [first] = (
+        await withLang(userLang(order.advertiser), () =>
+          this.ordersService.report(order),
+        )
+      ).insights;
       if (first && (await this.ordersService.markInsightsSent(order.id)))
         this.notifications.orderInsight(order, first.text);
     }

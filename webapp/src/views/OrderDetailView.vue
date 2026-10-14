@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { onUnmounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
-import { ApiError, categoryLabel, claimOrder, fetchOrder, type OrderDetail } from '../api';
+import { ApiError, categoryLabel, claimOrder, fetchOrder, PLATFORM_NAMES, type OrderDetail } from '../api';
+import PlatformIcon from '../components/PlatformIcon.vue';
+import { i18next, tList } from '../i18n';
 import SupportLink from '../components/SupportLink.vue';
-import { formatCpm, formatDeadline, formatMoney, formatVideoFormat, formatViews } from '../format';
+import { formatDeadline, formatMoney, formatVideoFormat, formatViews } from '../format';
 import { safeUrl } from '../telegram';
 
 // `id` приходит из адреса /orders/:id (в router.ts у маршрута `props: true`).
@@ -19,7 +21,7 @@ async function load() {
   try {
     order.value = await fetchOrder(Number(props.id));
   } catch (err) {
-    loadError.value = err instanceof ApiError ? err.userMessage : 'Не удалось загрузить заказ';
+    loadError.value = err instanceof ApiError ? err.userMessage : i18next.t('order.loadError');
   }
 }
 
@@ -31,7 +33,7 @@ async function claim() {
     order.value!.claimed = true;
     justClaimed.value = true;
   } catch (err) {
-    claimError.value = err instanceof ApiError ? err.userMessage : 'Не удалось откликнуться';
+    claimError.value = err instanceof ApiError ? err.userMessage : i18next.t('order.claimError');
   } finally {
     claiming.value = false;
   }
@@ -51,55 +53,58 @@ onUnmounted(() => clearInterval(refresh));
 <template>
   <main class="detail">
     <p v-if="loadError" class="hint">{{ loadError }}</p>
-    <p v-else-if="!order" class="hint">Загрузка…</p>
+    <p v-else-if="!order" class="hint">{{ $t('common.loading') }}</p>
 
     <template v-else>
-      <header class="head">
-        <span class="category">{{ categoryLabel(order.category) }}</span>
+      <!-- Главное о заказе — в одном ярком блоке: площадки, название, ставка, остаток. -->
+      <header class="hero">
+        <div class="tags">
+          <span v-for="p in order.platforms" :key="p" class="tag platform">
+            <PlatformIcon :platform="p" :size="18" round inverse />
+            {{ PLATFORM_NAMES[p] }}
+          </span>
+          <span v-if="!order.platforms.length" class="tag">{{ $t('orderCard.anyPlatform') }}</span>
+          <span class="tag">{{ categoryLabel(order.category) }}</span>
+        </div>
         <h1>{{ order.title }}</h1>
+        <div v-if="order.cpm !== null" class="price">
+          <span class="money cpm">{{ formatMoney(order.cpm) }}</span>
+          <span>{{ $t('money.perEveryThousand') }}</span>
+        </div>
+        <span v-else>{{ $t('order.cpmPending') }}</span>
+        <span :class="['free', { low: order.budgetLow }]">
+          {{ $t('order.left', { amount: formatMoney(order.free) }) }}<template v-if="order.budgetLow">{{ $t('orderCard.hurry') }}</template>
+        </span>
       </header>
 
       <section class="rows">
         <div class="row">
-          <span>Оплата</span>
-          <strong>{{ formatCpm(order.cpm) }}</strong>
-        </div>
-        <div class="row">
-          <span>Осталось в бюджете</span>
-          <span class="value">{{ formatMoney(order.free) }}</span>
-        </div>
-        <div class="row">
-          <span>Сдать можно</span>
-          <span class="value">от {{ formatViews(order.minViews) }} просмотров</span>
+          <span>{{ $t('order.canSubmit') }}</span>
+          <span class="value">{{ $t('order.fromViews', { views: formatViews(order.minViews) }) }}</span>
         </div>
         <div v-if="order.deadline" class="row">
-          <span>Сдать до</span>
+          <span>{{ $t('order.dueBy') }}</span>
           <span class="value">{{ formatDeadline(order.deadline) }}</span>
         </div>
         <div class="row">
-          <span>Выплата</span>
-          <span class="value">через CreON, после проверки модератором</span>
+          <span>{{ $t('order.payout') }}</span>
+          <span class="value">{{ $t('order.payoutValue') }}</span>
         </div>
       </section>
 
       <section class="block">
-        <h2 class="section-title">Задание</h2>
+        <h2 class="section-title">{{ $t('order.task') }}</h2>
         <div class="text">{{ order.description }}</div>
-        <p v-if="formatVideoFormat(order)" class="format">Ролик: {{ formatVideoFormat(order) }}</p>
+        <p v-if="formatVideoFormat(order)" class="format">{{ $t('order.video', { format: formatVideoFormat(order) }) }}</p>
         <a v-if="safeUrl(order.referenceUrl)" :href="safeUrl(order.referenceUrl)" target="_blank" rel="noopener noreferrer" class="reference">
-          Референс и материалы ›
+          {{ $t('order.reference') }}
         </a>
       </section>
 
       <section class="block">
-        <h2 class="section-title">Как это работает</h2>
+        <h2 class="section-title">{{ $t('order.howItWorks') }}</h2>
         <ol class="steps">
-          <li>Откликаетесь — заказ появляется в «Мои отклики»</li>
-          <li>Публикуете ролик у себя в соцсети — на всё 7 дней с отклика, потом слот сгорает</li>
-          <li>Когда ролик наберёт {{ formatViews(order.minViews) }} просмотров, присылаете ссылку и число просмотров</li>
-          <li>Модератор проверяет ролик и фиксирует просмотры — начисляется оплата</li>
-          <li>Через 5 дней фиксируем итог и доплачиваем за новые просмотры, пока есть бюджет</li>
-          <li>После итога деньги можно вывести. Не удаляйте публикацию: если её не будет на месте, начисление отменится</li>
+          <li v-for="s in tList('order.steps')" :key="s">{{ s }}</li>
         </ol>
       </section>
 
@@ -108,25 +113,25 @@ onUnmounted(() => clearInterval(refresh));
         :to="{ path: '/report', query: { target: 'ORDER', id: order.id, title: order.title } }"
         class="quiet-link"
       >
-        Пожаловаться на заказ
+        {{ $t('order.report') }}
       </RouterLink>
       <SupportLink
-        :label="`Вопрос по заказу #${order.id} — написать менеджеру`"
-        :about="`Вопрос по заказу #${order.id} «${order.title}»`"
+        :label="$t('order.supportLabel', { id: order.id })"
+        :about="$t('order.supportAbout', { id: order.id, title: order.title })"
       />
 
       <p v-if="justClaimed" class="notice success" role="status">
-        Заказ взят в работу. Когда видео будет готово, отправьте его в «Мои отклики».
+        {{ $t('order.claimed') }}
       </p>
       <p v-if="claimError" class="notice error" role="alert">{{ claimError }}</p>
 
-      <p v-if="order.own" class="notice" role="status">Это ваш заказ — откликаться на него могут только другие.</p>
+      <p v-if="order.own" class="notice" role="status">{{ $t('order.own') }}</p>
       <div v-else class="bottom-bar">
         <RouterLink v-if="order.claimed" to="/submissions" class="main-button">
-          Мои отклики
+          {{ $t('order.mySubmissions') }}
         </RouterLink>
         <button v-else type="button" class="main-button" :disabled="claiming" @click="claim">
-          {{ claiming ? 'Отправляем…' : 'Откликнуться' }}
+          {{ claiming ? $t('common.sending') : $t('order.claim') }}
         </button>
       </div>
     </template>
@@ -141,23 +146,63 @@ onUnmounted(() => clearInterval(refresh));
   /* Снизу место под фиксированную нижнюю кнопку. */
   padding: 16px 16px calc(96px + var(--safe-bottom));
 }
-.head {
+.hero {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 14px;
+  padding: 20px;
+  border-radius: 26px;
+  background: var(--accent);
+  color: var(--accent-text);
 }
-.category {
-  align-self: flex-start;
-  padding: 4px 10px;
-  border-radius: 12px;
-  background: var(--fill);
-  font-size: 13px;
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  background: rgb(255 255 255 / 18%);
+  font-size: 12px;
+  font-weight: 700;
+}
+.tag.platform {
+  padding-left: 4px;
 }
 h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   line-height: 1.25;
+}
+.price {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+.cpm {
+  font-size: 34px;
+  letter-spacing: -1px;
+}
+.free {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: var(--lime);
+  color: var(--lime-text);
+  font-size: 14px;
+  font-weight: 800;
+}
+.free.low {
+  background: var(--orange);
 }
 .rows {
   border-radius: 14px;

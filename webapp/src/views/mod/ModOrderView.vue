@@ -185,8 +185,8 @@ watch(() => props.id, load, { immediate: true });
   font-weight: 600;
 }
 .badge.pending {
-  background: color-mix(in srgb, #9a5200 14%, transparent);
-  color: #9a5200;
+  background: var(--orange-soft);
+  color: var(--orange-text);
 }
 h1 {
   margin: 0;
@@ -227,8 +227,8 @@ h1 {
   gap: 4px;
   padding: 12px 14px;
   border-radius: 14px;
-  background: color-mix(in srgb, #9a5200 14%, transparent);
-  color: #9a5200;
+  background: var(--orange-soft);
+  color: var(--orange-text);
   font-size: 15px;
   overflow-wrap: anywhere;
 }
@@ -261,7 +261,7 @@ h1 {
   color: #fff;
 }
 .approve {
-  background: #1e7b34;
+  background: var(--success);
   color: #fff;
 }
 .reference {

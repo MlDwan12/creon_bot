@@ -1,3 +1,4 @@
+import { tr } from '../i18n/request-lang';
 import {
   BadRequestException,
   ForbiddenException,
@@ -71,21 +72,21 @@ export class ReportsService {
     const b = (body ?? {}) as Record<string, unknown>;
     const target = b.target as ReportTarget;
     if (!Object.values(ReportTarget).includes(target))
-      throw new BadRequestException('Неизвестно, на что жалоба');
+      throw new BadRequestException(tr('errors.reportUnknown'));
     const targetId = b.targetId;
     if (!isDbId(targetId))
-      throw new BadRequestException('Неизвестно, на что жалоба');
+      throw new BadRequestException(tr('errors.reportUnknown'));
     const reason = b.reason as string;
     if (!REPORT_REASONS[target].includes(reason))
-      throw new BadRequestException('Выберите причину');
+      throw new BadRequestException(tr('errors.reportReason'));
     const comment = typeof b.comment === 'string' ? b.comment.trim() : '';
     if (comment.length > MAX_COMMENT_LENGTH)
       throw new BadRequestException(
-        `Комментарий длиннее ${MAX_COMMENT_LENGTH} символов`,
+        tr('errors.commentTooLong', { max: MAX_COMMENT_LENGTH }),
       );
     const meaningful = isMeaningfulText(comment);
     if (reason === 'OTHER' && !meaningful)
-      throw new BadRequestException('Опишите, что не так');
+      throw new BadRequestException(tr('errors.describeProblem'));
     return {
       target,
       targetId,
@@ -104,7 +105,7 @@ export class ReportsService {
       report.target,
       report.targetId,
     );
-    if (!what) throw new NotFoundException('Не найдено');
+    if (!what) throw new NotFoundException(tr('errors.notFound'));
     try {
       await this.prisma.report.create({
         data: { reporterId: reporter.id, ...report },
@@ -114,7 +115,7 @@ export class ReportsService {
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === 'P2002'
       )
-        throw new ForbiddenException('Вы уже пожаловались на это');
+        throw new ForbiddenException(tr('errors.alreadyReported'));
       throw err;
     }
     return what;

@@ -1,5 +1,6 @@
+import { tr, trNum } from '../i18n/request-lang';
 import { BadRequestException } from '@nestjs/common';
-import { OrderCategory, VideoOrientation } from '@prisma/client';
+import { OrderCategory, VideoOrientation, VideoPlatform } from '@prisma/client';
 import {
   isMeaningfulText,
   MAX_COMMENT_LENGTH,
@@ -32,31 +33,31 @@ export function parseOrderInput(body: unknown) {
 
   const title = text(b.title);
   if (!isMeaningfulText(title))
-    throw new BadRequestException('Укажите название заказа');
+    throw new BadRequestException(tr('errors.titleEmpty'));
   if (title.length > MAX_TITLE_LENGTH) {
     throw new BadRequestException(
-      `Название длиннее ${MAX_TITLE_LENGTH} символов`,
+      tr('errors.titleTooLong', { max: MAX_TITLE_LENGTH }),
     );
   }
 
   const description = text(b.description);
   if (!isMeaningfulText(description))
-    throw new BadRequestException('Опишите, что нужно снять');
+    throw new BadRequestException(tr('errors.briefEmpty'));
   if (description.length > MAX_DESCRIPTION_LENGTH) {
     throw new BadRequestException(
-      `Описание длиннее ${MAX_DESCRIPTION_LENGTH} символов`,
+      tr('errors.briefTooLong', { max: MAX_DESCRIPTION_LENGTH }),
     );
   }
 
   const referenceUrl = optionalUrl(
     b.referenceUrl,
-    'Ссылка на референс',
-    'Дайте ссылку на файл или видео',
+    tr('errors.referenceWhat'),
+    tr('errors.referenceInstead'),
   );
   const targetUrl = optionalUrl(
     b.targetUrl,
-    'Ссылка на товар',
-    'Дайте ссылку на сайт или страницу товара в магазине',
+    tr('errors.targetWhat'),
+    tr('errors.targetInstead'),
   );
 
   // Бюджет — всё, что платит рекламодатель, целыми USDT; в базу — центами.
@@ -67,21 +68,22 @@ export function parseOrderInput(body: unknown) {
     (budget as number) > MAX_BUDGET
   )
     throw new BadRequestException(
-      `Бюджет — целое число USDT от ${MIN_BUDGET.toLocaleString('ru-RU')} до ${MAX_BUDGET.toLocaleString('ru-RU')}`,
+      tr('errors.budgetRange', {
+        min: trNum(MIN_BUDGET),
+        max: trNum(MAX_BUDGET),
+      }),
     );
 
   // Пусто — порог по умолчанию.
   const minViews =
     b.minViews === undefined || b.minViews === null || b.minViews === ''
       ? DEFAULT_MIN_VIEWS
-      : parseViews(b.minViews, 'Порог просмотров');
+      : parseViews(b.minViews, tr('errors.thresholdWhat'));
 
   const minDurationSec = durationSec(b.minDurationSec);
   const maxDurationSec = durationSec(b.maxDurationSec);
   if (minDurationSec && maxDurationSec && minDurationSec > maxDurationSec)
-    throw new BadRequestException(
-      'Минимальная длительность больше максимальной',
-    );
+    throw new BadRequestException(tr('errors.durationOrder'));
 
   // Пусто — любая ориентация.
   const orientation = (b.orientation ?? null) as VideoOrientation | null;
@@ -89,11 +91,21 @@ export function parseOrderInput(body: unknown) {
     orientation !== null &&
     !Object.values(VideoOrientation).includes(orientation)
   )
-    throw new BadRequestException('Неизвестная ориентация ролика');
+    throw new BadRequestException(tr('errors.badOrientation'));
+
+  // Пусто — любая площадка.
+  const platforms = b.platforms ?? [];
+  if (
+    !Array.isArray(platforms) ||
+    !platforms.every((p) =>
+      Object.values(VideoPlatform).includes(p as VideoPlatform),
+    )
+  )
+    throw new BadRequestException(tr('errors.badPlatform'));
 
   const category = b.category as OrderCategory;
   if (!Object.values(OrderCategory).includes(category)) {
-    throw new BadRequestException('Выберите категорию');
+    throw new BadRequestException(tr('errors.chooseCategory'));
   }
 
   const deadline =
@@ -111,6 +123,7 @@ export function parseOrderInput(body: unknown) {
     minDurationSec,
     maxDurationSec,
     orientation,
+    platforms: [...new Set(platforms as VideoPlatform[])],
     category,
     deadline,
   };
@@ -124,13 +137,9 @@ function optionalUrl(value: unknown, what: string, instead: string) {
   const url = text(value) || undefined;
   if (url === undefined) return undefined;
   if (!VIDEO_URL_RE.test(url) || url.length > MAX_URL_LENGTH)
-    throw new BadRequestException(
-      `${what} должна начинаться с http:// или https://`,
-    );
+    throw new BadRequestException(tr('errors.urlScheme', { what }));
   if (findExactContacts(url).length)
-    throw new BadRequestException(
-      `Ссылка на мессенджер или соцсеть — это контакт: общение идёт через бота. ${instead}`,
-    );
+    throw new BadRequestException(tr('errors.urlIsContact', { instead }));
   return url;
 }
 
@@ -139,11 +148,13 @@ export function videoFormat(o: {
   minDurationSec: number | null;
   maxDurationSec: number | null;
   orientation: VideoOrientation | null;
+  platforms: VideoPlatform[];
 }) {
   return {
     minDurationSec: o.minDurationSec,
     maxDurationSec: o.maxDurationSec,
     orientation: o.orientation,
+    platforms: o.platforms,
   };
 }
 
@@ -154,20 +165,23 @@ export function parseCpm(body: unknown): number {
     typeof cpm === 'number' && Number.isFinite(cpm) ? toMinor(cpm) : 0;
   if (minor < 1 || minor > MAX_CPM * 100)
     throw new BadRequestException(
-      `Ставка за 1000 просмотров — от 0,01 до ${MAX_CPM.toLocaleString('ru-RU')} USDT`,
+      tr('errors.cpmRange', { max: trNum(MAX_CPM) }),
     );
   return minor;
 }
 
 /** Число просмотров: целое от 1 до MAX_VIEWS. `what` — для текста ошибки. */
-export function parseViews(value: unknown, what = 'Просмотры'): number {
+export function parseViews(
+  value: unknown,
+  what = tr('errors.viewsWhat'),
+): number {
   if (
     !Number.isInteger(value) ||
     (value as number) < 1 ||
     (value as number) > MAX_VIEWS
   )
     throw new BadRequestException(
-      `${what} — целое число от 1 до ${MAX_VIEWS.toLocaleString('ru-RU')}`,
+      tr('errors.viewsRange', { what, max: trNum(MAX_VIEWS) }),
     );
   return value as number;
 }
@@ -181,7 +195,7 @@ export function parseLikes(value: unknown): number | null {
     (value as number) > MAX_VIEWS
   )
     throw new BadRequestException(
-      `Лайки — целое число от 0 до ${MAX_VIEWS.toLocaleString('ru-RU')}`,
+      tr('errors.likesRange', { max: trNum(MAX_VIEWS) }),
     );
   return value as number;
 }
@@ -195,7 +209,7 @@ function durationSec(value: unknown): number | null {
     (value as number) > MAX_DURATION_SEC
   )
     throw new BadRequestException(
-      `Длительность — целое число секунд от 1 до ${MAX_DURATION_SEC}`,
+      tr('errors.durationRange', { max: MAX_DURATION_SEC }),
     );
   return value as number;
 }
@@ -217,6 +231,7 @@ export function parseOrderEdit(body: unknown) {
     minDurationSec: input.minDurationSec,
     maxDurationSec: input.maxDurationSec,
     orientation: input.orientation,
+    platforms: input.platforms,
     category: input.category,
     deadline:
       b.deadlineDays === undefined
@@ -235,7 +250,7 @@ export function parseDeadlineDays(days: unknown): number {
     (days as number) > MAX_DEADLINE_DAYS
   ) {
     throw new BadRequestException(
-      `Срок — целое число дней от 1 до ${MAX_DEADLINE_DAYS}`,
+      tr('errors.deadlineRange', { max: MAX_DEADLINE_DAYS }),
     );
   }
   return days as number;
@@ -245,10 +260,10 @@ export function parseDeadlineDays(days: unknown): number {
 export function parseRejectComment(body: unknown): string {
   const comment = text((body as Record<string, unknown> | null)?.comment);
   if (!isMeaningfulText(comment))
-    throw new BadRequestException('Напишите причину отклонения');
+    throw new BadRequestException(tr('errors.rejectReason'));
   if (comment.length > MAX_COMMENT_LENGTH) {
     throw new BadRequestException(
-      `Причина длиннее ${MAX_COMMENT_LENGTH} символов`,
+      tr('errors.rejectTooLong', { max: MAX_COMMENT_LENGTH }),
     );
   }
   return comment;

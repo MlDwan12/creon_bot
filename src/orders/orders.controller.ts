@@ -1,3 +1,4 @@
+import { tr } from '../i18n/request-lang';
 import {
   BadRequestException,
   Controller,
@@ -13,7 +14,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ParseIdPipe } from '../common/parse-id.pipe';
-import { OrderCategory } from '@prisma/client';
+import { OrderCategory, VideoPlatform } from '@prisma/client';
 import { Throttle } from '@nestjs/throttler';
 import { fromMinor } from '../common/money';
 import { OrdersService } from './orders.service';
@@ -21,12 +22,14 @@ import { SubmissionsService } from '../submissions/submissions.service';
 import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
 import { videoFormat } from './order-input';
+import { payoutPool } from './budget';
 
 const PAGE_SIZE = 20;
 
 /**
- * Креатору — ставка и свободный остаток фонда выплат в USDT. Бюджет рекламодателя и комиссию
- * площадки не показываем.
+ * Креатору — ставка, свободный остаток фонда выплат в USDT и «осталось мало» (подсветка «успейте»).
+ * Бюджет рекламодателя и комиссию площадки не показываем, поэтому и долю остатка — только флаг:
+ * по остатку и проценту фонд, а с ним и бюджет, вычисляется.
  */
 function toPublic(
   order: Awaited<ReturnType<OrdersService['listOpen']>>['items'][number],
@@ -40,10 +43,16 @@ function toPublic(
     minViews: order.minViews,
     cpm: fromMinor(order.cpmMinor),
     free: fromMinor(order.freeMinor),
+    budgetLow: isBudgetLow(order.freeMinor, payoutPool(order)),
     category: order.category,
     deadline: order.deadline,
     createdAt: order.createdAt,
   };
+}
+
+/** Свободно меньше 30% фонда выплат — в каталоге подсвечиваем «успейте». */
+export function isBudgetLow(freeMinor: number, poolMinor: number): boolean {
+  return freeMinor < poolMinor * 0.3;
 }
 
 @Controller('api/orders')
@@ -62,6 +71,8 @@ export class OrdersController {
   async listOpen(
     @Query('category', new ParseEnumPipe(OrderCategory, { optional: true }))
     category: OrderCategory | undefined,
+    @Query('platform', new ParseEnumPipe(VideoPlatform, { optional: true }))
+    platform: VideoPlatform | undefined,
     @Query('afterId', new ParseIntPipe({ optional: true })) afterId?: number,
     @Query('afterCreatedAt') afterCreatedAt?: string,
   ) {
@@ -69,11 +80,12 @@ export class OrdersController {
     if (afterId !== undefined) {
       const createdAt = new Date(afterCreatedAt ?? '');
       if (Number.isNaN(createdAt.getTime()))
-        throw new BadRequestException('Некорректная страница');
+        throw new BadRequestException(tr('errors.badPage'));
       after = { createdAt, id: afterId };
     }
     const { items, hasMore, total } = await this.ordersService.listOpen(
       category,
+      platform,
       after,
       PAGE_SIZE,
     );
@@ -84,7 +96,7 @@ export class OrdersController {
   @Get(':id')
   async findOpen(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
     const order = await this.ordersService.findOpenById(id);
-    if (!order) throw new NotFoundException('Заказ не найден или уже закрыт');
+    if (!order) throw new NotFoundException(tr('errors.orderClosedOrMissing'));
     const claimed = await this.submissionsService.hasInProgress(
       id,
       req.user.id,

@@ -1,3 +1,4 @@
+import { translator, userLang } from '../i18n/i18n';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { User } from '@prisma/client';
@@ -145,7 +146,7 @@ export class SupportService {
       if ('text' in msg && msg.text.startsWith('/close')) {
         await this.bot.telegram.sendMessage(
           String(user.telegramId),
-          '✅ Обращение закрыто. Если остались вопросы — просто напишите сюда.',
+          translator(userLang(user))('bot.supportClosed'),
         );
         await this.bot.telegram.closeForumTopic(this.chatId!, thread);
         return;
@@ -153,7 +154,7 @@ export class SupportService {
       if ('text' in msg)
         await this.bot.telegram.sendMessage(
           String(user.telegramId),
-          `💬 Поддержка CreON:\n\n${msg.text}`,
+          translator(userLang(user))('bot.supportReply', { text: msg.text }),
         );
       else if (
         'photo' in msg ||
@@ -244,7 +245,7 @@ export class SupportService {
     ]);
     const card = [
       `👤 <b>${escapeHtml(creatorLabel(user))}</b>${user.firstName && user.username ? ` (${escapeHtml(user.firstName)})` : ''}`,
-      `Telegram id: <code>${user.telegramId}</code> · id в CreON: ${user.id}`,
+      `Telegram id: <code>${user.telegramId}</code> · id в Fixum: ${user.id}`,
       `Заказов создал: ${orders} · откликов: ${submissions}`,
       user.bannedAt
         ? `🚫 Заблокирован: ${escapeHtml(user.banReason ?? '')}`

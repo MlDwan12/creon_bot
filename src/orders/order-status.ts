@@ -1,3 +1,4 @@
+import { tr } from '../i18n/request-lang';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { OrderStatus, Prisma } from '@prisma/client';
 
@@ -32,13 +33,13 @@ export async function transitionOrder(
   orderId: number,
   from: OrderStatus[],
   data: Prisma.OrderUpdateManyMutationInput,
-  conflictMessage = 'Этот заказ уже обработан',
+  conflictMessage?: string,
   also?: Prisma.OrderWhereInput,
 ) {
   if (await tryTransitionOrder(db, orderId, from, data, also)) return;
   if (!(await db.order.findUnique({ where: { id: orderId } })))
-    throw new NotFoundException('Заказ не найден');
-  throw new ForbiddenException(conflictMessage);
+    throw new NotFoundException(tr('errors.orderNotFound'));
+  throw new ForbiddenException(conflictMessage ?? tr('errors.orderProcessed'));
 }
 
 /** Закрыть открытые заказы из списка; уже не открытые не трогает. */

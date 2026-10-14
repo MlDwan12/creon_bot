@@ -1,11 +1,19 @@
-/** Площадки, где креаторы публикуют ролики: код → название и домены (с поддоменами). */
+import type { VideoPlatform } from '@prisma/client';
+
+/**
+ * Площадки, где креаторы публикуют ролики: код → название и домены (с поддоменами). Коды — те же,
+ * что в enum VideoPlatform (площадки заказа): satisfies не даст им разойтись.
+ */
 export const PLATFORMS = {
   TIKTOK: { name: 'TikTok', hosts: ['tiktok.com'] },
   YOUTUBE: { name: 'YouTube', hosts: ['youtube.com', 'youtu.be'] },
   VK: { name: 'VK', hosts: ['vk.com', 'vk.ru', 'vkvideo.ru'] },
   INSTAGRAM: { name: 'Instagram', hosts: ['instagram.com'] },
   X: { name: 'X', hosts: ['x.com', 'twitter.com'] },
-} as const;
+} as const satisfies Record<
+  VideoPlatform,
+  { name: string; hosts: readonly string[] }
+>;
 
 export type Platform = keyof typeof PLATFORMS | 'OTHER';
 
@@ -44,9 +52,74 @@ export function youtubeId(url: string): string | null {
   return id && /^[\w-]{11}$/.test(id) ? id : null;
 }
 
+/** id поста X: x.com/<автор>/status/ID, twitter.com/…/status/ID, x.com/i/status/ID. */
+export function xPostId(url: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!isOnHosts(u.hostname, PLATFORMS.X.hosts)) return null;
+  return u.pathname.match(/\/status(?:es)?\/(\d{1,20})(?:\/|$)/)?.[1] ?? null;
+}
+
+/**
+ * id ролика TikTok: tiktok.com/@автор/video/ID, m.tiktok.com/v/ID.html.
+ * ponytail: короткие vm.tiktok.com/… не раскрываем — такой ролик считается вручную.
+ */
+export function tiktokVideoId(url: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!isOnHosts(u.hostname, PLATFORMS.TIKTOK.hosts)) return null;
+  return (
+    u.pathname.match(/\/(?:video|v)\/(\d{5,25})(?:\.html)?(?:\/|$)/)?.[1] ??
+    null
+  );
+}
+
+/**
+ * Ролик VK как «владелец_ролик» (как ждёт video.get): vk.com/video-1_2, vkvideo.ru/video1_2,
+ * vk.com/clip-1_2 и ролик в просмотрщике — vk.com/feed?z=video-1_2%2F….
+ */
+export function vkVideoId(url: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!isOnHosts(u.hostname, PLATFORMS.VK.hosts)) return null;
+  const where = `${u.pathname} ${u.searchParams.get('z') ?? ''}`;
+  return where.match(/(?:video|clip)(-?\d+_\d+)/)?.[1] ?? null;
+}
+
+/**
+ * Код публикации Instagram (shortcode): instagram.com/reel/КОД, /reels/КОД, /p/КОД, /tv/КОД,
+ * в том числе с ником впереди (instagram.com/ник/reel/КОД).
+ */
+export function instagramShortcode(url: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!isOnHosts(u.hostname, PLATFORMS.INSTAGRAM.hosts)) return null;
+  return (
+    u.pathname.match(/\/(?:reels?|p|tv)\/([A-Za-z0-9_-]{5,40})(?:\/|$)/)?.[1] ??
+    null
+  );
+}
+
 /**
  * Ссылка на ролик в одном виде — чтобы тот же ролик не сдали дважды под разными ссылками.
- * YouTube — по id ролика (watch?v=, youtu.be, shorts — один ролик); остальное — домен без www/m
+ * YouTube — по id ролика (watch?v=, youtu.be, shorts — один ролик); X — по id поста (x.com и
+ * twitter.com, любой ник в ссылке — один пост); остальное — домен без www/m
  * и путь без хвостового «/», без параметров (метки соцсетей вроде ?is_from_webapp ролик не меняют).
  * У VK ролик бывает в параметре z (vk.com/feed?z=video-1_2) — его оставляем.
  * ponytail: короткие ссылки (vm.tiktok.com/…) не раскрываем — нужен запрос к площадке.
@@ -54,6 +127,8 @@ export function youtubeId(url: string): string | null {
 export function videoKey(url: string): string {
   const yt = youtubeId(url);
   if (yt) return `youtube:${yt}`;
+  const x = xPostId(url);
+  if (x) return `x:${x}`;
   const u = new URL(url);
   const host = u.hostname.toLowerCase().replace(/^(?:www|m)\./, '');
   const path = u.pathname.replace(/\/+$/, '');

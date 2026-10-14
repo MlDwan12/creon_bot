@@ -1,6 +1,8 @@
+import { tr } from './i18n/request-lang';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { AccountsModule } from './accounts/accounts.module';
 import { AuthModule } from './auth/auth.module';
 import { validateEnv } from './config/env.validation';
 import { HealthModule } from './health/health.module';
@@ -22,8 +24,7 @@ import { TelegramModule } from './telegram/telegram.module';
     // ponytail: счётчики в памяти процесса — пока инстанс один; станет несколько — хранилище в Redis.
     ThrottlerModule.forRoot({
       throttlers: [{ ttl: 60_000, limit: 60 }],
-      errorMessage:
-        'Слишком много запросов — подождите минуту и попробуйте снова',
+      errorMessage: () => tr('errors.tooManyRequests'),
     }),
     PrismaModule,
     HealthModule,
@@ -32,6 +33,7 @@ import { TelegramModule } from './telegram/telegram.module';
     TelegramModule,
     OrdersModule,
     SubmissionsModule,
+    AccountsModule,
     ProfilesModule,
     ReportsModule,
     PayoutsModule,

@@ -1,18 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ApiError, createReport, REPORT_REASONS, type ReportTarget } from '../api';
+import { ApiError, createReport, reasonLabel, REPORT_REASONS, type ReportTarget } from '../api';
+import { i18next } from '../i18n';
 
 // /report?target=ORDER&id=12&title=… — одна форма на все жалобы; title только для заголовка.
 const route = useRoute();
 const router = useRouter();
-
-const HEADINGS: Record<ReportTarget, string> = {
-  ORDER: 'Жалоба на заказ',
-  VIDEO: 'Жалоба на видео',
-  REVIEW: 'Жалоба на отзыв',
-  PROFILE: 'Жалоба на профиль',
-};
 
 const target = route.query.target as ReportTarget;
 const targetId = Number(route.query.id);
@@ -38,7 +32,7 @@ async function send() {
     await createReport({ target, targetId, reason: reason.value, comment: comment.value });
     sent.value = true;
   } catch (err) {
-    error.value = err instanceof ApiError ? err.userMessage : 'Не удалось отправить жалобу';
+    error.value = err instanceof ApiError ? err.userMessage : i18next.t('report.sendError');
   } finally {
     busy.value = false;
   }
@@ -47,27 +41,27 @@ async function send() {
 
 <template>
   <main class="page">
-    <p v-if="!valid" class="hint">Непонятно, на что жалоба.</p>
+    <p v-if="!valid" class="hint">{{ $t('report.invalid') }}</p>
 
     <template v-else-if="sent">
-      <h1>Жалоба отправлена</h1>
-      <p class="hint">Спасибо. Модератор проверит — результат придёт сообщением от бота.</p>
+      <h1>{{ $t('report.sentTitle') }}</h1>
+      <p class="hint">{{ $t('report.sentText') }}</p>
       <div class="bottom-bar">
-        <button type="button" class="main-button" @click="router.back()">Готово</button>
+        <button type="button" class="main-button" @click="router.back()">{{ $t('common.done') }}</button>
       </div>
     </template>
 
     <template v-else>
       <header class="head">
-        <h1>{{ HEADINGS[target] }}</h1>
+        <h1>{{ $t(`report.heading.${target}`) }}</h1>
         <span v-if="title" class="hint">{{ title }}</span>
       </header>
 
       <fieldset class="reasons">
-        <legend class="section-title">Что не так</legend>
-        <label v-for="r in reasons" :key="r.code" class="reason">
-          <input v-model="reason" type="radio" name="reason" :value="r.code" />
-          {{ r.label }}
+        <legend class="section-title">{{ $t('report.whatsWrong') }}</legend>
+        <label v-for="r in reasons" :key="r" class="reason">
+          <input v-model="reason" type="radio" name="reason" :value="r" />
+          {{ reasonLabel(target, r) }}
         </label>
       </fieldset>
 
@@ -75,13 +69,13 @@ async function send() {
         v-model="comment"
         rows="3"
         maxlength="500"
-        :placeholder="reason === 'OTHER' ? 'Опишите, что не так' : 'Комментарий — по желанию'"
+        :placeholder="reason === 'OTHER' ? $t('report.describe') : $t('report.commentOptional')"
       />
       <p v-if="error" class="error" role="alert">{{ error }}</p>
 
       <div class="bottom-bar">
         <button type="button" class="main-button" :disabled="!canSend" @click="send">
-          {{ busy ? 'Отправляем…' : 'Отправить жалобу' }}
+          {{ busy ? $t('common.sending') : $t('report.submit') }}
         </button>
       </div>
     </template>

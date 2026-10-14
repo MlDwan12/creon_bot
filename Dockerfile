@@ -21,6 +21,8 @@ WORKDIR /webapp
 COPY webapp/package.json webapp/yarn.lock ./
 RUN yarn install --frozen-lockfile
 COPY webapp ./
+# словари общие с бэкендом и лежат в корне репозитория; webapp/src импортирует ../../i18n
+COPY i18n /i18n
 RUN yarn build
 
 # --- runtime: run pending migrations, then start the compiled app ---
@@ -37,6 +39,7 @@ RUN addgroup -S app && adduser -S app -G app
 COPY --chown=app:app --from=build /app/node_modules ./node_modules
 COPY --chown=app:app --from=build /app/dist ./dist
 COPY --chown=app:app --from=webapp /webapp/dist ./public
+COPY --chown=app:app i18n ./i18n
 COPY --chown=app:app prisma ./prisma
 COPY --chown=app:app prisma.config.ts package.json ./
 COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

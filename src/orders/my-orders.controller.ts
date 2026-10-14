@@ -1,3 +1,4 @@
+import { tr } from '../i18n/request-lang';
 import {
   BadRequestException,
   Body,
@@ -142,19 +143,16 @@ export class MyOrdersController {
     const sent = await this.notifications.sendFile(
       req.user.telegramId,
       reportCsv(report),
-      `creon-order-${id}.csv`,
+      `fixum-order-${id}.csv`,
     );
-    if (!sent)
-      throw new BadRequestException(
-        'Не удалось отправить файл — откройте чат с ботом и нажмите «Старт»',
-      );
+    if (!sent) throw new BadRequestException(tr('errors.fileNotSent'));
     return { ok: true };
   }
 
   private async ownOrder(id: number, advertiserId: number) {
     const order = await this.ordersService.findById(id);
     if (!order || order.advertiserId !== advertiserId)
-      throw new NotFoundException('Заказ не найден');
+      throw new NotFoundException(tr('errors.orderNotFound'));
     return order;
   }
 }

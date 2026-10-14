@@ -1,3 +1,4 @@
+import { tr, trNum } from '../i18n/request-lang';
 import {
   ForbiddenException,
   Injectable,
@@ -10,8 +11,8 @@ import {
   Prisma,
   SubmissionStatus,
   VideoOrientation,
+  VideoPlatform,
 } from '@prisma/client';
-import { formatMoney } from '../common/format';
 import { fromMinor } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -48,6 +49,7 @@ const PUBLIC_ORDER_FIELDS = {
   minDurationSec: true,
   maxDurationSec: true,
   orientation: true,
+  platforms: true,
   category: true,
   deadline: true,
   createdAt: true,
@@ -90,6 +92,7 @@ export class OrdersService {
       minDurationSec?: number | null;
       maxDurationSec?: number | null;
       orientation?: VideoOrientation | null;
+      platforms?: VideoPlatform[];
       category: OrderCategory;
       deadline?: Date;
     },
@@ -102,7 +105,7 @@ export class OrdersService {
     });
     if (active >= MAX_ACTIVE_ORDERS)
       throw new ForbiddenException(
-        `У вас уже ${MAX_ACTIVE_ORDERS} активных заказов — закройте ненужные, чтобы разместить новый`,
+        tr('errors.tooManyActive', { max: MAX_ACTIVE_ORDERS }),
       );
     return this.prisma.order.create({
       data: {
@@ -118,6 +121,7 @@ export class OrdersService {
         minDurationSec: data.minDurationSec,
         maxDurationSec: data.maxDurationSec,
         orientation: data.orientation,
+        platforms: data.platforms,
         category: data.category,
         deadline: data.deadline,
       },
@@ -134,12 +138,24 @@ export class OrdersService {
    */
   async listOpen(
     category: OrderCategory | undefined,
+    platform: VideoPlatform | undefined,
     after: { createdAt: Date; id: number } | undefined,
     take: number,
   ) {
-    const where = {
+    const where: Prisma.OrderWhereInput = {
       status: OrderStatus.OPEN,
       ...(category ? { category } : {}),
+      // Заказ без площадок подходит для любой.
+      ...(platform
+        ? {
+            AND: {
+              OR: [
+                { platforms: { isEmpty: true } },
+                { platforms: { has: platform } },
+              ],
+            },
+          }
+        : {}),
     };
     const [rows, total] = await Promise.all([
       this.prisma.order.findMany({
@@ -156,7 +172,7 @@ export class OrdersService {
         take: take + 1,
         select: PUBLIC_ORDER_FIELDS,
       }),
-      this.countOpen(category ?? 'ALL', where),
+      this.countOpen(`${category ?? 'ALL'}:${platform ?? 'ALL'}`, where),
     ]);
     return {
       items: await this.withFree(rows.slice(0, take)),
@@ -297,15 +313,15 @@ export class OrdersService {
 
   async close(orderId: number, advertiserId: number) {
     const order = await this.findById(orderId);
-    if (!order) throw new NotFoundException('Заказ не найден');
+    if (!order) throw new NotFoundException(tr('errors.orderNotFound'));
     if (order.advertiserId !== advertiserId)
-      throw new ForbiddenException('Это не ваш заказ');
+      throw new ForbiddenException(tr('errors.notYourOrder'));
     await transitionOrder(
       this.prisma,
       orderId,
       [OrderStatus.OPEN],
       { status: OrderStatus.CLOSED, closedAt: new Date() },
-      'Закрыть можно только открытый заказ',
+      tr('errors.onlyOpenClose'),
     );
     return this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
@@ -341,7 +357,7 @@ export class OrdersService {
   async extend(orderId: number, advertiserId: number, days: number) {
     const order = await this.mustFind(orderId);
     if (order.advertiserId !== advertiserId)
-      throw new ForbiddenException('Это не ваш заказ');
+      throw new ForbiddenException(tr('errors.notYourOrder'));
     await transitionOrder(
       this.prisma,
       orderId,
@@ -352,7 +368,7 @@ export class OrdersService {
         closedAt: null,
         deadlineReminderSentAt: null,
       },
-      'Продлить можно только открытый заказ или заказ с истёкшим сроком',
+      tr('errors.extendWhich'),
     );
   }
 
@@ -437,19 +453,16 @@ export class OrdersService {
       where: { id: orderId },
       include: { submissions: { include: { creator: true } } },
     });
-    if (!order) throw new NotFoundException('Заказ не найден');
+    if (!order) throw new NotFoundException(tr('errors.orderNotFound'));
     if (order.advertiserId !== advertiserId)
-      throw new ForbiddenException('Это не ваш заказ');
+      throw new ForbiddenException(tr('errors.notYourOrder'));
     const { count } = await this.prisma.order.deleteMany({
       where: {
         id: orderId,
         submissions: { none: { status: { notIn: NO_VIDEO } } },
       },
     });
-    if (count === 0)
-      throw new ForbiddenException(
-        'По заказу уже сдавали видео — удалить его нельзя, только закрыть',
-      );
+    if (count === 0) throw new ForbiddenException(tr('errors.cantDelete'));
     return order;
   }
 
@@ -472,13 +485,14 @@ export class OrdersService {
       minDurationSec?: number | null;
       maxDurationSec?: number | null;
       orientation?: VideoOrientation | null;
+      platforms?: VideoPlatform[];
       category: OrderCategory;
       deadline?: Date | null;
     },
   ) {
     const order = await this.mustFind(orderId);
     if (order.advertiserId !== advertiserId)
-      throw new ForbiddenException('Это не ваш заказ');
+      throw new ForbiddenException(tr('errors.notYourOrder'));
     const now = new Date();
     // Срок «как было» у заказа на проверке — это ещё «N дней от отправки на проверку»: переносим его
     // вместе с моментом отправки, иначе время до правки съело бы дни креаторов.
@@ -498,7 +512,9 @@ export class OrdersService {
       const spent = (await spentByOrder(tx, [orderId])).get(orderId) ?? 0;
       if (payoutPool({ ...order, budgetMinor: data.budgetMinor }) < spent)
         throw new ForbiddenException(
-          `Из бюджета уже потрачено или зарезервировано ${formatMoney(fromMinor(spent))} выплат креаторам — бюджет нельзя сделать меньше`,
+          tr('errors.budgetBelowSpent', {
+            amount: `${trNum(fromMinor(spent))} USDT`,
+          }),
         );
       await transitionOrder(
         tx,
@@ -513,7 +529,7 @@ export class OrdersService {
           decidedAt: null,
           deadlineReminderSentAt: null,
         },
-        'Изменить можно только заказ на проверке или открытый',
+        tr('errors.editWhich'),
       );
     });
     return this.withActiveCreators(orderId);
@@ -714,7 +730,7 @@ export class OrdersService {
 
   private async mustFind(id: number) {
     const order = await this.prisma.order.findUnique({ where: { id } });
-    if (!order) throw new NotFoundException('Заказ не найден');
+    if (!order) throw new NotFoundException(tr('errors.orderNotFound'));
     return order;
   }
 }

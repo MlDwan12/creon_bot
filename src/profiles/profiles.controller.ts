@@ -1,3 +1,5 @@
+import { tr } from '../i18n/request-lang';
+import { isLang, LANGS } from '../i18n/i18n';
 import {
   BadRequestException,
   Body,
@@ -56,6 +58,18 @@ export class ProfilesController {
     return { ok: true };
   }
 
+  /** Язык интерфейса и сообщений бота; null — снова по языку Telegram. */
+  @Put('profile/language')
+  async updateLanguage(
+    @Body('language') language: unknown,
+    @Req() req: ApiRequest,
+  ) {
+    if (language !== null && !isLang(language))
+      throw new BadRequestException(`language — ${LANGS.join(', ')} или null`);
+    await this.profiles.updateLanguage(req.user.id, language);
+    return { ok: true };
+  }
+
   /** Кошелёк USDT (TRC20) для выплат; пусто — убрать. */
   @Put('profile/wallet')
   async updateWallet(@Body() body: unknown, @Req() req: ApiRequest) {
@@ -89,7 +103,7 @@ export class ProfilesController {
     await this.mustView(req, id);
     const telegramId = await this.profiles.telegramIdOf(id);
     const photo = telegramId && (await this.photos.profilePhoto(telegramId));
-    if (!photo) throw new NotFoundException('Фото нет');
+    if (!photo) throw new NotFoundException(tr('errors.noPhoto'));
     // только на успех: @Header ставится до обработчика, и клиент на час запоминал бы 404,
     // полученный, пока Telegram был недоступен
     res.setHeader('Cache-Control', 'private, max-age=3600');
@@ -102,7 +116,6 @@ export class ProfilesController {
       creatorId,
       this.moderatorGuard.isModerator(req.user),
     );
-    if (!allowed)
-      throw new ForbiddenException('Профиль этого креатора вам недоступен');
+    if (!allowed) throw new ForbiddenException(tr('errors.creatorHidden'));
   }
 }

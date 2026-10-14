@@ -1,3 +1,4 @@
+import { tr } from '../i18n/request-lang';
 import {
   BadRequestException,
   Body,
@@ -25,13 +26,13 @@ export class SupportController {
   @Throttle({ default: { limit: 10, ttl: 60 * 60_000 } })
   async send(@Body('text') value: unknown, @Req() req: ApiRequest) {
     if (!this.support.chatId)
-      throw new NotFoundException('Поддержка не настроена');
+      throw new NotFoundException(tr('errors.supportOff'));
     const text = typeof value === 'string' ? value.trim() : '';
     if (!isMeaningfulText(text))
-      throw new BadRequestException('Напишите вопрос');
+      throw new BadRequestException(tr('errors.supportEmpty'));
     if (text.length > MAX_SUPPORT_MESSAGE)
       throw new BadRequestException(
-        `Сообщение длиннее ${MAX_SUPPORT_MESSAGE} символов`,
+        tr('errors.supportTooLong', { max: MAX_SUPPORT_MESSAGE }),
       );
     await this.support.fromApp(req.user, text);
     return { ok: true };

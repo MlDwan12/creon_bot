@@ -24,25 +24,44 @@ const config = {
 /** Telegram, который отвечает по chat_id: 13 — бот заблокирован, 15 — 429, 16 — сеть упала. */
 function setup() {
   const sent: string[] = [];
-  const callApi = jest.fn((_method: string, payload: { chat_id: string }) => {
-    const id = payload.chat_id;
-    if (id === '13')
-      throw new TelegramError({
-        error_code: 403,
-        description: 'Forbidden: bot was blocked by the user',
+  /** Текст и подпись кнопки «Открыть» по chat_id — проверить язык. */
+  const texts = new Map<string, { text: string; button: string }>();
+  const callApi = jest.fn(
+    (
+      _method: string,
+      payload: {
+        chat_id: string;
+        text: string;
+        reply_markup?: { inline_keyboard: { text: string }[][] };
+      },
+    ) => {
+      const id = payload.chat_id;
+      if (id === '13')
+        throw new TelegramError({
+          error_code: 403,
+          description: 'Forbidden: bot was blocked by the user',
+        });
+      if (id === '15')
+        throw new TelegramError({
+          error_code: 429,
+          description: 'Too Many Requests',
+          parameters: { retry_after: 30 },
+        });
+      if (id === '16') throw new Error('ETIMEDOUT');
+      sent.push(id);
+      texts.set(id, {
+        text: payload.text,
+        button: payload.reply_markup?.inline_keyboard[0][0].text ?? '',
       });
-    if (id === '15')
-      throw new TelegramError({
-        error_code: 429,
-        description: 'Too Many Requests',
-        parameters: { retry_after: 30 },
-      });
-    if (id === '16') throw new Error('ETIMEDOUT');
-    sent.push(id);
-    return Promise.resolve({});
-  });
+      return Promise.resolve({});
+    },
+  );
   const bot = { telegram: { callApi } } as unknown as Telegraf<Context>;
-  return { service: new NotificationsService(bot, prisma, config), sent };
+  return {
+    service: new NotificationsService(bot, prisma, config),
+    sent,
+    texts,
+  };
 }
 
 /** Дождаться, пока запись в очередь (без await у вызывающего) дойдёт до базы. */
@@ -86,15 +105,17 @@ it('отправляет по порядку; заблокированным н�
 });
 
 it('рассылка о новом заказе — всем, кроме автора, модераторов, заблокированных и отписавшихся; после обычных', async () => {
-  const { service, sent } = setup();
+  const { service, sent, texts } = setup();
   const author = await prisma.user.create({ data: { telegramId: 20n } });
   await prisma.user.createMany({
     data: [
       { telegramId: 1n }, // модератор
-      { telegramId: 21n },
+      { telegramId: 21n, telegramLanguage: 'ru' },
       { telegramId: 22n, bannedAt: new Date() },
       { telegramId: 23n, notifyNewOrders: false },
-      { telegramId: 24n },
+      // Telegram на русском, но в профиле выбран английский
+      { telegramId: 24n, telegramLanguage: 'ru', language: 'en' },
+      { telegramId: 30n, telegramLanguage: 'ru' }, // жаловался
     ],
   });
   service.newOrderPublished({
@@ -109,5 +130,11 @@ it('рассылка о новом заказе — всем, кроме авт�
   await flushWrites();
 
   await service.processBatch();
-  expect(sent).toEqual(['30', '21', '24']);
+  // сначала обычное (ответ на жалобу), потом рассылка — её порядок внутри не важен
+  expect(sent[0]).toBe('30');
+  expect(sent.slice(1).sort()).toEqual(['21', '24', '30']);
+  expect(texts.get('21')).toMatchObject({ button: 'Открыть' });
+  expect(texts.get('21')!.text).toContain('Новый заказ: «Новый»');
+  expect(texts.get('24')).toMatchObject({ button: 'Open' });
+  expect(texts.get('24')!.text).toContain('New order: “Новый”');
 });

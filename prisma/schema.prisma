@@ -23,6 +23,10 @@ model User {
   payoutWallet String?
   /// Присылать ли сообщение о каждом новом заказе в каталоге — переключатель в профиле.
   notifyNewOrders Boolean @default(true)
+  /// Язык интерфейса, выбранный в профиле (src/i18n/i18n.ts, LANGS); null — по языку Telegram.
+  language        String?
+  /// language_code из Telegram — по нему язык, пока человек сам не выбрал; бот пишет на нём же.
+  telegramLanguage String?
   /// Заблокирован модератором: мини-апп показывает только экран блокировки, бот не пишет.
   bannedAt   DateTime?
   banReason  String?
@@ -34,6 +38,8 @@ model User {
   orderViews  OrderView[]
   reports     Report[]
   payouts     Payout[]
+  socialAccounts SocialAccount[]
+  oauthPendings  OAuthPending[]
 
   /// Ответ поддержки в теме → чей это пользователь (SupportService.fromSupport).
   @@index([supportTopicId])
@@ -60,6 +66,15 @@ enum Currency {
 enum VideoOrientation {
   VERTICAL
   HORIZONTAL
+}
+
+/** Площадки роликов — коды из src/common/platforms.ts (PLATFORMS). */
+enum VideoPlatform {
+  TIKTOK
+  YOUTUBE
+  VK
+  INSTAGRAM
+  X
 }
 
 enum OrderCategory {
@@ -100,6 +115,8 @@ model Order {
   minDurationSec   Int?
   maxDurationSec   Int?
   orientation      VideoOrientation?
+  /// Где можно публиковать ролик; пусто — на любой площадке.
+  platforms        VideoPlatform[] @default([])
   deadline         DateTime?
   status           OrderStatus   @default(PENDING_MODERATION)
   moderatorId      BigInt?
@@ -275,6 +292,8 @@ model Notification {
   html      Boolean  @default(false)
   /// Экран мини-аппа для кнопки «Открыть»: путь вроде /my-orders.
   path      String
+  /// Язык получателя (src/i18n): на нём подпись кнопки «Открыть». Текст уже переведён при постановке.
+  lang      String   @default("ru")
   /// 0 — обычные, 1 — рассылки: обычные уходят первыми, рассылка не задерживает срочное.
   priority  Int      @default(0)
   attempts  Int      @default(0)
@@ -284,4 +303,68 @@ model Notification {
 
   /// Выборка воркера: готовые к отправке, по приоритету.
   @@index([priority, sendAfter])
+}
+
+/** Площадки, где креатор подключает свой аккаунт (OAuth): по его токену берём просмотры его роликов. */
+enum SocialPlatform {
+  TIKTOK
+  VK
+  INSTAGRAM
+}
+
+/**
+ * Аккаунт креатора на площадке, подключённый через OAuth (src/accounts). Токены — зашифрованы
+ * (SOCIAL_TOKENS_KEY, src/accounts/token-crypto.ts): это доступ к чужому аккаунту.
+ * Рекламодателю аккаунт не показываем — контакты сторон скрыты.
+ */
+model SocialAccount {
+  id              Int            @id @default(autoincrement())
+  userId          Int
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform        SocialPlatform
+  /// id пользователя на площадке: TikTok open_id, VK user_id, Instagram user_id.
+  externalId      String
+  /// Имя аккаунта на площадке — креатору, чтобы различать свои аккаунты; null — площадка не отдала.
+  label           String?
+  accessToken     String
+  refreshToken    String
+  accessExpiresAt DateTime
+  /// VK ID: без device_id токен не обновить.
+  deviceId        String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  /// У креатора может быть несколько аккаунтов одной площадки (AccountsService, MAX_PER_PLATFORM).
+  @@index([userId, platform])
+  /// Один аккаунт площадки — одному креатору: чужой аккаунт к себе не подключить.
+  @@unique([platform, externalId])
+}
+
+/**
+ * Начатое подключение аккаунта площадки (AccountsService.start): ждём, когда креатор вернётся с
+ * площадки. В базе, а не в памяти: callback может прийти в другую копию бота или после рестарта.
+ */
+model OAuthPending {
+  /// Одноразовый state из ссылки входа.
+  state     String         @id
+  userId    Int
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform  SocialPlatform
+  /// PKCE: секрет, чей хеш ушёл в ссылку входа.
+  verifier  String
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+/**
+ * Какая копия бота выполняет фоновые задачи (src/jobs/job-lease.ts). Аренду продлевает каждый
+ * проход держателя; копия упала — по истечении аренды задачи забирает другая. Иначе при двух
+ * копиях напоминания и итоги задвоились бы.
+ */
+model JobLease {
+  name   String   @id
+  /// Случайный id процесса-держателя.
+  holder String
+  until  DateTime
 }

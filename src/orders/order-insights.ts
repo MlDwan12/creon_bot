@@ -1,5 +1,5 @@
+import { requestLang, tr, trNum } from '../i18n/request-lang';
 import { type Order, OrderStatus } from '@prisma/client';
-import { formatMoney } from '../common/format';
 import { DAY_MS } from './deadline';
 import type { buildOrderReport } from './order-report';
 
@@ -46,20 +46,26 @@ export function orderInsights(
   )
     result.push({
       code: 'NOT_TAKEN',
-      text: `Заказ открыли ${funnel.viewers} креаторов, а взяли ${funnel.taken}. Условия не цепляют: снизьте порог просмотров, ослабьте требования к длительности и формату, приложите пример ролика.`,
+      text: tr('insights.notTaken', {
+        viewers: funnel.viewers,
+        taken: funnel.taken,
+      }),
     });
 
   if (funnel.expired >= 3 && funnel.expired / funnel.taken >= 0.4)
     result.push({
       code: 'SLOTS_BURN',
-      text: `${funnel.expired} из ${funnel.taken} креаторов взяли заказ, но не прислали видео вовремя. Похоже, задача сложнее, чем кажется: упростите требования или опишите её подробнее.`,
+      text: tr('insights.slotsBurn', {
+        expired: funnel.expired,
+        taken: funnel.taken,
+      }),
     });
 
   const judged = funnel.rejected + funnel.approved;
   if (funnel.rejected >= 3 && funnel.rejected / judged >= 0.3)
     result.push({
       code: 'REJECTED',
-      text: `Модератор отклонил ${funnel.rejected} из ${judged} роликов — креаторы понимают задачу не так. Уточните описание заказа.`,
+      text: tr('insights.rejected', { rejected: funnel.rejected, judged }),
     });
 
   // лайки известны не у всех роликов — считаем только по тем, где они есть
@@ -69,7 +75,12 @@ export function orderInsights(
   if (likedViews >= 5000 && likes / likedViews < 0.02)
     result.push({
       code: 'LOW_ENGAGEMENT',
-      text: `Лайков — ${((likes / likedViews) * 100).toFixed(1)}% от просмотров: ролики смотрят, но не реагируют. Попробуйте другой посыл или формат.`,
+      text: tr('insights.lowEngagement', {
+        percent: ((likes / likedViews) * 100).toLocaleString(
+          requestLang() === 'en' ? 'en-US' : 'ru-RU',
+          { minimumFractionDigits: 1, maximumFractionDigits: 1 },
+        ),
+      }),
     });
 
   if (
@@ -79,13 +90,18 @@ export function orderInsights(
   )
     result.push({
       code: 'LOW_CLICKS',
-      text: `Ролики посмотрели ${summary.views.toLocaleString('ru-RU')} раз, а по ссылке на товар перешли ${summary.clicks}. Зрители не идут на сайт: попросите креаторов прямо звать по ссылке в описании и показать, что получит зритель.`,
+      text: tr('insights.lowClicks', {
+        views: trNum(summary.views),
+        clicks: summary.clicks,
+      }),
     });
 
   if (open && summary.videos >= 3 && summary.left / summary.budget < 0.2)
     result.push({
       code: 'BUDGET_ENDING',
-      text: `Ролики набирают просмотры, а бюджет почти закончился — осталось ${formatMoney(summary.left)}. Чтобы не останавливать поток роликов, увеличьте бюджет в заказе.`,
+      text: tr('insights.budgetEnding', {
+        left: `${trNum(summary.left)} USDT`,
+      }),
     });
 
   if (
@@ -96,7 +112,7 @@ export function orderInsights(
   )
     result.push({
       code: 'DEADLINE_MONEY_LEFT',
-      text: `До конца срока меньше 2 дней, а потрачено меньше половины бюджета. Продлите срок в «Мои заказы», чтобы собрать больше роликов.`,
+      text: tr('insights.deadline'),
     });
 
   return result;

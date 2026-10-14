@@ -1,4 +1,5 @@
 import { ref } from 'vue';
+import { i18next, type Lang } from './i18n';
 import { getInitData } from './telegram';
 
 /** Аккаунт заблокирован — App.vue показывает экран блокировки вместо любого экрана. */
@@ -15,29 +16,29 @@ export type OrderCategory =
   | 'TECH'
   | 'OTHER';
 
-// ponytail: копия ORDER_CATEGORIES из src/bot/utils/format.ts (там с эмодзи для чата) — фронт и бэк
-// пока отдельные пакеты. Если копий станет больше, вынести общие типы в пакет, который импортируют оба.
-export const ORDER_CATEGORIES: { code: OrderCategory; label: string }[] = [
-  { code: 'PRODUCT_REVIEW', label: 'Обзор товара' },
-  { code: 'BEAUTY', label: 'Красота' },
-  { code: 'FOOD', label: 'Еда' },
-  { code: 'FASHION', label: 'Мода' },
-  { code: 'GAMING', label: 'Игры' },
-  { code: 'FITNESS', label: 'Спорт и фитнес' },
-  { code: 'ENTERTAINMENT', label: 'Развлечения' },
-  { code: 'TECH', label: 'Техника' },
-  { code: 'OTHER', label: 'Другое' },
+/** Категории заказа по порядку в фильтрах; названия — в словаре (i18n/*.json, categories). */
+export const ORDER_CATEGORIES: OrderCategory[] = [
+  'PRODUCT_REVIEW',
+  'BEAUTY',
+  'FOOD',
+  'FASHION',
+  'GAMING',
+  'FITNESS',
+  'ENTERTAINMENT',
+  'TECH',
+  'OTHER',
 ];
 
 export function categoryLabel(code: OrderCategory): string {
-  return ORDER_CATEGORIES.find((c) => c.code === code)?.label ?? code;
+  return i18next.t(`categories.${code}`);
 }
 
-/** Требования к ролику в заказе; null — любая длительность или ориентация. */
+/** Требования к ролику в заказе; null — любая длительность или ориентация, пустые platforms — любая площадка. */
 export interface VideoFormat {
   minDurationSec: number | null;
   maxDurationSec: number | null;
   orientation: 'VERTICAL' | 'HORIZONTAL' | null;
+  platforms: VideoPlatform[];
 }
 
 /** Ответ `GET /api/orders` — см. OrdersController и OrdersService на бэкенде. */
@@ -53,6 +54,8 @@ export interface OrderSummary extends VideoFormat {
   minViews: number;
   /** Сколько ещё осталось на выплаты креаторам, USDT. */
   free: number;
+  /** Осталось меньше 30% фонда — подсвечиваем «успейте». */
+  budgetLow: boolean;
   category: OrderCategory;
   deadline: string | null;
   createdAt: string;
@@ -160,6 +163,10 @@ export const PLATFORM_NAMES: Record<Platform, string> = {
   X: 'X',
   OTHER: 'Другое',
 };
+
+/** Площадки, которые рекламодатель может указать в заказе (enum VideoPlatform на бэкенде). */
+export type VideoPlatform = Exclude<Platform, 'OTHER'>;
+export const VIDEO_PLATFORMS: VideoPlatform[] = ['TIKTOK', 'INSTAGRAM', 'YOUTUBE', 'VK', 'X'];
 
 /** Ответ `GET /api/my-orders/:id/report` — см. src/api/order-report.ts. Деньги в USDT, с комиссией. */
 export interface OrderReport {
@@ -455,7 +462,7 @@ async function request<T>(
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!res.ok) {
-    let userMessage = 'Что-то пошло не так, попробуйте ещё раз';
+    let userMessage = i18next.t('common.genericError');
     if ([400, 403, 404, 429].includes(res.status)) {
       const data = (await res.json().catch(() => null)) as {
         message?: unknown;
@@ -476,13 +483,14 @@ async function request<T>(
  * Страница каталога. `after` — последний показанный заказ (без него — первая страница).
  * hasMore — есть ли следующая; total — для заголовка, может отставать на полминуты.
  */
-export function fetchOpenOrders(after?: OrderSummary, category?: OrderCategory) {
+export function fetchOpenOrders(after?: OrderSummary, category?: OrderCategory, platform?: VideoPlatform) {
   const query = new URLSearchParams();
   if (after) {
     query.set('afterId', String(after.id));
     query.set('afterCreatedAt', after.createdAt);
   }
   if (category) query.set('category', category);
+  if (platform) query.set('platform', platform);
   return request<{ items: OrderSummary[]; hasMore: boolean; total: number }>('GET', `/api/orders?${query}`);
 }
 
@@ -592,6 +600,30 @@ export function updateWallet(wallet: string) {
   return request<{ ok: true }>('PUT', '/api/profile/wallet', { wallet });
 }
 
+/** Площадка, где креатор подключает свои аккаунты — тогда просмотры его роликов оттуда считаются сами. */
+export interface SocialAccount {
+  platform: 'TIKTOK' | 'VK' | 'INSTAGRAM';
+  name: string;
+  /** Подключённые аккаунты; label — имя на площадке, null — площадка его не отдала. */
+  accounts: { id: number; label: string | null }[];
+  /** Можно подключить ещё один (у площадки есть лимит). */
+  canAdd: boolean;
+}
+
+/** Пусто — ни одна площадка пока не подключается (нет ключей), раздел в профиле не показываем. */
+export function fetchSocialAccounts() {
+  return request<SocialAccount[]>('GET', '/api/accounts');
+}
+
+/** Ссылка на вход на площадке — открыть во внешнем браузере. */
+export function connectSocialAccount(platform: SocialAccount['platform']) {
+  return request<{ url: string }>('POST', `/api/accounts/${platform.toLowerCase()}/connect`);
+}
+
+export function disconnectSocialAccount(accountId: number) {
+  return request<{ ok: true }>('DELETE', `/api/accounts/${accountId}`);
+}
+
 /** Модератор: опубликовать отзыв с проверки в профиле креатора. */
 export function approveReview(submissionId: number) {
   return request<{ ok: true }>('POST', `/api/mod/reviews/${submissionId}/approve`);
@@ -602,10 +634,22 @@ export function removeReview(submissionId: number) {
   return request<{ ok: true }>('DELETE', `/api/mod/reviews/${submissionId}`);
 }
 
-type Me = { isModerator: boolean; supportUrl: string | null };
+type Me = {
+  isModerator: boolean;
+  supportUrl: string | null;
+  /** Язык интерфейса: выбранный в профиле или по Telegram; languageChosen — выбран ли вручную. */
+  language: Lang;
+  languageChosen: boolean;
+};
 let me: Promise<Me> | undefined;
 
 /** Один запрос на запуск: initData, а с ним и ответ, до перезапуска Mini App не меняется. */
+/** Язык интерфейса и бота; null — снова по языку Telegram. */
+export function updateLanguage(language: Lang | null) {
+  me = undefined; // /api/me вернёт уже новый язык
+  return request<{ ok: true }>('PUT', '/api/profile/language', { language });
+}
+
 export function fetchMe() {
   // неудачный запрос не запоминаем — иначе сбой сети считался бы ответом до перезапуска
   return (me ??= request<Me>('GET', '/api/me').catch((err) => {
@@ -704,42 +748,16 @@ export function markPublicationDeleted(id: number) {
 /** На что жалоба: VIDEO и REVIEW — по id отклика, PROFILE — по id пользователя. */
 export type ReportTarget = 'ORDER' | 'VIDEO' | 'REVIEW' | 'PROFILE';
 
-/** Причины жалоб по типу объекта; коды проверяет бэкенд (src/api/reports.service.ts). */
-export const REPORT_REASONS: Record<ReportTarget, { code: string; label: string }[]> = {
-  ORDER: [
-    { code: 'FRAUD', label: 'Мошенничество' },
-    { code: 'PROHIBITED', label: 'Запрещённая тематика' },
-    { code: 'FAKE_REVIEWS', label: 'Фейковые отзывы, обман покупателей' },
-    { code: 'PERSONAL_DATA', label: 'Просят личные данные' },
-    { code: 'SPAM', label: 'Спам' },
-    { code: 'OFF_PLATFORM', label: 'Предлагает связь или оплату вне площадки' },
-    { code: 'OTHER', label: 'Другое' },
-  ],
-  VIDEO: [
-    { code: 'STOLEN', label: 'Чужое или краденое видео' },
-    { code: 'UNAVAILABLE', label: 'Видео удалено или недоступно' },
-    { code: 'BRAND_NEGATIVE', label: 'Негатив о бренде' },
-    { code: 'BLACKMAIL', label: 'Шантаж, вымогательство' },
-    { code: 'OFF_PLATFORM', label: 'Предлагает связь или оплату вне площадки' },
-    { code: 'OTHER', label: 'Другое' },
-  ],
-  REVIEW: [
-    { code: 'INSULT', label: 'Оскорбления' },
-    { code: 'FALSE', label: 'Ложный отзыв' },
-    { code: 'PERSONAL_DATA', label: 'Раскрывает личные данные' },
-    { code: 'OFF_PLATFORM', label: 'Предлагает связь или оплату вне площадки' },
-    { code: 'OTHER', label: 'Другое' },
-  ],
-  PROFILE: [
-    { code: 'IMPERSONATION', label: 'Выдаёт себя за другого' },
-    { code: 'OFFENSIVE', label: 'Оскорбительное имя или фото' },
-    { code: 'OFF_PLATFORM', label: 'Предлагает связь или оплату вне площадки' },
-    { code: 'OTHER', label: 'Другое' },
-  ],
+/** Причины жалоб по типу объекта; коды проверяет бэкенд (src/reports), названия — в словаре (reportReasons). */
+export const REPORT_REASONS: Record<ReportTarget, string[]> = {
+  ORDER: ['FRAUD', 'PROHIBITED', 'FAKE_REVIEWS', 'PERSONAL_DATA', 'SPAM', 'OFF_PLATFORM', 'OTHER'],
+  VIDEO: ['STOLEN', 'UNAVAILABLE', 'BRAND_NEGATIVE', 'BLACKMAIL', 'OFF_PLATFORM', 'OTHER'],
+  REVIEW: ['INSULT', 'FALSE', 'PERSONAL_DATA', 'OFF_PLATFORM', 'OTHER'],
+  PROFILE: ['IMPERSONATION', 'OFFENSIVE', 'OFF_PLATFORM', 'OTHER'],
 };
 
 export function reasonLabel(target: ReportTarget, code: string): string {
-  return REPORT_REASONS[target].find((r) => r.code === code)?.label ?? code;
+  return REPORT_REASONS[target].includes(code) ? i18next.t(`reportReasons.${target}.${code}`) : code;
 }
 
 /** Сообщение менеджеру из мини-аппа; ответ придёт в чат с ботом. */

@@ -44,15 +44,32 @@ creon_bot:
 
 ## Как идёт выкатка
 
-`.github/workflows/deploy.yml`:
-1. собирает образ `creon_bot:sha-<коммит>` из того коммита, что прошёл CI, и по SSH делает на сервере `docker load`;
-2. бэкап базы в `/var/www/site/_backups/` (хранятся последние 5);
-3. текущий `creon_bot:current` становится `creon_bot:previous`, новый образ — `current`;
-4. `docker compose up -d --no-deps creon_bot` и ждёт `healthy` до 3 минут;
-5. не поднялся — откат на `previous`, job падает красным. Миграции откат не отменит: для этого бэкап;
-6. удаляет старые образы creon (по метке `app=creon_bot`), чужие не трогает.
+`.github/workflows/deploy.yml` (права токена — только `contents: read`):
+1. запускается только после зелёного CI на пуше в `main` этого репозитория (не форка);
+2. если коммит уже не вершина `main` (CI нового коммита закончился раньше), выкатку пропускает — иначе стенд откатился бы на старую версию;
+3. собирает образ `creon_bot:sha-<коммит>` из того коммита, что прошёл CI; SSH-ключ появляется на раннере только после сборки;
+4. по SSH: `docker load` образа и копия `deploy/remote-deploy.sh` в домашний каталог `deploy`, затем `ssh -n prod … bash remote-deploy.sh <тег>`. Итог — только код возврата скрипта.
 
-Откат вручную: `sudo docker tag creon_bot:previous creon_bot:current && sudo docker compose up -d --no-deps creon_bot`.
+`deploy/remote-deploy.sh` на сервере:
+1. бэкап базы `pg_dump -Fc` в `/var/www/site/_backups/*.dump` (последние 5) и проверка, что архив читается (`pg_restore --list`);
+2. текущий `creon_bot:current` становится `creon_bot:previous`, новый образ — `current`;
+3. `docker compose up -d --no-deps --force-recreate creon_bot` и ждёт до 3 минут, пока контейнер **на новом образе** станет `healthy`;
+4. упал `up` или нет healthy — откат на `previous` и проверка, что healthy стал он; job красный в обоих случаях, в логе — получилось ли откатиться;
+5. удаляет тег сборки и висячие образы creon (по метке `app=creon_bot`), чужие не трогает.
+
+Откат образа **не откатывает миграции**. Поэтому миграции — только совместимые с прошлой версией кода: сначала добавить (колонку, таблицу), выпустить код, который работает с обеими схемами, и только следующим релизом удалять старое (expand → contract).
+
+Откат вручную: `sudo docker tag creon_bot:previous creon_bot:current && sudo docker compose up -d --no-deps --force-recreate creon_bot`.
+
+Восстановление базы из бэкапа (бот остановлен, чтобы не писал в базу; всё или ничего — `--single-transaction`):
+
+```bash
+cd /var/www/site
+sudo docker compose stop creon_bot
+sudo sh -c 'cat _backups/<файл>.dump' | sudo docker compose exec -T postgres \
+  pg_restore -U creon -d creon_bot --clean --if-exists --no-owner --single-transaction --exit-on-error
+sudo docker compose up -d --no-deps creon_bot
+```
 
 ## Настройка (один раз)
 
