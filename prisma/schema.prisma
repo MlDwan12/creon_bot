@@ -35,6 +35,7 @@ model User {
   reports     Report[]
   payouts     Payout[]
   socialAccounts SocialAccount[]
+  oauthPendings  OAuthPending[]
 
   /// Ответ поддержки в теме → чей это пользователь (SupportService.fromSupport).
   @@index([supportTopicId])
@@ -331,4 +332,33 @@ model SocialAccount {
   @@index([userId, platform])
   /// Один аккаунт площадки — одному креатору: чужой аккаунт к себе не подключить.
   @@unique([platform, externalId])
+}
+
+/**
+ * Начатое подключение аккаунта площадки (AccountsService.start): ждём, когда креатор вернётся с
+ * площадки. В базе, а не в памяти: callback может прийти в другую копию бота или после рестарта.
+ */
+model OAuthPending {
+  /// Одноразовый state из ссылки входа.
+  state     String         @id
+  userId    Int
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform  SocialPlatform
+  /// PKCE: секрет, чей хеш ушёл в ссылку входа.
+  verifier  String
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+/**
+ * Какая копия бота выполняет фоновые задачи (src/jobs/job-lease.ts). Аренду продлевает каждый
+ * проход держателя; копия упала — по истечении аренды задачи забирает другая. Иначе при двух
+ * копиях напоминания и итоги задвоились бы.
+ */
+model JobLease {
+  name   String   @id
+  /// Случайный id процесса-держателя.
+  holder String
+  until  DateTime
 }

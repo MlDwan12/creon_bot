@@ -27,13 +27,6 @@ const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 /** Аккаунтов одной площадки у креатора: по каждому — запрос к площадке при подсчёте просмотров. */
 export const MAX_PER_PLATFORM = 5;
 
-interface Pending {
-  userId: number;
-  platform: SocialPlatform;
-  verifier: string;
-  expiresAt: number;
-}
-
 /**
  * Аккаунты креаторов на площадках, подключённые через OAuth (TikTok, VK, Instagram); на площадке
  * их может быть несколько (MAX_PER_PLATFORM). По токену креатора
@@ -46,8 +39,6 @@ export class AccountsService {
   private readonly providers: Map<SocialPlatform, Provider>;
   private readonly crypto?: TokenCrypto;
   private readonly webappUrl: string;
-  // ponytail: в памяти — после рестарта начатое подключение придётся повторить; инстанс один.
-  private readonly pending = new Map<string, Pending>();
 
   constructor(
     config: ConfigService,
@@ -95,7 +86,6 @@ export class AccountsService {
   /** Начать подключение: ссылка на вход на площадке. Вернётся креатор на callback. */
   async start(userId: number, platform: SocialPlatform) {
     const provider = this.mustProvider(platform);
-    const now = Date.now();
     // ponytail: лимит проверяем только здесь — две вкладки входа сразу дадут лишний аккаунт; не страшно
     const count = await this.prisma.socialAccount.count({
       where: { userId, platform },
@@ -104,15 +94,20 @@ export class AccountsService {
       throw new ForbiddenException(
         `Можно подключить до ${MAX_PER_PLATFORM} аккаунтов ${provider.name} — отключите ненужный`,
       );
-    for (const [k, p] of this.pending)
-      if (p.expiresAt < now) this.pending.delete(k);
+    // брошенные входы — заодно убираем
+    await this.prisma.oAuthPending.deleteMany({
+      where: { expiresAt: { lt: new Date() } },
+    });
     const state = randomState();
     const verifier = randomBytes(48).toString('base64url');
-    this.pending.set(state, {
-      userId,
-      platform,
-      verifier,
-      expiresAt: now + PENDING_TTL_MS,
+    await this.prisma.oAuthPending.create({
+      data: {
+        state,
+        userId,
+        platform,
+        verifier,
+        expiresAt: new Date(Date.now() + PENDING_TTL_MS),
+      },
     });
     return provider.authorizeUrl({
       state,
@@ -132,12 +127,24 @@ export class AccountsService {
   ): Promise<{ user: User; name: string }> {
     const provider = this.mustProvider(platform);
     const query = callbackParams(rawQuery);
-    const pending = query.state ? this.pending.get(query.state) : undefined;
-    if (query.state) this.pending.delete(query.state);
+    // одноразовый: удаляем сразу — даже неудачная попытка его сжигает
+    const pending = query.state
+      ? await this.prisma.oAuthPending
+          .delete({ where: { state: query.state } })
+          .catch((err: unknown) => {
+            // нет такого — устарел или уже использован; другие сбои базы — наверх
+            if (
+              err instanceof Prisma.PrismaClientKnownRequestError &&
+              err.code === 'P2025'
+            )
+              return null;
+            throw err;
+          })
+      : null;
     if (
       !pending ||
       pending.platform !== platform ||
-      pending.expiresAt < Date.now()
+      pending.expiresAt.getTime() < Date.now()
     )
       throw new BadRequestException(
         'Ссылка устарела — нажмите «Подключить» в приложении ещё раз',
