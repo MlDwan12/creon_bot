@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { fetchMyOrders, type MyOrder } from '../api';
 import MyOrderCard from '../components/MyOrderCard.vue';
+import { i18next } from '../i18n';
 
 const orders = ref<MyOrder[]>([]);
 const loading = ref(true);
@@ -13,7 +14,7 @@ async function load() {
     orders.value = await fetchMyOrders();
     error.value = '';
   } catch {
-    error.value = 'Не удалось загрузить заказы';
+    error.value = i18next.t('myOrders.loadError');
   } finally {
     loading.value = false;
   }
@@ -25,14 +26,14 @@ void load();
 <template>
   <main class="page">
     <header class="head">
-      <h1>Мои заказы</h1>
-      <RouterLink to="/my-orders/new" class="new">+ Разместить</RouterLink>
+      <h1>{{ $t('myOrders.title') }}</h1>
+      <RouterLink to="/my-orders/new" class="new">{{ $t('myOrders.new') }}</RouterLink>
     </header>
 
-    <p v-if="loading" class="hint">Загрузка…</p>
+    <p v-if="loading" class="hint">{{ $t('common.loading') }}</p>
     <p v-else-if="error" class="hint">{{ error }}</p>
     <p v-else-if="orders.length === 0" class="hint">
-      У вас пока нет заказов. Разместите первый — креаторы увидят его после проверки модератором.
+      {{ $t('myOrders.empty') }}
     </p>
 
     <!-- @changed — карточка сообщила, что заказ закрыт/удалён: перечитываем список. -->
@@ -54,20 +55,19 @@ void load();
 }
 h1 {
   margin: 0;
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
-  letter-spacing: -0.3px;
 }
 .new {
   display: flex;
   align-items: center;
-  min-height: 36px;
-  padding: 0 14px;
-  border-radius: 18px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 22px;
   background: var(--accent);
   color: var(--accent-text);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 800;
   text-decoration: none;
 }
 .hint {

@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { ApiError, closeOrder, deleteOrder, extendOrder, type MyOrder } from '../api';
 import { formatDate, formatMoney, formatViews } from '../format';
+import { i18next } from '../i18n';
 import { confirmAction } from '../telegram';
 
 const props = defineProps<{ order: MyOrder }>();
@@ -10,12 +11,13 @@ const props = defineProps<{ order: MyOrder }>();
 const emit = defineEmits<{ changed: [] }>();
 const router = useRouter();
 
-const STATUS: Record<MyOrder['status'], { label: string; tone: string }> = {
-  PENDING_MODERATION: { label: 'На проверке', tone: 'warn' },
-  OPEN: { label: 'Открыт', tone: 'success' },
-  REJECTED: { label: 'Отклонён', tone: 'danger' },
-  CLOSED: { label: 'Закрыт', tone: 'muted' },
-  EXPIRED: { label: 'Срок вышел', tone: 'muted' },
+/** Цвет метки статуса; текст — в словаре (myOrderCard.status). */
+const TONE: Record<MyOrder['status'], string> = {
+  PENDING_MODERATION: 'warn',
+  OPEN: 'success',
+  REJECTED: 'danger',
+  CLOSED: 'muted',
+  EXPIRED: 'muted',
 };
 
 /** На сколько дней продлить — как варианты срока в форме заказа. */
@@ -38,14 +40,14 @@ async function run(question: string | null, action: () => Promise<unknown>) {
     await action();
     emit('changed');
   } catch (err) {
-    error.value = err instanceof ApiError ? err.userMessage : 'Не получилось, попробуйте ещё раз';
+    error.value = err instanceof ApiError ? err.userMessage : i18next.t('myOrderCard.error');
   } finally {
     busy.value = false;
   }
 }
 
 const close = () =>
-  run('Закрыть заказ? Новые отклики перестанут приниматься, уже сданные ролики будут оплачены из бюджета.', () =>
+  run(i18next.t('myOrderCard.closeConfirm'), () =>
     closeOrder(props.order.id),
   );
 const extend = (days: number) =>
@@ -54,7 +56,7 @@ const extend = (days: number) =>
     extending.value = false;
   });
 const remove = () =>
-  run('Удалить заказ? Это необратимо — вместе с ним удалятся все отклики.', () =>
+  run(i18next.t('myOrderCard.deleteConfirm'), () =>
     deleteOrder(props.order.id),
   );
 </script>
@@ -63,45 +65,45 @@ const remove = () =>
   <article class="card">
     <div class="top">
       <div class="title">{{ order.title }}</div>
-      <span :class="['badge', STATUS[order.status].tone]">{{ STATUS[order.status].label }}</span>
+      <span :class="['badge', TONE[order.status]]">{{ $t(`myOrderCard.status.${order.status}`) }}</span>
     </div>
     <div class="hint">
-      Бюджет {{ formatMoney(order.budget) }}
-      <template v-if="order.deadline"> · до {{ formatDate(order.deadline) }}</template>
-      <template v-if="order.status === 'PENDING_MODERATION'"> · модератор проверит заказ перед публикацией</template>
+      {{ $t('myOrderCard.budget', { amount: formatMoney(order.budget) })
+      }}<template v-if="order.deadline">{{ $t('myOrderCard.until', { date: formatDate(order.deadline) }) }}</template
+      ><template v-if="order.status === 'PENDING_MODERATION'">{{ $t('myOrderCard.pending') }}</template>
     </div>
 
     <div v-if="order.approved > 0 || order.usedPercent > 0" class="usage">
       <div class="bar" aria-hidden="true"><span :style="{ width: `${order.usedPercent}%` }" /></div>
       <div class="hint">
-        Израсходовано {{ order.usedPercent }}% бюджета · роликов: {{ order.approved }} · просмотров: {{ formatViews(order.views) }}
+        {{ $t('myOrderCard.usage', { percent: order.usedPercent, approved: order.approved, views: formatViews(order.views) }) }}
       </div>
     </div>
 
     <RouterLink v-if="order.approved > 0" :to="`/my-orders/${order.id}/review`" class="pending">
       <span>
-        <strong>Отчёт · роликов: {{ order.approved }}</strong>
-        <small v-if="order.toRate > 0">можно оценить: {{ order.toRate }}</small>
-        <small v-else>откликов всего: {{ order.submissionsCount }}</small>
+        <strong>{{ $t('myOrderCard.report', { count: order.approved }) }}</strong>
+        <small v-if="order.toRate > 0">{{ $t('myOrderCard.toRate', { count: order.toRate }) }}</small>
+        <small v-else>{{ $t('myOrderCard.totalSubmissions', { count: order.submissionsCount }) }}</small>
       </span>
       <span aria-hidden="true">›</span>
     </RouterLink>
-    <div v-else-if="order.submissionsCount > 0" class="hint">Откликов: {{ order.submissionsCount }}</div>
+    <div v-else-if="order.submissionsCount > 0" class="hint">{{ $t('myOrderCard.submissions', { count: order.submissionsCount }) }}</div>
 
     <template v-if="order.status === 'REJECTED'">
-      <p v-if="order.rejectReason" class="reason">Модератор: «{{ order.rejectReason }}»</p>
+      <p v-if="order.rejectReason" class="reason">{{ $t('myOrderCard.moderator', { reason: order.rejectReason }) }}</p>
       <RouterLink :to="`/my-orders/new?from=${order.id}`" class="action">
-        Исправить и отправить снова
+        {{ $t('myOrderCard.fix') }}
       </RouterLink>
     </template>
 
     <p v-if="order.status === 'EXPIRED'" class="hint">
-      Новые видео не принимаются. Продлите срок, чтобы снова открыть заказ.
+      {{ $t('myOrderCard.expired') }}
     </p>
 
     <div v-if="extending" class="buttons">
       <button v-for="d in EXTEND_DAYS" :key="d" type="button" :disabled="busy" @click="extend(d)">
-        +{{ d }} дн
+        {{ $t('myOrderCard.extendBy', { count: d }) }}
       </button>
     </div>
     <div class="buttons">
@@ -111,13 +113,13 @@ const remove = () =>
         :disabled="busy"
         @click="router.push(`/my-orders/${order.id}/edit`)"
       >
-        Изменить
+        {{ $t('myOrderCard.edit') }}
       </button>
       <button v-if="canExtend" type="button" :disabled="busy" @click="extending = !extending">
-        {{ extending ? 'Отмена' : 'Продлить срок' }}
+        {{ extending ? $t('common.cancel') : $t('myOrderCard.extend') }}
       </button>
       <button v-if="order.status === 'OPEN'" type="button" :disabled="busy" @click="close">
-        Закрыть набор
+        {{ $t('myOrderCard.close') }}
       </button>
       <!-- та же форма, что «Исправить и отправить снова»: поля подставятся из этого заказа -->
       <button
@@ -126,9 +128,9 @@ const remove = () =>
         :disabled="busy"
         @click="router.push(`/my-orders/new?from=${order.id}`)"
       >
-        Создать похожий
+        {{ $t('myOrderCard.similar') }}
       </button>
-      <button v-if="order.deletable" type="button" class="danger" :disabled="busy" @click="remove">Удалить</button>
+      <button v-if="order.deletable" type="button" class="danger" :disabled="busy" @click="remove">{{ $t('myOrderCard.delete') }}</button>
     </div>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
   </article>
@@ -141,8 +143,8 @@ const remove = () =>
   gap: 6px;
 }
 .bar {
-  height: 6px;
-  border-radius: 3px;
+  height: 8px;
+  border-radius: 4px;
   background: var(--fill);
   overflow: hidden;
 }
@@ -154,9 +156,9 @@ const remove = () =>
 .card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border-radius: 14px;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-card);
   background: var(--surface);
 }
 .top {
@@ -166,16 +168,16 @@ const remove = () =>
 }
 .title {
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 800;
   line-height: 1.3;
 }
 .badge {
   flex: none;
   align-self: flex-start;
-  padding: 3px 8px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 13px;
+  font-size: 12px;
+  font-weight: 800;
 }
 .badge.success {
   background: var(--success-soft);
@@ -186,7 +188,7 @@ const remove = () =>
   color: var(--orange-text);
 }
 .badge.danger {
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  background: var(--danger-soft);
   color: var(--danger);
 }
 .badge.muted {
@@ -201,9 +203,9 @@ const remove = () =>
   display: flex;
   justify-content: space-between;
   align-items: center;
-  min-height: 48px;
-  padding: 6px 12px;
-  border-radius: 10px;
+  min-height: 52px;
+  padding: 8px 14px;
+  border-radius: 16px;
   background: var(--orange-soft);
   color: var(--text);
   text-decoration: none;
