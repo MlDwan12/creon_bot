@@ -415,12 +415,12 @@ describe('каталог', () => {
     for (let i = 0; i < 3; i++) await openOrder(adv.id);
     await pendingOrder(adv.id); // на модерации — не в каталоге
 
-    const first = await orders.listOpen(undefined, undefined, 2);
+    const first = await orders.listOpen(undefined, undefined, undefined, 2);
     expect(first).toMatchObject({ hasMore: true, total: 3 });
     expect(first.items).toHaveLength(2);
 
     const tail = first.items[1];
-    const last = await orders.listOpen(undefined, tail, 2);
+    const last = await orders.listOpen(undefined, undefined, tail, 2);
     expect(last.hasMore).toBe(false);
     expect(last.items).toHaveLength(1);
   });
@@ -429,10 +429,43 @@ describe('каталог', () => {
     const adv = await user();
     const ids: number[] = [];
     for (let i = 0; i < 4; i++) ids.push((await openOrder(adv.id)).id);
-    const first = await orders.listOpen(undefined, undefined, 2); // новые: ids[3], ids[2]
+    const first = await orders.listOpen(undefined, undefined, undefined, 2); // новые: ids[3], ids[2]
     await orders.close(first.items[0].id, adv.id); // закрыли уже показанный
-    const next = await orders.listOpen(undefined, first.items[1], 2);
+    const next = await orders.listOpen(undefined, undefined, first.items[1], 2);
     expect(next.items.map((o) => o.id)).toEqual([ids[1], ids[0]]);
+  });
+
+  it('фильтр по площадке: заказы для неё и без ограничений; ролик с другой площадки не сдать', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const any = await openOrder(adv.id);
+    const tiktok = await openOrder(adv.id);
+    await prisma.order.update({
+      where: { id: tiktok.id },
+      data: { platforms: ['TIKTOK'] },
+    });
+
+    const ids = async (p: 'TIKTOK' | 'INSTAGRAM') =>
+      (await orders.listOpen(undefined, p, undefined, 10)).items.map(
+        (o) => o.id,
+      );
+    expect(await ids('TIKTOK')).toEqual([tiktok.id, any.id]);
+    expect(await ids('INSTAGRAM')).toEqual([any.id]);
+
+    const s = await submissions.claim(tiktok.id, creator.id);
+    await expect(
+      submissions.attachVideo(
+        s.id,
+        creator.id,
+        'https://www.instagram.com/reel/abc/',
+        VIEWS,
+      ),
+    ).rejects.toThrow('только в TikTok');
+    await submissions.attachVideo(
+      s.id,
+      creator.id,
+      'https://www.tiktok.com/@a/video/123',
+      VIEWS,
+    );
   });
 });
 

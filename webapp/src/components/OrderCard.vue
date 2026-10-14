@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router';
 import { categoryLabel, type OrderSummary } from '../api';
-import { formatCpm, formatDate, formatMoney, formatViews, timeAgo } from '../format';
+import { formatCpm, formatDate, formatMoney, formatPlatforms, formatViews, timeAgo } from '../format';
 
 // Входные параметры компонента: <OrderCard :order="o" /> в CatalogView передаёт сюда заказ.
 defineProps<{ order: OrderSummary }>();
@@ -11,7 +11,9 @@ defineProps<{ order: OrderSummary }>();
   <!-- {{ }} экранирует HTML сам, поэтому текст от пользователей безопасен. Не использовать v-html. -->
   <RouterLink :to="`/orders/${order.id}`" class="card">
     <div class="top">
-      <span class="category">{{ categoryLabel(order.category) }}</span>
+      <span class="category">
+        {{ [categoryLabel(order.category), formatPlatforms(order.platforms)].filter(Boolean).join(' · ') }}
+      </span>
       <span class="price">{{ formatCpm(order.cpm) }}</span>
     </div>
     <div class="title">{{ order.title }}</div>

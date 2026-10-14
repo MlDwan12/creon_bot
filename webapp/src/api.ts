@@ -33,11 +33,12 @@ export function categoryLabel(code: OrderCategory): string {
   return ORDER_CATEGORIES.find((c) => c.code === code)?.label ?? code;
 }
 
-/** Требования к ролику в заказе; null — любая длительность или ориентация. */
+/** Требования к ролику в заказе; null — любая длительность или ориентация, пустые platforms — любая площадка. */
 export interface VideoFormat {
   minDurationSec: number | null;
   maxDurationSec: number | null;
   orientation: 'VERTICAL' | 'HORIZONTAL' | null;
+  platforms: VideoPlatform[];
 }
 
 /** Ответ `GET /api/orders` — см. OrdersController и OrdersService на бэкенде. */
@@ -160,6 +161,10 @@ export const PLATFORM_NAMES: Record<Platform, string> = {
   X: 'X',
   OTHER: 'Другое',
 };
+
+/** Площадки, которые рекламодатель может указать в заказе (enum VideoPlatform на бэкенде). */
+export type VideoPlatform = Exclude<Platform, 'OTHER'>;
+export const VIDEO_PLATFORMS: VideoPlatform[] = ['TIKTOK', 'INSTAGRAM', 'YOUTUBE', 'VK', 'X'];
 
 /** Ответ `GET /api/my-orders/:id/report` — см. src/api/order-report.ts. Деньги в USDT, с комиссией. */
 export interface OrderReport {
@@ -476,13 +481,14 @@ async function request<T>(
  * Страница каталога. `after` — последний показанный заказ (без него — первая страница).
  * hasMore — есть ли следующая; total — для заголовка, может отставать на полминуты.
  */
-export function fetchOpenOrders(after?: OrderSummary, category?: OrderCategory) {
+export function fetchOpenOrders(after?: OrderSummary, category?: OrderCategory, platform?: VideoPlatform) {
   const query = new URLSearchParams();
   if (after) {
     query.set('afterId', String(after.id));
     query.set('afterCreatedAt', after.createdAt);
   }
   if (category) query.set('category', category);
+  if (platform) query.set('platform', platform);
   return request<{ items: OrderSummary[]; hasMore: boolean; total: number }>('GET', `/api/orders?${query}`);
 }
 

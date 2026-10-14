@@ -14,6 +14,7 @@ const order = (id: number): Order => ({
   minDurationSec: null,
   maxDurationSec: null,
   orientation: null,
+  platforms: [],
   referenceUrl: null,
   targetUrl: null,
   category: 'OTHER',
