@@ -26,7 +26,9 @@ export function validateEnv(config: Record<string, unknown>) {
   }
   // Подключение аккаунтов площадок (src/accounts): их токены хранятся зашифрованными этим ключом.
   if (
-    (config.TIKTOK_CLIENT_KEY || config.VK_CLIENT_ID) &&
+    (config.TIKTOK_CLIENT_KEY ||
+      config.VK_CLIENT_ID ||
+      config.INSTAGRAM_APP_ID) &&
     Buffer.from(
       typeof config.SOCIAL_TOKENS_KEY === 'string'
         ? config.SOCIAL_TOKENS_KEY
@@ -35,11 +37,13 @@ export function validateEnv(config: Record<string, unknown>) {
     ).length !== 32
   )
     throw new Error(
-      'SOCIAL_TOKENS_KEY — 32 байта в base64 (openssl rand -base64 32): без него не подключить TikTok и VK',
+      'SOCIAL_TOKENS_KEY — 32 байта в base64 (openssl rand -base64 32): без него не подключить TikTok, VK и Instagram',
     );
   if (
     Boolean(config.TIKTOK_CLIENT_KEY) !== Boolean(config.TIKTOK_CLIENT_SECRET)
   )
     throw new Error('TIKTOK_CLIENT_KEY и TIKTOK_CLIENT_SECRET задаются вместе');
+  if (Boolean(config.INSTAGRAM_APP_ID) !== Boolean(config.INSTAGRAM_APP_SECRET))
+    throw new Error('INSTAGRAM_APP_ID и INSTAGRAM_APP_SECRET задаются вместе');
   return config;
 }

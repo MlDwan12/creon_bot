@@ -598,11 +598,14 @@ export function updateWallet(wallet: string) {
   return request<{ ok: true }>('PUT', '/api/profile/wallet', { wallet });
 }
 
-/** Площадка, где креатор подключает свой аккаунт — тогда просмотры его роликов оттуда считаются сами. */
+/** Площадка, где креатор подключает свои аккаунты — тогда просмотры его роликов оттуда считаются сами. */
 export interface SocialAccount {
-  platform: 'TIKTOK' | 'VK';
+  platform: 'TIKTOK' | 'VK' | 'INSTAGRAM';
   name: string;
-  connected: boolean;
+  /** Подключённые аккаунты; label — имя на площадке, null — площадка его не отдала. */
+  accounts: { id: number; label: string | null }[];
+  /** Можно подключить ещё один (у площадки есть лимит). */
+  canAdd: boolean;
 }
 
 /** Пусто — ни одна площадка пока не подключается (нет ключей), раздел в профиле не показываем. */
@@ -615,8 +618,8 @@ export function connectSocialAccount(platform: SocialAccount['platform']) {
   return request<{ url: string }>('POST', `/api/accounts/${platform.toLowerCase()}/connect`);
 }
 
-export function disconnectSocialAccount(platform: SocialAccount['platform']) {
-  return request<{ ok: true }>('DELETE', `/api/accounts/${platform.toLowerCase()}`);
+export function disconnectSocialAccount(accountId: number) {
+  return request<{ ok: true }>('DELETE', `/api/accounts/${accountId}`);
 }
 
 /** Модератор: опубликовать отзыв с проверки в профиле креатора. */

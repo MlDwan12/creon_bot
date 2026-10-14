@@ -99,6 +99,24 @@ export function vkVideoId(url: string): string | null {
 }
 
 /**
+ * Код публикации Instagram (shortcode): instagram.com/reel/КОД, /reels/КОД, /p/КОД, /tv/КОД,
+ * в том числе с ником впереди (instagram.com/ник/reel/КОД).
+ */
+export function instagramShortcode(url: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!isOnHosts(u.hostname, PLATFORMS.INSTAGRAM.hosts)) return null;
+  return (
+    u.pathname.match(/\/(?:reels?|p|tv)\/([A-Za-z0-9_-]{5,40})(?:\/|$)/)?.[1] ??
+    null
+  );
+}
+
+/**
  * Ссылка на ролик в одном виде — чтобы тот же ролик не сдали дважды под разными ссылками.
  * YouTube — по id ролика (watch?v=, youtu.be, shorts — один ролик); X — по id поста (x.com и
  * twitter.com, любой ник в ссылке — один пост); остальное — домен без www/m

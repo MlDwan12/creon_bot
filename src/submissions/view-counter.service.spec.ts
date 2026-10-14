@@ -17,7 +17,7 @@ describe('youtubeId', () => {
 });
 
 describe('ViewCounterService', () => {
-  // аккаунты площадок (TikTok, VK) здесь не подключены
+  // аккаунты площадок (TikTok, VK, Instagram) здесь не подключены
   const noAccounts = {
     providerFor: () => null,
     stats: () => Promise.resolve(new Map()),

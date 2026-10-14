@@ -16,10 +16,11 @@ import type { Response } from 'express';
 import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
 import { escapeHtml } from '../common/format';
+import { ParseIdPipe } from '../common/parse-id.pipe';
 import { NotificationsService } from '../telegram/notifications.service';
 import { AccountsService } from './accounts.service';
 
-/** tiktok / vk в адресе → площадка; другое — 404. */
+/** tiktok / vk / instagram в адресе → площадка; другое — 404. */
 function parsePlatform(raw: string): SocialPlatform {
   const platform = raw.toUpperCase() as SocialPlatform;
   if (!Object.values(SocialPlatform).includes(platform))
@@ -33,7 +34,7 @@ function parsePlatform(raw: string): SocialPlatform {
 export class AccountsController {
   constructor(private readonly accounts: AccountsService) {}
 
-  /** Площадки, которые можно подключить, и что уже подключено. Пусто — ни одна не включена. */
+  /** Площадки, которые можно подключить, и подключённые аккаунты. Пусто — ни одна не включена. */
   @Get()
   list(@Req() req: ApiRequest) {
     return this.accounts.list(req.user.id);
@@ -41,23 +42,25 @@ export class AccountsController {
 
   /** Ссылка на вход на площадке — мини-апп открывает её во внешнем браузере. */
   @Post(':platform/connect')
-  connect(@Param('platform') platform: string, @Req() req: ApiRequest) {
-    return { url: this.accounts.start(req.user.id, parsePlatform(platform)) };
+  async connect(@Param('platform') platform: string, @Req() req: ApiRequest) {
+    return {
+      url: await this.accounts.start(req.user.id, parsePlatform(platform)),
+    };
   }
 
-  @Delete(':platform')
+  @Delete(':id')
   async disconnect(
-    @Param('platform') platform: string,
+    @Param('id', ParseIdPipe) id: number,
     @Req() req: ApiRequest,
   ) {
-    await this.accounts.disconnect(req.user.id, parsePlatform(platform));
+    await this.accounts.disconnect(req.user.id, id);
     return { ok: true };
   }
 }
 
 /**
  * Сюда площадка возвращает креатора после входа (адрес регистрируется в настройках приложения
- * на площадке: <WEBAPP_URL>/oauth/<tiktok|vk>/callback). Без авторизации мини-аппа — креатор пришёл
+ * на площадке: <WEBAPP_URL>/oauth/<tiktok|vk|instagram>/callback). Без авторизации мини-аппа — креатор пришёл
  * из браузера; кто он, говорит одноразовый state. Ответ — простая страница без скриптов (так требует VK ID).
  */
 @Controller('oauth')
