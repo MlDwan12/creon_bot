@@ -292,6 +292,8 @@ model Notification {
   html      Boolean  @default(false)
   /// Экран мини-аппа для кнопки «Открыть»: путь вроде /my-orders.
   path      String
+  /// Язык получателя (src/i18n): на нём подпись кнопки «Открыть». Текст уже переведён при постановке.
+  lang      String   @default("ru")
   /// 0 — обычные, 1 — рассылки: обычные уходят первыми, рассылка не задерживает срочное.
   priority  Int      @default(0)
   attempts  Int      @default(0)

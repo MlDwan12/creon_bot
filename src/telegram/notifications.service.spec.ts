@@ -26,12 +26,17 @@ function setup() {
   return { service, queued };
 }
 
-const order = (creators: number[]) =>
+/** Креаторы с русским Telegram, языка в профиле не выбирали; `en` — эти выбрали английский. */
+const order = (creators: number[], en: number[] = []) =>
   ({
     id: 1,
     title: 'Заказ',
     submissions: creators.map((id) => ({
-      creator: { telegramId: BigInt(id) },
+      creator: {
+        telegramId: BigInt(id),
+        language: en.includes(id) ? 'en' : null,
+        telegramLanguage: 'ru',
+      },
     })),
   }) as unknown as Order & { submissions: { creator: User }[] };
 
@@ -63,5 +68,21 @@ describe('NotificationsService — название заказа креатор�
     expect(queued[0].text).toContain('Заказ #1 закрыт');
     expect(queued[0].text).not.toContain('@shop');
     expect(queued[1].text).toContain('«пишите @shop»');
+  });
+});
+
+describe('NotificationsService — язык получателя', () => {
+  it('каждому — на его языке, и кнопка «Открыть» тоже', () => {
+    const { service, queued } = setup();
+    service.orderClosed({
+      ...order([11, 12], [12]),
+      status: 'OPEN',
+    });
+
+    expect(queued[0]).toMatchObject({ chatId: 11n, lang: 'ru' });
+    expect(queued[0].text).toContain('закрыт рекламодателем');
+    expect(queued[1]).toMatchObject({ chatId: 12n, lang: 'en' });
+    expect(queued[1].text).toContain('was closed by the advertiser');
+    expect(queued[1].text).toContain('“Заказ”');
   });
 });
