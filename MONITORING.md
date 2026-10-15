@@ -19,9 +19,12 @@
 
 1. sentry.io → бесплатный тариф → два проекта: **Node.js** (бэкенд) и **Vue** (мини-апп).
 2. DSN бэкенда → `SENTRY_DSN` в `/var/www/site/.env.creon_bot` на сервере.
-3. DSN мини-аппа вшивается при сборке: GitHub → Settings → Environments → `production` →
-   **Variables** → `VITE_SENTRY_DSN` (это не секрет — он и так виден в браузере).
-4. Алерты Sentry: Alerts → «новая ошибка» → в Telegram (через интеграцию или почту).
+3. DSN мини-аппа вшивается при сборке: GitHub → Settings → Secrets and variables → Actions →
+   **Variables** → `VITE_SENTRY_DSN` (переменная репозитория — на оба стенда; это не секрет, он и так
+   виден в браузере).
+4. Проекты общие для прода и дева: стенд — в поле `environment` (домен мини-аппа: `fixumapp.com`,
+   `dev.creon.couchreboot.site`), по нему фильтр в Issues и в правилах алертов.
+5. Алерты Sentry: Alerts → «новая ошибка» с фильтром `environment:fixumapp.com` → в Telegram (через интеграцию или почту).
 
 ## 3. Grafana Cloud — метрики и алерты
 
@@ -36,7 +39,9 @@
    ```
    Задаются все три или ни одного (иначе приложение не стартует — проверка в `env.validation.ts`).
 4. Перезапуск сервиса: `sudo docker compose up -d --no-deps --force-recreate creon_bot`.
-5. Через пару минут метрики `fixum_*` видны в Explore.
+5. Через пару минут метрики `fixum_*` видны в Explore. Стенд — метка `instance` (домен мини-аппа):
+   правила ниже смотрят только прод, `instance="fixumapp.com"`.
+6. Дашборд: Dashboards → New → Import → файл `monitoring/grafana-dashboard.json`, источник — Prometheus стека.
 
 ### Проверка снаружи
 
@@ -76,18 +81,26 @@ Alerting → Alert rules → New. У каждого правила — метк�
 | Алерт | Запрос | Условие | severity | Что делать |
 |---|---|---|---|---|
 | Сайт недоступен | проверка Synthetics | 2 неудачи подряд | critical | `sudo docker ps` — жив ли `creon_bot`; `sudo docker logs --tail 100 creon_bot` |
-| Бот не получает сообщения | `max(fixum_bot_up)` | `== 0` 5 мин | critical | Логи: 409 — второй экземпляр с тем же токеном; 401 — токен отозван; сеть до Telegram |
-| Нет метрик от Fixum | `absent_over_time(fixum_bot_up[5m])` | `== 1` | critical | Процесс упал или завис: `docker ps`, логи, перезапуск |
-| Застряли уведомления | `max(fixum_notifications_oldest_age_seconds)` | `> 600` | critical | Логи `NotificationsService`: 429 от Telegram, сеть, бот заблокирован |
-| Всплеск ошибок 500 | `sum(increase(fixum_http_requests_total{status=~"5.."}[5m]))` | `>= 5` | critical | Sentry — какая ошибка и где |
-| Мало места на диске | `min(fixum_disk_free_ratio)` | `< 0.15` | critical | `df -h`; старые образы — `docker image prune` (осторожно: сервер общий), дампы в `_backups` |
-| Память у лимита | `max(fixum_memory_rss_bytes / fixum_memory_limit_bytes)` | `> 0.85` 10 мин | warning | Поднять лимит в общем compose (256M → 512M) или искать утечку |
-| API площадки сбоит | `sum by (platform) (increase(fixum_external_api_requests_total{outcome="error"}[15m])) / sum by (platform) (increase(fixum_external_api_requests_total[15m]))` | `> 0.5` | warning | Ключ или квота площадки; просмотры пока вводит модератор |
+| Бот не получает сообщения | `max(fixum_bot_up{instance="fixumapp.com"})` | `== 0` 5 мин | critical | Логи: 409 — второй экземпляр с тем же токеном; 401 — токен отозван; сеть до Telegram |
+| Нет метрик от Fixum | `absent_over_time(fixum_bot_up{instance="fixumapp.com"}[5m])` | `== 1` | critical | Процесс упал или завис: `docker ps`, логи, перезапуск |
+| Застряли уведомления | `max(fixum_notifications_oldest_age_seconds{instance="fixumapp.com"})` | `> 600` | critical | Логи `NotificationsService`: 429 от Telegram, сеть, бот заблокирован |
+| Всплеск ошибок 500 | `sum(increase(fixum_http_requests_total{instance="fixumapp.com",status=~"5.."}[5m]))` | `>= 5` | critical | Sentry — какая ошибка и где |
+| Мало места на диске | `min(fixum_disk_free_ratio{instance="fixumapp.com"})` | `< 0.15` | critical | `df -h`; старые образы — `docker image prune` (осторожно: сервер общий), дампы в `_backups` |
+| Память у лимита | `max(fixum_memory_rss_bytes{instance="fixumapp.com"} / fixum_memory_limit_bytes{instance="fixumapp.com"})` | `> 0.85` 10 мин | warning | Поднять лимит в общем compose (256M → 512M) или искать утечку |
+| API площадки сбоит | `sum by (platform) (increase(fixum_external_api_requests_total{instance="fixumapp.com",outcome="error"}[15m])) / sum by (platform) (increase(fixum_external_api_requests_total{instance="fixumapp.com"}[15m]))` | `> 0.5` | warning | Ключ или квота площадки; просмотры пока вводит модератор |
 | SSL скоро истекает | `min(probe_ssl_earliest_cert_expiry) - time()` | `< 14 * 86400` | warning | `sudo certbot renew` на сервере |
 
 ## 4. Итог выкатки в Telegram
 
-GitHub → Settings → Environments → `production` → **Secrets**: `ALERT_BOT_TOKEN`, `ALERT_CHAT_ID` и,
+GitHub → Settings → Secrets and variables → Actions → **Repository secrets** (общие для обоих стендов):
+`ALERT_BOT_TOKEN`, `ALERT_CHAT_ID` и,
 если алерты идут в группу с темами, `ALERT_THREAD_ID` — номер темы проекта (без него — в общий чат).
-После каждой выкатки: «✓ Fixum выкачен» (без звука) или «✗ Выкатка не удалась» со ссылкой на лог.
-Без секретов шаг пропускается.
+После каждой выкатки: «✓ Fixum выкачен (прод)» / «(дев)» без звука или «✗ Выкатка … не удалась» со ссылкой
+на лог. Без секретов шаг пропускается.
+
+## 5. Дев-стенд
+
+На деве — только Sentry: `SENTRY_DSN` в `/opt/creon/.env` (тот же DSN, что в проде; стенд различается по
+`environment`), `GRAFANA_*` пустые — метрики дева не занимают лимит бесплатного Grafana Cloud. Проверить
+метрики перед продом — временно задать `GRAFANA_*` и на деве: в Explore у них `instance="dev.creon.couchreboot.site"`.
+Перезапуск после правки `.env`: `cd /opt/creon && docker compose up -d --no-deps --force-recreate creon_bot`.
