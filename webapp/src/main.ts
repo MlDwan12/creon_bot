@@ -2,6 +2,7 @@ import I18NextVue from 'i18next-vue';
 import { createApp } from 'vue';
 import App from './App.vue';
 import { i18next } from './i18n';
+import { initMonitoring } from './monitoring';
 import { router } from './router';
 import './style.css';
 import { applyTheme, inTelegram, openExternalLink, webApp } from './telegram';
@@ -22,4 +23,7 @@ if (inTelegram)
 webApp?.ready(); // убирает экран загрузки Telegram
 webApp?.expand(); // открывает мини-апп на всю высоту
 
-createApp(App).use(router).use(I18NextVue, { i18next }).mount('#app');
+const app = createApp(App).use(router).use(I18NextVue, { i18next });
+// ошибки у пользователей — в Sentry (без VITE_SENTRY_DSN выключено)
+initMonitoring(app);
+app.mount('#app');

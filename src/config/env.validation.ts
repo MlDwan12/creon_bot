@@ -45,5 +45,15 @@ export function validateEnv(config: Record<string, unknown>) {
     throw new Error('TIKTOK_CLIENT_KEY и TIKTOK_CLIENT_SECRET задаются вместе');
   if (Boolean(config.INSTAGRAM_APP_ID) !== Boolean(config.INSTAGRAM_APP_SECRET))
     throw new Error('INSTAGRAM_APP_ID и INSTAGRAM_APP_SECRET задаются вместе');
+  // Метрики в Grafana Cloud (src/monitoring/metrics.ts): без любого из трёх — молча выключены бы
+  const grafana = [
+    'GRAFANA_OTLP_URL',
+    'GRAFANA_OTLP_INSTANCE_ID',
+    'GRAFANA_OTLP_TOKEN',
+  ].filter((k) => config[k]);
+  if (grafana.length && grafana.length < 3)
+    throw new Error(
+      'GRAFANA_OTLP_URL, GRAFANA_OTLP_INSTANCE_ID и GRAFANA_OTLP_TOKEN задаются вместе',
+    );
   return config;
 }

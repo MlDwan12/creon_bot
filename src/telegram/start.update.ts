@@ -1,3 +1,4 @@
+import { setBotPolling } from '../monitoring/metrics';
 import {
   Logger,
   OnApplicationBootstrap,
@@ -71,10 +72,12 @@ export class StartUpdate
   private async launch() {
     while (!this.stopping) {
       try {
-        // промис завершается, только когда polling остановлен
-        await this.bot.launch();
+        // промис завершается, только когда polling остановлен; колбэк — когда запустился
+        await this.bot.launch(() => setBotPolling(true));
+        setBotPolling(false);
         return;
       } catch (err) {
+        setBotPolling(false);
         if (this.stopping) return;
         const fatal =
           err instanceof TelegramError && err.code < 500 && err.code !== 429;
