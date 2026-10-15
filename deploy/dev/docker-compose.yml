@@ -1,0 +1,43 @@
+# Дев-стенд (DEPLOY.md → «Дев-стенд»): лежит на сервере в /opt/creon рядом с .env (права 600).
+# Образ creon_bot:current загружает и переключает deploy.yml → deploy/remote-deploy.sh.
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: '10m'
+      max-file: '3'
+
+services:
+  postgres:
+    <<: *logging
+    image: postgres:15
+    container_name: creon_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: creon
+      # из .env рядом (compose подставляет его сам); тот же пароль — в DATABASE_URL
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
+      POSTGRES_DB: creon_bot
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U creon -d creon_bot']
+      interval: 5s
+      retries: 10
+
+  # имя контейнера = SERVICE в remote-deploy.sh: по нему скрипт ждёт healthy
+  creon_bot:
+    <<: *logging
+    image: creon_bot:current
+    pull_policy: never
+    container_name: creon_bot
+    restart: always
+    env_file: .env
+    ports:
+      - '127.0.0.1:3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  db_data:
