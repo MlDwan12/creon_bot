@@ -15,11 +15,15 @@ try {
   // файла нет — значит, переменные уже в окружении
 }
 
+/** Стенд — домен мини-аппа (fixumapp.com, dev.creon.couchreboot.site): NODE_ENV в образе везде production. */
+export const STAND =
+  URL.parse(process.env.WEBAPP_URL ?? '')?.hostname || 'local';
+
 const dsn = process.env.SENTRY_DSN;
 if (dsn)
   Sentry.init({
     dsn,
-    environment: process.env.NODE_ENV ?? 'development',
+    environment: STAND,
     // только ошибки: трейсы и профили не собираем
     tracesSampleRate: 0,
     // Sentry 11 по умолчанию собирает всё — выключаем всё, что может нести персональные данные

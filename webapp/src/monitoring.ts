@@ -15,7 +15,8 @@ export function initMonitoring(app: App) {
   Sentry.init({
     app,
     dsn,
-    environment: import.meta.env.MODE,
+    // стенд — по домену: fixumapp.com или dev.creon.couchreboot.site (сборка у них одна)
+    environment: location.hostname,
     tracesSampleRate: 0,
     dataCollection: {
       userInfo: false,
