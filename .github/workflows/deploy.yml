@@ -20,7 +20,7 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
-    # у каждого environment свои секреты SSH_*
+    # у каждого environment свои секреты SSH_* и ALERT_*
     environment: ${{ github.event.workflow_run.head_branch == 'main' && 'production' || 'dev' }}
     # одна выкатка за раз; порядок ожидающих не гарантирован — устаревший коммит отсекает шаг ниже
     concurrency:
@@ -39,6 +39,7 @@ jobs:
         ${{ github.event.workflow_run.head_branch == 'main'
         && 'APP=creon_bot DIR=/var/www/site SERVICE=creon_bot PG=postgres DB=creon_bot DB_USER=creon'
         || 'APP=creon_bot DIR=/opt/creon SERVICE=creon_bot PG=postgres DB=creon_bot DB_USER=creon' }}
+      STAND: ${{ github.event.workflow_run.head_branch == 'main' && 'прод' || 'дев' }}
     steps:
       # именно тот коммит, который прошёл CI, а не то, что успело прийти в main после
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -65,7 +66,8 @@ jobs:
 
       - name: Build image
         if: steps.latest.outputs.deploy == 'true'
-        run: docker build -t "$APP:$TAG" .
+        # адрес Sentry мини-аппа — не секрет (виден в браузере): переменная окружения GitHub, пусто — выключен
+        run: docker build --build-arg VITE_SENTRY_DSN="${{ vars.VITE_SENTRY_DSN }}" -t "$APP:$TAG" .
 
       # ключ появляется на раннере только после сборки — код сборки его не застанет
       - name: SSH key
@@ -100,3 +102,25 @@ jobs:
       - name: Remove key
         if: always()
         run: rm -f ~/.ssh/id_deploy
+
+      # Итог выкатки — в Telegram отдельным ботом алертов, в тему проекта (MONITORING.md). Нет секретов — шаг молчит.
+      - name: Notify
+        if: always() && steps.latest.outputs.deploy == 'true'
+        env:
+          ALERT_BOT_TOKEN: ${{ secrets.ALERT_BOT_TOKEN }}
+          ALERT_CHAT_ID: ${{ secrets.ALERT_CHAT_ID }}
+          # тема проекта в группе алертов (группа с темами); пусто — в общий чат
+          ALERT_THREAD_ID: ${{ secrets.ALERT_THREAD_ID }}
+          STATUS: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ -n "$ALERT_BOT_TOKEN" ] && [ -n "$ALERT_CHAT_ID" ] || exit 0
+          if [ "$STATUS" = success ]; then
+            text="✓ Fixum выкачен ($STAND): ${SHA:0:7}"; silent=true
+          else
+            text="✗ Выкатка Fixum ($STAND) ${SHA:0:7} не удалась (откат на прошлую версию, если был возможен) — лог: $RUN_URL"; silent=false
+          fi
+          curl -fsS --max-time 10 "https://api.telegram.org/bot$ALERT_BOT_TOKEN/sendMessage" \
+            --data-urlencode "chat_id=$ALERT_CHAT_ID" --data-urlencode "text=$text" \
+            ${ALERT_THREAD_ID:+--data "message_thread_id=$ALERT_THREAD_ID"} \
+            --data "disable_notification=$silent" >/dev/null || echo "::warning::не удалось отправить итог в Telegram"
