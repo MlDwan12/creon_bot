@@ -8,7 +8,7 @@
 - VPS `72.60.80.75`, каталог `/var/www/site`. Там общий `docker-compose.yaml` с другим проектом (vituss) —
   ничего, кроме сервиса `creon_bot`, не трогаем.
 - База — общий сервис `postgres` (postgres 15), у бота своя роль `creon` (не суперпользователь) и база `creon_bot`.
-- nginx и certbot стоят на хосте: `/etc/nginx/sites-available/creon.couchreboot.site` → `127.0.0.1:8003`.
+- nginx и certbot стоят на хосте: `/etc/nginx/sites-available/fixumapp.com` (+ www) → `127.0.0.1:8003`.
   `frame-ancestors` и `X-Frame-Options` в vhost не добавлять: Telegram Web открывает Mini App во фрейме.
 - Миграции накатываются сами при старте контейнера (`docker-entrypoint.sh` → `prisma migrate deploy`).
 - `HEALTHCHECK` образа дёргает `/api/health`, статус виден в `docker ps`.
@@ -51,7 +51,7 @@ creon_bot:
 4. по SSH: `docker load` образа и копия `deploy/remote-deploy.sh` в домашний каталог `deploy`, затем `ssh -n prod … bash remote-deploy.sh <тег>`. Итог — только код возврата скрипта.
 
 `deploy/remote-deploy.sh` на сервере:
-1. бэкап базы `pg_dump -Fc` в `/var/www/site/_backups/*.dump` (последние 5) и проверка, что архив читается (`pg_restore --list`);
+1. бэкап базы `pg_dump -Fc` в `/var/www/site/_backups/creon_bot_*.dump` (последние 5; чужие файлы в папке не трогаются) и проверка, что архив читается (`pg_restore --list`);
 2. текущий `creon_bot:current` становится `creon_bot:previous`, новый образ — `current`;
 3. `docker compose up -d --no-deps --force-recreate creon_bot` и ждёт до 3 минут, пока контейнер **на новом образе** станет `healthy`;
 4. упал `up` или нет healthy — откат на `previous` и проверка, что healthy стал он; job красный в обоих случаях, в логе — получилось ли откатиться;
@@ -94,3 +94,31 @@ sudo docker compose up -d --no-deps creon_bot
    | `SSH_KNOWN_HOSTS` | вывод `ssh-keyscan -p <порт> 72.60.80.75` со своей машины |
 
    По желанию там же — Required reviewers: выкатка ждёт подтверждения. После этого `creon_deploy` удалить с машины.
+
+## Дев-стенд
+
+Тот же `deploy.yml`: зелёный CI на пуше в `develop` (мерж PR) → выкатка на дев-стенд, GitHub environment `dev`.
+Workflow с `workflow_run` берётся из `main`: правки `deploy.yml` начинают действовать только после попадания в `main`.
+
+- VPS `38.180.145.13`, только наш. Каталог `/opt/creon`: `docker-compose.yml` из `deploy/dev/` и `.env` (права 600).
+- База — свой `postgres` в том же compose (том `db_data`), бэкапы перед выкаткой — в `/opt/creon/_backups`.
+- nginx и certbot на хосте: `/etc/nginx/sites-available/dev.creon.couchreboot.site` → `127.0.0.1:3000`.
+- Бот — тестовый `@creontest_bot` (свой токен, иначе 409 с продом). Группа поддержки и модераторы — как в проде.
+
+Настройка (один раз, под root):
+
+```bash
+useradd -m -s /bin/bash -G docker deploy && usermod -p '*' deploy   # без пароля; passwd -l не годится — sshd не пустит
+install -d -m 700 -o deploy -g deploy /home/deploy/.ssh /opt/creon
+# сюда — публичный ключ: ssh-keygen -t ed25519 -f creon_dev_deploy -N "" -C creon-ci-dev (на своей машине)
+nano /home/deploy/.ssh/authorized_keys && chown deploy:deploy /home/deploy/.ssh/authorized_keys && chmod 600 /home/deploy/.ssh/authorized_keys
+# в /opt/creon — docker-compose.yml из deploy/dev/ и .env по .env.example, плюс:
+#   POSTGRES_PASSWORD=<openssl rand -hex 24>
+#   DATABASE_URL=postgresql://creon:<тот же пароль>@postgres:5432/creon_bot
+#   WEBAPP_URL=https://dev.creon.couchreboot.site
+chown deploy:deploy /opt/creon/* && chmod 600 /opt/creon/.env
+cd /opt/creon && docker compose up -d postgres
+```
+
+GitHub → Settings → Environments → `dev`: те же секреты `SSH_*`, что у `production`, но для `38.180.145.13`
+(ключ — отдельный, `creon_dev_deploy`). `ALERT_*` — по желанию, в сообщении будет «дев».

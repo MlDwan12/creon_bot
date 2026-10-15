@@ -1,11 +1,12 @@
 name: Deploy
 
-# Выкатка в прод: после зелёного CI на пуше в main (мерж релиза). Сервер и порядок шагов — DEPLOY.md.
+# Выкатка после зелёного CI на пуше: main — в прод (environment production), develop — на дев-стенд
+# (environment dev). Серверы и порядок шагов — DEPLOY.md.
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
-    branches: [main]
+    branches: [main, develop]
 
 # GITHUB_TOKEN — только читать код; больше workflow ничего не нужно
 permissions:
@@ -19,10 +20,11 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
-    environment: production
+    # у каждого environment свои секреты SSH_*
+    environment: ${{ github.event.workflow_run.head_branch == 'main' && 'production' || 'dev' }}
     # одна выкатка за раз; порядок ожидающих не гарантирован — устаревший коммит отсекает шаг ниже
     concurrency:
-      group: deploy-production
+      group: deploy-${{ github.event.workflow_run.head_branch }}
       cancel-in-progress: false
     defaults:
       run:
@@ -33,7 +35,10 @@ jobs:
       BRANCH: ${{ github.event.workflow_run.head_branch }}
       APP: creon_bot
       # куда и что выкатывать на сервере — переменные deploy/remote-deploy.sh
-      REMOTE_ENV: APP=creon_bot DIR=/var/www/site SERVICE=creon_bot PG=postgres DB=creon_bot DB_USER=creon
+      REMOTE_ENV: >-
+        ${{ github.event.workflow_run.head_branch == 'main'
+        && 'APP=creon_bot DIR=/var/www/site SERVICE=creon_bot PG=postgres DB=creon_bot DB_USER=creon'
+        || 'APP=creon_bot DIR=/opt/creon SERVICE=creon_bot PG=postgres DB=creon_bot DB_USER=creon' }}
     steps:
       # именно тот коммит, который прошёл CI, а не то, что успело прийти в main после
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
