@@ -218,6 +218,8 @@ export interface ModQueue {
     advertiser: string;
     /** С какого момента ждёт проверки: после правки заказ встаёт в очередь заново. */
     queuedAt: string;
+    /** После правки бюджет выше одобренного — проверить доплату. */
+    budgetRaised: boolean;
     /** В тексте похоже на контакты для связи в обход площадки. */
     hasContacts: boolean;
   }[];
@@ -300,6 +302,8 @@ export interface ModOrder extends VideoFormat {
   referenceUrl: string | null;
   targetUrl: string | null;
   budget: number;
+  /** Бюджет, одобренный в прошлый раз; null — заказ ещё не одобряли. */
+  approvedBudget: number | null;
   feePercent: number;
   /** Фонд выплат креаторам (бюджет без комиссии), USDT — от него считается ставка. */
   pool: number;
@@ -675,12 +679,13 @@ export function fetchModOrder(id: number) {
 /**
  * `version` — из fetchModOrder: если рекламодатель успел изменить заказ, решение не пройдёт.
  * `cpm` — ставка за 1000 просмотров, USDT (только при одобрении).
+ * `budgetConfirmed` — новый бюджет, USDT: модератор отметил, что доплата за повышение получена.
  */
 export function moderateOrder(
   id: number,
   decision: 'approve' | 'reject',
   version: string,
-  extra: { comment?: string; cpm?: number } = {},
+  extra: { comment?: string; cpm?: number; budgetConfirmed?: number } = {},
 ) {
   return request<{ ok: true }>('POST', `/api/mod/orders/${id}/${decision}`, { version, ...extra });
 }

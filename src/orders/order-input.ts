@@ -170,6 +170,15 @@ export function parseCpm(body: unknown): number {
   return minor;
 }
 
+/** Подтверждённый модератором новый бюджет (доплата получена), USDT → центы; не передан — null. */
+export function parseBudgetConfirmed(body: unknown): number | null {
+  const value = (body as { budgetConfirmed?: unknown } | null)?.budgetConfirmed;
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)
+    throw new BadRequestException('budgetConfirmed — сумма в USDT');
+  return toMinor(value);
+}
+
 /** Число просмотров: целое от 1 до MAX_VIEWS. `what` — для текста ошибки. */
 export function parseViews(
   value: unknown,

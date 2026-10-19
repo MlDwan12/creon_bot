@@ -501,6 +501,31 @@ describe('правка заказа', () => {
     expect((await approveOrder(order.id, 1n)).firstPublication).toBe(false);
   });
 
+  it('бюджет повышен — одобрить можно, только подтвердив доплату на новую сумму', async () => {
+    const adv = await user();
+    const order = await openOrder(adv.id);
+    expect(order.approvedBudgetMinor).toBe(BUDGET);
+    const raised = BUDGET * 2;
+    await orders.update(order.id, adv.id, { ...edit, budgetMinor: raised });
+
+    const approve = async (confirmed: number | null) =>
+      orders.moderatorApprove(
+        order.id,
+        1n,
+        await versionOf(order.id),
+        CPM,
+        confirmed,
+      );
+    await expect(approve(null)).rejects.toThrow('доплата получена');
+    // подтверждение другой суммы (устаревшей версии) не подходит
+    await expect(approve(BUDGET)).rejects.toThrow('доплата получена');
+    expect((await approve(raised)).approvedBudgetMinor).toBe(raised);
+
+    // понижение подтверждать не нужно
+    await orders.update(order.id, adv.id, edit);
+    expect((await approveOrder(order.id, 1n)).approvedBudgetMinor).toBe(BUDGET);
+  });
+
   it('чужой и закрытый — нельзя', async () => {
     const adv = await user();
     const other = await user();

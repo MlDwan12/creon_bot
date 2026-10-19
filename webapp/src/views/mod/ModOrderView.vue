@@ -30,6 +30,11 @@ const busy = ref(false);
 const error = ref('');
 /** Ставка креатору за 1000 просмотров, USDT; '' — ещё не введена. После правки — прежняя. */
 const cpm = ref<number | ''>('');
+/** Бюджет выше одобренного в прошлый раз — опубликовать можно, только отметив, что доплата получена. */
+const budgetRaised = computed(
+  () => !!order.value && order.value.approvedBudget !== null && order.value.budget > order.value.approvedBudget,
+);
+const paymentConfirmed = ref(false);
 /** Сколько просмотров оплатит фонд при этой ставке — чтобы ставка была разумной. */
 const coveredViews = computed(() =>
   order.value && cpm.value ? Math.floor((order.value.pool / cpm.value) * 1000) : 0,
@@ -39,6 +44,7 @@ async function load() {
   order.value = undefined;
   loadError.value = '';
   comment.value = '';
+  paymentConfirmed.value = false;
   try {
     order.value = await fetchModOrder(Number(props.id));
     cpm.value = order.value.cpm ?? '';
@@ -61,7 +67,9 @@ async function decide(decision: 'approve' | 'reject') {
       Number(props.id),
       decision,
       order.value!.version,
-      decision === 'reject' ? { comment: comment.value } : { cpm: Number(cpm.value) },
+      decision === 'reject'
+        ? { comment: comment.value }
+        : { cpm: Number(cpm.value), ...(budgetRaised.value && { budgetConfirmed: order.value!.budget }) },
     );
     await goNext();
   } catch (err) {
@@ -94,7 +102,9 @@ watch(() => props.id, load, { immediate: true });
         <div class="row"><span>Рекламодатель</span><span>{{ order.advertiser }}</span></div>
         <div class="row">
           <span>Бюджет</span>
-          <span>{{ formatMoney(order.budget) }}, креаторам {{ formatMoney(order.pool) }} (комиссия {{ order.feePercent }}%)</span>
+          <span>
+            <template v-if="budgetRaised">{{ formatMoney(order.approvedBudget!) }} → </template>
+            {{ formatMoney(order.budget) }}, креаторам {{ formatMoney(order.pool) }} (комиссия {{ order.feePercent }}%)</span>
         </div>
         <div class="row"><span>Порог</span><span>от {{ formatViews(order.minViews) }} просмотров</span></div>
         <div v-if="order.cpm !== null" class="row"><span>Ставка</span><span>{{ formatCpm(order.cpm) }}</span></div>
@@ -120,6 +130,11 @@ watch(() => props.id, load, { immediate: true });
         <span>{{ order.contacts.join(' · ') }}</span>
       </div>
 
+      <label v-if="budgetRaised && order.status === 'PENDING_MODERATION'" class="contacts" role="alert">
+        <strong>⚠ Бюджет повышен на {{ formatMoney(order.budget - order.approvedBudget!) }}</strong>
+        <span><input v-model="paymentConfirmed" type="checkbox" /> Доплата получена</span>
+      </label>
+
       <p v-if="order.moderatorComment" class="hint">Комментарий модератора: «{{ order.moderatorComment }}»</p>
 
       <template v-if="order.status === 'PENDING_MODERATION'">
@@ -137,7 +152,7 @@ watch(() => props.id, load, { immediate: true });
           <button type="button" class="reject" :disabled="busy || !comment.trim()" @click="decide('reject')">
             Отклонить
           </button>
-          <button type="button" class="approve" :disabled="busy || !cpm" @click="decide('approve')">Опубликовать</button>
+          <button type="button" class="approve" :disabled="busy || !cpm || (budgetRaised && !paymentConfirmed)" @click="decide('approve')">Опубликовать</button>
         </div>
       </template>
     </template>

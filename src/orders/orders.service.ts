@@ -1,5 +1,6 @@
 import { tr, trNum } from '../i18n/request-lang';
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -17,6 +18,7 @@ import { fromMinor } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ACCRUED,
+  budgetRaised,
   budgetState,
   HOLDS_MONEY,
   NO_VIDEO,
@@ -568,8 +570,16 @@ export class OrdersService {
     moderatorTelegramId: bigint,
     version: Date,
     cpmMinor: number,
+    /** Новый бюджет в центах, если модератор подтвердил доплату за повышение; иначе null. */
+    budgetConfirmedMinor: number | null = null,
   ) {
     const order = await this.mustFind(orderId);
+    // сверяем с суммой, а не флагом: подтверждение старой версии не пропустит новое повышение
+    // (а версию заказа и так проверяет условие перехода ниже)
+    if (budgetRaised(order) && budgetConfirmedMinor !== order.budgetMinor)
+      throw new BadRequestException(
+        `Бюджет повышен с ${fromMinor(order.approvedBudgetMinor!)} до ${fromMinor(order.budgetMinor)} USDT — подтвердите, что доплата получена`,
+      );
     // Ставка, при которой фонд не покрывает даже один ролик с порогом, — заказ сразу исчерпан.
     if (budgetState({ ...order, cpmMinor }, 0).exhausted)
       throw new ForbiddenException(
@@ -591,6 +601,7 @@ export class OrdersService {
           ...(exhausted && { closedAt: now }),
           moderatorId: moderatorTelegramId,
           cpmMinor,
+          approvedBudgetMinor: order.budgetMinor,
           decidedAt: now,
           deadline: order.deadline
             ? new Date(

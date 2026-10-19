@@ -19,7 +19,7 @@ import { findContacts } from '../common/contacts';
 import { fromMinor } from '../common/money';
 import { NotificationsService } from '../telegram/notifications.service';
 import { creatorLabel } from '../common/format';
-import { payoutPool, VIEWS_TOPUP_DAYS } from '../orders/budget';
+import { budgetRaised, payoutPool, VIEWS_TOPUP_DAYS } from '../orders/budget';
 import { OrdersService } from '../orders/orders.service';
 import { DAY_MS } from '../orders/deadline';
 import { platformOf } from '../common/platforms';
@@ -40,6 +40,7 @@ import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
 import { ModeratorGuard } from '../auth/moderator.guard';
 import {
+  parseBudgetConfirmed,
   parseCpm,
   parseRejectComment,
   parseLikes,
@@ -93,6 +94,8 @@ export class ModerationController {
         advertiser: creatorLabel(o.advertiser),
         // ждёт с момента отправки на проверку: после правки — заново
         queuedAt: o.moderationRequestedAt,
+        // после правки бюджет выше одобренного — модератору проверить доплату
+        budgetRaised: budgetRaised(o),
         // похоже на контакты в обход площадки — модератору пометка в списке
         hasContacts:
           findContacts(o.title, o.description, o.referenceUrl, o.targetUrl)
@@ -182,6 +185,8 @@ export class ModerationController {
       targetUrl: o.targetUrl,
       ...videoFormat(o),
       budget: fromMinor(o.budgetMinor),
+      // одобренный в прошлый раз; выше него — повышение, одобрение только с budgetConfirmed
+      approvedBudget: fromMinor(o.approvedBudgetMinor),
       feePercent: o.feePercent,
       // фонд выплат креаторам — от него модератор считает ставку
       pool: fromMinor(payoutPool(o)),
@@ -215,6 +220,7 @@ export class ModerationController {
       req.user.telegramId,
       parseVersion(body),
       parseCpm(body),
+      parseBudgetConfirmed(body),
     );
     if (order.status === OrderStatus.CLOSED)
       this.notifications.orderBudgetExhausted(order);
