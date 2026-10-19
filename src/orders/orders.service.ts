@@ -330,18 +330,21 @@ export class OrdersService {
   }
 
   /**
-   * Модератор закрывает открытый заказ (по жалобе). `null` — заказ уже не открыт: закрывать нечего.
-   * В отличие от закрытия рекламодателем, начатые ролики по нему не принимаются: слоты сгорают.
-   * Возвращает заказ с рекламодателем и откликами — для уведомлений.
+   * Модератор снимает заказ по жалобе — в транзакции решения по жалобам (ReportsService.resolve).
+   * Ссылка на товар убирается при любом статусе: /r/ в уже опубликованных роликах не должен вести
+   * туда (фишинг) и у закрытого или истёкшего заказа; вернуть её можно только правкой через модератора.
+   * Открытый заказ закрывается, и, в отличие от закрытия рекламодателем, начатые ролики по нему не
+   * принимаются: слоты сгорают. Возвращает закрытый заказ с рекламодателем и откликами — для
+   * уведомлений; `null` — заказ не был открыт.
    */
-  async moderatorClose(orderId: number) {
-    const closed = await this.prisma.$transaction(async (tx) => {
-      const count = await closeOpenOrders(tx, [orderId]);
-      if (count > 0) await expireSlots(tx, [orderId]);
-      return count > 0;
+  async moderatorClose(tx: Prisma.TransactionClient, orderId: number) {
+    await tx.order.updateMany({
+      where: { id: orderId },
+      data: { targetUrl: null },
     });
-    if (!closed) return null;
-    return this.prisma.order.findUniqueOrThrow({
+    if ((await closeOpenOrders(tx, [orderId])) === 0) return null;
+    await expireSlots(tx, [orderId]);
+    return tx.order.findUniqueOrThrow({
       where: { id: orderId },
       include: {
         advertiser: true,

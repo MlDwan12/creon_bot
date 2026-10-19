@@ -1449,6 +1449,42 @@ describe('жалобы', () => {
     ).rejects.toThrow('уже рассмотрены');
   });
 
+  it('мера по уже закрытому заказу убирает ссылку на товар — /r/ больше не ведёт на неё', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const order = await openOrder(advertiser.id);
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { targetUrl: 'https://phish.example' },
+    });
+    const { trackCode } = await submissions.claim(order.id, creator.id);
+    await reports.create(creator, report('ORDER', order.id));
+    await orders.close(order.id, advertiser.id);
+    expect(await submissions.click(trackCode!)).toBe('https://phish.example');
+
+    const { closedOrder } = await reports.resolve(
+      { target: 'ORDER', targetId: order.id },
+      true,
+      1n,
+    );
+    expect(closedOrder).toBeNull(); // уже был закрыт — уведомлять о закрытии некого
+    expect(await submissions.click(trackCode!)).toBeNull();
+  });
+
+  it('мера не применилась — жалобы остаются открытыми', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const order = await openOrder(advertiser.id);
+    await reports.create(creator, report('ORDER', order.id));
+    jest
+      .spyOn(orders, 'moderatorClose')
+      .mockRejectedValueOnce(new Error('сбой'));
+
+    await expect(
+      reports.resolve({ target: 'ORDER', targetId: order.id }, true, 1n),
+    ).rejects.toThrow('сбой');
+    expect(await reports.listOpen()).toHaveLength(1);
+    expect(await statusOf(order.id)).toBe('OPEN');
+  });
+
   it('жалоба на отзыв: пишет только тот, о ком отзыв; мера удаляет отзыв', async () => {
     const [advertiser, creator] = [await user(), await user()];
     const order = await openOrder(advertiser.id);
