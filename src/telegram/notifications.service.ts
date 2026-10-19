@@ -458,6 +458,23 @@ export class NotificationsService
     );
   }
 
+  /**
+   * Пользователю: кошелёк для выплат изменён или удалён — если это не он (угнали сессию Telegram),
+   * узнает до того, как выведут деньги. Адрес — с краёв, этого хватит сверить.
+   */
+  walletChanged(user: User, wallet: string | null) {
+    this.send(
+      user,
+      (t) =>
+        wallet
+          ? t('notify.walletChanged', {
+              wallet: `${wallet.slice(0, 4)}…${wallet.slice(-4)}`,
+            })
+          : t('notify.walletRemoved'),
+      '/profile',
+    );
+  }
+
   /** Креатору: заявку на вывод выполнили или отклонили. */
   payoutDecided(payout: Payout & { creator: User }) {
     this.send(

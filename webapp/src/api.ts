@@ -384,6 +384,8 @@ export interface ModPayout {
   wallet: string | null;
   creator: string;
   creatorId: number;
+  /** Креатор заблокирован — заявку подали до бана. */
+  banned: { at: string; reason: string | null } | null;
   createdAt: string;
 }
 

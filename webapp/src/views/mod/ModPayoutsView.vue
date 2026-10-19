@@ -68,6 +68,9 @@ void load();
         <span :class="['wait', { long: isWaitingLong(p.createdAt) }]">{{ waitingFor(p.createdAt) }}</span>
       </div>
       <RouterLink :to="`/mod/creators/${p.creatorId}`" class="creator">{{ p.creator }} · заявка #{{ p.id }}</RouterLink>
+      <p v-if="p.banned" class="banned" role="alert">
+        🚫 Креатор заблокирован<template v-if="p.banned.reason">: {{ p.banned.reason }}</template>
+      </p>
       <button v-if="p.wallet" type="button" class="wallet" @click="copyWallet(p.wallet)">
         <span>{{ p.wallet }}</span>
         <small>{{ copied === p.wallet ? 'Скопировано' : 'Скопировать' }}</small>
@@ -201,5 +204,14 @@ textarea {
   margin: 0;
   font-size: 14px;
   color: var(--danger);
+}
+.banned {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 14px;
+  overflow-wrap: anywhere;
 }
 </style>

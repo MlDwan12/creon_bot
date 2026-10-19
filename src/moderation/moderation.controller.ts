@@ -402,6 +402,10 @@ export class ModerationController {
       wallet: p.wallet,
       creator: creatorLabel(p.creator),
       creatorId: p.creatorId,
+      // забаненному (например, за накрутку) модератор, скорее всего, не переведёт — решает сам
+      banned: p.creator.bannedAt
+        ? { at: p.creator.bannedAt, reason: p.creator.banReason }
+        : null,
       createdAt: p.createdAt,
     }));
   }
