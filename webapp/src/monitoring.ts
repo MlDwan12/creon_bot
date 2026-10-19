@@ -9,6 +9,10 @@ import type { App } from 'vue';
  * Authorization — подписанные данные Telegram), ни тел, ни параметров адреса, ни записи экрана —
  * только ошибка, стектрейс и экран.
  */
+/** Адрес без #…: там бывает подписанный initData (#tgWebAppData=…), если ошибка случилась до main.ts. */
+const withoutHash = (url: unknown) =>
+  typeof url === 'string' ? url.replace(/#.*$/, '') : url;
+
 export function initMonitoring(app: App) {
   const dsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
   if (!dsn) return;
@@ -33,12 +37,17 @@ export function initMonitoring(app: App) {
         delete event.request.cookies;
         delete event.request.query_string;
         delete event.request.data;
+        event.request.url = withoutHash(event.request.url) as string | undefined;
       }
       return event;
     },
     beforeBreadcrumb(crumb) {
       // в логах консоли и в адресах бывают данные пользователей — эти следы не отправляем
-      return crumb.category === 'console' ? null : crumb;
+      if (crumb.category === 'console') return null;
+      // переходы (from/to) и запросы (url) — без #…
+      for (const key of ['from', 'to', 'url'])
+        if (crumb.data?.[key]) crumb.data[key] = withoutHash(crumb.data[key]);
+      return crumb;
     },
   });
 }

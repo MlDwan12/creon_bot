@@ -61,6 +61,7 @@ Testing & synthetics → Synthetics → новая проверка **HTTP**: `h
 | `fixum_notifications_oldest_age_seconds` | Сколько ждёт самое старое уведомление |
 | `fixum_external_api_requests_total{platform,outcome}` | Запросы к API площадок: `ok` / `error` |
 | `fixum_disk_free_ratio` | Свободная доля диска сервера |
+| `fixum_db_up` | 1 — база ответила на запросы метрик (за 5 с); 0 — нет |
 | `fixum_memory_rss_bytes`, `fixum_memory_limit_bytes` | Память процесса и лимит контейнера |
 | `fixum_event_loop_delay_p99_ms` | Задержка цикла событий Node |
 | `fixum_business_count{kind}` | `orders_open`, `videos_on_review`, `payouts_requested` — для графиков |
@@ -83,6 +84,7 @@ Alerting → Alert rules → New. У каждого правила — метк�
 | Сайт недоступен | проверка Synthetics | 2 неудачи подряд | critical | `sudo docker ps` — жив ли `creon_bot`; `sudo docker logs --tail 100 creon_bot` |
 | Бот не получает сообщения | `max(fixum_bot_up{instance="fixumapp.com"})` | `== 0` 5 мин | critical | Логи: 409 — второй экземпляр с тем же токеном; 401 — токен отозван; сеть до Telegram |
 | Нет метрик от Fixum | `absent_over_time(fixum_bot_up{instance="fixumapp.com"}[5m])` | `== 1` | critical | Процесс упал или завис: `docker ps`, логи, перезапуск |
+| База недоступна | `min(fixum_db_up{instance="fixumapp.com"})` | `== 0` 3 мин | critical | `docker ps` — жив ли postgres; его логи; `df -h` — база падает и на полном диске |
 | Застряли уведомления | `max(fixum_notifications_oldest_age_seconds{instance="fixumapp.com"})` | `> 600` | critical | Логи `NotificationsService`: 429 от Telegram, сеть, бот заблокирован |
 | Всплеск ошибок 500 | `sum(increase(fixum_http_requests_total{instance="fixumapp.com",status=~"5.."}[5m]))` | `>= 5` | critical | Sentry — какая ошибка и где |
 | Мало места на диске | `min(fixum_disk_free_ratio{instance="fixumapp.com"})` | `< 0.15` | critical | `df -h`; старые образы — `docker image prune` (осторожно: сервер общий), дампы в `_backups` |

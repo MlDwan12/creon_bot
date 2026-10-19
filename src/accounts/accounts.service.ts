@@ -14,6 +14,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   enabledProviders,
+  PlatformUnavailable,
   Provider,
   ProviderRejected,
   randomState,
@@ -244,7 +245,9 @@ export class AccountsService {
         recordExternalApi(provider.platform, true);
         left = left.filter((id) => !out.has(id));
       } catch (err) {
-        recordExternalApi(provider.platform, false);
+        // отозванный токен одного креатора, расшифровка, база — не сбой площадки: только в лог
+        if (err instanceof PlatformUnavailable)
+          recordExternalApi(provider.platform, false);
         this.logger.warn(
           `${provider.name}: просмотры по аккаунту #${account.id} не получены — ${String(err)}`,
         );
