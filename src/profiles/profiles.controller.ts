@@ -85,6 +85,7 @@ export class ProfilesController {
     const profile = await this.profiles.profile(
       id,
       moderator || id === req.user.id,
+      req.user.id,
     );
     // причина блокировки — внутреннее дело модерации
     return moderator ? profile : { ...profile, ban: null };

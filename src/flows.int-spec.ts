@@ -1283,6 +1283,23 @@ describe('профиль креатора', () => {
     expect(full.portfolio[0].videoUrl).not.toBeNull();
   });
 
+  it('рекламодателю — названия только его заказов, чужие скрыты', async () => {
+    const [mine, other, creator] = [await user(), await user(), await user()];
+    await acceptedVideo(mine.id, creator.id, 5, true);
+    await acceptedVideo(other.id, creator.id, 4, true);
+
+    const forMine = await profiles.profile(creator.id, false, mine.id);
+    const titles = (list: { orderTitle: string | null }[]) =>
+      list.map((x) => x.orderTitle).sort();
+    expect(titles(forMine.reviews)).toEqual(['Заказ', null].sort());
+    expect(titles(forMine.portfolio)).toEqual(['Заказ', null].sort());
+    // креатору и модератору — все названия
+    expect(titles((await profiles.profile(creator.id, true)).reviews)).toEqual([
+      'Заказ',
+      'Заказ',
+    ]);
+  });
+
   it('отзыв с текстом — в профиле только после проверки, звёзды без текста — сразу', async () => {
     const [advertiser, creator] = [await user(), await user()];
     const s = await approvedVideo(advertiser.id, creator.id);

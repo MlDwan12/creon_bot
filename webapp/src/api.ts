@@ -408,10 +408,11 @@ export interface CreatorProfile {
     submissionId: number;
     rating: number;
     review: string | null;
-    orderTitle: string;
+    /** null — заказ другого рекламодателя: его название рекламодателю не показываем. */
+    orderTitle: string | null;
     decidedAt: string | null;
   }[];
-  portfolio: { submissionId: number; videoUrl: string | null; orderTitle: string }[];
+  portfolio: { submissionId: number; videoUrl: string | null; orderTitle: string | null }[];
 }
 
 /** Оценка рекламодателя одобренному ролику. */
