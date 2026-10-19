@@ -29,6 +29,9 @@ export interface Tokens {
 /** Площадка отказала по существу (код протух, refresh отозван, не дали нужный доступ). */
 export class ProviderRejected extends Error {}
 
+/** Площадка недоступна: сеть, таймаут или 5xx. Только это — «API площадки сбоит» в метриках. */
+export class PlatformUnavailable extends Error {}
+
 /**
  * Площадка, где креатор подключает свой аккаунт через OAuth, и по его токену мы читаем просмотры
  * его роликов. Включается своими ключами в env — без них площадки нет, ролики считаются вручную.
@@ -495,10 +498,17 @@ function postForm<T>(url: string, params: Record<string, string>) {
  * разбирает вызывающий. Сеть или 5xx — исключение (повторим в другой раз).
  */
 async function request<T>(url: string, init: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...init,
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
-  if (res.status >= 500) throw new Error(`${new URL(url).host}: ${res.status}`);
+  const host = new URL(url).host;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...init,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (err) {
+    throw new PlatformUnavailable(`${host}: ${String(err)}`);
+  }
+  if (res.status >= 500)
+    throw new PlatformUnavailable(`${host}: ${res.status}`);
   return (await res.json()) as T;
 }

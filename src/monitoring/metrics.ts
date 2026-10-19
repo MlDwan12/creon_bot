@@ -5,7 +5,7 @@ import {
   PeriodicExportingMetricReader,
 } from '@opentelemetry/sdk-metrics';
 import type { NextFunction, Request, Response } from 'express';
-import { STAND } from './instrument';
+import { stand } from './stand';
 
 /**
  * Метрики Fixum — по стандарту OpenTelemetry, отправка в Grafana Cloud (OTLP) раз в минуту.
@@ -27,8 +27,8 @@ const provider = new MeterProvider({
   resource: resourceFromAttributes({
     'service.name': 'fixum',
     // в Grafana — метка instance: по ней правила алертов смотрят только прод
-    'service.instance.id': STAND,
-    'deployment.environment': STAND,
+    'service.instance.id': stand(),
+    'deployment.environment': stand(),
   }),
   readers: metricsEnabled
     ? [

@@ -21,6 +21,11 @@ import {
 const TELEGRAM_CHECK_MS = 60_000;
 /** Без удачной проверки дольше — бот считается отрезанным от Telegram. */
 const TELEGRAM_STALE_MS = 3 * 60_000;
+/**
+ * Запросы к базе при сборе метрик — не дольше: показатели собираются одной пачкой, и зависший запрос
+ * выбросил бы её целиком (bot.up, диск, память), когда они нужнее всего.
+ */
+const DB_TIMEOUT_MS = 5_000;
 
 /**
  * Показатели, которые снимаются при каждой отправке метрик (раз в минуту): жив ли бот, очередь
@@ -96,6 +101,9 @@ export class MonitoringService implements OnModuleInit, OnApplicationShutdown {
       'fixum.memory.limit_bytes',
       { description: 'Лимит памяти контейнера (cgroup), байт' },
     );
+    const dbUp = meter.createObservableGauge('fixum.db.up', {
+      description: '1 — база отвечает на запросы метрик',
+    });
     const loopDelay = meter.createObservableGauge(
       'fixum.event_loop.delay_p99_ms',
       { description: 'Задержка цикла событий Node, 99-й перцентиль, мс' },
@@ -110,34 +118,51 @@ export class MonitoringService implements OnModuleInit, OnApplicationShutdown {
             : 0,
         );
 
-        const [queue, open, onReview, payouts] = await Promise.all([
-          // все неотправленные, включая отложенные после сбоев: возраст — от постановки в очередь
-          this.prisma.notification.aggregate({
-            _count: true,
-            _min: { createdAt: true },
-          }),
-          this.prisma.order.count({ where: { status: OrderStatus.OPEN } }),
-          this.prisma.submission.count({
-            where: { status: SubmissionStatus.SUBMITTED },
-          }),
-          this.prisma.payout.count({
-            where: { status: PayoutStatus.REQUESTED },
-          }),
-        ]);
-        result.observe(queueSize, queue._count);
-        result.observe(
-          queueAge,
-          queue._min.createdAt
-            ? Math.max(0, (Date.now() - queue._min.createdAt.getTime()) / 1000)
-            : 0,
-        );
-        result.observe(business, open, { kind: 'orders_open' });
-        result.observe(business, onReview, { kind: 'videos_on_review' });
-        result.observe(business, payouts, { kind: 'payouts_requested' });
+        // база и диск — каждый в своём try: сбой одного не должен гасить остальные показатели
+        try {
+          const [queue, open, onReview, payouts] = await withTimeout(
+            Promise.all([
+              // все неотправленные, включая отложенные после сбоев: возраст — от постановки в очередь
+              this.prisma.notification.aggregate({
+                _count: true,
+                _min: { createdAt: true },
+              }),
+              this.prisma.order.count({ where: { status: OrderStatus.OPEN } }),
+              this.prisma.submission.count({
+                where: { status: SubmissionStatus.SUBMITTED },
+              }),
+              this.prisma.payout.count({
+                where: { status: PayoutStatus.REQUESTED },
+              }),
+            ]),
+            DB_TIMEOUT_MS,
+          );
+          result.observe(queueSize, queue._count);
+          result.observe(
+            queueAge,
+            queue._min.createdAt
+              ? Math.max(
+                  0,
+                  (Date.now() - queue._min.createdAt.getTime()) / 1000,
+                )
+              : 0,
+          );
+          result.observe(business, open, { kind: 'orders_open' });
+          result.observe(business, onReview, { kind: 'videos_on_review' });
+          result.observe(business, payouts, { kind: 'payouts_requested' });
+          result.observe(dbUp, 1);
+        } catch (err) {
+          result.observe(dbUp, 0);
+          this.logger.warn(`Метрики: база не ответила — ${String(err)}`);
+        }
 
-        // контейнер видит диск сервера: его файловая система лежит на том же разделе
-        const fs = await statfs('/');
-        result.observe(diskFree, fs.bavail / fs.blocks);
+        try {
+          // контейнер видит диск сервера: его файловая система лежит на том же разделе
+          const fs = await statfs('/');
+          result.observe(diskFree, fs.bavail / fs.blocks);
+        } catch (err) {
+          this.logger.warn(`Метрики: диск не прочитан — ${String(err)}`);
+        }
 
         result.observe(memoryUsed, process.memoryUsage().rss);
         const limit = await cgroupMemoryLimit();
@@ -152,12 +177,22 @@ export class MonitoringService implements OnModuleInit, OnApplicationShutdown {
         queueAge,
         business,
         diskFree,
+        dbUp,
         memoryUsed,
         memoryLimit,
         loopDelay,
       ],
     );
   }
+}
+
+/** Промис или ошибка через `ms` — зависшая база не задерживает сбор метрик. */
+export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`нет ответа за ${ms} мс`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 /** Лимит памяти контейнера (cgroup v2); без лимита или вне Docker — null. */

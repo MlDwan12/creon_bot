@@ -20,6 +20,11 @@ if (inTelegram)
     e.preventDefault();
     openExternalLink(href);
   });
+// Telegram открывает мини-апп с #tgWebAppData=… — это подписанный initData, им авторизуется API.
+// SDK уже прочитал его (при перезагрузке берёт из sessionStorage), а в адресе он попал бы в отчёты
+// об ошибках, в «скопировать ссылку» и т.п. — убираем до запуска роутера.
+if (location.hash.includes('tgWebApp'))
+  history.replaceState(history.state, '', location.pathname + location.search);
 webApp?.ready(); // убирает экран загрузки Telegram
 webApp?.expand(); // открывает мини-апп на всю высоту
 

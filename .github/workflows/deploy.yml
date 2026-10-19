@@ -104,8 +104,9 @@ jobs:
         run: rm -f ~/.ssh/id_deploy
 
       # Итог выкатки — в Telegram отдельным ботом алертов, в тему проекта (MONITORING.md). Нет секретов — шаг молчит.
+      # Сбой — сообщаем всегда, даже на checkout или ls-remote; молчим, только если коммит пропущен как не вершина.
       - name: Notify
-        if: always() && steps.latest.outputs.deploy == 'true'
+        if: always() && (steps.latest.outputs.deploy == 'true' || job.status != 'success')
         env:
           ALERT_BOT_TOKEN: ${{ secrets.ALERT_BOT_TOKEN }}
           ALERT_CHAT_ID: ${{ secrets.ALERT_CHAT_ID }}
