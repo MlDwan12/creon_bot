@@ -22,10 +22,10 @@ import { creatorLabel } from '../common/format';
 import { payoutPool, VIEWS_TOPUP_DAYS } from '../orders/budget';
 import { OrdersService } from '../orders/orders.service';
 import { DAY_MS } from '../orders/deadline';
-import { platformOf } from '../common/platforms';
+import { authorInLinks, authorUrl, platformOf } from '../common/platforms';
 import { SubmissionsService } from '../submissions/submissions.service';
 import {
-  type VideoStats,
+  type CountedVideo,
   ViewCounterService,
 } from '../submissions/view-counter.service';
 import { AnalyticsService } from './analytics.service';
@@ -48,6 +48,25 @@ import {
 } from '../orders/order-input';
 
 const PAGE_SIZE = 20;
+
+/**
+ * Чей ролик — модератору: `verified` — посчитан по аккаунту креатора или автор есть в соцсетях его
+ * профиля; `mismatch` — автор известен, но в профиле его нет; `unknown` — площадка автора не отдала.
+ * Решает модератор: сдачу и одобрение это не запрещает.
+ */
+export function videoAuthor(stats: CountedVideo | undefined, links: string[]) {
+  if (stats?.ownAccount)
+    return { status: 'verified', viaAccount: true, name: null, url: null };
+  const a = stats?.author;
+  if (!a)
+    return { status: 'unknown', viaAccount: false, name: null, url: null };
+  return {
+    status: authorInLinks(a, links) ? 'verified' : 'mismatch',
+    viaAccount: false,
+    name: [a.name, a.handle && `@${a.handle}`].filter(Boolean).join(' · '),
+    url: authorUrl(a),
+  };
+}
 
 /** Версия заказа, которую модератор видел (`version` из GET /api/mod/orders/:id). */
 function parseVersion(body: unknown): Date {
@@ -251,11 +270,13 @@ export class ModerationController {
       this.submissionsService.attemptNumber(s),
       this.submissionsService.orderBudget(s.order),
       s.videoUrl
-        ? this.viewCounter.fetchViews([
-            { url: s.videoUrl, creatorId: s.creatorId },
-          ])
-        : new Map<string, VideoStats>(),
+        ? this.viewCounter.fetchViews(
+            [{ url: s.videoUrl, creatorId: s.creatorId }],
+            { withAuthor: true },
+          )
+        : new Map<string, CountedVideo>(),
     ]);
+    const stats = counted.get(s.videoUrl ?? '');
     return {
       id: s.id,
       status: s.status,
@@ -268,8 +289,9 @@ export class ModerationController {
       views: s.views,
       likes: s.likes,
       // сейчас по данным API площадки; null — считается вручную или API не ответило
-      autoViews: counted.get(s.videoUrl ?? '')?.views ?? null,
-      autoLikes: counted.get(s.videoUrl ?? '')?.likes ?? null,
+      autoViews: stats?.views ?? null,
+      autoLikes: stats?.likes ?? null,
+      author: videoAuthor(stats, s.creator.socialLinks),
       platform: platformOf(s.videoUrl),
       payout: fromMinor(s.payoutMinor),
       decidedAt: s.decidedAt,

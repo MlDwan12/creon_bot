@@ -334,6 +334,17 @@ export interface ModVideo {
   likes: number | null;
   /** Лайки по данным API площадки; null — нет API или автор их скрыл. */
   autoLikes: number | null;
+  /**
+   * Чей ролик: verified — посчитан по аккаунту креатора (`viaAccount`) или автор есть в его соцсетях;
+   * mismatch — автора нет в профиле; unknown — площадка автора не отдала, сверить вручную.
+   */
+  author: {
+    status: 'verified' | 'mismatch' | 'unknown';
+    viaAccount: boolean;
+    /** Канал или аккаунт автора: «Название · @handle». */
+    name: string | null;
+    url: string | null;
+  };
   platform: Platform;
   /** USDT: резерв или начислено. */
   payout: number;

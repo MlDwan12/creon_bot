@@ -129,6 +129,18 @@ watch(() => props.id, load, { immediate: true });
       </a>
       <p v-else class="hint">Ссылка на видео некорректна: {{ video.videoUrl }}</p>
 
+      <p :class="['author', video.author.status]" :role="video.author.status === 'verified' ? undefined : 'alert'">
+        <template v-if="video.author.status === 'verified'">
+          ✅ Автор подтверждён: {{ video.author.viaAccount ? 'ролик с подключённого аккаунта креатора' : video.author.name }}
+        </template>
+        <template v-else-if="video.author.status === 'mismatch'">
+          ⚠ Автор —
+          <a v-if="safeUrl(video.author.url)" :href="safeUrl(video.author.url)" target="_blank" rel="noopener noreferrer">{{ video.author.name || 'аккаунт' }}</a>,
+          его нет в соцсетях креатора — проверьте, что ролик его
+        </template>
+        <template v-else>⚠ Авторство не проверено — сверьте аккаунт ролика с соцсетями креатора</template>
+      </p>
+
       <section class="block">
         <h2 class="section-title">Сверьте с заданием</h2>
         <div class="text">{{ video.order.description }}</div>
@@ -188,6 +200,22 @@ watch(() => props.id, load, { immediate: true });
 </template>
 
 <style scoped>
+.author {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  background: var(--orange-soft);
+  color: var(--orange-text);
+}
+.author.verified {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+.author a {
+  color: inherit;
+}
 .rows {
   display: flex;
   flex-direction: column;
