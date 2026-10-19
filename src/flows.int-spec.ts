@@ -1,4 +1,5 @@
 import type { ConfigService } from '@nestjs/config';
+import { OrderStatus } from '@prisma/client';
 import { ModeratorGuard } from './auth/moderator.guard';
 import { AnalyticsService } from './moderation/analytics.service';
 import { BansService } from './moderation/bans.service';
@@ -401,6 +402,18 @@ describe('ссылка на товар', () => {
       'https://shop.example/item',
     );
     expect(await submissions.click('нет-такого')).toBeNull();
+
+    // правка ссылки ещё у модератора или заказ снят — по ссылке не ведём и переход не считаем
+    for (const status of [
+      OrderStatus.PENDING_MODERATION,
+      OrderStatus.REJECTED,
+    ]) {
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { status, targetUrl: 'https://phish.example' },
+      });
+      expect(await submissions.click(trackCode!)).toBeNull();
+    }
 
     const { clicks } = await prisma.submission.findUniqueOrThrow({
       where: { trackCode: trackCode! },
