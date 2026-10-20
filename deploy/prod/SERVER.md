@@ -275,3 +275,65 @@ sudo -u deploy nano /opt/fixum/.env   # остальные ключи — по .
 cd / && sudo -u deploy docker compose -f /opt/fixum/docker-compose.yml up -d postgres
 sudo docker ps --format '{{.Names}} {{.Status}} {{.Ports}}'   # fixum_postgres … (healthy) 5432/tcp — без 0.0.0.0
 ```
+
+## Слой 6. Бэкапы
+
+Каждый день в 00:30 UTC `fixum-backup.timer` снимает `pg_dump` базы, шифрует его `age` открытым ключом
+и шлёт файлом в приватный Telegram-канал отдельным ботом (не `@FixumBot`: отзыв основного токена бэкапы
+не останавливает). Секретного ключа на сервере нет — дамп с сервера и из канала без него не прочесть.
+На сервере — последние 7 копий в `/var/backups/fixum` (только root), тоже зашифрованные. Ошибка любого
+шага — сообщение в тот же канал. Скрипт и юниты — `deploy/prod/backup/`.
+
+Если в канале нет файла за сутки и нет сообщения об ошибке — таймер не сработал: смотреть
+`systemctl list-timers fixum-backup.timer` и `journalctl -u fixum-backup`.
+
+### 6.1. Ключ, бот и канал (на ноутбуке)
+
+```bash
+mkdir -p ~/.config/fixum && age-keygen -o ~/.config/fixum/backup.agekey   # печатает «Public key: age1…»
+chmod 600 ~/.config/fixum/backup.agekey
+```
+
+Секретный ключ сразу — в менеджер паролей: потерян ключ — потеряны все бэкапы.
+
+BotFather → `/newbot` (бот бэкапов) → токен. Приватный канал → бот в админы с правом публиковать.
+Id канала: написать в канал любое сообщение и взять `chat.id` (`-100…`). Если это группа с темами — ещё
+номер темы: в ссылке на сообщение `t.me/c/<id>/<тема>/<сообщение>`, он идёт в `TG_THREAD`:
+
+```bash
+curl -s "https://api.telegram.org/bot<TOKEN>/getUpdates" | grep -o '"chat":{"id":-100[0-9]*'
+```
+
+### 6.2. Установка (на сервере)
+
+```bash
+# с ноутбука, из корня репозитория:
+scp deploy/prod/backup/fixum-backup.{sh,service,timer} fixum-prod:
+```
+
+```bash
+sudo apt install -y age
+sudo install -m 700 ~/fixum-backup.sh /usr/local/sbin/fixum-backup
+sudo install -m 644 ~/fixum-backup.service ~/fixum-backup.timer /etc/systemd/system/
+sudo install -m 600 /dev/null /etc/fixum-backup.env
+sudo nano /etc/fixum-backup.env   # TG_TOKEN=…  TG_CHAT=-100…  AGE_RECIPIENT=age1…  [TG_THREAD=<тема>]
+sudo systemctl daemon-reload
+sudo systemctl start fixum-backup.service    # первый бэкап сразу: в канале — файл «✓ fixum …»
+sudo systemctl enable --now fixum-backup.timer
+systemctl list-timers fixum-backup.timer
+```
+
+### 6.3. Восстановление (проверить один раз и после смены версии Postgres)
+
+Файл из канала — на ноутбук. `pg_restore` — того же major, что база (17):
+
+```bash
+age -d -i ~/.config/fixum/backup.agekey fixum_<дата>.dump.age > fixum.dump
+docker run -d --name fixum_restore -e POSTGRES_PASSWORD=x postgres:17 && sleep 5
+docker exec -i fixum_restore pg_restore -U postgres -d postgres --no-owner --no-acl < fixum.dump
+docker exec fixum_restore psql -U postgres -c 'select count(*) from "User"'
+docker rm -f fixum_restore && rm fixum.dump
+```
+
+В прод — так же в пустую базу `fixum` при остановленном боте (как при переезде:
+`DROP DATABASE` / `CREATE DATABASE` из базы `postgres`, затем `pg_restore … -U fixum -d fixum`).
