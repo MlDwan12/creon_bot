@@ -77,7 +77,7 @@ export type SubmissionStatus =
   | 'SLOT_EXPIRED';
 
 /** EXPIRED — закрыт по сроку (рекламодатель может продлить), CLOSED — закрыт им вручную. */
-export type OrderStatus = 'PENDING_MODERATION' | 'OPEN' | 'REJECTED' | 'CLOSED' | 'EXPIRED';
+export type OrderStatus = 'PENDING_MODERATION' | 'OPEN' | 'REJECTED' | 'CLOSED' | 'EXPIRED' | 'EDIT_REJECTED';
 
 /** Ответ `GET /api/submissions`: каждое видео — своя карточка. См. src/api/my-submissions.ts. */
 export interface MySubmission {
@@ -124,6 +124,8 @@ export interface MyOrder extends VideoFormat {
   deadline: string | null;
   status: OrderStatus;
   rejectReason: string | null;
+  /** Опубликованный заказ изменён, правку ещё не одобрили: ролики не сдают, можно исправить или закрыть. */
+  frozen: boolean;
   /** Сколько бюджета израсходовано и зарезервировано, %. */
   usedPercent: number;
   /** Одобренных роликов и сумма их просмотров. */
@@ -364,6 +366,8 @@ export interface ModVideo {
     minViews: number;
     /** Свободный остаток фонда, USDT. */
     free: number;
+    /** Ролик сдан до правки заказа — условия выше прежние, проверять по ним. */
+    termsBeforeEdit: boolean;
   } & VideoFormat;
 }
 

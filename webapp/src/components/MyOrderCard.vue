@@ -18,6 +18,7 @@ const TONE: Record<MyOrder['status'], string> = {
   REJECTED: 'danger',
   CLOSED: 'muted',
   EXPIRED: 'muted',
+  EDIT_REJECTED: 'danger',
 };
 
 /** На сколько дней продлить — как варианты срока в форме заказа. */
@@ -46,8 +47,9 @@ async function run(question: string | null, action: () => Promise<unknown>) {
   }
 }
 
+// замороженный закрывается иначе: правка отменяется, слоты «в работе» сгорают
 const close = () =>
-  run(i18next.t('myOrderCard.closeConfirm'), () =>
+  run(i18next.t(props.order.frozen ? 'myOrderCard.closeFrozenConfirm' : 'myOrderCard.closeConfirm'), () =>
     closeOrder(props.order.id),
   );
 const extend = (days: number) =>
@@ -96,6 +98,10 @@ const remove = () =>
         {{ $t('myOrderCard.fix') }}
       </RouterLink>
     </template>
+    <p v-if="order.status === 'EDIT_REJECTED' && order.rejectReason" class="reason">
+      {{ $t('myOrderCard.moderator', { reason: order.rejectReason }) }}
+    </p>
+    <p v-if="order.frozen" class="hint">{{ $t('myOrderCard.frozen') }}</p>
 
     <p v-if="order.status === 'EXPIRED'" class="hint">
       {{ $t('myOrderCard.expired') }}
@@ -108,7 +114,7 @@ const remove = () =>
     </div>
     <div class="buttons">
       <button
-        v-if="order.status === 'PENDING_MODERATION' || order.status === 'OPEN'"
+        v-if="order.status === 'PENDING_MODERATION' || order.status === 'OPEN' || order.status === 'EDIT_REJECTED'"
         type="button"
         :disabled="busy"
         @click="router.push(`/my-orders/${order.id}/edit`)"
@@ -118,12 +124,12 @@ const remove = () =>
       <button v-if="canExtend" type="button" :disabled="busy" @click="extending = !extending">
         {{ extending ? $t('common.cancel') : $t('myOrderCard.extend') }}
       </button>
-      <button v-if="order.status === 'OPEN'" type="button" :disabled="busy" @click="close">
+      <button v-if="order.status === 'OPEN' || order.frozen" type="button" :disabled="busy" @click="close">
         {{ $t('myOrderCard.close') }}
       </button>
       <!-- та же форма, что «Исправить и отправить снова»: поля подставятся из этого заказа -->
       <button
-        v-if="order.status !== 'REJECTED' && order.status !== 'PENDING_MODERATION'"
+        v-if="order.status !== 'REJECTED' && order.status !== 'PENDING_MODERATION' && order.status !== 'EDIT_REJECTED'"
         type="button"
         :disabled="busy"
         @click="router.push(`/my-orders/new?from=${order.id}`)"

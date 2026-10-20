@@ -6,14 +6,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
-  OrderStatus,
   Prisma,
   ReportStatus,
   ReportTarget,
   SubmissionStatus,
   type User,
 } from '@prisma/client';
-import { creatorLabel } from '../common/format';
+import { creatorLabel, titleVisibleToCreators } from '../common/format';
 import {
   isDbId,
   isMeaningfulText,
@@ -132,8 +131,7 @@ export class ReportsService {
         const visible =
           order &&
           order.advertiserId !== reporter.id &&
-          order.status !== OrderStatus.PENDING_MODERATION &&
-          order.status !== OrderStatus.REJECTED;
+          titleVisibleToCreators(order);
         return visible ? `заказ «${order.title}»` : null;
       }
       case ReportTarget.VIDEO: {

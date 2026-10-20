@@ -50,6 +50,9 @@ enum OrderStatus {
   CLOSED
   /// Истёк срок (deadline) — закрыт автоматически; рекламодатель может продлить и открыть снова.
   EXPIRED
+  /// Модератор отклонил правку опубликованного заказа: заказ остаётся замороженным (см. editedAt),
+  /// рекламодатель исправляет правку или закрывает заказ.
+  EDIT_REJECTED
 }
 
 /// Валюта денег. Всё в USDT (src/orders/budget.ts); RUB — у старых заказов и выплат.
@@ -131,6 +134,11 @@ model Order {
   deadlineReminderSentAt DateTime?
   /// Рекламодателю отправлены советы по заказу (src/orders/order-insights.ts) — раз на заказ.
   insightsSentAt DateTime?
+  /// Когда началась последняя правка опубликованного заказа. Пока правку не одобрили (статус
+  /// PENDING_MODERATION или EDIT_REJECTED), заказ заморожен: ролики не сдают, слоты не сгорают.
+  editedAt       DateTime?
+  /// Условия до этой правки — модератору: ролики, сданные раньше editedAt, проверяют по ним.
+  prevTerms      Json?
 
   submissions Submission[]
   views       OrderView[]

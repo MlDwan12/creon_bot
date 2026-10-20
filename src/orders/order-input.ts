@@ -17,7 +17,6 @@ import {
 } from '../common/validation';
 import { findExactContacts } from '../common/contacts';
 import { toMinor } from '../common/money';
-import { DEFAULT_MIN_VIEWS } from './budget';
 import { deadlineIn } from './deadline';
 
 function text(value: unknown): string {
@@ -26,7 +25,8 @@ function text(value: unknown): string {
 
 /**
  * Тело `POST /api/my-orders` → данные для OrdersService.create. Нарушение — 400 с текстом,
- * который Mini App показывает пользователю.
+ * который Mini App показывает пользователю. Обязательно всё, кроме ссылки на товар; «любая
+ * ориентация», «любая площадка» и «без срока» — явный выбор (null / [] / null), не пропуск поля.
  */
 export function parseOrderInput(body: unknown) {
   const b = (body ?? {}) as Record<string, unknown>;
@@ -54,6 +54,8 @@ export function parseOrderInput(body: unknown) {
     tr('errors.referenceWhat'),
     tr('errors.referenceInstead'),
   );
+  if (referenceUrl === undefined)
+    throw new BadRequestException(tr('errors.referenceRequired'));
   const targetUrl = optionalUrl(
     b.targetUrl,
     tr('errors.targetWhat'),
@@ -74,27 +76,27 @@ export function parseOrderInput(body: unknown) {
       }),
     );
 
-  // Пусто — порог по умолчанию.
-  const minViews =
-    b.minViews === undefined || b.minViews === null || b.minViews === ''
-      ? DEFAULT_MIN_VIEWS
-      : parseViews(b.minViews, tr('errors.thresholdWhat'));
+  const minViews = parseViews(b.minViews, tr('errors.thresholdWhat'));
 
   const minDurationSec = durationSec(b.minDurationSec);
   const maxDurationSec = durationSec(b.maxDurationSec);
-  if (minDurationSec && maxDurationSec && minDurationSec > maxDurationSec)
+  if (minDurationSec > maxDurationSec)
     throw new BadRequestException(tr('errors.durationOrder'));
 
-  // Пусто — любая ориентация.
-  const orientation = (b.orientation ?? null) as VideoOrientation | null;
+  // null — любая ориентация; не передана — не выбрали.
+  if (b.orientation === undefined)
+    throw new BadRequestException(tr('errors.chooseOrientation'));
+  const orientation = b.orientation as VideoOrientation | null;
   if (
     orientation !== null &&
     !Object.values(VideoOrientation).includes(orientation)
   )
     throw new BadRequestException(tr('errors.badOrientation'));
 
-  // Пусто — любая площадка.
-  const platforms = b.platforms ?? [];
+  // [] — любая площадка; не передано — не выбрали.
+  if (b.platforms === undefined)
+    throw new BadRequestException(tr('errors.choosePlatforms'));
+  const platforms = b.platforms;
   if (
     !Array.isArray(platforms) ||
     !platforms.every((p) =>
@@ -108,8 +110,11 @@ export function parseOrderInput(body: unknown) {
     throw new BadRequestException(tr('errors.chooseCategory'));
   }
 
+  // null — без срока; не передан — не выбрали.
+  if (b.deadlineDays === undefined)
+    throw new BadRequestException(tr('errors.chooseDeadline'));
   const deadline =
-    b.deadlineDays === undefined || b.deadlineDays === null
+    b.deadlineDays === null
       ? undefined
       : deadlineIn(parseDeadlineDays(b.deadlineDays));
 
@@ -130,7 +135,7 @@ export function parseOrderInput(body: unknown) {
 }
 
 /**
- * Необязательная ссылка заказа: пусто — без ссылки. Ссылка на мессенджер или соцсеть — это контакт
+ * Ссылка заказа: пусто — без ссылки (undefined). Ссылка на мессенджер или соцсеть — это контакт
  * в обход площадки. `what` и `instead` — для текста ошибки.
  */
 function optionalUrl(value: unknown, what: string, instead: string) {
@@ -209,9 +214,10 @@ export function parseLikes(value: unknown): number | null {
   return value as number;
 }
 
-/** Длительность в секундах из требований; пусто — любая (null). */
-function durationSec(value: unknown): number | null {
-  if (value === undefined || value === null || value === '') return null;
+/** Длительность в секундах из требований — обязательна. */
+function durationSec(value: unknown): number {
+  if (value === undefined || value === null || value === '')
+    throw new BadRequestException(tr('errors.durationRequired'));
   if (
     !Number.isInteger(value) ||
     (value as number) < 1 ||
@@ -229,7 +235,8 @@ function durationSec(value: unknown): number | null {
  */
 export function parseOrderEdit(body: unknown) {
   const b = (body ?? {}) as Record<string, unknown>;
-  const input = parseOrderInput({ ...b, deadlineDays: undefined });
+  // срок при правке разбираем ниже: там «не передан» — не менять
+  const input = parseOrderInput({ ...b, deadlineDays: null });
   return {
     title: input.title,
     description: input.description,

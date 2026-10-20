@@ -9,7 +9,13 @@ import {
 const valid = {
   title: '  Распаковка наушников  ',
   description: 'Снять 30 секунд',
+  referenceUrl: 'https://disk.yandex.ru/x',
   budget: 500,
+  minViews: 250,
+  minDurationSec: 15,
+  maxDurationSec: 60,
+  orientation: null,
+  platforms: [],
   category: 'TECH',
   deadlineDays: 7,
 };
@@ -29,10 +35,10 @@ describe('parseOrderInput', () => {
     expect(Math.round(days)).toBe(7);
   });
 
-  it('требования к ролику: пусто — любые, иначе секунды, ориентация и площадки (без повторов)', () => {
+  it('требования к ролику: null и [] — любые, иначе ориентация и площадки (без повторов)', () => {
     expect(parseOrderInput(valid)).toMatchObject({
-      minDurationSec: null,
-      maxDurationSec: null,
+      minDurationSec: 15,
+      maxDurationSec: 60,
       orientation: null,
       platforms: [],
     });
@@ -77,20 +83,26 @@ describe('parseOrderInput', () => {
     );
   });
 
-  it('порог просмотров: пусто — 250, иначе своё число', () => {
-    expect(parseOrderInput({ ...valid, minViews: '' }).minViews).toBe(250);
-    expect(parseOrderInput({ ...valid, minViews: 1000 }).minViews).toBe(1000);
+  it.each([
+    ['референса', { referenceUrl: '' }],
+    ['порога просмотров', { minViews: '' }],
+    ['длительности от', { minDurationSec: '' }],
+    ['длительности до', { maxDurationSec: undefined }],
+    ['выбора ориентации', { orientation: undefined }],
+    ['выбора площадок', { platforms: undefined }],
+    ['категории', { category: undefined }],
+    ['выбора срока', { deadlineDays: undefined }],
+  ])('всё, кроме ссылки на товар, обязательно — нет %s', (_name, patch) => {
+    expect(() => parseOrderInput({ ...valid, ...patch })).toThrow(
+      BadRequestException,
+    );
   });
 
-  it('референс: ссылка без пробелов по краям, пусто — без ссылки', () => {
+  it('референс — без пробелов по краям', () => {
     expect(
       parseOrderInput({ ...valid, referenceUrl: ' https://disk.yandex.ru/x ' })
         .referenceUrl,
     ).toBe('https://disk.yandex.ru/x');
-    expect(
-      parseOrderInput({ ...valid, referenceUrl: '' }).referenceUrl,
-    ).toBeUndefined();
-    expect(parseOrderEdit({ ...valid }).referenceUrl).toBeNull();
   });
 
   it('ссылка на товар — по тем же правилам, в правке пусто — null', () => {
@@ -160,12 +172,7 @@ describe('parseCpm', () => {
 });
 
 describe('parseOrderEdit', () => {
-  const base = {
-    title: 'Название',
-    description: 'Описание',
-    category: 'FOOD',
-    budget: 100,
-  };
+  const base = { ...valid, budget: 100, deadlineDays: undefined };
 
   it('срок: не передан — не менять, null — без срока, число — через N дней', () => {
     expect(parseOrderEdit(base).deadline).toBeUndefined();

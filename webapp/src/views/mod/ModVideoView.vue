@@ -118,6 +118,9 @@ watch(() => props.id, load, { immediate: true });
           <RouterLink :to="`/mod/creators/${video.creatorId}`">{{ video.creator }}</RouterLink> · видео {{ video.attempt }}<template v-if="video.submittedAt"> · {{ timeAgo(video.submittedAt) }}</template>
         </span>
         <h1>{{ video.order.title }}</h1>
+        <p v-if="video.order.termsBeforeEdit" class="hint">
+          Ролик сдан до правки заказа — ниже прежние условия, проверяйте по ним.
+        </p>
       </header>
 
       <a v-if="safeUrl(video.videoUrl)" :href="safeUrl(video.videoUrl)" target="_blank" rel="noopener noreferrer" class="video">

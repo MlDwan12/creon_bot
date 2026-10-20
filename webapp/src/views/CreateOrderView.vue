@@ -24,7 +24,6 @@ const MAX_TITLE = 100;
 const MAX_DESCRIPTION = 1000;
 const MIN_BUDGET = 10;
 const MAX_BUDGET = 100_000;
-const DEFAULT_MIN_VIEWS = 250;
 const MAX_DURATION = 600;
 const ORIENTATIONS: { value: NewOrderInput['orientation']; label: string }[] = [
   { value: 'VERTICAL', label: 'createOrder.vertical' },
@@ -50,11 +49,22 @@ const route = useRoute();
 const router = useRouter();
 
 // reactive() — как ref(), но для объекта целиком: form.title и т.д. без `.value`.
-// v-model.number отдаёт '' для пустого ввода: budget '' — ещё не введён, minViews '' — порог по умолчанию.
+// Обязательно всё, кроме ссылки на товар, и значений по умолчанию нет — рекламодатель выбирает сам.
+// v-model.number отдаёт '' для пустого ввода; undefined у выбора — ещё не выбрали («Любое» — null,
+// «Любая площадка» — []). У срока при правке undefined — «как было», это тоже выбор.
 const form = reactive<
   Omit<
     NewOrderInput,
-    'referenceUrl' | 'targetUrl' | 'budget' | 'minViews' | 'minDurationSec' | 'maxDurationSec' | 'deadlineDays'
+    | 'referenceUrl'
+    | 'targetUrl'
+    | 'budget'
+    | 'minViews'
+    | 'minDurationSec'
+    | 'maxDurationSec'
+    | 'orientation'
+    | 'platforms'
+    | 'category'
+    | 'deadlineDays'
   > & {
     referenceUrl: string;
     targetUrl: string;
@@ -62,6 +72,9 @@ const form = reactive<
     minViews: number | '';
     minDurationSec: number | '';
     maxDurationSec: number | '';
+    orientation: NewOrderInput['orientation'] | undefined;
+    platforms: VideoPlatform[] | undefined;
+    category: NewOrderInput['category'] | undefined;
     deadlineDays: number | null | undefined;
   }
 >({
@@ -70,15 +83,16 @@ const form = reactive<
   referenceUrl: '',
   targetUrl: '',
   budget: '',
-  minViews: DEFAULT_MIN_VIEWS,
-  // Короткие вертикальные ролики — самый частый заказ; рекламодатель может поменять.
-  minDurationSec: 15,
-  maxDurationSec: 60,
-  orientation: 'VERTICAL',
-  platforms: [],
-  category: 'OTHER',
-  deadlineDays: props.id ? undefined : 7,
+  minViews: '',
+  minDurationSec: '',
+  maxDurationSec: '',
+  orientation: undefined,
+  platforms: undefined,
+  category: undefined,
+  deadlineDays: undefined,
 });
+/** Выбрали срок: при правке «как было» (undefined) — тоже выбор, при создании — нет. */
+const deadlinePicked = computed(() => props.id !== undefined || form.deadlineDays !== undefined);
 /** Редактируемый заказ — для подсказки, что открытый уйдёт на повторную проверку. */
 const editing = ref<MyOrder>();
 const deadlines = computed(() => (props.id ? [undefined, ...DEADLINES] : DEADLINES));
@@ -108,24 +122,39 @@ async function prefill() {
   form.category = source.category;
 }
 
-/** Отметить площадку или снять отметку. */
+/** Отметить площадку или снять отметку; «Любая» — пустой список. */
 function togglePlatform(p: VideoPlatform) {
-  form.platforms = form.platforms.includes(p) ? form.platforms.filter((x) => x !== p) : [...form.platforms, p];
+  const list = form.platforms ?? [];
+  form.platforms = list.includes(p) ? list.filter((x) => x !== p) : [...list, p];
 }
 
 async function submit() {
-  sending.value = true;
   error.value = '';
+  // Поля ввода проверяет браузер (required), выбор кнопками — здесь; тексты — те же, что у бэкенда.
+  const { orientation, platforms, category } = form;
+  const missing = (key: string) => {
+    error.value = i18next.t(key);
+  };
+  if (orientation === undefined) return missing('errors.chooseOrientation');
+  if (platforms === undefined) return missing('errors.choosePlatforms');
+  if (category === undefined) return missing('errors.chooseCategory');
+  if (!deadlinePicked.value) return missing('errors.chooseDeadline');
+  sending.value = true;
   try {
-    const budget = Number(form.budget);
-    const minViews = form.minViews === '' ? null : form.minViews;
-    const referenceUrl = form.referenceUrl.trim() || null;
-    const targetUrl = form.targetUrl.trim() || null;
-    const minDurationSec = form.minDurationSec === '' ? null : form.minDurationSec;
-    const maxDurationSec = form.maxDurationSec === '' ? null : form.maxDurationSec;
-    const input = { ...form, referenceUrl, targetUrl, budget, minViews, minDurationSec, maxDurationSec };
+    const input = {
+      ...form,
+      orientation,
+      platforms,
+      category,
+      referenceUrl: form.referenceUrl.trim() || null,
+      targetUrl: form.targetUrl.trim() || null,
+      budget: Number(form.budget),
+      minViews: Number(form.minViews),
+      minDurationSec: Number(form.minDurationSec),
+      maxDurationSec: Number(form.maxDurationSec),
+    };
     if (props.id) await updateOrder(Number(props.id), input);
-    // при создании «как было» не бывает — срок всегда выбран
+    // при создании «как было» не бывает — deadlinePicked выше гарантирует выбор
     else await createOrder({ ...input, deadlineDays: form.deadlineDays ?? null });
     await router.replace('/my-orders');
   } catch (err) {
@@ -173,6 +202,7 @@ void prefill();
           type="url"
           inputmode="url"
           maxlength="500"
+          required
           :placeholder="$t('createOrder.referencePlaceholder')"
         />
       </div>
@@ -217,7 +247,8 @@ void prefill();
               min="1"
               :max="MAX_DURATION"
               step="1"
-              :placeholder="$t('createOrder.any')"
+              required
+              placeholder="15"
             />
           </label>
           <label class="row bordered">
@@ -229,7 +260,8 @@ void prefill();
               min="1"
               :max="MAX_DURATION"
               step="1"
-              :placeholder="$t('createOrder.any')"
+              required
+              placeholder="60"
             />
           </label>
         </div>
@@ -238,15 +270,18 @@ void prefill();
       <fieldset class="field">
         <legend class="section-title">{{ $t('createOrder.platforms') }}</legend>
         <div class="chips">
+          <button type="button" :aria-pressed="form.platforms?.length === 0" @click="form.platforms = []">
+            {{ $t('createOrder.anyPlatform') }}
+          </button>
           <button
             v-for="p in VIDEO_PLATFORMS"
             :key="p"
             type="button"
             class="with-icon"
-            :aria-pressed="form.platforms.includes(p)"
+            :aria-pressed="!!form.platforms?.includes(p)"
             @click="togglePlatform(p)"
           >
-            <PlatformIcon :platform="p" :size="26" round :inverse="form.platforms.includes(p)" />
+            <PlatformIcon :platform="p" :size="26" round :inverse="!!form.platforms?.includes(p)" />
             {{ PLATFORM_NAMES[p] }}
           </button>
         </div>
@@ -290,7 +325,8 @@ void prefill();
             inputmode="numeric"
             min="1"
             step="1"
-            :placeholder="String(DEFAULT_MIN_VIEWS)"
+            required
+            placeholder="250"
           />
         </label>
         <div class="row column">

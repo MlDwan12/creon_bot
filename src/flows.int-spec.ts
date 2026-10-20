@@ -622,16 +622,137 @@ describe('правка заказа — защита', () => {
     expect(daysLeft).toBeCloseTo(7, 1);
   });
 
-  it('изменённый открытый заказ отклонён — креаторы в ответе, видео больше не принимаются', async () => {
+  it('правку отклонили — заказ заморожен (EDIT_REJECTED), видео не принимаются', async () => {
     const [adv, creator] = [await user(), await user()];
     const order = await openOrder(adv.id);
     const s = await submissions.claim(order.id, creator.id);
     await orders.update(order.id, adv.id, edit);
     const rejected = await rejectOrder(order.id, 1n, 'причина');
-    expect(rejected.submissions.map((x) => x.creatorId)).toEqual([creator.id]);
+    expect(rejected.status).toBe('EDIT_REJECTED');
     await expect(
       submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS),
-    ).rejects.toThrow('снят модератором');
+    ).rejects.toThrow('после решения модератора');
+  });
+});
+
+describe('заморозка при правке', () => {
+  const edit = {
+    title: 'Новое',
+    description: 'Описание',
+    targetUrl: 'https://shop.example/new',
+    budgetMinor: BUDGET,
+    minViews: 500,
+    category: 'FOOD' as const,
+  };
+
+  it('пока правка на проверке — сдать нельзя и слот не сгорает; после одобрения слот продлён', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    const s = await submissions.claim(order.id, creator.id);
+    // взял 6 дней назад, правка — 3 дня назад: без заморозки слот уже сгорел бы
+    await prisma.submission.update({
+      where: { id: s.id },
+      data: { createdAt: new Date(Date.now() - 6 * DAY) },
+    });
+    await orders.update(order.id, adv.id, edit);
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { editedAt: new Date(Date.now() - 3 * DAY) },
+    });
+    await prisma.submission.update({
+      where: { id: s.id },
+      data: { createdAt: new Date(Date.now() - 8 * DAY) },
+    });
+    await expect(
+      submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS),
+    ).rejects.toThrow('после решения модератора');
+    expect(await submissions.listSlotOverdue()).toEqual([]);
+
+    const approved = await approveOrder(order.id, 1n);
+    expect(approved.unfrozen).toBe(true);
+    expect(approved.submissions.map((x) => x.id)).toEqual([s.id]);
+    const after = await prisma.submission.findUniqueOrThrow({
+      where: { id: s.id },
+    });
+    // 8 дней назад + 3 дня заморозки = 5 дней назад: слот ещё жив
+    expect((Date.now() - after.createdAt.getTime()) / DAY).toBeCloseTo(5, 1);
+    expect(await submissions.listSlotOverdue()).toEqual([]);
+    await expect(
+      submissions.attachVideo(s.id, creator.id, videoUrl(), 1000),
+    ).resolves.toMatchObject({ status: 'SUBMITTED' });
+  });
+
+  it('прежние условия — с первой правки; отклонённую правку можно исправить', async () => {
+    const adv = await user();
+    const order = await openOrder(adv.id);
+    await orders.update(order.id, adv.id, edit);
+    const first = await prisma.order.findUniqueOrThrow({
+      where: { id: order.id },
+    });
+    expect(first.prevTerms).toMatchObject({ title: 'Заказ', minViews: 250 });
+    await rejectOrder(order.id, 1n, 'контакты');
+    await orders.update(order.id, adv.id, { ...edit, title: 'Ещё новее' });
+    const second = await prisma.order.findUniqueOrThrow({
+      where: { id: order.id },
+    });
+    expect(second).toMatchObject({
+      status: 'PENDING_MODERATION',
+      title: 'Ещё новее',
+      editedAt: first.editedAt,
+      prevTerms: first.prevTerms,
+      moderatorComment: null,
+    });
+  });
+
+  it('правку отклонили — ролик, сданный до правки, проверяется и оплачивается как обычно', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS);
+    await orders.update(order.id, adv.id, edit);
+    await rejectOrder(order.id, 1n, 'контакты в названии');
+    await expect(
+      submissions.moderatorApprove(s.id, 1n, VIEWS),
+    ).resolves.toMatchObject({
+      submission: { status: 'MODERATOR_APPROVED' },
+    });
+  });
+
+  it('закрыли замороженный — слоты сгорели, правка отменена, сданное доводится до конца', async () => {
+    const [adv, waiting, done] = [await user(), await user(), await user()];
+    const order = await openOrder(adv.id);
+    const inWork = await submissions.claim(order.id, waiting.id);
+    const sent = await submissions.claim(order.id, done.id);
+    await submissions.attachVideo(sent.id, done.id, videoUrl(), VIEWS);
+    await orders.update(order.id, adv.id, { ...edit, budgetMinor: BUDGET * 2 });
+    await rejectOrder(order.id, 1n, 'контакты');
+
+    const closed = await orders.close(order.id, adv.id);
+    expect(closed.burned.map((x) => x.id)).toEqual([inWork.id]);
+    expect(closed).toMatchObject({
+      status: 'CLOSED',
+      title: 'Заказ',
+      targetUrl: null,
+      minViews: 250,
+      category: 'OTHER',
+      budgetMinor: BUDGET,
+    });
+    expect((await submissions.findById(inWork.id))?.status).toBe(
+      'SLOT_EXPIRED',
+    );
+    await expect(
+      submissions.moderatorApprove(sent.id, 1n, VIEWS),
+    ).resolves.toBeDefined();
+  });
+
+  it('открытый заказ закрывается как раньше — начатые ролики ещё принимаются', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    const s = await submissions.claim(order.id, creator.id);
+    expect((await orders.close(order.id, adv.id)).burned).toEqual([]);
+    await expect(
+      submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS),
+    ).resolves.toMatchObject({ status: 'SUBMITTED' });
   });
 });
 
@@ -644,31 +765,6 @@ describe('гонки и снятые заказы', () => {
       creators.map((c) => submissions.claim(order.id, c.id)),
     );
     expect(results.map((r) => r.status)).toEqual(Array(5).fill('fulfilled'));
-  });
-
-  it('отклонили изменённый заказ — видео по нему сняты с очередей и не одобряются', async () => {
-    const [adv, creator] = [await user(), await user()];
-    const order = await openOrder(adv.id);
-    const s = await submissions.claim(order.id, creator.id);
-    await submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS);
-    await orders.update(order.id, adv.id, {
-      title: 'Новое',
-      description: 'Описание',
-      budgetMinor: BUDGET,
-      minViews: 250,
-      category: 'OTHER',
-    });
-    await rejectOrder(order.id, 1n, 'контакты в названии');
-    const after = await prisma.submission.findUniqueOrThrow({
-      where: { id: s.id },
-    });
-    expect(after).toMatchObject({
-      status: 'MODERATOR_REJECTED',
-      payoutMinor: 0,
-    });
-    await expect(
-      submissions.moderatorApprove(s.id, 1n, VIEWS),
-    ).rejects.toThrow();
   });
 });
 

@@ -23,7 +23,7 @@ import {
 import { DAY_MS } from '../orders/deadline';
 import { titleVisibleToCreators } from '../common/format';
 import { PLATFORMS, platformOf, videoKey } from '../common/platforms';
-import { closeOpenOrders, lockOrder } from '../orders/order-status';
+import { closeOpenOrders, isFrozen, lockOrder } from '../orders/order-status';
 import {
   transitionSubmission,
   tryTransitionSubmission,
@@ -44,9 +44,20 @@ export function slotDueAt(createdAt: Date) {
   return new Date(createdAt.getTime() + SLOT_DAYS * DAY_MS);
 }
 
-/** По таким заказам видео ещё принимают (как в attachVideo) — только тогда слот может сгореть. */
+/**
+ * По таким заказам видео ещё принимают (как в attachVideo) — только тогда слот может сгореть.
+ * Замороженный на время правки (PENDING_MODERATION, EDIT_REJECTED) видео не принимает и слоты не
+ * жжёт: после одобрения правки они продлеваются (OrdersService.moderatorApprove).
+ */
 const ACCEPTS_VIDEOS: Prisma.OrderWhereInput = {
-  status: { notIn: [OrderStatus.EXPIRED, OrderStatus.REJECTED] },
+  status: {
+    notIn: [
+      OrderStatus.EXPIRED,
+      OrderStatus.REJECTED,
+      OrderStatus.PENDING_MODERATION,
+      OrderStatus.EDIT_REJECTED,
+    ],
+  },
 };
 
 // Свободного остатка может не хватать и из-за резерва роликов на проверке — тогда он ещё вернётся.
@@ -183,9 +194,12 @@ export class SubmissionsService implements OnApplicationBootstrap {
     // После срока видео не принимаются. После ручного закрытия — принимаются, пока есть бюджет.
     if (submission.order.status === OrderStatus.EXPIRED)
       throw new ForbiddenException(tr('errors.orderExpired'));
-    // Изменённый открытый заказ модератор отклонил — он снят с площадки.
+    // Заказ снят (бан рекламодателя).
     if (submission.order.status === OrderStatus.REJECTED)
       throw new ForbiddenException(tr('errors.orderRemovedByMod'));
+    // Рекламодатель изменил заказ — до одобрения правки сдавать нельзя, слот не тикает.
+    if (isFrozen(submission.order))
+      throw new ForbiddenException(tr('errors.orderFrozen'));
     const { platforms } = submission.order;
     if (
       platforms.length &&
