@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   type Notification,
   type Order,
+  OrderStatus,
   type Payout,
   PayoutStatus,
   Prisma,
@@ -194,22 +195,26 @@ export class NotificationsService
   }
 
   /**
-   * Рекламодателю: модератор отклонил заказ. Если это изменённый открытый заказ — креаторам,
-   * которые по нему работали: он снят, продолжать не нужно.
+   * Рекламодателю: модератор отклонил заказ. Новый — разместить заново; правку опубликованного —
+   * заказ заморожен, исправить правку или закрыть заказ.
    */
-  orderRejected(
-    order: Order & { advertiser: User } & OrderWithCreators,
-    comment: string,
-  ) {
+  orderRejected(order: Order & { advertiser: User }, comment: string) {
+    const edit = order.status === OrderStatus.EDIT_REJECTED;
     this.send(
       order.advertiser,
-      (t) => t('notify.orderRejected', { title: order.title, reason: comment }),
-      `/my-orders/new?from=${order.id}`,
+      (t) =>
+        t(edit ? 'notify.orderEditRejected' : 'notify.orderRejected', {
+          title: order.title,
+          reason: comment,
+        }),
+      edit ? '/my-orders' : `/my-orders/new?from=${order.id}`,
     );
-    this.toCreators(
-      order,
-      // название — непроверенное (его и отклонили), поэтому по номеру
-      (t) => t('notify.orderRejectedCreators', { id: order.id }),
+  }
+
+  /** Креаторам «в работе»: правку заказа одобрили — сдавать снова можно, слот продлён. */
+  orderUnfrozen(order: OrderWithCreators) {
+    this.toCreators(order, (t, lang) =>
+      t('notify.orderUnfrozen', { order: forCreator(order, lang) }),
     );
   }
 
@@ -291,6 +296,13 @@ export class NotificationsService
   orderClosed(order: OrderWithCreators) {
     this.toCreators(order, (t, lang) =>
       t('notify.orderClosed', { order: forCreator(order, lang) }),
+    );
+  }
+
+  /** Креаторам, чьи слоты сгорели: рекламодатель закрыл замороженный заказ. */
+  orderClosedSlotsBurned(order: OrderWithCreators) {
+    this.toCreators(order, (t, lang) =>
+      t('notify.orderClosedFrozen', { order: forCreator(order, lang) }),
     );
   }
 

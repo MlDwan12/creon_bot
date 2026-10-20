@@ -28,6 +28,8 @@ const order = (id: number): Order => ({
   decidedAt: null,
   closedAt: null,
   deadlineReminderSentAt: null,
+  editedAt: null,
+  prevTerms: null,
   insightsSentAt: null,
 });
 
@@ -136,6 +138,6 @@ describe('toMySubmissions — изменённый заказ на провер�
     const [row] = toMySubmissions([
       { ...submission(1, 3, 'IN_PROGRESS'), order: pending },
     ]);
-    expect(row.order.title).toBe('Заказ #3 — на проверке у модератора');
+    expect(row.order.title).toBe('Заказ #3 — изменён, сдача роликов на паузе');
   });
 });

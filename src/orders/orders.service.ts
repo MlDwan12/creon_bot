@@ -32,11 +32,13 @@ import { type OrderFunnel, orderInsights } from './order-insights';
 import { buildOrderReport } from './order-report';
 import {
   closeOpenOrders,
+  FROZEN,
+  isFrozen,
   lockOrder,
   transitionOrder,
   tryTransitionOrder,
 } from './order-status';
-import { expireSlots, rejectSubmitted } from '../submissions/submission-status';
+import { expireSlots } from '../submissions/submission-status';
 
 /** Поля заказа, которые видит любой пользователь Mini App: без модераторских данных и без BigInt. */
 const PUBLIC_ORDER_FIELDS = {
@@ -102,7 +104,8 @@ export class OrdersService {
     const active = await this.prisma.order.count({
       where: {
         advertiserId,
-        status: { in: [OrderStatus.PENDING_MODERATION, OrderStatus.OPEN] },
+        // замороженный с отклонённой правкой — тоже действующий: его ещё исправят
+        status: { in: [...FROZEN, OrderStatus.OPEN] },
       },
     });
     if (active >= MAX_ACTIVE_ORDERS)
@@ -313,22 +316,49 @@ export class OrdersService {
     return this.prisma.order.findUnique({ where: { id } });
   }
 
+  /**
+   * Закрыть заказ. Открытый — начатые ролики ещё принимаются, пока есть бюджет. Замороженный
+   * (правку не одобрили) — слоты «в работе» сгорают: работать по нему больше не на чем, а правка
+   * отменяется — возвращаются одобренные условия и бюджет: закрытый заказ креаторы видят, и
+   * непроверенные название или ссылка на товар (/r/) не должны им открыться. Ролики на
+   * проверке и одобренные доводятся до конца в обоих случаях. Возвращает заказ с откликами, слоты
+   * которых сгорели (`burned`), — им своё уведомление.
+   */
   async close(orderId: number, advertiserId: number) {
     const order = await this.findById(orderId);
     if (!order) throw new NotFoundException(tr('errors.orderNotFound'));
     if (order.advertiserId !== advertiserId)
       throw new ForbiddenException(tr('errors.notYourOrder'));
-    await transitionOrder(
-      this.prisma,
-      orderId,
-      [OrderStatus.OPEN],
-      { status: OrderStatus.CLOSED, closedAt: new Date() },
-      tr('errors.onlyOpenClose'),
-    );
-    return this.prisma.order.findUniqueOrThrow({
+    const frozen = isFrozen(order);
+    // отклики, которые сейчас сгорят, — до перехода: потом они уже SLOT_EXPIRED среди прочих
+    const burned = frozen
+      ? await this.prisma.submission.findMany({
+          where: { orderId, status: SubmissionStatus.IN_PROGRESS },
+          include: { creator: true },
+        })
+      : [];
+    await this.prisma.$transaction(async (tx) => {
+      await transitionOrder(
+        tx,
+        orderId,
+        frozen ? FROZEN : [OrderStatus.OPEN],
+        {
+          status: OrderStatus.CLOSED,
+          closedAt: new Date(),
+          ...(frozen && {
+            ...(order.prevTerms as ReturnType<typeof termsOf> | null),
+            budgetMinor: order.approvedBudgetMinor!,
+          }),
+        },
+        tr('errors.onlyOpenClose'),
+      );
+      if (frozen) await expireSlots(tx, [orderId]);
+    });
+    const closed = await this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
       include: { submissions: { include: { creator: true } } },
     });
+    return { ...closed, burned };
   }
 
   /**
@@ -474,8 +504,10 @@ export class OrdersService {
   /**
    * Правка своего заказа: на проверке — остаётся на проверке, открытый — уходит на повторную
    * (пропадает из каталога до одобрения: новые условия видит модератор, в том числе контакты).
-   * `deadline`: undefined — не менять, null — без срока. Возвращает заказ с рекламодателем и
-   * креаторами, которые уже работают по нему (отклики бывают, только если заказ публиковали).
+   * Опубликованный заказ на это время заморожен (isFrozen): с первой правки запоминаем, когда она
+   * началась и какие были условия, — ролики, сданные раньше, модератор проверяет по ним. Отклонённую
+   * правку (EDIT_REJECTED) можно исправить. `deadline`: undefined — не менять, null — без срока.
+   * Возвращает заказ с рекламодателем и креаторами, которые уже работают по нему.
    */
   async update(
     orderId: number,
@@ -505,7 +537,7 @@ export class OrdersService {
     if (
       deadline === undefined &&
       order.deadline &&
-      order.status === OrderStatus.PENDING_MODERATION
+      FROZEN.includes(order.status)
     )
       deadline = new Date(
         order.deadline.getTime() +
@@ -521,18 +553,22 @@ export class OrdersService {
             amount: `${trNum(fromMinor(spent))} USDT`,
           }),
         );
+      // заморозка начинается с первой правки открытого заказа; повторная правка её не сдвигает
+      const startsFreeze = order.status === OrderStatus.OPEN;
       await transitionOrder(
         tx,
         orderId,
-        [OrderStatus.PENDING_MODERATION, OrderStatus.OPEN],
+        [...FROZEN, OrderStatus.OPEN],
         {
           ...data,
           deadline,
           status: OrderStatus.PENDING_MODERATION,
           moderationRequestedAt: now,
           moderatorId: null,
+          moderatorComment: null,
           decidedAt: null,
           deadlineReminderSentAt: null,
+          ...(startsFreeze && { editedAt: now, prevTerms: termsOf(order) }),
         },
         tr('errors.editWhich'),
       );
@@ -616,6 +652,15 @@ export class OrdersService {
         CHANGED_WHILE_VIEWED,
         { moderationRequestedAt: version },
       );
+      // Правку одобрили — заморозка кончилась: слоты «в работе» продлеваем на время заморозки,
+      // пока она шла, они не сгорали (ACCEPTS_VIDEOS в SubmissionsService).
+      // ponytail: сдвигаем createdAt, от него считается слот (slotDueAt); понадобится честная дата
+      // отклика — завести отдельное поле начала слота.
+      if (isFrozen(order) && order.editedAt)
+        await tx.$executeRaw`
+          UPDATE "Submission"
+          SET "createdAt" = "createdAt" + (${now}::timestamp - ${order.editedAt}::timestamp)
+          WHERE "orderId" = ${orderId} AND "status" = 'IN_PROGRESS'`;
     });
     const approved = await this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
@@ -628,12 +673,17 @@ export class OrdersService {
       },
     });
     // ставку назначают при первом одобрении, правка заказа её не сбрасывает
-    return { ...approved, firstPublication: order.cpmMinor === null };
+    return {
+      ...approved,
+      firstPublication: order.cpmMinor === null,
+      unfrozen: isFrozen(order),
+    };
   }
 
   /**
-   * Возвращает заказ с креаторами, чья работа по нему не решена: отклонить можно и изменённый
-   * открытый заказ — тогда им надо сказать, что работа по нему больше не нужна.
+   * Отклонить заказ. Новый — REJECTED, его можно только разместить заново. Правку опубликованного —
+   * EDIT_REJECTED: заказ остаётся замороженным, рекламодатель исправляет правку или закрывает его;
+   * ролики на проверке модератор проверяет как обычно (по условиям на момент сдачи).
    */
   async moderatorReject(
     orderId: number,
@@ -641,32 +691,28 @@ export class OrdersService {
     comment: string,
     version: Date,
   ) {
-    // креаторы — до снятия: их ролики на проверке сейчас станут отклонёнными
-    const order = await this.withActiveCreators(orderId);
-    await this.prisma.$transaction(async (tx) => {
-      await lockOrder(tx, orderId);
-      await transitionOrder(
-        tx,
-        orderId,
-        [OrderStatus.PENDING_MODERATION],
-        {
-          status: OrderStatus.REJECTED,
-          moderatorId: moderatorTelegramId,
-          moderatorComment: comment,
-          decidedAt: new Date(),
-        },
-        CHANGED_WHILE_VIEWED,
-        { moderationRequestedAt: version },
-      );
-      // Изменённый открытый заказ сняли — ролики на проверке не ждут модератора, резерв
-      // освобождается. Одобренные остаются: деньги за них уже начислены.
-      await rejectSubmitted(
-        tx,
-        { orderId: { in: [orderId] } },
-        'Заказ снят модератором',
-      );
+    const order = await this.mustFind(orderId);
+    const status =
+      order.cpmMinor === null
+        ? OrderStatus.REJECTED
+        : OrderStatus.EDIT_REJECTED;
+    await transitionOrder(
+      this.prisma,
+      orderId,
+      [OrderStatus.PENDING_MODERATION],
+      {
+        status,
+        moderatorId: moderatorTelegramId,
+        moderatorComment: comment,
+        decidedAt: new Date(),
+      },
+      CHANGED_WHILE_VIEWED,
+      { moderationRequestedAt: version },
+    );
+    return this.prisma.order.findUniqueOrThrow({
+      where: { id: orderId },
+      include: { advertiser: true },
     });
-    return { ...order, status: OrderStatus.REJECTED };
   }
 
   async stats() {
@@ -747,4 +793,20 @@ export class OrdersService {
     if (!order) throw new NotFoundException(tr('errors.orderNotFound'));
     return order;
   }
+}
+
+/** Условия заказа, по которым проверяют ролики, — снимок до правки (Order.prevTerms). */
+export function termsOf(order: Order) {
+  return {
+    title: order.title,
+    description: order.description,
+    referenceUrl: order.referenceUrl,
+    targetUrl: order.targetUrl,
+    category: order.category,
+    minViews: order.minViews,
+    minDurationSec: order.minDurationSec,
+    maxDurationSec: order.maxDurationSec,
+    orientation: order.orientation,
+    platforms: order.platforms,
+  };
 }

@@ -75,6 +75,7 @@ export function creatorLabel(user: User): string {
 export function titleVisibleToCreators(order: Pick<Order, 'status'>): boolean {
   return (
     order.status !== OrderStatus.PENDING_MODERATION &&
-    order.status !== OrderStatus.REJECTED
+    order.status !== OrderStatus.REJECTED &&
+    order.status !== OrderStatus.EDIT_REJECTED
   );
 }

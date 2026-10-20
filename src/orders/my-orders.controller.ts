@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { ParseIdPipe } from '../common/parse-id.pipe';
 import { OrderStatus } from '@prisma/client';
+import { isFrozen } from './order-status';
 import { fromMinor } from '../common/money';
 import { payoutPool } from './budget';
 import { NotificationsService } from '../telegram/notifications.service';
@@ -55,7 +56,12 @@ export class MyOrdersController {
       deadline: o.deadline,
       status: o.status,
       rejectReason:
-        o.status === OrderStatus.REJECTED ? o.moderatorComment : null,
+        o.status === OrderStatus.REJECTED ||
+        o.status === OrderStatus.EDIT_REJECTED
+          ? o.moderatorComment
+          : null,
+      // правку опубликованного заказа не одобрили — ролики не сдают, можно исправить или закрыть
+      frozen: isFrozen(o),
       // Фонд креаторам — бюджет без комиссии; рекламодателю — доля израсходованного бюджета.
       usedPercent: Math.min(
         100,
@@ -101,8 +107,20 @@ export class MyOrdersController {
 
   @Post(':id/close')
   async close(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
-    const order = await this.ordersService.close(id, req.user.id);
-    this.notifications.orderClosed(order);
+    const { burned, ...order } = await this.ordersService.close(
+      id,
+      req.user.id,
+    );
+    const burnedIds = new Set(burned.map((s) => s.id));
+    this.notifications.orderClosed({
+      ...order,
+      submissions: order.submissions.filter((s) => !burnedIds.has(s.id)),
+    });
+    if (burned.length)
+      this.notifications.orderClosedSlotsBurned({
+        ...order,
+        submissions: burned,
+      });
     return { ok: true };
   }
 

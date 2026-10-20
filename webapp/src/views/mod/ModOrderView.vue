@@ -21,6 +21,7 @@ const STATUS_LABELS: Record<ModOrder['status'], string> = {
   REJECTED: 'Отклонён',
   CLOSED: 'Закрыт',
   EXPIRED: 'Срок вышел',
+  EDIT_REJECTED: 'Правки отклонены',
 };
 
 const order = ref<ModOrder>();

@@ -10,6 +10,7 @@ const STATUS: Record<ModOrderRow['status'], { label: string; tone: string }> = {
   REJECTED: { label: 'Отклонён', tone: 'danger' },
   CLOSED: { label: 'Закрыт', tone: 'muted' },
   EXPIRED: { label: 'Срок вышел', tone: 'muted' },
+  EDIT_REJECTED: { label: 'Правки отклонены', tone: 'danger' },
 };
 
 const orders = ref<ModOrderRow[]>([]);

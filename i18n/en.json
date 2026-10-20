@@ -228,7 +228,8 @@
     "emptyActive": "No active orders.",
     "toCatalog": "Pick an order in the catalog",
     "attention": "Need your attention",
-    "emptyDone": "Accepted and closed orders will appear here."
+    "emptyDone": "Accepted and closed orders will appear here.",
+    "heldShort": "plus {{amount}} on hold"
   },
   "submissionCard": {
     "status": {
@@ -264,11 +265,12 @@
     },
     "loadError": "Couldn't load the balance",
     "error": "That didn't work, please try again",
-    "available": "Available to withdraw",
+    "available": "Ready to withdraw",
     "summary": "Earned {{earned}} · paid out {{paid}}",
     "inRequest": " · requested {{amount}}",
-    "held": "{{amount}} on hold — available 5 days after approval",
-    "nextRelease": ", next on {{date}}",
+    "held": "On hold",
+    "heldHint": "Available 5 days after a video is approved",
+    "nextRelease": "Next release {{date}}",
     "rate": "{{rub}} · rate {{rate}} ₽ per USDT",
     "sent": "Request sent. A manager will send USDT to your wallet — you'll get a notification.",
     "pending": "Your request for {{amount}} is awaiting transfer. You can send a new one after it.",
@@ -406,10 +408,12 @@
       "OPEN": "Open",
       "REJECTED": "Rejected",
       "CLOSED": "Closed",
-      "EXPIRED": "Expired"
+      "EXPIRED": "Expired",
+      "EDIT_REJECTED": "Changes rejected"
     },
     "error": "That didn't work, please try again",
     "closeConfirm": "Close the order? New applications will stop, and videos already submitted will be paid from the budget.",
+    "closeFrozenConfirm": "Close the order? The changes will be discarded, and creators who haven't submitted yet will lose their slots. Videos already submitted will be reviewed and paid.",
     "deleteConfirm": "Delete the order? This can't be undone — all applications will be deleted too.",
     "budget": "Budget {{amount}}",
     "until": " · until {{date}}",
@@ -427,7 +431,8 @@
     "extend": "Extend deadline",
     "close": "Stop accepting",
     "similar": "Create similar",
-    "delete": "Delete"
+    "delete": "Delete",
+    "frozen": "The order is frozen until the changes are approved: creators can't submit videos. Fix the changes or close the order."
   },
   "createOrder": {
     "vertical": "Vertical",
@@ -444,7 +449,7 @@
     "brief": "What to film",
     "briefPlaceholder": "What must be shown or said, the style, what to avoid",
     "reference": "Reference or materials",
-    "referencePlaceholder": "Link to an example video or files — optional",
+    "referencePlaceholder": "Link to an example video or files",
     "target": "Product link",
     "targetPlaceholder": "Website or store page — optional",
     "targetHint": "Each creator gets their own link for the video description — you'll see clicks in the report.",
@@ -452,9 +457,9 @@
     "orientation": "Orientation",
     "durationFrom": "Duration from, sec",
     "durationTo": "to, sec",
-    "any": "any",
     "platforms": "Platforms",
-    "platformsHint": "Where to post the video. Nothing selected — any platform.",
+    "anyPlatform": "Any",
+    "platformsHint": "Where to post the video. “Any” — any platform.",
     "category": "Category",
     "budget": "Budget, USDT",
     "budgetPlaceholder": "from {{min}}",
@@ -524,11 +529,10 @@
     "supportReply": "💬 Fixum support:\n\n{{text}}"
   },
   "notify": {
-    "orderEditedCreators": "✏️ The advertiser changed the terms of order #{{id}}. The order is under moderator review again — once approved, the new terms will be in the order card.",
+    "orderEditedCreators": "✏️ The advertiser changed the terms of order #{{id}}. While a moderator reviews the changes, you can't submit a video — your slot will be extended for that time. Videos you've already submitted will be reviewed under the previous terms.",
     "newOrder": "🆕 New order: “{{title}}”\n{{cpm}} per 1,000 views · can be submitted from {{minViews}} views\n\nTurn these messages off in “Profile” → “Notifications”.",
     "orderApproved": "✅ Your order “{{title}}” passed moderation and is published — creators can already see it in the catalog.",
     "orderRejected": "❌ Your order “{{title}}” was rejected by a moderator.\nReason: {{reason}}\n\nYou can post the order again, taking the comments into account.",
-    "orderRejectedCreators": "🔒 Order #{{id}} didn't pass moderation after changes and was removed — don't continue working on it.",
     "videoApproved": "✅ Your video for order {{order}} was approved: {{views}} views, {{amount}} credited.\n\nIn {{days}} days we'll check the post is still there — then you can withdraw the money: “Profile” → “Balance”. Don't delete the post: if it's gone, the payment will be cancelled.",
     "newVideo": "🎬 A new video for your order\n\nOrder: {{title}}\nViews: {{views}}\nVideo: {{url}}",
     "publicationDeleted": "❌ Your video for order {{order}} wasn't found at the link at the end of the hold — the post was deleted or hidden. Its payment is cancelled.\n\nIf this is a mistake, contact support.",
@@ -553,7 +557,10 @@
     "payoutPaid": "💸 Payout of {{amount}} has been sent. If the money didn't arrive, contact support.",
     "payoutRejected": "❌ Your withdrawal request for {{amount}} was rejected.\nReason: {{reason}}\n\nThe amount has been returned to your balance.",
     "videoRated": "⭐ The advertiser rated your video for order {{order}}: {{stars}}",
-    "holdReleased": "💸 The hold on your video (order {{order}}) is over: {{amount}} is ready to withdraw — “Profile” → “Balance”."
+    "holdReleased": "💸 The hold on your video (order {{order}}) is over: {{amount}} is ready to withdraw — “Profile” → “Balance”.",
+    "orderUnfrozen": "✅ The changes to order {{order}} were approved — you can submit your video. The new terms are in the order card, and your slot was extended for the review time.",
+    "orderEditRejected": "❌ The changes to your order “{{title}}” were rejected by a moderator.\nReason: {{reason}}\n\nThe order is frozen: creators can't submit videos for it. Fix the changes or close the order in “My orders”.",
+    "orderClosedFrozen": "🔒 Order {{order}} was closed by the advertiser. Your slot for it is closed — no need to submit a video."
   },
   "errors": {
     "tooManyRequests": "Too many requests — wait a minute and try again",
@@ -639,7 +646,7 @@
     "deadlineRange": "The deadline must be a whole number of days from 1 to {{max}}",
     "rejectReason": "Write the rejection reason",
     "rejectTooLong": "The reason is longer than {{max}} characters",
-    "orderUnderReview": "Order #{{id}} — under moderator review",
+    "orderUnderReview": "Order #{{id}} — changed, submissions paused",
     "anonCreator": "Creator",
     "oauthConnected": "{{platform}} connected",
     "oauthBackToTelegram": "You can go back to Telegram.",
@@ -655,7 +662,13 @@
     "csvOther": "Other",
     "linksList": "Links must be a list",
     "socialLink": "The link “{{link}}” must start with https:// and lead to {{platforms}}",
-    "tooManyLinks": "No more than {{max}} links"
+    "tooManyLinks": "No more than {{max}} links",
+    "referenceRequired": "Add a link to a reference or materials",
+    "durationRequired": "Enter the video duration — from and to, in seconds",
+    "chooseOrientation": "Choose an orientation — or “Any”",
+    "choosePlatforms": "Choose platforms — or “Any”",
+    "chooseDeadline": "Choose a deadline — or “none”",
+    "orderFrozen": "The advertiser changed the order — you can submit after the moderator reviews the changes. Your slot will be extended for that time."
   },
   "insights": {
     "notTaken": "{{viewers}} creators opened the order, but {{taken}} took it. The terms don't attract them: lower the view threshold, relax the duration and format requirements, attach an example video.",

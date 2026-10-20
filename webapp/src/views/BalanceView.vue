@@ -59,23 +59,31 @@ void load();
     <p v-else-if="!balance" class="hint">{{ $t('common.loading') }}</p>
 
     <template v-else>
-      <section class="total">
-        <span class="hint">{{ $t('balance.available') }}</span>
-        <strong>{{ formatMoney(balance.available) }}</strong>
-        <span class="hint">
-          {{ $t('balance.summary', { earned: formatMoney(balance.earned), paid: formatMoney(balance.paid) }) }}
-          <template v-if="balance.requested">{{ $t('balance.inRequest', { amount: formatMoney(balance.requested) }) }}</template>
-        </span>
-        <span v-if="balance.held" class="hint">
-          {{ $t('balance.held', { amount: formatMoney(balance.held) })
-          }}<template v-if="balance.nextReleaseAt">{{
-            $t('balance.nextRelease', { date: formatDate(balance.nextReleaseAt) })
-          }}</template>
-        </span>
-        <span v-if="rubPerUsdt" class="hint">
-          {{ $t('balance.rate', { rub: approxRub(balance.available, rubPerUsdt), rate: rubPerUsdt.toLocaleString(locale()) }) }}
-        </span>
-      </section>
+      <!-- Две плашки: что можно вывести сейчас и что ещё в холде (HOLD_DAYS после одобрения). -->
+      <div class="tiles">
+        <section class="tile total">
+          <span class="hint">{{ $t('balance.available') }}</span>
+          <strong>{{ formatMoney(balance.available) }}</strong>
+          <span v-if="rubPerUsdt" class="hint">
+            {{ $t('balance.rate', { rub: approxRub(balance.available, rubPerUsdt), rate: rubPerUsdt.toLocaleString(locale()) }) }}
+          </span>
+        </section>
+        <section class="tile held">
+          <span class="hint">{{ $t('balance.held') }}</span>
+          <strong>{{ formatMoney(balance.held) }}</strong>
+          <span class="hint">
+            {{
+              balance.nextReleaseAt
+                ? $t('balance.nextRelease', { date: formatDate(balance.nextReleaseAt) })
+                : $t('balance.heldHint')
+            }}
+          </span>
+        </section>
+      </div>
+      <p class="hint">
+        {{ $t('balance.summary', { earned: formatMoney(balance.earned), paid: formatMoney(balance.paid) }) }}
+        <template v-if="balance.requested">{{ $t('balance.inRequest', { amount: formatMoney(balance.requested) }) }}</template>
+      </p>
 
       <p v-if="sent" class="notice" role="status">
         {{ $t('balance.sent') }}
@@ -144,12 +152,28 @@ h1 {
   font-size: 14px;
   color: var(--hint);
 }
-.total {
+.tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.tile {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 20px;
-  border-radius: 26px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 22px;
+  background: var(--surface);
+}
+.tile strong {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  overflow-wrap: anywhere;
+}
+.total {
   background: var(--ink);
   color: var(--ink-text);
 }
@@ -157,10 +181,6 @@ h1 {
   color: var(--ink-hint);
 }
 .total strong {
-  font-family: var(--font-display);
-  font-size: 36px;
-  font-weight: 700;
-  letter-spacing: -1px;
   color: var(--lime);
 }
 .notice {

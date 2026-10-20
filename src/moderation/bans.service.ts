@@ -12,7 +12,11 @@ import {
   MAX_COMMENT_LENGTH,
 } from '../common/validation';
 import { ReportsService } from '../reports/reports.service';
-import { closeOpenOrders, rejectPendingOrders } from '../orders/order-status';
+import {
+  closeOpenOrders,
+  FROZEN,
+  rejectPendingOrders,
+} from '../orders/order-status';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   deleteInProgress,
@@ -133,17 +137,17 @@ export class BansService {
         where: { advertiserId: userId, status: OrderStatus.OPEN },
         select: { id: true },
       });
-      // на проверке может быть и изменённый открытый заказ — у него есть креаторы в работе
+      // на проверке или с отклонённой правкой — замороженный опубликованный, у него есть креаторы в работе
       const pending = await tx.order.findMany({
-        where: { advertiserId: userId, status: OrderStatus.PENDING_MODERATION },
+        where: { advertiserId: userId, status: { in: FROZEN } },
         select: { id: true },
       });
       const openIds = open.map((o) => o.id);
       const pendingIds = pending.map((o) => o.id);
       await closeOpenOrders(tx, openIds);
       await rejectPendingOrders(tx, pendingIds, BANNED_COMMENT);
-      // по закрытым заказам автора чужие ролики больше не сдают
-      await expireSlots(tx, openIds);
+      // по закрытым и снятым заказам автора чужие ролики больше не сдают
+      await expireSlots(tx, [...openIds, ...pendingIds]);
       // Заказы на повторной проверке сняты — чужие ролики по ним не ждут модератора, как в
       // OrdersService.moderatorReject; резерв возвращается в фонд.
       await rejectSubmitted(
