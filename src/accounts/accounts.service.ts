@@ -1,3 +1,4 @@
+import { recordExternalApi } from '../monitoring/metrics';
 import { tr } from '../i18n/request-lang';
 import {
   BadRequestException,
@@ -13,6 +14,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   enabledProviders,
+  PlatformUnavailable,
   Provider,
   ProviderRejected,
   randomState,
@@ -240,8 +242,12 @@ export class AccountsService {
         const token = await this.accessToken(account, provider);
         if (!token) continue;
         for (const [id, s] of await provider.stats(token, left)) out.set(id, s);
+        recordExternalApi(provider.platform, true);
         left = left.filter((id) => !out.has(id));
       } catch (err) {
+        // отозванный токен одного креатора, расшифровка, база — не сбой площадки: только в лог
+        if (err instanceof PlatformUnavailable)
+          recordExternalApi(provider.platform, false);
         this.logger.warn(
           `${provider.name}: просмотры по аккаунту #${account.id} не получены — ${String(err)}`,
         );

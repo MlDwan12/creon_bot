@@ -1,4 +1,7 @@
+// Мониторинг ошибок — до всех остальных импортов: Sentry оборачивает модули при их загрузке
+import './monitoring/instrument';
 import { requestLangMiddleware } from './i18n/request-lang';
+import { httpMetricsMiddleware } from './monitoring/metrics';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -30,6 +33,8 @@ async function bootstrap() {
   app.use(securityHeaders);
   // язык запроса для текстов ошибок (src/i18n/request-lang.ts) — до всех обработчиков
   app.use(requestLangMiddleware);
+  // метрики запросов API (src/monitoring/metrics.ts); без настроек Grafana — вхолостую
+  app.use(httpMetricsMiddleware);
   serveWebapp(app);
   // На SIGTERM (docker stop / редеплой) останавливает polling и закрывает соединение Prisma.
   app.enableShutdownHooks();

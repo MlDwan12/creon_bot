@@ -19,8 +19,8 @@ import { findContacts } from '../common/contacts';
 import { fromMinor } from '../common/money';
 import { NotificationsService } from '../telegram/notifications.service';
 import { creatorLabel } from '../common/format';
-import { budgetRaised, payoutPool, VIEWS_TOPUP_DAYS } from '../orders/budget';
-import { OrdersService } from '../orders/orders.service';
+import { budgetRaised, payoutPool, HOLD_DAYS } from '../orders/budget';
+import { OrdersService, termsOf } from '../orders/orders.service';
 import { DAY_MS } from '../orders/deadline';
 import { authorInLinks, authorUrl, platformOf } from '../common/platforms';
 import { SubmissionsService } from '../submissions/submissions.service';
@@ -99,10 +99,10 @@ export class ModerationController {
   /** Обе очереди сразу: заказы и видео на проверке, старые первыми. */
   @Get('queue')
   async queue() {
-    const [orders, videos, topups, reviews] = await Promise.all([
+    const [orders, videos, holds, reviews] = await Promise.all([
       this.ordersService.listPending(),
       this.submissionsService.listPendingModeration(),
-      this.submissionsService.listTopupDue(),
+      this.submissionsService.listHoldDue(),
       this.submissionsService.listPendingReviews(),
     ]);
     return {
@@ -126,8 +126,8 @@ export class ModerationController {
         creator: creatorLabel(s.creator),
         submittedAt: s.submittedAt,
       })),
-      // добор закончился — зафиксировать итог просмотров
-      topups: topups.map((s) => ({
+      // холд закончился — проверить публикацию и зафиксировать итог
+      holds: holds.map((s) => ({
         id: s.id,
         orderTitle: s.order.title,
         creator: creatorLabel(s.creator),
@@ -247,6 +247,8 @@ export class ModerationController {
       this.notifications.orderApproved(order);
       // изменённый заказ после повторной проверки — не новый, второй раз не рассылаем
       if (order.firstPublication) this.notifications.newOrderPublished(order);
+      // заморозка кончилась — креаторам «в работе»: можно сдавать, слот продлён
+      if (order.unfrozen) this.notifications.orderUnfrozen(order);
     }
     return { ok: true };
   }
@@ -283,6 +285,12 @@ export class ModerationController {
         : new Map<string, CountedVideo>(),
     ]);
     const stats = counted.get(s.videoUrl ?? '');
+    // Сдан до правки заказа — проверять по условиям, которые креатор видел при сдаче.
+    const prev =
+      s.order.editedAt && s.submittedAt && s.submittedAt < s.order.editedAt
+        ? (s.order.prevTerms as ReturnType<typeof termsOf> | null)
+        : null;
+    const terms = { ...s.order, ...prev };
     return {
       id: s.id,
       status: s.status,
@@ -302,15 +310,16 @@ export class ModerationController {
       payout: fromMinor(s.payoutMinor),
       decidedAt: s.decidedAt,
       finalizedAt: s.finalizedAt,
-      topupDays: VIEWS_TOPUP_DAYS,
+      holdDays: HOLD_DAYS,
       order: {
         id: s.order.id,
-        title: s.order.title,
-        description: s.order.description,
-        ...videoFormat(s.order),
+        title: terms.title,
+        description: terms.description,
+        ...videoFormat(terms),
         cpm: fromMinor(s.order.cpmMinor),
-        minViews: s.order.minViews,
+        minViews: terms.minViews,
         free: fromMinor(budget.free),
+        termsBeforeEdit: prev !== null,
       },
     };
   }
@@ -389,21 +398,19 @@ export class ModerationController {
     return { ok: true };
   }
 
-  /** Итог просмотров после добора: доплата за прирост, пока есть бюджет. */
+  /** Итог холда: публикация на месте, просмотры — для отчёта; деньги можно вывести. */
   @Post('videos/:id/finalize')
   async finalizeVideo(
     @Param('id', ParseIdPipe) id: number,
     @Body('views') views: unknown,
     @Body('likes') likes: unknown,
   ) {
-    const { submission, extraMinor, closed } =
-      await this.submissionsService.finalizeViews(
-        id,
-        parseViews(views),
-        parseLikes(likes),
-      );
-    this.notifications.viewsFinalized(submission, extraMinor);
-    if (closed) this.notifications.orderBudgetExhausted(closed);
+    const submission = await this.submissionsService.finalizeViews(
+      id,
+      parseViews(views),
+      parseLikes(likes),
+    );
+    this.notifications.viewsFinalized(submission);
     return { ok: true };
   }
 

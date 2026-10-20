@@ -121,12 +121,12 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   /**
-   * Итог добора по роликам, чьи просмотры отдаёт API площадки (YouTube, X, а TikTok и VK — если
+   * Итог холда по роликам, чьи просмотры отдаёт API площадки (YouTube, X, а TikTok и VK — если
    * креатор подключил аккаунт), — без модератора.
    * API не ответило — ролик остаётся в очереди «Итоги», итог введёт модератор.
    */
   private async finalizeAutomatic() {
-    const due = (await this.submissionsService.listTopupDue()).filter((s) =>
+    const due = (await this.submissionsService.listHoldDue()).filter((s) =>
       this.viewCounter.isAutomatic(s.videoUrl),
     );
     if (!due.length) return;
@@ -137,15 +137,13 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
       const stats = counted.get(s.videoUrl!);
       if (!stats) continue;
       try {
-        // просмотры не уменьшаем: начисленное за них уже не вернуть
-        const { submission, extraMinor, closed } =
-          await this.submissionsService.finalizeViews(
-            s.id,
-            Math.max(stats.views, s.views ?? 0),
-            stats.likes,
-          );
-        this.notifications.viewsFinalized(submission, extraMinor);
-        if (closed) this.notifications.orderBudgetExhausted(closed);
+        // в отчёте просмотры не уменьшаются: API бывает отдаёт меньше, чем видел модератор
+        const submission = await this.submissionsService.finalizeViews(
+          s.id,
+          Math.max(stats.views, s.views ?? 0),
+          stats.likes,
+        );
+        this.notifications.viewsFinalized(submission);
       } catch (err) {
         // модератор успел зафиксировать итог сам — остальные ролики это не останавливает
         this.logger.warn(err);
@@ -176,7 +174,7 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
     const staleBefore = new Date(Date.now() - STALE_MS);
     const [
       staleOrders,
-      { videos: staleVideos, topups: staleTopups, reviews: staleReviews },
+      { videos: staleVideos, holds: staleHolds, reviews: staleReviews },
       stalePayouts,
     ] = await Promise.all([
       this.ordersService.countPendingBefore(staleBefore),
@@ -186,7 +184,7 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
     if (
       !staleOrders &&
       !staleVideos &&
-      !staleTopups &&
+      !staleHolds &&
       !stalePayouts &&
       !staleReviews
     )
@@ -195,7 +193,7 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
       {
         orders: staleOrders,
         videos: staleVideos,
-        topups: staleTopups,
+        holds: staleHolds,
         payouts: stalePayouts,
         reviews: staleReviews,
       },

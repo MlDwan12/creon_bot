@@ -1,6 +1,6 @@
 import { tr } from '../i18n/request-lang';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import { OrderStatus, Prisma } from '@prisma/client';
+import { type Order, OrderStatus, Prisma } from '@prisma/client';
 
 /*
  * Все смены статуса заказа — только здесь. Каждая — условный `updateMany` по текущему статусу:
@@ -42,6 +42,20 @@ export async function transitionOrder(
   throw new ForbiddenException(conflictMessage ?? tr('errors.orderProcessed'));
 }
 
+/** Статусы, в которых опубликованный заказ заморожен: правка на проверке или отклонена. */
+export const FROZEN: OrderStatus[] = [
+  OrderStatus.PENDING_MODERATION,
+  OrderStatus.EDIT_REJECTED,
+];
+
+/**
+ * Опубликованный заказ изменён и правку ещё не одобрили: новые ролики не сдают, слоты не сгорают,
+ * рекламодатель может исправить правку или закрыть заказ. Ставка есть только у опубликованного.
+ */
+export function isFrozen(order: Pick<Order, 'status' | 'cpmMinor'>) {
+  return order.cpmMinor !== null && FROZEN.includes(order.status);
+}
+
 /** Закрыть открытые заказы из списка; уже не открытые не трогает. */
 export async function closeOpenOrders(db: Db, orderIds: number[]) {
   const { count } = await db.order.updateMany({
@@ -51,14 +65,14 @@ export async function closeOpenOrders(db: Db, orderIds: number[]) {
   return count;
 }
 
-/** Снять заказы, ждущие модератора, с комментарием — их увидит рекламодатель. */
+/** Снять заказы, ждущие модератора или исправления правки, с комментарием — их увидит рекламодатель. */
 export async function rejectPendingOrders(
   db: Db,
   orderIds: number[],
   comment: string,
 ) {
   const { count } = await db.order.updateMany({
-    where: { id: { in: orderIds }, status: OrderStatus.PENDING_MODERATION },
+    where: { id: { in: orderIds }, status: { in: FROZEN } },
     data: {
       status: OrderStatus.REJECTED,
       moderatorComment: comment,

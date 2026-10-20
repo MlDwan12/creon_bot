@@ -5,7 +5,7 @@ import { AnalyticsService } from './moderation/analytics.service';
 import { BansService } from './moderation/bans.service';
 import { ProfilesService } from './profiles/profiles.service';
 import { PayoutsService } from './payouts/payouts.service';
-import { VIEWS_TOPUP_DAYS } from './orders/budget';
+import { HOLD_DAYS } from './orders/budget';
 import { PUBLICATION_DELETED } from './submissions/submissions.service';
 import { ReportsService } from './reports/reports.service';
 import { MAX_ACTIVE_ORDERS, OrdersService } from './orders/orders.service';
@@ -129,7 +129,7 @@ describe('отклик', () => {
     );
   });
 
-  it('второй отклик «в работе» — нельзя, пока ролик на проверке — нельзя, после решения — можно', async () => {
+  it('второй отклик «в работе» — нельзя, пока ролик на проверке — можно', async () => {
     const [advertiser, creator] = [await user(), await user()];
     const order = await openOrder(advertiser.id);
 
@@ -139,10 +139,6 @@ describe('отклик', () => {
     );
 
     await submissions.attachVideo(first.id, creator.id, videoUrl(), VIEWS);
-    await expect(submissions.claim(order.id, creator.id)).rejects.toThrow(
-      'на проверке',
-    );
-    await submissions.moderatorReject(first.id, 1n, 'не по заданию');
     await expect(
       submissions.claim(order.id, creator.id),
     ).resolves.toBeDefined();
@@ -626,16 +622,137 @@ describe('правка заказа — защита', () => {
     expect(daysLeft).toBeCloseTo(7, 1);
   });
 
-  it('изменённый открытый заказ отклонён — креаторы в ответе, видео больше не принимаются', async () => {
+  it('правку отклонили — заказ заморожен (EDIT_REJECTED), видео не принимаются', async () => {
     const [adv, creator] = [await user(), await user()];
     const order = await openOrder(adv.id);
     const s = await submissions.claim(order.id, creator.id);
     await orders.update(order.id, adv.id, edit);
     const rejected = await rejectOrder(order.id, 1n, 'причина');
-    expect(rejected.submissions.map((x) => x.creatorId)).toEqual([creator.id]);
+    expect(rejected.status).toBe('EDIT_REJECTED');
     await expect(
       submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS),
-    ).rejects.toThrow('снят модератором');
+    ).rejects.toThrow('после решения модератора');
+  });
+});
+
+describe('заморозка при правке', () => {
+  const edit = {
+    title: 'Новое',
+    description: 'Описание',
+    targetUrl: 'https://shop.example/new',
+    budgetMinor: BUDGET,
+    minViews: 500,
+    category: 'FOOD' as const,
+  };
+
+  it('пока правка на проверке — сдать нельзя и слот не сгорает; после одобрения слот продлён', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    const s = await submissions.claim(order.id, creator.id);
+    // взял 6 дней назад, правка — 3 дня назад: без заморозки слот уже сгорел бы
+    await prisma.submission.update({
+      where: { id: s.id },
+      data: { createdAt: new Date(Date.now() - 6 * DAY) },
+    });
+    await orders.update(order.id, adv.id, edit);
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { editedAt: new Date(Date.now() - 3 * DAY) },
+    });
+    await prisma.submission.update({
+      where: { id: s.id },
+      data: { createdAt: new Date(Date.now() - 8 * DAY) },
+    });
+    await expect(
+      submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS),
+    ).rejects.toThrow('после решения модератора');
+    expect(await submissions.listSlotOverdue()).toEqual([]);
+
+    const approved = await approveOrder(order.id, 1n);
+    expect(approved.unfrozen).toBe(true);
+    expect(approved.submissions.map((x) => x.id)).toEqual([s.id]);
+    const after = await prisma.submission.findUniqueOrThrow({
+      where: { id: s.id },
+    });
+    // 8 дней назад + 3 дня заморозки = 5 дней назад: слот ещё жив
+    expect((Date.now() - after.createdAt.getTime()) / DAY).toBeCloseTo(5, 1);
+    expect(await submissions.listSlotOverdue()).toEqual([]);
+    await expect(
+      submissions.attachVideo(s.id, creator.id, videoUrl(), 1000),
+    ).resolves.toMatchObject({ status: 'SUBMITTED' });
+  });
+
+  it('прежние условия — с первой правки; отклонённую правку можно исправить', async () => {
+    const adv = await user();
+    const order = await openOrder(adv.id);
+    await orders.update(order.id, adv.id, edit);
+    const first = await prisma.order.findUniqueOrThrow({
+      where: { id: order.id },
+    });
+    expect(first.prevTerms).toMatchObject({ title: 'Заказ', minViews: 250 });
+    await rejectOrder(order.id, 1n, 'контакты');
+    await orders.update(order.id, adv.id, { ...edit, title: 'Ещё новее' });
+    const second = await prisma.order.findUniqueOrThrow({
+      where: { id: order.id },
+    });
+    expect(second).toMatchObject({
+      status: 'PENDING_MODERATION',
+      title: 'Ещё новее',
+      editedAt: first.editedAt,
+      prevTerms: first.prevTerms,
+      moderatorComment: null,
+    });
+  });
+
+  it('правку отклонили — ролик, сданный до правки, проверяется и оплачивается как обычно', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS);
+    await orders.update(order.id, adv.id, edit);
+    await rejectOrder(order.id, 1n, 'контакты в названии');
+    await expect(
+      submissions.moderatorApprove(s.id, 1n, VIEWS),
+    ).resolves.toMatchObject({
+      submission: { status: 'MODERATOR_APPROVED' },
+    });
+  });
+
+  it('закрыли замороженный — слоты сгорели, правка отменена, сданное доводится до конца', async () => {
+    const [adv, waiting, done] = [await user(), await user(), await user()];
+    const order = await openOrder(adv.id);
+    const inWork = await submissions.claim(order.id, waiting.id);
+    const sent = await submissions.claim(order.id, done.id);
+    await submissions.attachVideo(sent.id, done.id, videoUrl(), VIEWS);
+    await orders.update(order.id, adv.id, { ...edit, budgetMinor: BUDGET * 2 });
+    await rejectOrder(order.id, 1n, 'контакты');
+
+    const closed = await orders.close(order.id, adv.id);
+    expect(closed.burned.map((x) => x.id)).toEqual([inWork.id]);
+    expect(closed).toMatchObject({
+      status: 'CLOSED',
+      title: 'Заказ',
+      targetUrl: null,
+      minViews: 250,
+      category: 'OTHER',
+      budgetMinor: BUDGET,
+    });
+    expect((await submissions.findById(inWork.id))?.status).toBe(
+      'SLOT_EXPIRED',
+    );
+    await expect(
+      submissions.moderatorApprove(sent.id, 1n, VIEWS),
+    ).resolves.toBeDefined();
+  });
+
+  it('открытый заказ закрывается как раньше — начатые ролики ещё принимаются', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    const s = await submissions.claim(order.id, creator.id);
+    expect((await orders.close(order.id, adv.id)).burned).toEqual([]);
+    await expect(
+      submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS),
+    ).resolves.toMatchObject({ status: 'SUBMITTED' });
   });
 });
 
@@ -648,31 +765,6 @@ describe('гонки и снятые заказы', () => {
       creators.map((c) => submissions.claim(order.id, c.id)),
     );
     expect(results.map((r) => r.status)).toEqual(Array(5).fill('fulfilled'));
-  });
-
-  it('отклонили изменённый заказ — видео по нему сняты с очередей и не одобряются', async () => {
-    const [adv, creator] = [await user(), await user()];
-    const order = await openOrder(adv.id);
-    const s = await submissions.claim(order.id, creator.id);
-    await submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS);
-    await orders.update(order.id, adv.id, {
-      title: 'Новое',
-      description: 'Описание',
-      budgetMinor: BUDGET,
-      minViews: 250,
-      category: 'OTHER',
-    });
-    await rejectOrder(order.id, 1n, 'контакты в названии');
-    const after = await prisma.submission.findUniqueOrThrow({
-      where: { id: s.id },
-    });
-    expect(after).toMatchObject({
-      status: 'MODERATOR_REJECTED',
-      payoutMinor: 0,
-    });
-    await expect(
-      submissions.moderatorApprove(s.id, 1n, VIEWS),
-    ).rejects.toThrow();
   });
 });
 
@@ -764,10 +856,6 @@ describe('бюджет и просмотры', () => {
     const s = await sent(order.id, liar.id, 1_000_000_000);
     expect(s.payoutMinor).toBe(2_500);
     expect(await free(order.id)).toBe(77_500);
-    // следующий ролик — только после решения по этому
-    await expect(submissions.claim(order.id, liar.id)).rejects.toThrow(
-      'на проверке',
-    );
     await sent(order.id, honest.id, 1000);
   });
 
@@ -824,29 +912,6 @@ describe('бюджет и просмотры', () => {
     expect(approved.closedAt).not.toBeNull();
   });
 
-  it('по снятому модератором заказу итог добора фиксируется без доплаты', async () => {
-    const [adv, a] = [await user(), await user()];
-    const order = await orderWith(adv.id, 10_000);
-    const s = await sent(order.id, a.id, 1000);
-    await submissions.moderatorApprove(s.id, 1n, 1000); // 100 USDT
-    await orders.update(order.id, adv.id, {
-      title: 'Новое',
-      description: 'Описание',
-      budgetMinor: 1_000_000,
-      minViews: 250,
-      category: 'OTHER',
-    });
-    await rejectOrder(order.id, 1n, 'контакты в названии');
-    await prisma.submission.update({
-      where: { id: s.id },
-      data: { decidedAt: new Date(Date.now() - VIEWS_TOPUP_DAYS * DAY - 1000) },
-    });
-    const res = await submissions.finalizeViews(s.id, 5000);
-    expect(res.extraMinor).toBe(0);
-    expect(res.submission).toMatchObject({ views: 5000, payoutMinor: 10_000 });
-    expect(await submissions.listTopupDue()).toEqual([]);
-  });
-
   it('одновременные сдачи на остаток — вместе не больше фонда', async () => {
     const adv = await user();
     const creators = await Promise.all([1, 2, 3, 4].map(() => user()));
@@ -866,32 +931,30 @@ describe('бюджет и просмотры', () => {
     expect(total._sum.payoutMinor).toBe(5_000);
   });
 
-  it('итог добора: доплата за прирост через VIEWS_TOPUP_DAYS, один раз', async () => {
+  it('итог холда — через HOLD_DAYS, один раз, без доплаты: просмотры только для отчёта', async () => {
     const [adv, a] = [await user(), await user()];
     const order = await orderWith(adv.id, 10_000);
     const s = await sent(order.id, a.id, 1000);
     await submissions.moderatorApprove(s.id, 1n, 1000, 40); // 100 USDT
     await expect(submissions.finalizeViews(s.id, 3000)).rejects.toThrow(
-      `через ${VIEWS_TOPUP_DAYS} дн.`,
+      `через ${HOLD_DAYS} дн.`,
     );
     await prisma.submission.update({
       where: { id: s.id },
-      data: { decidedAt: new Date(Date.now() - VIEWS_TOPUP_DAYS * DAY - 1000) },
+      data: { decidedAt: new Date(Date.now() - HOLD_DAYS * DAY - 1000) },
     });
-    expect((await submissions.listTopupDue()).map((x) => x.id)).toEqual([s.id]);
+    expect((await submissions.listHoldDue()).map((x) => x.id)).toEqual([s.id]);
 
-    const res = await submissions.finalizeViews(s.id, 3000);
-    expect(res.extraMinor).toBe(20_000);
-    // лайки при итоге не ввели — остаются зафиксированные при одобрении
-    expect(res.submission).toMatchObject({
+    // лайки при итоге не ввели — остаются зафиксированные при одобрении; оплата — за 1000 при одобрении
+    expect(await submissions.finalizeViews(s.id, 3000)).toMatchObject({
       views: 3000,
       likes: 40,
-      payoutMinor: 30_000,
+      payoutMinor: 10_000,
     });
     await expect(submissions.finalizeViews(s.id, 5000)).rejects.toThrow(
       'уже зафиксирован',
     );
-    expect(await submissions.listTopupDue()).toEqual([]);
+    expect(await submissions.listHoldDue()).toEqual([]);
   });
 
   it('оценка — только своему одобренному ролику и один раз', async () => {
@@ -934,17 +997,17 @@ describe('баланс и вывод', () => {
     return s;
   }
 
-  /** Добор прошёл — сдвигаем одобрение в прошлое на срок холда. */
-  const topupOver = (submissionId: number) =>
+  /** Холд прошёл — сдвигаем одобрение в прошлое на срок холда. */
+  const holdOver = (submissionId: number) =>
     prisma.submission.update({
       where: { id: submissionId },
-      data: { decidedAt: new Date(Date.now() - VIEWS_TOPUP_DAYS * DAY - 1000) },
+      data: { decidedAt: new Date(Date.now() - HOLD_DAYS * DAY - 1000) },
     });
 
   /** Одобренный ролик с зафиксированным итогом — деньги вышли из холда. */
   async function earned(creatorId: number, views: number) {
     const s = await approved(creatorId, views);
-    await topupOver(s.id);
+    await holdOver(s.id);
     await submissions.finalizeViews(s.id, views);
   }
 
@@ -958,12 +1021,12 @@ describe('баланс и вывод', () => {
     });
     expect(
       (await payouts.balance(creator.id)).nextReleaseAt!.getTime(),
-    ).toBeGreaterThan(Date.now() + (VIEWS_TOPUP_DAYS - 1) * DAY);
+    ).toBeGreaterThan(Date.now() + (HOLD_DAYS - 1) * DAY);
     await expect(payouts.requestPayout(creator.id, 10_000)).rejects.toThrow(
       'больше доступного',
     );
 
-    await topupOver(s.id);
+    await holdOver(s.id);
     await submissions.finalizeViews(s.id, 5000);
     expect(await payouts.balance(creator.id)).toMatchObject({
       heldMinor: 0,
@@ -998,11 +1061,11 @@ describe('баланс и вывод', () => {
       )
     ).free;
     expect(freeAfter - freeBefore).toBe(50_000);
-    expect(await submissions.listTopupDue()).toEqual([]);
+    expect(await submissions.listHoldDue()).toEqual([]);
 
     // после итога деньги уже вышли из холда — отменить нельзя
     const done = await approved(creator.id, 5000);
-    await topupOver(done.id);
+    await holdOver(done.id);
     await submissions.finalizeViews(done.id, 5000);
     await expect(submissions.publicationDeleted(done.id, 1n)).rejects.toThrow(
       'вышли из холда',
@@ -1202,7 +1265,7 @@ describe('бизнес-метрики', () => {
     // итог зафиксирован — деньги вышли из холда, можно подать заявку
     await prisma.submission.update({
       where: { id: s.id },
-      data: { decidedAt: new Date(Date.now() - VIEWS_TOPUP_DAYS * DAY - 1000) },
+      data: { decidedAt: new Date(Date.now() - HOLD_DAYS * DAY - 1000) },
     });
     await submissions.finalizeViews(s.id, 30_000);
     await orders.close(done.id, advertiser.id);

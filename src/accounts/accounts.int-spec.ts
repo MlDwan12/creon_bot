@@ -1,5 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'node:crypto';
+import * as metrics from '../monitoring/metrics';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountsService, MAX_PER_PLATFORM } from './accounts.service';
 import { TokenCrypto } from './token-crypto';
@@ -402,5 +403,29 @@ describe('токены', () => {
 
     expect((await accounts.stats(creator.id, 'TIKTOK', ['111'])).size).toBe(0);
     expect(await prisma.socialAccount.count()).toBe(1);
+  });
+
+  it('метрика «API площадки сбоит» — только сеть и 5xx, не отозванный токен и не наши сбои', async () => {
+    const creator = await user();
+    await connectTiktok(creator.id);
+    const record = jest.spyOn(metrics, 'recordExternalApi');
+
+    // сеть — сбой площадки
+    jest.spyOn(global, 'fetch').mockRejectedValueOnce(new Error('ETIMEDOUT'));
+    await accounts.stats(creator.id, 'TIKTOK', ['111']);
+    expect(record.mock.calls).toEqual([['TIKTOK', false]]);
+
+    // креатор отозвал доступ: площадка жива, ответила ошибкой про токен
+    record.mockClear();
+    replies({ error: { code: 'access_token_invalid', message: 'revoked' } });
+    await accounts.stats(creator.id, 'TIKTOK', ['111']);
+    expect(record).not.toHaveBeenCalled();
+
+    // токен не расшифровать (сменили SOCIAL_TOKENS_KEY) — наша проблема, не площадки
+    await prisma.socialAccount.updateMany({
+      data: { accessToken: 'v1.x.y.z' },
+    });
+    await accounts.stats(creator.id, 'TIKTOK', ['111']);
+    expect(record).not.toHaveBeenCalled();
   });
 });

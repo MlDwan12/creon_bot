@@ -18,12 +18,12 @@ import {
   budgetState,
   payoutFor,
   spentByOrder,
-  VIEWS_TOPUP_DAYS,
+  HOLD_DAYS,
 } from '../orders/budget';
 import { DAY_MS } from '../orders/deadline';
 import { titleVisibleToCreators } from '../common/format';
 import { PLATFORMS, platformOf, videoKey } from '../common/platforms';
-import { closeOpenOrders, lockOrder } from '../orders/order-status';
+import { closeOpenOrders, isFrozen, lockOrder } from '../orders/order-status';
 import {
   transitionSubmission,
   tryTransitionSubmission,
@@ -44,9 +44,20 @@ export function slotDueAt(createdAt: Date) {
   return new Date(createdAt.getTime() + SLOT_DAYS * DAY_MS);
 }
 
-/** По таким заказам видео ещё принимают (как в attachVideo) — только тогда слот может сгореть. */
+/**
+ * По таким заказам видео ещё принимают (как в attachVideo) — только тогда слот может сгореть.
+ * Замороженный на время правки (PENDING_MODERATION, EDIT_REJECTED) видео не принимает и слоты не
+ * жжёт: после одобрения правки они продлеваются (OrdersService.moderatorApprove).
+ */
 const ACCEPTS_VIDEOS: Prisma.OrderWhereInput = {
-  status: { notIn: [OrderStatus.EXPIRED, OrderStatus.REJECTED] },
+  status: {
+    notIn: [
+      OrderStatus.EXPIRED,
+      OrderStatus.REJECTED,
+      OrderStatus.PENDING_MODERATION,
+      OrderStatus.EDIT_REJECTED,
+    ],
+  },
 };
 
 // Свободного остатка может не хватать и из-за резерва роликов на проверке — тогда он ещё вернётся.
@@ -57,8 +68,6 @@ const ALREADY_CLAIMED_MESSAGE = () => tr('errors.alreadyClaimed');
 /** Причина отклонения, когда публикацию удалили до конца холда — креатор увидит её. */
 export const PUBLICATION_DELETED =
   'Публикация удалена до итога просмотров — начисление отменено';
-
-const ON_REVIEW_MESSAGE = () => tr('errors.onReview');
 
 const DUPLICATE_VIDEO_MESSAGE = () => tr('errors.duplicateVideo');
 
@@ -143,14 +152,6 @@ export class SubmissionsService implements OnApplicationBootstrap {
     // без блокировки: сдачу всё равно проверит attachVideo, здесь — не брать слот впустую
     if ((await this.orderBudget(order)).exhausted)
       throw new ForbiddenException(EXHAUSTED_MESSAGE());
-    // По ролику на проверке за раз: каждый резервирует часть фонда, и поток пустых сдач
-    // (просмотры заявляет сам креатор) занял бы весь заказ до решения модератора.
-    // ponytail: проверка без блокировки — двойной тап по разным откликам даст два ролика, не больше.
-    const onReview = await this.prisma.submission.findFirst({
-      where: { orderId, creatorId, status: SubmissionStatus.SUBMITTED },
-      select: { id: true },
-    });
-    if (onReview) throw new ForbiddenException(ON_REVIEW_MESSAGE());
     // ponytail: заказ могут закрыть между проверкой и вставкой — отклик на только что закрытый
     // заказ безвреден (видео по закрытому принимаются), блокировать ради этого незачем.
     try {
@@ -193,9 +194,12 @@ export class SubmissionsService implements OnApplicationBootstrap {
     // После срока видео не принимаются. После ручного закрытия — принимаются, пока есть бюджет.
     if (submission.order.status === OrderStatus.EXPIRED)
       throw new ForbiddenException(tr('errors.orderExpired'));
-    // Изменённый открытый заказ модератор отклонил — он снят с площадки.
+    // Заказ снят (бан рекламодателя).
     if (submission.order.status === OrderStatus.REJECTED)
       throw new ForbiddenException(tr('errors.orderRemovedByMod'));
+    // Рекламодатель изменил заказ — до одобрения правки сдавать нельзя, слот не тикает.
+    if (isFrozen(submission.order))
+      throw new ForbiddenException(tr('errors.orderFrozen'));
     const { platforms } = submission.order;
     if (
       platforms.length &&
@@ -490,35 +494,35 @@ export class SubmissionsService implements OnApplicationBootstrap {
     return budgetState(order, spent);
   }
 
-  /** Одобренные ролики, у которых закончился добор просмотров, — модератору зафиксировать итог. */
-  listTopupDue() {
+  /** Одобренные ролики, у которых закончился холд, — модератору проверить публикацию и зафиксировать итог. */
+  listHoldDue() {
     return this.prisma.submission.findMany({
       where: {
         status: SubmissionStatus.MODERATOR_APPROVED,
         finalizedAt: null,
-        decidedAt: { lt: new Date(Date.now() - VIEWS_TOPUP_DAYS * DAY_MS) },
+        decidedAt: { lt: new Date(Date.now() - HOLD_DAYS * DAY_MS) },
       },
       orderBy: { decidedAt: 'asc' },
       include: { order: true, creator: true },
     });
   }
 
-  /** Сколько видео и итогов добора ждут модератора с момента раньше `before` — для напоминания. */
+  /** Сколько видео и итогов холда ждут модератора с момента раньше `before` — для напоминания. */
   async countStaleBefore(before: Date) {
-    const [videos, topups, reviews] = await Promise.all([
+    const [videos, holds, reviews] = await Promise.all([
       this.prisma.submission.count({
         where: {
           status: SubmissionStatus.SUBMITTED,
           submittedAt: { lt: before },
         },
       }),
-      // итог ждёт с конца добора
+      // итог ждёт с конца холда
       this.prisma.submission.count({
         where: {
           status: SubmissionStatus.MODERATOR_APPROVED,
           finalizedAt: null,
           decidedAt: {
-            lt: new Date(before.getTime() - VIEWS_TOPUP_DAYS * DAY_MS),
+            lt: new Date(before.getTime() - HOLD_DAYS * DAY_MS),
           },
         },
       }),
@@ -526,12 +530,13 @@ export class SubmissionsService implements OnApplicationBootstrap {
         where: { reviewQueuedAt: { lt: before } },
       }),
     ]);
-    return { videos, topups, reviews };
+    return { videos, holds, reviews };
   }
 
   /**
-   * Итог добора: модератор фиксирует просмотры через VIEWS_TOPUP_DAYS после одобрения. Прирост
-   * доплачивается из свободного остатка, пока он есть; начисленное не уменьшается. `extraMinor` — доплата.
+   * Итог холда: через HOLD_DAYS после одобрения модератор (или API площадки) проверяет, что
+   * публикация на месте, и фиксирует просмотры — только для отчёта рекламодателю. Оплата не меняется:
+   * платим за просмотры, зафиксированные при одобрении. После итога деньги можно вывести.
    */
   async finalizeViews(
     submissionId: number,
@@ -540,28 +545,16 @@ export class SubmissionsService implements OnApplicationBootstrap {
   ) {
     const found = await this.mustFind(submissionId);
     return this.prisma.$transaction(async (tx) => {
-      const { order, budget } = await this.lockBudget(tx, found.orderId);
+      // та же блокировка, что у publicationDeleted: ролик не окажется и с итогом, и снятым
+      await this.lockBudget(tx, found.orderId);
       const current = await this.mustFind(submissionId, tx);
-      // заказ снят модератором — итог фиксируем, но не доплачиваем (как и не одобряем по снятому)
-      const extraMinor =
-        order.status === OrderStatus.REJECTED
-          ? 0
-          : Math.max(
-              0,
-              Math.min(
-                payoutFor(views, order.cpmMinor!) - current.payoutMinor,
-                budget.free,
-              ),
-            );
       const ready = new Date(
-        (current.decidedAt?.getTime() ?? Date.now()) +
-          VIEWS_TOPUP_DAYS * DAY_MS,
+        (current.decidedAt?.getTime() ?? Date.now()) + HOLD_DAYS * DAY_MS,
       );
       if (ready > new Date())
         throw new ForbiddenException(
-          `Итог просмотров фиксируется через ${VIEWS_TOPUP_DAYS} дн. после одобрения`,
+          `Итог фиксируется через ${HOLD_DAYS} дн. после одобрения`,
         );
-      // не статус, но то же условное обновление: второй модератор не доплатит повторно
       const { count } = await tx.submission.updateMany({
         where: {
           id: submissionId,
@@ -572,17 +565,12 @@ export class SubmissionsService implements OnApplicationBootstrap {
           views,
           // лайки не ввели — остаются те, что зафиксированы при одобрении
           ...(likes !== null && { likes }),
-          payoutMinor: { increment: extraMinor },
           finalizedAt: new Date(),
         },
       });
       if (count === 0)
         throw new ForbiddenException('Итог по этому ролику уже зафиксирован');
-      return {
-        submission: await this.mustFind(submissionId, tx),
-        extraMinor,
-        closed: await this.closeIfExhausted(tx, order),
-      };
+      return this.mustFind(submissionId, tx);
     });
   }
 
@@ -650,7 +638,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
   }
 
   /**
-   * Бюджет заказа под блокировкой строки: резерв, начисление и доплата по одному заказу идут по
+   * Бюджет заказа под блокировкой строки: резерв, начисление и итог по одному заказу идут по
    * очереди, иначе две одновременные операции вместе вышли бы за фонд.
    */
   private async lockBudget(tx: Prisma.TransactionClient, orderId: number) {

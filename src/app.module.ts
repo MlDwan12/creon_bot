@@ -8,6 +8,7 @@ import { validateEnv } from './config/env.validation';
 import { HealthModule } from './health/health.module';
 import { JobsModule } from './jobs/jobs.module';
 import { ModerationModule } from './moderation/moderation.module';
+import { MonitoringModule } from './monitoring/monitoring.module';
 import { OrdersModule } from './orders/orders.module';
 import { PayoutsModule } from './payouts/payouts.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -19,6 +20,8 @@ import { TelegramModule } from './telegram/telegram.module';
 
 @Module({
   imports: [
+    // первым: фильтр ошибок Sentry и метрики (без настроек в env — выключены)
+    MonitoringModule,
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     // Общий лимит на пользователя; у создания заказа и отклика — свои, построже (@Throttle).
     // ponytail: счётчики в памяти процесса — пока инстанс один; станет несколько — хранилище в Redis.

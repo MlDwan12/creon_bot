@@ -8,7 +8,7 @@ import { i18next } from '../i18n';
 const props = defineProps<{ submission: MySubmission }>();
 const router = useRouter();
 
-/** Сколько из 4 этапов пройдено: в работе → ролик сдан → одобрен, начислено → итог после добора. */
+/** Сколько из 4 этапов пройдено: в работе → ролик сдан → одобрен, начислено → холд закончился. */
 const STEPS: Record<SubmissionStatus, number> = {
   IN_PROGRESS: 1,
   SUBMITTED: 2,
@@ -51,6 +51,8 @@ const canResubmit = computed(
   () => rejected.value && props.submission.latest && props.submission.order.status === 'OPEN',
 );
 const expired = computed(() => props.submission.order.status === 'EXPIRED');
+/** Заказ изменён и правку не одобрили: сдавать нельзя, слот не тикает (в работе — значит заказ публиковали). */
+const frozen = computed(() => ['PENDING_MODERATION', 'EDIT_REJECTED'].includes(props.submission.order.status));
 
 /** Ссылка на товар для описания ролика — у каждого отклика своя, по ней считаем переходы. */
 const trackUrl = computed(() =>
@@ -97,7 +99,8 @@ async function resubmit() {
 
     <div class="status">
       <span :class="['label', status.tone]">{{ status.label }}</span>
-      <span v-if="submission.dueAt" class="hint">
+      <span v-if="submission.dueAt && frozen" class="hint">{{ $t('errors.orderFrozen') }}</span>
+      <span v-else-if="submission.dueAt" class="hint">
         {{ $t('submissionCard.dueAt', { date: formatDeadline(submission.dueAt) }) }}
       </span>
       <span v-else-if="submission.attempt > 1" class="hint">{{ $t('submissionCard.attempt', { n: submission.attempt }) }}</span>

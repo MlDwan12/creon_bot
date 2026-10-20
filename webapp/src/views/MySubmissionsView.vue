@@ -51,6 +51,7 @@ void load();
       <span>
         <small>{{ $t('submissions.balance') }}</small>
         <strong>{{ formatMoney(balance.available) }}</strong>
+        <small v-if="balance.held">{{ $t('submissions.heldShort', { amount: formatMoney(balance.held) }) }}</small>
       </span>
       <span class="balance-action">{{ $t('submissions.withdraw') }}</span>
     </RouterLink>

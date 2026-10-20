@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { PayoutStatus, Prisma, SubmissionStatus } from '@prisma/client';
 import { toMinor } from '../common/money';
-import { ORDER_CURRENCY, VIEWS_TOPUP_DAYS } from '../orders/budget';
+import { ORDER_CURRENCY, HOLD_DAYS } from '../orders/budget';
 import { DAY_MS } from '../orders/deadline';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -39,7 +39,7 @@ export class PayoutsService {
 
   /**
    * Начислено, в холде, выплачено, в заявке и доступно к выводу — всё в центах. В холде — ролики,
-   * по которым ещё не зафиксирован итог (VIEWS_TOPUP_DAYS после одобрения); `nextReleaseAt` — когда
+   * по которым ещё не зафиксирован итог (HOLD_DAYS после одобрения); `nextReleaseAt` — когда
    * подойдёт срок итога у самого раннего из них.
    */
   async balance(creatorId: number, db: Prisma.TransactionClient = this.prisma) {
@@ -78,7 +78,7 @@ export class PayoutsService {
         earnedMinor - heldMinor - paidMinor - requestedMinor,
       ),
       nextReleaseAt: firstHeld
-        ? new Date(firstHeld.getTime() + VIEWS_TOPUP_DAYS * DAY_MS)
+        ? new Date(firstHeld.getTime() + HOLD_DAYS * DAY_MS)
         : null,
     };
   }

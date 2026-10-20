@@ -1,3 +1,4 @@
+import { recordExternalApi } from '../monitoring/metrics';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { SocialPlatform } from '@prisma/client';
@@ -137,6 +138,7 @@ export class ViewCounterService {
           snippet?: { channelId?: string; channelTitle?: string };
         }[];
       }>(
+        'YOUTUBE',
         `https://www.googleapis.com/youtube/v3/videos?part=statistics${withAuthor ? ',snippet' : ''}&id=${batch.join(',')}&key=${this.youtubeKey}`,
       );
       for (const item of data?.items ?? []) {
@@ -167,6 +169,7 @@ export class ViewCounterService {
       const data = await this.get<{
         items?: { id: string; snippet?: { customUrl?: string } }[];
       }>(
+        'YOUTUBE',
         `https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${batch.join(',')}&key=${this.youtubeKey}`,
       );
       for (const item of data?.items ?? []) {
@@ -204,6 +207,7 @@ export class ViewCounterService {
           users?: { id: string; username?: string; name?: string }[];
         };
       }>(
+        'X',
         withAuthor
           ? `https://api.x.com/2/tweets?ids=${batch.join(',')}&tweet.fields=public_metrics,author_id&expansions=attachments.media_keys,author_id&media.fields=public_metrics,type&user.fields=username`
           : `https://api.x.com/2/tweets?ids=${batch.join(',')}&tweet.fields=public_metrics&expansions=attachments.media_keys&media.fields=public_metrics,type`,
@@ -240,6 +244,7 @@ export class ViewCounterService {
 
   /** Сбой сети или API — не ошибка для вызывающего: просмотры введёт модератор. */
   private async get<T>(
+    platform: string,
     url: string,
     headers?: Record<string, string>,
   ): Promise<T | null> {
@@ -257,11 +262,14 @@ export class ViewCounterService {
         this.logger.warn(
           `API просмотров: ${body.error?.message ?? body.title ?? res.status}`,
         );
+        recordExternalApi(platform, false);
         return null;
       }
+      recordExternalApi(platform, true);
       return body;
     } catch (err) {
       this.logger.warn(`API просмотров недоступно: ${String(err)}`);
+      recordExternalApi(platform, false);
       return null;
     }
   }
