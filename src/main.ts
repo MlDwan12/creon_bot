@@ -30,6 +30,7 @@ async function bootstrap() {
   });
   // не подсказываем снаружи, на чём сервер
   app.disable('x-powered-by');
+  app.use(securityHeaders);
   // язык запроса для текстов ошибок (src/i18n/request-lang.ts) — до всех обработчиков
   app.use(requestLangMiddleware);
   // метрики запросов API (src/monitoring/metrics.ts); без настроек Grafana — вхолостую
@@ -40,6 +41,23 @@ async function bootstrap() {
   await app.listen(process.env.PORT ?? 3000);
 }
 void bootstrap();
+
+/**
+ * Заголовки безопасности на все ответы. Мини-апп в Telegram Web открывается во фрейме, поэтому
+ * не X-Frame-Options: DENY, а frame-ancestors — встраивать может только Telegram (от кликджекинга).
+ * ponytail: полного CSP (script-src и т.д.) нет — SDK Telegram и Sentry грузятся с чужих доменов,
+ * его надо собирать и проверять в Telegram на всех клиентах.
+ */
+function securityHeaders(_req: Request, res: Response, next: NextFunction) {
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader(
+    'Content-Security-Policy',
+    'frame-ancestors https://web.telegram.org https://*.telegram.org',
+  );
+  next();
+}
 
 /**
  * В проде собранный мини-апп лежит в public/ (см. Dockerfile), и Nest отдаёт его с того же адреса,
