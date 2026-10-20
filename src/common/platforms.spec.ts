@@ -1,4 +1,5 @@
 import {
+  authorInLinks,
   instagramShortcode,
   tiktokVideoId,
   videoKey,
@@ -62,5 +63,30 @@ describe('vkVideoId', () => {
     ['https://example.com/video-1_2', null],
   ])('%s → %s', (url, id) => {
     expect(vkVideoId(url)).toBe(id);
+  });
+});
+
+describe('authorInLinks', () => {
+  const yt = {
+    platform: 'YOUTUBE' as const,
+    id: 'UCabc123',
+    handle: 'Anya_UGC',
+    name: 'Аня',
+  };
+  const x = { platform: 'X' as const, id: '42', handle: 'anya', name: 'Аня' };
+  it.each([
+    [yt, 'https://www.youtube.com/@anya_ugc', true],
+    [yt, 'https://m.youtube.com/@Anya_UGC/shorts', true],
+    [yt, 'https://youtube.com/channel/UCabc123', true],
+    [yt, 'https://youtube.com/channel/ucabc123', false], // id канала — с учётом регистра
+    [yt, 'https://www.youtube.com/@anya_ugc2', false],
+    [yt, 'https://x.com/anya_ugc', false],
+    [{ ...yt, handle: null }, 'https://www.youtube.com/@anya_ugc', false],
+    [x, 'https://x.com/Anya', true],
+    [x, 'https://twitter.com/anya/', true],
+    [x, 'https://x.com/anya2', false],
+    [x, 'https://www.youtube.com/@anya', false],
+  ])('%o + %s → %s', (author, link, expected) => {
+    expect(authorInLinks(author, ['не ссылка', link])).toBe(expected);
   });
 });

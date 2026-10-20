@@ -40,6 +40,20 @@ export function budgetSpent(
   );
 }
 
+/**
+ * Рекламодатель поднял бюджет после последнего одобрения — модератор подтверждает, что доплата
+ * получена (оплата вне бота). Первую модерацию и понижение не трогает.
+ */
+export function budgetRaised(order: {
+  budgetMinor: number;
+  approvedBudgetMinor: number | null;
+}) {
+  return (
+    order.approvedBudgetMinor !== null &&
+    order.budgetMinor > order.approvedBudgetMinor
+  );
+}
+
 /** Выплата за просмотры по ставке за 1000. */
 export function payoutFor(views: number, cpmMinor: number) {
   return Math.floor((views * cpmMinor) / 1000);

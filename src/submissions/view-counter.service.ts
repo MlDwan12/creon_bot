@@ -4,7 +4,12 @@ import { ConfigService } from '@nestjs/config';
 import type { SocialPlatform } from '@prisma/client';
 import { AccountsService } from '../accounts/accounts.service';
 import { chunks, toStats, type VideoStats } from '../accounts/providers';
-import { platformOf, xPostId, youtubeId } from '../common/platforms';
+import {
+  platformOf,
+  type VideoAuthor,
+  xPostId,
+  youtubeId,
+} from '../common/platforms';
 
 export type { VideoStats } from '../accounts/providers';
 
@@ -15,6 +20,15 @@ export interface VideoRef {
   url: string;
   creatorId: number;
 }
+
+/**
+ * Просмотры и, если просили, автор публикации. `ownAccount` — посчитано по токену аккаунта креатора:
+ * площадка отдаёт только ролики владельца, значит ролик его.
+ */
+export type CountedVideo = VideoStats & {
+  author?: VideoAuthor;
+  ownAccount?: true;
+};
 
 /**
  * Просмотры публикаций из API площадок. Каждая площадка включается своим ключом в env:
@@ -51,16 +65,23 @@ export class ViewCounterService {
     );
   }
 
-  /** Просмотры и лайки по ссылкам; нет в карте — посчитать не удалось. */
-  async fetchViews(videos: VideoRef[]): Promise<Map<string, VideoStats>> {
-    const result = new Map<string, VideoStats>();
+  /**
+   * Просмотры и лайки по ссылкам; нет в карте — посчитать не удалось. `withAuthor` — ещё и автор
+   * (YouTube, X) для модератора: это лишний запрос к YouTube и чтение пользователей в X, поэтому
+   * только по запросу, не в фоновых задачах.
+   */
+  async fetchViews(
+    videos: VideoRef[],
+    { withAuthor = false } = {},
+  ): Promise<Map<string, CountedVideo>> {
+    const result = new Map<string, CountedVideo>();
     const auto = videos.map((v) => v.url).filter((u) => this.isAutomatic(u));
     const youtube = byId(auto, (u) =>
       platformOf(u) === 'YOUTUBE' ? youtubeId(u) : null,
     );
     const x = byId(auto, xPostId);
-    if (this.youtubeKey) await this.fetchYoutube(youtube, result);
-    if (this.xToken) await this.fetchX(x, result);
+    if (this.youtubeKey) await this.fetchYoutube(youtube, result, withAuthor);
+    if (this.xToken) await this.fetchX(x, result, withAuthor);
     await this.fetchByCreator(videos, result);
     return result;
   }
@@ -68,7 +89,7 @@ export class ViewCounterService {
   /** TikTok, VK и Instagram: ролики группируем по креатору и площадке — его аккаунты на ней спрашивает AccountsService. */
   private async fetchByCreator(
     videos: VideoRef[],
-    result: Map<string, VideoStats>,
+    result: Map<string, CountedVideo>,
   ) {
     const groups = new Map<
       string,
@@ -97,31 +118,63 @@ export class ViewCounterService {
       const stats = await this.accounts.stats(g.creatorId, g.platform, [
         ...g.urlsById.keys(),
       ]);
-      for (const [id, s] of stats) setAll(result, g.urlsById.get(id), s);
+      for (const [id, s] of stats)
+        setAll(result, g.urlsById.get(id), { ...s, ownAccount: true });
     }
   }
 
   private async fetchYoutube(
     urlsById: Map<string, string[]>,
-    result: Map<string, VideoStats>,
+    result: Map<string, CountedVideo>,
+    withAuthor: boolean,
   ) {
-    // До 50 роликов за запрос — это 1 единица из суточной квоты 10 000.
+    const authors: VideoAuthor[] = [];
+    // До 50 роликов за запрос — это 1 единица из суточной квоты 10 000 (snippet её не меняет).
     for (const batch of chunks([...urlsById.keys()], 50)) {
       const data = await this.get<{
         items?: {
           id: string;
           statistics?: { viewCount?: string; likeCount?: string };
+          snippet?: { channelId?: string; channelTitle?: string };
         }[];
       }>(
         'YOUTUBE',
-        `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${batch.join(',')}&key=${this.youtubeKey}`,
+        `https://www.googleapis.com/youtube/v3/videos?part=statistics${withAuthor ? ',snippet' : ''}&id=${batch.join(',')}&key=${this.youtubeKey}`,
       );
       for (const item of data?.items ?? []) {
-        const stats = toStats(
+        const stats: CountedVideo | null = toStats(
           item.statistics?.viewCount,
           item.statistics?.likeCount,
         );
-        if (stats) setAll(result, urlsById.get(item.id), stats);
+        if (!stats) continue;
+        if (withAuthor && item.snippet?.channelId) {
+          stats.author = {
+            platform: 'YOUTUBE',
+            id: item.snippet.channelId,
+            handle: null,
+            name: item.snippet.channelTitle ?? null,
+          };
+          authors.push(stats.author);
+        }
+        setAll(result, urlsById.get(item.id), stats);
+      }
+    }
+    if (authors.length) await this.fillYoutubeHandles(authors);
+  }
+
+  /** @handle каналов (customUrl): по нему креатор обычно и даёт ссылку на канал в профиле. */
+  private async fillYoutubeHandles(authors: VideoAuthor[]) {
+    const ids = [...new Set(authors.map((a) => a.id))];
+    for (const batch of chunks(ids, 50)) {
+      const data = await this.get<{
+        items?: { id: string; snippet?: { customUrl?: string } }[];
+      }>(
+        'YOUTUBE',
+        `https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${batch.join(',')}&key=${this.youtubeKey}`,
+      );
+      for (const item of data?.items ?? []) {
+        const handle = item.snippet?.customUrl?.replace(/^@/, '') || null;
+        for (const a of authors) if (a.id === item.id) a.handle = handle;
       }
     }
   }
@@ -133,13 +186,15 @@ export class ViewCounterService {
    */
   private async fetchX(
     urlsById: Map<string, string[]>,
-    result: Map<string, VideoStats>,
+    result: Map<string, CountedVideo>,
+    withAuthor: boolean,
   ) {
     // до 100 постов за запрос; платится каждый прочитанный пост
     for (const batch of chunks([...urlsById.keys()], 100)) {
       const data = await this.get<{
         data?: {
           id: string;
+          author_id?: string;
           public_metrics?: { like_count?: number };
           attachments?: { media_keys?: string[] };
         }[];
@@ -149,24 +204,40 @@ export class ViewCounterService {
             type: string;
             public_metrics?: { view_count?: number };
           }[];
+          users?: { id: string; username?: string; name?: string }[];
         };
       }>(
         'X',
-        `https://api.x.com/2/tweets?ids=${batch.join(',')}&tweet.fields=public_metrics&expansions=attachments.media_keys&media.fields=public_metrics,type`,
+        withAuthor
+          ? `https://api.x.com/2/tweets?ids=${batch.join(',')}&tweet.fields=public_metrics,author_id&expansions=attachments.media_keys,author_id&media.fields=public_metrics,type&user.fields=username`
+          : `https://api.x.com/2/tweets?ids=${batch.join(',')}&tweet.fields=public_metrics&expansions=attachments.media_keys&media.fields=public_metrics,type`,
         { Authorization: `Bearer ${this.xToken}` },
       );
       const media = new Map(
         (data?.includes?.media ?? []).map((m) => [m.media_key, m]),
       );
+      const users = new Map(
+        (data?.includes?.users ?? []).map((u) => [u.id, u]),
+      );
       for (const post of data?.data ?? []) {
         const video = (post.attachments?.media_keys ?? [])
           .map((k) => media.get(k))
           .find((m) => m?.type === 'video' || m?.type === 'animated_gif');
-        const stats = toStats(
+        const stats: CountedVideo | null = toStats(
           video?.public_metrics?.view_count,
           post.public_metrics?.like_count,
         );
-        if (stats) setAll(result, urlsById.get(post.id), stats);
+        if (!stats) continue;
+        if (withAuthor && post.author_id) {
+          const u = users.get(post.author_id);
+          stats.author = {
+            platform: 'X',
+            id: post.author_id,
+            handle: u?.username ?? null,
+            name: u?.name ?? null,
+          };
+        }
+        setAll(result, urlsById.get(post.id), stats);
       }
     }
   }
@@ -215,9 +286,9 @@ function byId(urls: string[], idOf: (url: string) => string | null) {
 }
 
 function setAll(
-  result: Map<string, VideoStats>,
+  result: Map<string, CountedVideo>,
   urls: string[] | undefined,
-  stats: VideoStats,
+  stats: CountedVideo,
 ) {
   for (const url of urls ?? []) result.set(url, stats);
 }

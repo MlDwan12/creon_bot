@@ -263,15 +263,27 @@ export class ReportsService {
 
   /**
    * Решение по всем открытым жалобам на объект. `actioned` — применить меру для этого типа:
-   * заказ — закрыть, видео — убрать из портфолио, отзыв — удалить, профиль — стереть ссылки.
-   * Жалобы помечаются первыми — второй модератор получит отказ и меру не применит повторно.
+   * заказ — снять (OrdersService.moderatorClose), видео — убрать из портфолио, отзыв — удалить,
+   * профиль — стереть ссылки. Жалобы помечаются первыми — второй модератор получит отказ и меру не
+   * применит повторно; всё в одной транзакции: мера не прошла — жалобы остаются открытыми.
    */
-  async resolve(group: Group, actioned: boolean, moderatorTelegramId: bigint) {
-    const reports = await this.prisma.report.findMany({
+  resolve(group: Group, actioned: boolean, moderatorTelegramId: bigint) {
+    return this.prisma.$transaction((tx) =>
+      this.resolveIn(tx, group, actioned, moderatorTelegramId),
+    );
+  }
+
+  private async resolveIn(
+    tx: Prisma.TransactionClient,
+    group: Group,
+    actioned: boolean,
+    moderatorTelegramId: bigint,
+  ) {
+    const reports = await tx.report.findMany({
       where: { ...group, status: ReportStatus.OPEN },
       include: { reporter: true },
     });
-    const { count } = await this.prisma.report.updateMany({
+    const { count } = await tx.report.updateMany({
       where: {
         id: { in: reports.map((r) => r.id) },
         status: ReportStatus.OPEN,
@@ -289,22 +301,25 @@ export class ReportsService {
     if (actioned) {
       switch (group.target) {
         case ReportTarget.ORDER:
-          closedOrder = await this.orders.moderatorClose(group.targetId);
+          closedOrder = await this.orders.moderatorClose(tx, group.targetId);
           break;
         case ReportTarget.VIDEO:
-          await this.prisma.submission.updateMany({
+          await tx.submission.updateMany({
             where: { id: group.targetId },
             data: { portfolioAllowed: false },
           });
           break;
         case ReportTarget.REVIEW:
-          await this.prisma.submission.updateMany({
+          await tx.submission.updateMany({
             where: { id: group.targetId },
             data: { rating: null, review: null, reviewQueuedAt: null },
           });
           break;
         case ReportTarget.PROFILE:
-          await this.profiles.updateLinks(group.targetId, []);
+          await tx.user.updateMany({
+            where: { id: group.targetId },
+            data: { socialLinks: [] },
+          });
           break;
       }
     }

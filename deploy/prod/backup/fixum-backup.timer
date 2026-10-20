@@ -1,0 +1,10 @@
+# Каждый день в 00:30 UTC (03:30 МСК); пропущенный из-за выключения сервера — сразу после старта
+[Unit]
+Description=Fixum: ежедневный бэкап базы
+
+[Timer]
+OnCalendar=*-*-* 00:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

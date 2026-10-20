@@ -19,13 +19,13 @@ import { findContacts } from '../common/contacts';
 import { fromMinor } from '../common/money';
 import { NotificationsService } from '../telegram/notifications.service';
 import { creatorLabel } from '../common/format';
-import { payoutPool, VIEWS_TOPUP_DAYS } from '../orders/budget';
+import { budgetRaised, payoutPool, VIEWS_TOPUP_DAYS } from '../orders/budget';
 import { OrdersService } from '../orders/orders.service';
 import { DAY_MS } from '../orders/deadline';
-import { platformOf } from '../common/platforms';
+import { authorInLinks, authorUrl, platformOf } from '../common/platforms';
 import { SubmissionsService } from '../submissions/submissions.service';
 import {
-  type VideoStats,
+  type CountedVideo,
   ViewCounterService,
 } from '../submissions/view-counter.service';
 import { AnalyticsService } from './analytics.service';
@@ -40,6 +40,7 @@ import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
 import { ModeratorGuard } from '../auth/moderator.guard';
 import {
+  parseBudgetConfirmed,
   parseCpm,
   parseRejectComment,
   parseLikes,
@@ -48,6 +49,25 @@ import {
 } from '../orders/order-input';
 
 const PAGE_SIZE = 20;
+
+/**
+ * Чей ролик — модератору: `verified` — посчитан по аккаунту креатора или автор есть в соцсетях его
+ * профиля; `mismatch` — автор известен, но в профиле его нет; `unknown` — площадка автора не отдала.
+ * Решает модератор: сдачу и одобрение это не запрещает.
+ */
+export function videoAuthor(stats: CountedVideo | undefined, links: string[]) {
+  if (stats?.ownAccount)
+    return { status: 'verified', viaAccount: true, name: null, url: null };
+  const a = stats?.author;
+  if (!a)
+    return { status: 'unknown', viaAccount: false, name: null, url: null };
+  return {
+    status: authorInLinks(a, links) ? 'verified' : 'mismatch',
+    viaAccount: false,
+    name: [a.name, a.handle && `@${a.handle}`].filter(Boolean).join(' · '),
+    url: authorUrl(a),
+  };
+}
 
 /** Версия заказа, которую модератор видел (`version` из GET /api/mod/orders/:id). */
 function parseVersion(body: unknown): Date {
@@ -93,6 +113,8 @@ export class ModerationController {
         advertiser: creatorLabel(o.advertiser),
         // ждёт с момента отправки на проверку: после правки — заново
         queuedAt: o.moderationRequestedAt,
+        // после правки бюджет выше одобренного — модератору проверить доплату
+        budgetRaised: budgetRaised(o),
         // похоже на контакты в обход площадки — модератору пометка в списке
         hasContacts:
           findContacts(o.title, o.description, o.referenceUrl, o.targetUrl)
@@ -182,6 +204,8 @@ export class ModerationController {
       targetUrl: o.targetUrl,
       ...videoFormat(o),
       budget: fromMinor(o.budgetMinor),
+      // одобренный в прошлый раз; выше него — повышение, одобрение только с budgetConfirmed
+      approvedBudget: fromMinor(o.approvedBudgetMinor),
       feePercent: o.feePercent,
       // фонд выплат креаторам — от него модератор считает ставку
       pool: fromMinor(payoutPool(o)),
@@ -215,6 +239,7 @@ export class ModerationController {
       req.user.telegramId,
       parseVersion(body),
       parseCpm(body),
+      parseBudgetConfirmed(body),
     );
     if (order.status === OrderStatus.CLOSED)
       this.notifications.orderBudgetExhausted(order);
@@ -251,11 +276,13 @@ export class ModerationController {
       this.submissionsService.attemptNumber(s),
       this.submissionsService.orderBudget(s.order),
       s.videoUrl
-        ? this.viewCounter.fetchViews([
-            { url: s.videoUrl, creatorId: s.creatorId },
-          ])
-        : new Map<string, VideoStats>(),
+        ? this.viewCounter.fetchViews(
+            [{ url: s.videoUrl, creatorId: s.creatorId }],
+            { withAuthor: true },
+          )
+        : new Map<string, CountedVideo>(),
     ]);
+    const stats = counted.get(s.videoUrl ?? '');
     return {
       id: s.id,
       status: s.status,
@@ -268,8 +295,9 @@ export class ModerationController {
       views: s.views,
       likes: s.likes,
       // сейчас по данным API площадки; null — считается вручную или API не ответило
-      autoViews: counted.get(s.videoUrl ?? '')?.views ?? null,
-      autoLikes: counted.get(s.videoUrl ?? '')?.likes ?? null,
+      autoViews: stats?.views ?? null,
+      autoLikes: stats?.likes ?? null,
+      author: videoAuthor(stats, s.creator.socialLinks),
       platform: platformOf(s.videoUrl),
       payout: fromMinor(s.payoutMinor),
       decidedAt: s.decidedAt,
@@ -402,6 +430,10 @@ export class ModerationController {
       wallet: p.wallet,
       creator: creatorLabel(p.creator),
       creatorId: p.creatorId,
+      // забаненному (например, за накрутку) модератор, скорее всего, не переведёт — решает сам
+      banned: p.creator.bannedAt
+        ? { at: p.creator.bannedAt, reason: p.creator.banReason }
+        : null,
       createdAt: p.createdAt,
     }));
   }

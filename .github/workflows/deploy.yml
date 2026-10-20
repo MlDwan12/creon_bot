@@ -37,7 +37,7 @@ jobs:
       # куда и что выкатывать на сервере — переменные deploy/remote-deploy.sh
       REMOTE_ENV: >-
         ${{ github.event.workflow_run.head_branch == 'main'
-        && 'APP=creon_bot DIR=/var/www/site SERVICE=creon_bot PG=postgres DB=creon_bot DB_USER=creon'
+        && 'APP=creon_bot DIR=/opt/fixum SERVICE=fixum_bot PG=postgres DB=fixum DB_USER=fixum'
         || 'APP=creon_bot DIR=/opt/creon SERVICE=creon_bot PG=postgres DB=creon_bot DB_USER=creon' }}
       STAND: ${{ github.event.workflow_run.head_branch == 'main' && 'прод' || 'дев' }}
     steps:

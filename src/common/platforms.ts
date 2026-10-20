@@ -135,3 +135,49 @@ export function videoKey(url: string): string {
   const z = isOnHosts(host, PLATFORMS.VK.hosts) && u.searchParams.get('z');
   return `${host}${path}${z ? `?z=${z}` : ''}`;
 }
+
+/** Автор публикации по данным API площадки — сверить с соцсетями в профиле креатора. */
+export interface VideoAuthor {
+  platform: 'YOUTUBE' | 'X';
+  /** id канала YouTube или пользователя X. */
+  id: string;
+  /** @handle канала YouTube или username в X, без «@»; null — площадка не отдала. */
+  handle: string | null;
+  name: string | null;
+}
+
+/** Автор есть среди ссылок профиля: youtube.com/@handle, youtube.com/channel/<id>, x.com/<username>. */
+export function authorInLinks(author: VideoAuthor, links: string[]): boolean {
+  const handle = author.handle?.toLowerCase();
+  return links.some((link) => {
+    let u: URL;
+    try {
+      u = new URL(link);
+    } catch {
+      return false;
+    }
+    const [first, second] = u.pathname.split('/').filter(Boolean);
+    if (author.platform === 'X')
+      return (
+        isOnHosts(u.hostname, PLATFORMS.X.hosts) &&
+        !!handle &&
+        first?.toLowerCase() === handle
+      );
+    return (
+      isOnHosts(u.hostname, PLATFORMS.YOUTUBE.hosts) &&
+      ((!!handle && first?.toLowerCase() === `@${handle}`) ||
+        (first === 'channel' && second === author.id))
+    );
+  });
+}
+
+/** Страница автора на площадке — модератору открыть и сверить. */
+export function authorUrl(author: VideoAuthor): string {
+  if (author.platform === 'X')
+    return author.handle
+      ? `https://x.com/${author.handle}`
+      : `https://x.com/i/user/${author.id}`;
+  return author.handle
+    ? `https://www.youtube.com/@${author.handle}`
+    : `https://www.youtube.com/channel/${author.id}`;
+}

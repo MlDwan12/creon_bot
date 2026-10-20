@@ -1,0 +1,44 @@
+# Прод (deploy/prod/SERVER.md, слой 3): лежит на сервере в /opt/fixum рядом с .env (права 600).
+# Образ creon_bot:current загружает и переключает deploy.yml → deploy/remote-deploy.sh.
+# Ротация логов — в /etc/docker/daemon.json (слой 2), здесь не нужна.
+name: fixum
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: fixum_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: fixum
+      # из .env рядом (compose подставляет его сам); тот же пароль — в DATABASE_URL
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
+      POSTGRES_DB: fixum
+    # порт наружу не публикуется: бот ходит в базу по сети compose
+    command: ['postgres', '-c', 'shared_buffers=512MB', '-c', 'effective_cache_size=1536MB']
+    mem_limit: 2g
+    shm_size: 256mb
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U fixum -d fixum']
+      interval: 5s
+      retries: 10
+
+  # имя контейнера = SERVICE в remote-deploy.sh: по нему скрипт ждёт healthy
+  fixum_bot:
+    image: creon_bot:current
+    pull_policy: never
+    container_name: fixum_bot
+    restart: always
+    env_file: .env
+    mem_limit: 1g
+    cap_drop: [ALL]
+    # только для nginx на этом же сервере: Docker публикует порты в обход ufw
+    ports:
+      - '127.0.0.1:3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  db_data:

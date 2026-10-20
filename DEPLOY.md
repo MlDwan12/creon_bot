@@ -5,42 +5,15 @@
 
 ## Как устроен прод
 
-- VPS `72.60.80.75`, каталог `/var/www/site`. Там общий `docker-compose.yaml` с другим проектом (vituss) —
-  ничего, кроме сервиса `creon_bot`, не трогаем.
-- База — общий сервис `postgres` (postgres 15), у бота своя роль `creon` (не суперпользователь) и база `creon_bot`.
-- nginx и certbot стоят на хосте: `/etc/nginx/sites-available/fixumapp.com` (+ www) → `127.0.0.1:8003`.
+- Свой VPS (Hostinger) `72.62.46.36`, только под Fixum; настройка сервера по слоям — `deploy/prod/SERVER.md`.
+- Каталог `/opt/fixum` (владелец `deploy`): `docker-compose.yml` из `deploy/prod/` и `.env` (600) — переменные
+  из `.env.example`, `DATABASE_URL=postgresql://fixum:<пароль>@postgres:5432/fixum`.
+- База — свой Postgres 17 в том же compose, порт наружу не публикуется. Бот — контейнер `fixum_bot` на `127.0.0.1:3000`.
+- nginx и certbot на хосте: `deploy/prod/nginx/` → `/etc/nginx/sites-available/`.
   `frame-ancestors` и `X-Frame-Options` в vhost не добавлять: Telegram Web открывает Mini App во фрейме.
 - Миграции накатываются сами при старте контейнера (`docker-entrypoint.sh` → `prisma migrate deploy`).
 - `HEALTHCHECK` образа дёргает `/api/health`, статус виден в `docker ps`.
-
-Сервис в общем compose:
-
-```yaml
-creon_bot:
-  <<: *default-logging
-  image: creon_bot:current
-  pull_policy: never
-  container_name: creon_bot
-  restart: always
-  env_file:
-    - .env.creon_bot
-  ports:
-    - '127.0.0.1:8003:3000'
-  depends_on:
-    postgres:
-      condition: service_healthy
-  deploy:
-    resources:
-      limits:
-        memory: 256M
-      reservations:
-        memory: 128M
-  networks:
-    - backend
-```
-
-В `.env.creon_bot` (права 600) — переменные из `.env.example`; `DATABASE_URL=postgresql://creon:<пароль>@postgres:5432/creon_bot`.
-`BOT_TOKEN` — боевой: long polling, один токен опрашивает только один процесс.
+- `BOT_TOKEN` — боевой: long polling, один токен опрашивает только один процесс.
 
 ## Как идёт выкатка
 
@@ -51,49 +24,40 @@ creon_bot:
 4. по SSH: `docker load` образа и копия `deploy/remote-deploy.sh` в домашний каталог `deploy`, затем `ssh -n prod … bash remote-deploy.sh <тег>`. Итог — только код возврата скрипта.
 
 `deploy/remote-deploy.sh` на сервере:
-1. бэкап базы `pg_dump -Fc` в `/var/www/site/_backups/creon_bot_*.dump` (последние 5; чужие файлы в папке не трогаются) и проверка, что архив читается (`pg_restore --list`);
+1. бэкап базы `pg_dump -Fc` в `/opt/fixum/_backups/fixum_*.dump` (последние 5) и проверка, что архив читается (`pg_restore --list`);
 2. текущий `creon_bot:current` становится `creon_bot:previous`, новый образ — `current`;
-3. `docker compose up -d --no-deps --force-recreate creon_bot` и ждёт до 3 минут, пока контейнер **на новом образе** станет `healthy`;
+3. `docker compose up -d --no-deps --force-recreate fixum_bot` и ждёт до 3 минут, пока контейнер **на новом образе** станет `healthy`;
 4. упал `up` или нет healthy — откат на `previous` и проверка, что healthy стал он; job красный в обоих случаях, в логе — получилось ли откатиться;
 5. удаляет тег сборки и висячие образы creon (по метке `app=creon_bot`), чужие не трогает.
 
 Откат образа **не откатывает миграции**. Поэтому миграции — только совместимые с прошлой версией кода: сначала добавить (колонку, таблицу), выпустить код, который работает с обеими схемами, и только следующим релизом удалять старое (expand → contract).
 
-Откат вручную: `sudo docker tag creon_bot:previous creon_bot:current && sudo docker compose up -d --no-deps --force-recreate creon_bot`.
+Откат вручную (на сервере, под `ops`): `sudo docker tag creon_bot:previous creon_bot:current && sudo -u deploy docker compose -f /opt/fixum/docker-compose.yml up -d --no-deps --force-recreate fixum_bot`.
 
 Восстановление базы из бэкапа (бот остановлен, чтобы не писал в базу; всё или ничего — `--single-transaction`):
 
 ```bash
-cd /var/www/site
-sudo docker compose stop creon_bot
-sudo sh -c 'cat _backups/<файл>.dump' | sudo docker compose exec -T postgres \
-  pg_restore -U creon -d creon_bot --clean --if-exists --no-owner --single-transaction --exit-on-error
-sudo docker compose up -d --no-deps creon_bot
+C='sudo -u deploy docker compose -f /opt/fixum/docker-compose.yml'
+$C stop fixum_bot
+sudo cat /opt/fixum/_backups/<файл>.dump | $C exec -T postgres \
+  pg_restore -U fixum -d fixum --clean --if-exists --no-owner --single-transaction --exit-on-error
+$C up -d --no-deps fixum_bot
 ```
 
 ## Настройка (один раз)
 
-1. На сервере — пользователь для CI в группе `docker`, без пароля и sudo:
-   ```bash
-   sudo useradd -m -s /bin/bash -G docker deploy
-   sudo passwd -l deploy
-   ```
-   Группа `docker` — это фактически root на сервере, включая контейнеры соседнего проекта: ключ храним только
-   в секретах GitHub.
-2. Ключ — на своей машине: `ssh-keygen -t ed25519 -f creon_deploy -N '' -C creon-ci`.
-   Публичный (`creon_deploy.pub`) — в `/home/deploy/.ssh/authorized_keys` (каталог 700, файл 600, владелец deploy).
-3. Проверка со своей машины: `ssh -i creon_deploy deploy@72.60.80.75 docker ps` — список контейнеров.
-4. GitHub → Settings → Environments → `production`, секреты:
+Пользователь `deploy` и его ключ — `deploy/prod/SERVER.md`, слой 2.2. GitHub → Settings → Environments →
+`production`, секреты:
 
-   | Секрет | Значение |
-   |---|---|
-   | `SSH_HOST` | `72.60.80.75` |
-   | `SSH_PORT` | `22` (или свой) |
-   | `SSH_USER` | `deploy` |
-   | `SSH_KEY` | содержимое приватного `creon_deploy` целиком, с первой и последней строкой |
-   | `SSH_KNOWN_HOSTS` | вывод `ssh-keyscan -p <порт> 72.60.80.75` со своей машины |
+| Секрет | Значение |
+|---|---|
+| `SSH_HOST` | `72.62.46.36` |
+| `SSH_PORT` | порт SSH сервера (в `~/.ssh/config` администратора) |
+| `SSH_USER` | `deploy` |
+| `SSH_KEY` | содержимое приватного `~/.ssh/fixum_prod_deploy` целиком, с первой и последней строкой |
+| `SSH_KNOWN_HOSTS` | `ssh-keyscan -p <порт> -t ed25519 72.62.46.36`; отпечаток сверить с `SERVER.md` |
 
-   По желанию там же — Required reviewers: выкатка ждёт подтверждения. После этого `creon_deploy` удалить с машины.
+Там же — Required reviewers: каждая выкатка в прод ждёт подтверждения.
 
 ## Дев-стенд
 
