@@ -8,6 +8,7 @@ const order = (id: number): Order => ({
   description: 'd',
   currency: 'RUB',
   budgetMinor: 5_000_000,
+  approvedBudgetMinor: 5_000_000,
   feePercent: 20,
   cpmMinor: 15_000,
   minViews: 250,

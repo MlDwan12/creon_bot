@@ -455,11 +455,11 @@ void load();
         <template v-for="p in profile.portfolio" :key="p.submissionId">
           <a v-if="safeUrl(p.videoUrl)" :href="safeUrl(p.videoUrl)" target="_blank" rel="noopener noreferrer" class="item">
             <span class="play" aria-hidden="true">▶</span>
-            <span>{{ p.orderTitle }}</span>
+            <span>{{ p.orderTitle ?? $t('profile.otherOrder') }}</span>
           </a>
           <div v-else class="item">
             <span class="play done" aria-hidden="true">✓</span>
-            <span>{{ p.orderTitle }}</span>
+            <span>{{ p.orderTitle ?? $t('profile.otherOrder') }}</span>
           </div>
         </template>
       </section>
@@ -473,7 +473,7 @@ void load();
             <span v-if="r.decidedAt" class="hint">{{ formatDate(r.decidedAt) }}</span>
           </div>
           <p v-if="r.review" class="review-text">{{ r.review }}</p>
-          <span class="hint">{{ r.orderTitle }}</span>
+          <span class="hint">{{ r.orderTitle ?? $t('profile.otherOrder') }}</span>
           <button v-if="moderator" type="button" class="remove" @click="remove(r.submissionId)">
             {{ $t('profile.removeReview') }}
           </button>

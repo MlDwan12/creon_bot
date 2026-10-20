@@ -21,6 +21,7 @@ import {
   VIEWS_TOPUP_DAYS,
 } from '../orders/budget';
 import { DAY_MS } from '../orders/deadline';
+import { titleVisibleToCreators } from '../common/format';
 import { PLATFORMS, platformOf, videoKey } from '../common/platforms';
 import { closeOpenOrders, lockOrder } from '../orders/order-status';
 import {
@@ -312,10 +313,15 @@ export class SubmissionsService implements OnApplicationBootstrap {
   async click(trackCode: string) {
     const submission = await this.prisma.submission.findUnique({
       where: { trackCode },
-      select: { id: true, order: { select: { targetUrl: true } } },
+      select: {
+        id: true,
+        order: { select: { targetUrl: true, status: true } },
+      },
     });
     const url = submission?.order.targetUrl;
-    if (!url) return null;
+    // Правка заказа пишет новую ссылку сразу: до решения модератора (и после снятия) не ведём по ней
+    // зрителей — иначе рекламодатель подменил бы её на фишинг под нашим доменом.
+    if (!url || !titleVisibleToCreators(submission.order)) return null;
     await this.prisma.submission.update({
       where: { id: submission.id },
       data: { clicks: { increment: 1 } },

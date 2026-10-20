@@ -235,7 +235,7 @@ void load();
             <span class="title">
               <span v-if="o.hasContacts" class="flag" title="Похоже на контакты в обход площадки">⚠ </span>{{ o.title }}
             </span>
-            <span class="sub">{{ o.advertiser }} · бюджет {{ formatMoney(o.budget) }}</span>
+            <span class="sub">{{ o.advertiser }} · бюджет {{ formatMoney(o.budget) }}<span v-if="o.budgetRaised" class="flag"> ↑ повышен</span></span>
           </span>
           <span :class="['wait', { long: isWaitingLong(o.queuedAt) }]">{{ waitingFor(o.queuedAt) }}</span>
           <span class="chevron" aria-hidden="true">›</span>

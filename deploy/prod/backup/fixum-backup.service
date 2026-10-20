@@ -1,0 +1,10 @@
+# Бэкап базы прода (deploy/prod/SERVER.md, слой 6); запускает fixum-backup.timer
+[Unit]
+Description=Fixum: бэкап базы в Telegram
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/fixum-backup.env
+ExecStart=/usr/local/sbin/fixum-backup

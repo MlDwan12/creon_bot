@@ -16,6 +16,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ParseIdPipe } from '../common/parse-id.pipe';
+import { NotificationsService } from '../telegram/notifications.service';
 import { TelegramPhotosService } from '../telegram/telegram-photos.service';
 import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
 import { ModeratorGuard } from '../auth/moderator.guard';
@@ -31,6 +32,7 @@ export class ProfilesController {
     private readonly profiles: ProfilesService,
     private readonly moderatorGuard: ModeratorGuard,
     private readonly photos: TelegramPhotosService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Свой профиль креатора. */
@@ -70,10 +72,13 @@ export class ProfilesController {
     return { ok: true };
   }
 
-  /** Кошелёк USDT (TRC20) для выплат; пусто — убрать. */
+  /** Кошелёк USDT (TRC20) для выплат; пусто — убрать. Смена — уведомление владельцу. */
   @Put('profile/wallet')
   async updateWallet(@Body() body: unknown, @Req() req: ApiRequest) {
-    await this.profiles.updateWallet(req.user.id, parseWallet(body));
+    const wallet = parseWallet(body);
+    await this.profiles.updateWallet(req.user.id, wallet);
+    if (wallet !== req.user.payoutWallet)
+      this.notifications.walletChanged(req.user, wallet);
     return { ok: true };
   }
 
@@ -85,6 +90,7 @@ export class ProfilesController {
     const profile = await this.profiles.profile(
       id,
       moderator || id === req.user.id,
+      req.user.id,
     );
     // причина блокировки — внутреннее дело модерации
     return moderator ? profile : { ...profile, ban: null };

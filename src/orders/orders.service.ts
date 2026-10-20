@@ -1,5 +1,6 @@
 import { tr, trNum } from '../i18n/request-lang';
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -17,6 +18,7 @@ import { fromMinor } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ACCRUED,
+  budgetRaised,
   budgetState,
   HOLDS_MONEY,
   NO_VIDEO,
@@ -330,18 +332,21 @@ export class OrdersService {
   }
 
   /**
-   * Модератор закрывает открытый заказ (по жалобе). `null` — заказ уже не открыт: закрывать нечего.
-   * В отличие от закрытия рекламодателем, начатые ролики по нему не принимаются: слоты сгорают.
-   * Возвращает заказ с рекламодателем и откликами — для уведомлений.
+   * Модератор снимает заказ по жалобе — в транзакции решения по жалобам (ReportsService.resolve).
+   * Ссылка на товар убирается при любом статусе: /r/ в уже опубликованных роликах не должен вести
+   * туда (фишинг) и у закрытого или истёкшего заказа; вернуть её можно только правкой через модератора.
+   * Открытый заказ закрывается, и, в отличие от закрытия рекламодателем, начатые ролики по нему не
+   * принимаются: слоты сгорают. Возвращает закрытый заказ с рекламодателем и откликами — для
+   * уведомлений; `null` — заказ не был открыт.
    */
-  async moderatorClose(orderId: number) {
-    const closed = await this.prisma.$transaction(async (tx) => {
-      const count = await closeOpenOrders(tx, [orderId]);
-      if (count > 0) await expireSlots(tx, [orderId]);
-      return count > 0;
+  async moderatorClose(tx: Prisma.TransactionClient, orderId: number) {
+    await tx.order.updateMany({
+      where: { id: orderId },
+      data: { targetUrl: null },
     });
-    if (!closed) return null;
-    return this.prisma.order.findUniqueOrThrow({
+    if ((await closeOpenOrders(tx, [orderId])) === 0) return null;
+    await expireSlots(tx, [orderId]);
+    return tx.order.findUniqueOrThrow({
       where: { id: orderId },
       include: {
         advertiser: true,
@@ -568,8 +573,16 @@ export class OrdersService {
     moderatorTelegramId: bigint,
     version: Date,
     cpmMinor: number,
+    /** Новый бюджет в центах, если модератор подтвердил доплату за повышение; иначе null. */
+    budgetConfirmedMinor: number | null = null,
   ) {
     const order = await this.mustFind(orderId);
+    // сверяем с суммой, а не флагом: подтверждение старой версии не пропустит новое повышение
+    // (а версию заказа и так проверяет условие перехода ниже)
+    if (budgetRaised(order) && budgetConfirmedMinor !== order.budgetMinor)
+      throw new BadRequestException(
+        `Бюджет повышен с ${fromMinor(order.approvedBudgetMinor!)} до ${fromMinor(order.budgetMinor)} USDT — подтвердите, что доплата получена`,
+      );
     // Ставка, при которой фонд не покрывает даже один ролик с порогом, — заказ сразу исчерпан.
     if (budgetState({ ...order, cpmMinor }, 0).exhausted)
       throw new ForbiddenException(
@@ -591,6 +604,7 @@ export class OrdersService {
           ...(exhausted && { closedAt: now }),
           moderatorId: moderatorTelegramId,
           cpmMinor,
+          approvedBudgetMinor: order.budgetMinor,
           decidedAt: now,
           deadline: order.deadline
             ? new Date(
