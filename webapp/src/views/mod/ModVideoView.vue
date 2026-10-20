@@ -51,13 +51,13 @@ async function load() {
   }
 }
 
-/** После решения — следующее из той же очереди (проверка или итог добора); пуста — назад к ней. */
-async function goNext(tab: 'videos' | 'topups') {
+/** После решения — следующее из той же очереди (проверка или итог холда); пуста — назад к ней. */
+async function goNext(tab: 'videos' | 'holds') {
   const next = (await fetchModQueue().catch(() => undefined))?.[tab].find((v) => v.id !== Number(props.id));
   await router.replace(next ? `/mod/videos/${next.id}` : `/mod?tab=${tab}`);
 }
 
-async function run(action: () => Promise<unknown>, tab: 'videos' | 'topups') {
+async function run(action: () => Promise<unknown>, tab: 'videos' | 'holds') {
   busy.value = true;
   error.value = '';
   try {
@@ -80,11 +80,11 @@ const decide = (decision: 'approve' | 'reject') =>
       ),
     'videos',
   );
-const finalize = () => run(() => finalizeVideo(Number(props.id), Number(views.value), likesOrNull()), 'topups');
+const finalize = () => run(() => finalizeVideo(Number(props.id), Number(views.value), likesOrNull()), 'holds');
 async function deleted() {
   if (!(await confirmAction('Публикации нет по ссылке? Начисление за ролик отменится, деньги вернутся в бюджет заказа.')))
     return;
-  await run(() => markPublicationDeleted(Number(props.id)), 'topups');
+  await run(() => markPublicationDeleted(Number(props.id)), 'holds');
 }
 
 /** Просмотры, которые фиксирует модератор: на проверке — заявленные креатором, при итоге — текущие. */
@@ -97,11 +97,11 @@ const estimate = computed(() => {
   const cpm = video.value?.order.cpm;
   return cpm && views.value ? formatMoney(Math.floor((views.value * cpm) / 10) / 100) : '';
 });
-/** Когда можно зафиксировать итог после добора; null — не одобрен или уже зафиксирован. */
-const topupAt = computed(() => {
+/** Когда кончается холд и можно зафиксировать итог; null — не одобрен или уже зафиксирован. */
+const holdEndsAt = computed(() => {
   const v = video.value;
   if (!v || v.status !== 'MODERATOR_APPROVED' || v.finalizedAt || !v.decidedAt) return null;
-  return new Date(new Date(v.decidedAt).getTime() + v.topupDays * 24 * 60 * 60 * 1000);
+  return new Date(new Date(v.decidedAt).getTime() + v.holdDays * 24 * 60 * 60 * 1000);
 });
 
 watch(() => props.id, load, { immediate: true });
@@ -161,12 +161,12 @@ watch(() => props.id, load, { immediate: true });
         </div>
       </section>
 
-      <label v-if="video.status === 'SUBMITTED' || topupAt" class="views">
+      <label v-if="video.status === 'SUBMITTED' || holdEndsAt" class="views">
         <span class="section-title">{{ video.status === 'SUBMITTED' ? 'Просмотров по ссылке' : 'Итог просмотров' }}</span>
         <input v-model.number="views" type="number" inputmode="numeric" min="1" step="1" />
         <span v-if="estimate" class="hint">К начислению за эти просмотры: {{ estimate }} (не больше остатка бюджета)</span>
       </label>
-      <label v-if="video.status === 'SUBMITTED' || topupAt" class="views">
+      <label v-if="video.status === 'SUBMITTED' || holdEndsAt" class="views">
         <span class="section-title">Лайков — по желанию, для отчёта рекламодателю</span>
         <input v-model.number="likes" type="number" inputmode="numeric" min="0" step="1" />
       </label>
@@ -182,10 +182,10 @@ watch(() => props.id, load, { immediate: true });
           <button type="button" class="approve" :disabled="busy || !views" @click="decide('approve')">Одобрить</button>
         </div>
       </template>
-      <template v-else-if="topupAt && topupAt <= new Date()">
+      <template v-else-if="holdEndsAt && holdEndsAt <= new Date()">
         <p class="hint">
-          Добор закончился: откройте публикацию и зафиксируйте итог — прирост доплатится, пока есть бюджет, а деньги
-          за ролик станут доступны к выводу. Публикации нет — отмените начисление.
+          Холд закончился: откройте публикацию и зафиксируйте итог — просмотры попадут в отчёт рекламодателю (оплата
+          не меняется), а деньги за ролик станут доступны к выводу. Публикации нет — отмените начисление.
         </p>
         <p v-if="error" class="error" role="alert">{{ error }}</p>
         <div class="bottom-bar two">
@@ -193,7 +193,7 @@ watch(() => props.id, load, { immediate: true });
           <button type="button" class="approve" :disabled="busy || !views" @click="finalize">Зафиксировать итог</button>
         </div>
       </template>
-      <p v-else-if="topupAt" class="hint">Одобрено. Итог просмотров — {{ formatDate(topupAt.toISOString()) }}.</p>
+      <p v-else-if="holdEndsAt" class="hint">Одобрено. Конец холда — {{ formatDate(holdEndsAt.toISOString()) }}.</p>
       <p v-else class="hint">Это видео уже проверено.</p>
     </template>
   </main>

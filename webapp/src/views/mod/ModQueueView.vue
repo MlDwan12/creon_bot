@@ -20,8 +20,8 @@ import { confirmAction } from '../../telegram';
 const route = useRoute();
 const router = useRouter();
 
-type Tab = 'orders' | 'videos' | 'topups' | 'reviews' | 'reports';
-const TABS: Tab[] = ['orders', 'videos', 'topups', 'reviews', 'reports'];
+type Tab = 'orders' | 'videos' | 'holds' | 'reviews' | 'reports';
+const TABS: Tab[] = ['orders', 'videos', 'holds', 'reviews', 'reports'];
 // Вкладка — в адресе (?tab=videos), чтобы «Назад» из карточки вернул на ту же вкладку.
 const tab = computed<Tab>(() =>
   TABS.includes(route.query.tab as Tab) ? (route.query.tab as Tab) : 'orders',
@@ -143,8 +143,8 @@ void load();
         <button type="button" role="tab" :aria-selected="tab === 'videos'" @click="setTab('videos')">
           Видео · {{ queue.videos.length }}
         </button>
-        <button type="button" role="tab" :aria-selected="tab === 'topups'" @click="setTab('topups')">
-          Итоги · {{ queue.topups.length }}
+        <button type="button" role="tab" :aria-selected="tab === 'holds'" @click="setTab('holds')">
+          Итоги · {{ queue.holds.length }}
         </button>
         <button type="button" role="tab" :aria-selected="tab === 'reviews'" @click="setTab('reviews')">
           Отзывы · {{ queue.reviews.length }}
@@ -242,9 +242,9 @@ void load();
         </RouterLink>
       </div>
 
-      <div v-else-if="tab === 'topups'" class="list">
-        <p v-if="queue.topups.length === 0" class="empty">Роликов с законченным добором нет.</p>
-        <RouterLink v-for="v in queue.topups" :key="v.id" :to="`/mod/videos/${v.id}`" class="row">
+      <div v-else-if="tab === 'holds'" class="list">
+        <p v-if="queue.holds.length === 0" class="empty">Роликов с законченным холдом нет.</p>
+        <RouterLink v-for="v in queue.holds" :key="v.id" :to="`/mod/videos/${v.id}`" class="row">
           <span class="main">
             <span class="title">{{ v.orderTitle }}</span>
             <span class="sub">{{ v.creator }} · зафиксировать итог просмотров</span>

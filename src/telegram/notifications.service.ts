@@ -17,7 +17,7 @@ import {
 import { InjectBot } from 'nestjs-telegraf';
 import { fromMinor } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
-import { VIEWS_TOPUP_DAYS } from '../orders/budget';
+import { HOLD_DAYS } from '../orders/budget';
 import { SLOT_DAYS } from '../submissions/submissions.service';
 import { Context, Markup, Telegraf, TelegramError } from 'telegraf';
 import {
@@ -228,7 +228,7 @@ export class NotificationsService
           order: forCreator(submission.order, lang),
           views: num(lang, views),
           amount: money(lang, submission.payoutMinor),
-          days: VIEWS_TOPUP_DAYS,
+          days: HOLD_DAYS,
         }),
       '/submissions',
       true,
@@ -246,19 +246,15 @@ export class NotificationsService
     );
   }
 
-  /** Креатору: итог просмотров после добора и доплата. */
-  viewsFinalized(submission: SubmissionWithParties, extraMinor: number) {
+  /** Креатору: холд по ролику закончился, деньги можно вывести. */
+  viewsFinalized(submission: SubmissionWithParties) {
     this.send(
       submission.creator,
       (t, lang) =>
-        t(
-          extraMinor > 0 ? 'notify.finalizedExtra' : 'notify.finalizedNoExtra',
-          {
-            order: forCreator(submission.order, lang),
-            views: num(lang, submission.views ?? 0),
-            amount: money(lang, extraMinor),
-          },
-        ),
+        t('notify.holdReleased', {
+          order: forCreator(submission.order, lang),
+          amount: money(lang, submission.payoutMinor),
+        }),
       '/submissions',
       true,
     );
@@ -430,7 +426,7 @@ export class NotificationsService
     stale: {
       orders: number;
       videos: number;
-      topups: number;
+      holds: number;
       payouts: number;
       reviews: number;
     },
@@ -439,7 +435,7 @@ export class NotificationsService
     const parts = [
       stale.orders ? `заказов: ${stale.orders}` : '',
       stale.videos ? `видео: ${stale.videos}` : '',
-      stale.topups ? `итогов просмотров: ${stale.topups}` : '',
+      stale.holds ? `итогов просмотров: ${stale.holds}` : '',
       stale.payouts ? `заявок на вывод: ${stale.payouts}` : '',
       stale.reviews ? `отзывов: ${stale.reviews}` : '',
     ].filter(Boolean);
