@@ -50,6 +50,54 @@ describe('ViewCounterService', () => {
     ).toBe(false);
   });
 
+  it('YouTube с автором: канал и его @handle — вторым запросом; без автора — один запрос', async () => {
+    const fetch = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            items: [
+              {
+                id: 'dQw4w9WgXcQ',
+                statistics: { viewCount: '1000' },
+                snippet: { channelId: 'UCabc', channelTitle: 'Аня' },
+              },
+            ],
+          }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            items: [{ id: 'UCabc', snippet: { customUrl: '@anya_ugc' } }],
+          }),
+      } as Response);
+    const url = 'https://youtu.be/dQw4w9WgXcQ';
+    const stats = await service({ YOUTUBE_API_KEY: 'k' }).fetchViews(
+      refs([url]),
+      { withAuthor: true },
+    );
+    expect(stats.get(url)?.author).toEqual({
+      platform: 'YOUTUBE',
+      id: 'UCabc',
+      handle: 'anya_ugc',
+      name: 'Аня',
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+
+    fetch.mockClear().mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          items: [{ id: 'dQw4w9WgXcQ', statistics: { viewCount: '1' } }],
+        }),
+    } as Response);
+    await service({ YOUTUBE_API_KEY: 'k' }).fetchViews(refs([url]));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0][0] as string).not.toContain('snippet');
+  });
+
   it('X: просмотры видео из поста, удалённый пост и пост без видео — вручную', async () => {
     const fetch = reply({
       data: [

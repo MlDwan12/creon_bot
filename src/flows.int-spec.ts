@@ -1,4 +1,5 @@
 import type { ConfigService } from '@nestjs/config';
+import { OrderStatus } from '@prisma/client';
 import { ModeratorGuard } from './auth/moderator.guard';
 import { AnalyticsService } from './moderation/analytics.service';
 import { BansService } from './moderation/bans.service';
@@ -402,6 +403,18 @@ describe('ссылка на товар', () => {
     );
     expect(await submissions.click('нет-такого')).toBeNull();
 
+    // правка ссылки ещё у модератора или заказ снят — по ссылке не ведём и переход не считаем
+    for (const status of [
+      OrderStatus.PENDING_MODERATION,
+      OrderStatus.REJECTED,
+    ]) {
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { status, targetUrl: 'https://phish.example' },
+      });
+      expect(await submissions.click(trackCode!)).toBeNull();
+    }
+
     const { clicks } = await prisma.submission.findUniqueOrThrow({
       where: { trackCode: trackCode! },
     });
@@ -499,6 +512,31 @@ describe('правка заказа', () => {
     expect(order.firstPublication).toBe(true);
     await orders.update(order.id, adv.id, edit);
     expect((await approveOrder(order.id, 1n)).firstPublication).toBe(false);
+  });
+
+  it('бюджет повышен — одобрить можно, только подтвердив доплату на новую сумму', async () => {
+    const adv = await user();
+    const order = await openOrder(adv.id);
+    expect(order.approvedBudgetMinor).toBe(BUDGET);
+    const raised = BUDGET * 2;
+    await orders.update(order.id, adv.id, { ...edit, budgetMinor: raised });
+
+    const approve = async (confirmed: number | null) =>
+      orders.moderatorApprove(
+        order.id,
+        1n,
+        await versionOf(order.id),
+        CPM,
+        confirmed,
+      );
+    await expect(approve(null)).rejects.toThrow('доплата получена');
+    // подтверждение другой суммы (устаревшей версии) не подходит
+    await expect(approve(BUDGET)).rejects.toThrow('доплата получена');
+    expect((await approve(raised)).approvedBudgetMinor).toBe(raised);
+
+    // понижение подтверждать не нужно
+    await orders.update(order.id, adv.id, edit);
+    expect((await approveOrder(order.id, 1n)).approvedBudgetMinor).toBe(BUDGET);
   });
 
   it('чужой и закрытый — нельзя', async () => {
@@ -1283,6 +1321,23 @@ describe('профиль креатора', () => {
     expect(full.portfolio[0].videoUrl).not.toBeNull();
   });
 
+  it('рекламодателю — названия только его заказов, чужие скрыты', async () => {
+    const [mine, other, creator] = [await user(), await user(), await user()];
+    await acceptedVideo(mine.id, creator.id, 5, true);
+    await acceptedVideo(other.id, creator.id, 4, true);
+
+    const forMine = await profiles.profile(creator.id, false, mine.id);
+    const titles = (list: { orderTitle: string | null }[]) =>
+      list.map((x) => x.orderTitle).sort();
+    expect(titles(forMine.reviews)).toEqual(['Заказ', null].sort());
+    expect(titles(forMine.portfolio)).toEqual(['Заказ', null].sort());
+    // креатору и модератору — все названия
+    expect(titles((await profiles.profile(creator.id, true)).reviews)).toEqual([
+      'Заказ',
+      'Заказ',
+    ]);
+  });
+
   it('отзыв с текстом — в профиле только после проверки, звёзды без текста — сразу', async () => {
     const [advertiser, creator] = [await user(), await user()];
     const s = await approvedVideo(advertiser.id, creator.id);
@@ -1447,6 +1502,42 @@ describe('жалобы', () => {
     await expect(
       reports.resolve({ target: 'ORDER', targetId: order.id }, false, 2n),
     ).rejects.toThrow('уже рассмотрены');
+  });
+
+  it('мера по уже закрытому заказу убирает ссылку на товар — /r/ больше не ведёт на неё', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const order = await openOrder(advertiser.id);
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { targetUrl: 'https://phish.example' },
+    });
+    const { trackCode } = await submissions.claim(order.id, creator.id);
+    await reports.create(creator, report('ORDER', order.id));
+    await orders.close(order.id, advertiser.id);
+    expect(await submissions.click(trackCode!)).toBe('https://phish.example');
+
+    const { closedOrder } = await reports.resolve(
+      { target: 'ORDER', targetId: order.id },
+      true,
+      1n,
+    );
+    expect(closedOrder).toBeNull(); // уже был закрыт — уведомлять о закрытии некого
+    expect(await submissions.click(trackCode!)).toBeNull();
+  });
+
+  it('мера не применилась — жалобы остаются открытыми', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const order = await openOrder(advertiser.id);
+    await reports.create(creator, report('ORDER', order.id));
+    jest
+      .spyOn(orders, 'moderatorClose')
+      .mockRejectedValueOnce(new Error('сбой'));
+
+    await expect(
+      reports.resolve({ target: 'ORDER', targetId: order.id }, true, 1n),
+    ).rejects.toThrow('сбой');
+    expect(await reports.listOpen()).toHaveLength(1);
+    expect(await statusOf(order.id)).toBe('OPEN');
   });
 
   it('жалоба на отзыв: пишет только тот, о ком отзыв; мера удаляет отзыв', async () => {

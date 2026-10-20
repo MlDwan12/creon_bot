@@ -31,9 +31,10 @@ export class ProfilesService {
 
   /**
    * `full` — для самого креатора и модератора: @username и соцсети. Остальным (рекламодателю) —
-   * только имя: контакты сторон друг другу не показываем, всё общение — через площадку.
+   * только имя: контакты сторон друг другу не показываем, всё общение — через площадку. Названия
+   * заказов рекламодателю — только его собственных (`viewerId`): чужие — дело других рекламодателей.
    */
-  async profile(creatorId: number, full: boolean) {
+  async profile(creatorId: number, full: boolean, viewerId?: number) {
     const creator = await this.prisma.user.findUnique({
       where: { id: creatorId },
     });
@@ -60,15 +61,17 @@ export class ProfilesService {
         where: published,
         orderBy: { decidedAt: 'desc' },
         take: PROFILE_LIST_LIMIT,
-        include: { order: { select: { title: true } } },
+        include: { order: { select: { title: true, advertiserId: true } } },
       }),
       this.prisma.submission.findMany({
         where: { ...accepted, portfolioAllowed: true },
         orderBy: { decidedAt: 'desc' },
         take: PROFILE_LIST_LIMIT,
-        include: { order: { select: { title: true } } },
+        include: { order: { select: { title: true, advertiserId: true } } },
       }),
     ]);
+    const titleOf = (order: { title: string; advertiserId: number }) =>
+      full || order.advertiserId === viewerId ? order.title : null;
 
     const avg = ratings._avg.rating;
     return {
@@ -91,14 +94,14 @@ export class ProfilesService {
         submissionId: s.id,
         rating: s.rating!,
         review: s.review,
-        orderTitle: s.order.title,
+        orderTitle: titleOf(s.order),
         decidedAt: s.decidedAt,
       })),
       // ссылка на видео обычно ведёт на аккаунт креатора — рекламодателю только название работы
       portfolio: portfolio.map((s) => ({
         submissionId: s.id,
         videoUrl: full ? s.videoUrl : null,
-        orderTitle: s.order.title,
+        orderTitle: titleOf(s.order),
       })),
     };
   }
