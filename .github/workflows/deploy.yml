@@ -121,7 +121,12 @@ jobs:
           else
             text="✗ Выкатка Fixum ($STAND) ${SHA:0:7} не удалась (откат на прошлую версию, если был возможен) — лог: $RUN_URL"; silent=false
           fi
-          curl -fsS --max-time 10 "https://api.telegram.org/bot$ALERT_BOT_TOKEN/sendMessage" \
+          # без -f: при ошибке Telegram объясняет причину в description — её и выводим
+          res=$(curl -sS --max-time 10 "https://api.telegram.org/bot$ALERT_BOT_TOKEN/sendMessage" \
             --data-urlencode "chat_id=$ALERT_CHAT_ID" --data-urlencode "text=$text" \
             ${ALERT_THREAD_ID:+--data "message_thread_id=$ALERT_THREAD_ID"} \
-            --data "disable_notification=$silent" >/dev/null || echo "::warning::не удалось отправить итог в Telegram"
+            --data "disable_notification=$silent") || res=''
+          case "$res" in
+            *'"ok":true'*) ;;
+            *) echo "::warning::не удалось отправить итог в Telegram: $(echo "$res" | grep -o '"description":"[^"]*"')" ;;
+          esac
