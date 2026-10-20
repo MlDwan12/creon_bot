@@ -77,7 +77,7 @@
         "Pick an order and apply",
         "Post a video on your social media — you have 7 days",
         "Once it reaches the view threshold, send us the link",
-        "A moderator checks the video and we pay you; 5 days later we top up for new views"
+        "A moderator checks the video and records the views — we pay you; you can withdraw 5 days later"
       ],
       "action": "Browse orders"
     },
@@ -201,11 +201,15 @@
       },
       "submit": {
         "title": "How to submit a video and get paid",
-        "text": "Publish the video on your social media. Once it reaches the view threshold, send the link and the current view count in “My videos” — payment for the threshold is reserved right away. A moderator checks the views and credits you for all of them; 5 days later they record the final count and top up for new views while the order has budget. Until then the money is on hold; after that you can withdraw it. Each video is paid once; the next one for the same order — after a decision on the previous one. Keep the post public: if it's gone at the final check, the payment is cancelled."
+        "text": "Publish the video on your social media. Once it reaches the view threshold, send the link and the current view count in “My videos” — payment for the threshold is reserved right away. A moderator checks the views and credits you for all they see at review — that's the payment for the video; views gained after approval are not paid extra. While a video is under review, you can take the order again and submit the next one. The same video is paid once. Keep the post public: 5 days later we check it's still there, and if it's gone, the payment is cancelled."
+      },
+      "timing": {
+        "title": "When to submit a video",
+        "text": "An order's budget is shared by all creators. When it runs out, the order closes on its own — and videos that weren't submitted in time can no longer be paid. So submit your video as soon as it reaches the view threshold, don't wait for bigger numbers: the moderator counts the views at review time, and you get paid while the order still has budget."
       },
       "withdraw": {
         "title": "How to withdraw money",
-        "text": "Earnings for videos add up on your balance in USDT: “Profile” → “Balance”. The money for a video shows up right after approval, and you can withdraw it 5 days later, once a moderator records the final views and checks the post is still there — this is the hold. It exists because sometimes a video gets approved and immediately deleted, while the advertiser paid for a placement that no longer exists. “Balance” shows how much is on hold and when the next amount is released. Add a USDT wallet on the TRC20 network in your profile and request a withdrawal of 10 USDT or more — a manager will send the money to that wallet."
+        "text": "Earnings for videos add up on your balance in USDT: “Profile” → “Balance”. The money for a video shows up right after approval, and you can withdraw it 5 days later, once we check the post is still there — this is the hold. It exists because sometimes a video gets approved and immediately deleted, while the advertiser paid for a placement that no longer exists. “Balance” shows how much is on hold, when the next amount is released, and how much you can withdraw. Add a USDT wallet on the TRC20 network in your profile and request a withdrawal of 10 USDT or more — a manager will send the money to that wallet."
       },
       "rules": {
         "title": "Platform rules",
@@ -230,10 +234,10 @@
     "status": {
       "IN_PROGRESS": "In progress",
       "SUBMITTED": "Under moderator review",
-      "MODERATOR_APPROVED": "Approved — collecting views, money on hold",
+      "MODERATOR_APPROVED": "Approved — money on hold",
       "MODERATOR_REJECTED": "Rejected by moderator",
       "SLOT_EXPIRED": "Slot expired — no video within 7 days",
-      "FINALIZED": "Final count recorded"
+      "FINALIZED": "Hold is over — ready to withdraw"
     },
     "reserved": "{{amount}} reserved",
     "accrued": "{{amount}} credited",
@@ -263,7 +267,7 @@
     "available": "Available to withdraw",
     "summary": "Earned {{earned}} · paid out {{paid}}",
     "inRequest": " · requested {{amount}}",
-    "held": "{{amount}} on hold — available after the final view count",
+    "held": "{{amount}} on hold — available 5 days after approval",
     "nextRelease": ", next on {{date}}",
     "rate": "{{rub}} · rate {{rate}} ₽ per USDT",
     "sent": "Request sent. A manager will send USDT to your wallet — you'll get a notification.",
@@ -299,8 +303,8 @@
       "You post the video on your social media — you have 7 days from applying, then the slot expires",
       "Once the video reaches the view threshold, you send the link and the view count",
       "A moderator checks the video and records the views — you get paid",
-      "5 days later we record the final count and top up for new views while there's budget",
-      "After the final count you can withdraw the money. Don't delete the post: if it's gone, the payment is cancelled"
+      "5 days later we check the post is still there — the money leaves the hold",
+      "After that you can withdraw the money. Don't delete the post: if it's gone, the payment is cancelled"
     ],
     "report": "Report this order",
     "supportLabel": "Question about order #{{id}} — message a manager",
@@ -525,11 +529,9 @@
     "orderApproved": "✅ Your order “{{title}}” passed moderation and is published — creators can already see it in the catalog.",
     "orderRejected": "❌ Your order “{{title}}” was rejected by a moderator.\nReason: {{reason}}\n\nYou can post the order again, taking the comments into account.",
     "orderRejectedCreators": "🔒 Order #{{id}} didn't pass moderation after changes and was removed — don't continue working on it.",
-    "videoApproved": "✅ Your video for order {{order}} was approved: {{views}} views, {{amount}} credited.\n\nIn {{days}} days we'll record the final view count and top up for new views while the order has budget. After that you can withdraw the money — “Profile” → “Balance”. Don't delete the post: if it's gone, the payment will be cancelled.",
+    "videoApproved": "✅ Your video for order {{order}} was approved: {{views}} views, {{amount}} credited.\n\nIn {{days}} days we'll check the post is still there — then you can withdraw the money: “Profile” → “Balance”. Don't delete the post: if it's gone, the payment will be cancelled.",
     "newVideo": "🎬 A new video for your order\n\nOrder: {{title}}\nViews: {{views}}\nVideo: {{url}}",
-    "finalizedExtra": "📈 Final count for your video (order {{order}}): {{views}} views, {{amount}} topped up. You can withdraw the money for this video.",
-    "finalizedNoExtra": "📈 Final count for your video (order {{order}}): {{views}} views. No top-up — there are no new views or the order's budget is spent. You can withdraw the money for this video.",
-    "publicationDeleted": "❌ Your video for order {{order}} wasn't found at the link during the final count — the post was deleted or hidden. Its payment is cancelled.\n\nIf this is a mistake, contact support.",
+    "publicationDeleted": "❌ Your video for order {{order}} wasn't found at the link at the end of the hold — the post was deleted or hidden. Its payment is cancelled.\n\nIf this is a mistake, contact support.",
     "videoRejected": "❌ Your application for order {{order}} was rejected by a moderator.\nReason: {{reason}}\n\nYou can send a new application for this order.",
     "orderClosed": "🔒 Order {{order}} was closed by the advertiser. New applications are no longer accepted.",
     "budgetExhausted": "💸 The budget of order “{{title}}” is spent — the order is closed. The video report is in “My campaigns”.",
@@ -550,7 +552,8 @@
     "accountConnected": "✅ {{platform}} is connected. Views of your videos there are now counted automatically.",
     "payoutPaid": "💸 Payout of {{amount}} has been sent. If the money didn't arrive, contact support.",
     "payoutRejected": "❌ Your withdrawal request for {{amount}} was rejected.\nReason: {{reason}}\n\nThe amount has been returned to your balance.",
-    "videoRated": "⭐ The advertiser rated your video for order {{order}}: {{stars}}"
+    "videoRated": "⭐ The advertiser rated your video for order {{order}}: {{stars}}",
+    "holdReleased": "💸 The hold on your video (order {{order}}) is over: {{amount}} is ready to withdraw — “Profile” → “Balance”."
   },
   "errors": {
     "tooManyRequests": "Too many requests — wait a minute and try again",
@@ -570,7 +573,6 @@
     "creatorNotFound": "Creator not found",
     "budgetShort": "The order doesn't have enough free budget for a video right now — new videos are not accepted",
     "alreadyClaimed": "You already have an active application for this order — submit its video in “My videos”",
-    "onReview": "Your video for this order is still under review — you can send the next one after the moderator's decision",
     "duplicateVideo": "This video has already been submitted — for this or another order. Each video is paid only once",
     "orderNotFound": "Order not found",
     "orderUnavailable": "The order is not available right now",

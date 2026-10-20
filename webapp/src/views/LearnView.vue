@@ -10,6 +10,7 @@ const LESSONS: { key: string; videoUrl: string | null }[] = [
   { key: 'take', videoUrl: null },
   { key: 'shoot', videoUrl: null },
   { key: 'submit', videoUrl: null },
+  { key: 'timing', videoUrl: null },
   { key: 'withdraw', videoUrl: null },
   { key: 'rules', videoUrl: null },
 ];

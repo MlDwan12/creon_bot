@@ -96,7 +96,7 @@ export interface MySubmission {
   views: number | null;
   /** USDT: на проверке — зарезервировано, после одобрения — начислено. */
   payout: number;
-  /** Итог просмотров после добора зафиксирован. */
+  /** Холд закончился: итог зафиксирован, деньги можно вывести. */
   finalized: boolean;
   /** Ссылка на товар для описания ролика — путь `/r/<код>` от адреса мини-аппа; null — у заказа нет товара. */
   trackPath: string | null;
@@ -224,8 +224,8 @@ export interface ModQueue {
     hasContacts: boolean;
   }[];
   videos: { id: number; orderTitle: string; creator: string; submittedAt: string | null }[];
-  /** Добор закончился — зафиксировать итог просмотров. */
-  topups: { id: number; orderTitle: string; creator: string; decidedAt: string | null }[];
+  /** Холд закончился — проверить публикацию и зафиксировать итог. */
+  holds: { id: number; orderTitle: string; creator: string; decidedAt: string | null }[];
   /** Отзывы рекламодателей с текстом — в профиле креатора только после проверки. */
   reviews: {
     submissionId: number;
@@ -355,7 +355,7 @@ export interface ModVideo {
   decidedAt: string | null;
   finalizedAt: string | null;
   /** Через сколько дней после одобрения фиксируется итог просмотров. */
-  topupDays: number;
+  holdDays: number;
   order: {
     id: number;
     title: string;
@@ -747,7 +747,7 @@ export function decidePayout(id: number, decision: 'paid' | 'reject', comment?: 
   return request<{ ok: true }>('POST', `/api/mod/payouts/${id}/${decision}`, comment === undefined ? undefined : { comment });
 }
 
-/** Итог просмотров после добора. */
+/** Итог холда: публикация на месте, просмотры — для отчёта. */
 export function finalizeVideo(id: number, views: number, likes: number | null) {
   return request<{ ok: true }>('POST', `/api/mod/videos/${id}/finalize`, { views, likes });
 }

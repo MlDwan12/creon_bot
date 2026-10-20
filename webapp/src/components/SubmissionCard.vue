@@ -8,7 +8,7 @@ import { i18next } from '../i18n';
 const props = defineProps<{ submission: MySubmission }>();
 const router = useRouter();
 
-/** Сколько из 4 этапов пройдено: в работе → ролик сдан → одобрен, начислено → итог после добора. */
+/** Сколько из 4 этапов пройдено: в работе → ролик сдан → одобрен, начислено → холд закончился. */
 const STEPS: Record<SubmissionStatus, number> = {
   IN_PROGRESS: 1,
   SUBMITTED: 2,
