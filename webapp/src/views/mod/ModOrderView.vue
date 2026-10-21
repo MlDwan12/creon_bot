@@ -1,7 +1,16 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { ApiError, categoryLabel, fetchModOrder, fetchModQueue, type ModOrder, moderateOrder } from '../../api';
+import {
+  ApiError,
+  categoryLabel,
+  fetchModOrder,
+  fetchModQueue,
+  type ModOrder,
+  moderateOrder,
+  type OrderSummary,
+} from '../../api';
+import OrderCard from '../../components/OrderCard.vue';
 import ReasonPicker from '../../components/ReasonPicker.vue';
 import { formatCpm, formatDate, formatMoney, formatVideoFormat, formatViews, waitingFor } from '../../format';
 import { safeUrl } from '../../telegram';
@@ -41,7 +50,24 @@ const coveredViews = computed(() =>
   order.value && cpm.value ? Math.floor((order.value.pool / cpm.value) * 1000) : 0,
 );
 
+/** Частые ставки, USDT за 1000 просмотров; другая — в поле ниже. */
+const CPM_PRESETS = [1, 1.5, 2, 3];
+/** Отказ в два шага: сначала «Отклонить», потом причина и подтверждение. */
+const rejecting = ref(false);
+
+/** Карточка в каталоге с выбранной ставкой — как её увидят креаторы после публикации. */
+const previewCard = computed<OrderSummary>(() => {
+  const o = order.value!;
+  return {
+    ...o,
+    cpm: Number(cpm.value) || null,
+    free: o.pool,
+    budgetLow: false,
+  };
+});
+
 async function load() {
+  rejecting.value = false;
   order.value = undefined;
   loadError.value = '';
   comment.value = '';
@@ -99,6 +125,12 @@ watch(() => props.id, load, { immediate: true });
         <h1>{{ order.title }}</h1>
       </header>
 
+      <!-- контакты — первым: из-за них заказ чаще всего отклоняют -->
+      <div v-if="order.contacts.length" class="contacts" role="alert">
+        <strong><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 3l9.5 17h-19z" /><path d="M12 10v4M12 17.5v.01" /></svg> Похоже на контакты для связи в обход площадки</strong>
+        <span>{{ order.contacts.join(' · ') }}</span>
+      </div>
+
       <section class="rows">
         <div class="row"><span>Рекламодатель</span><span>{{ order.advertiser }}</span></div>
         <div class="row">
@@ -126,34 +158,61 @@ watch(() => props.id, load, { immediate: true });
         <template v-else>{{ order.targetUrl }}</template>
       </p>
 
-      <div v-if="order.contacts.length" class="contacts" role="alert">
-        <strong>⚠ Похоже на контакты для связи в обход площадки</strong>
-        <span>{{ order.contacts.join(' · ') }}</span>
-      </div>
-
       <label v-if="budgetRaised && order.status === 'PENDING_MODERATION'" class="contacts" role="alert">
-        <strong>⚠ Бюджет повышен на {{ formatMoney(order.budget - order.approvedBudget!) }}</strong>
+        <strong><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 3l9.5 17h-19z" /><path d="M12 10v4M12 17.5v.01" /></svg> Бюджет повышен на {{ formatMoney(order.budget - order.approvedBudget!) }}</strong>
         <span><input v-model="paymentConfirmed" type="checkbox" /> Доплата получена</span>
       </label>
 
       <p v-if="order.moderatorComment" class="hint">Комментарий модератора: «{{ order.moderatorComment }}»</p>
 
       <template v-if="order.status === 'PENDING_MODERATION'">
-        <label class="cpm">
-          <span class="section-title">Ставка креатору за 1000 просмотров, USDT</span>
-          <input v-model.number="cpm" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="например, 100" />
+        <div class="cpm">
+          <span id="cpm-label" class="section-title">Ставка креатору за 1000 просмотров, USDT</span>
+          <div class="presets" role="radiogroup" aria-labelledby="cpm-label">
+            <button
+              v-for="v in CPM_PRESETS"
+              :key="v"
+              type="button"
+              role="radio"
+              :aria-checked="cpm === v"
+              @click="cpm = v"
+            >
+              {{ v.toLocaleString('ru-RU') }}
+            </button>
+          </div>
+          <input
+            v-model.number="cpm"
+            type="number"
+            inputmode="decimal"
+            min="0.01"
+            step="0.01"
+            placeholder="Другая ставка"
+            aria-labelledby="cpm-label"
+          />
           <span v-if="coveredViews" class="hint">
             Фонда хватит примерно на {{ formatViews(coveredViews) }} просмотров
           </span>
-        </label>
-        <ReasonPicker v-model="comment" :presets="PRESETS" />
+        </div>
+
+        <section v-if="cpm" class="block">
+          <h2 class="section-title">Так увидят креаторы</h2>
+          <OrderCard :order="previewCard" preview />
+        </section>
+
+        <ReasonPicker v-if="rejecting" v-model="comment" :presets="PRESETS" />
         <p v-if="error" class="error" role="alert">{{ error }}</p>
 
-        <div class="bottom-bar two">
-          <button type="button" class="reject" :disabled="busy || !comment.trim()" @click="decide('reject')">
+        <div v-if="rejecting" class="bottom-bar two">
+          <button type="button" class="secondary" :disabled="busy" @click="rejecting = false">Отмена</button>
+          <button type="button" class="reject-confirm" :disabled="busy || !comment.trim()" @click="decide('reject')">
             Отклонить
           </button>
-          <button type="button" class="approve" :disabled="busy || !cpm || (budgetRaised && !paymentConfirmed)" @click="decide('approve')">Опубликовать</button>
+        </div>
+        <div v-else class="bottom-bar two">
+          <button type="button" class="reject" :disabled="busy" @click="rejecting = true">Отклонить</button>
+          <button type="button" class="approve" :disabled="busy || !cpm || (budgetRaised && !paymentConfirmed)" @click="decide('approve')">
+            Опубликовать
+          </button>
         </div>
       </template>
     </template>
@@ -272,13 +331,55 @@ h1 {
 .bottom-bar button:disabled {
   opacity: 0.5;
 }
+/* первый шаг отказа — спокойная кнопка, красная — только подтверждение с причиной */
+.reject,
+.secondary {
+  background: var(--fill);
+  color: var(--text);
+}
 .reject {
+  color: var(--danger);
+}
+.reject-confirm {
   background: var(--danger);
-  color: #fff;
+  color: var(--accent-text);
+}
+.contacts strong {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.contacts .icon {
+  flex: none;
+  margin-top: 2px;
+}
+.presets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.presets button {
+  min-height: 48px;
+  border: 1.5px solid var(--separator);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 800;
+}
+.presets button[aria-checked='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 .approve {
   background: var(--success);
-  color: #fff;
+  color: var(--accent-text);
 }
 .reference {
   margin: 0;

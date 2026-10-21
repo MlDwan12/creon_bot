@@ -8,7 +8,9 @@
     "modQueue": "Queue",
     "modOrders": "All orders",
     "modStats": "Stats",
-    "aria": "Sections"
+    "aria": "Sections",
+    "help": "How it works",
+    "modPayouts": "Payouts"
   },
   "categories": {
     "PRODUCT_REVIEW": "Product review",
@@ -34,27 +36,34 @@
     "categoriesAria": "Categories",
     "allCategories": "All",
     "loadError": "Couldn't load orders",
-    "empty": "No orders here yet — try another category or platform.",
     "openCount_one": "{{count}} open order",
     "openCount_other": "{{count}} open orders",
     "more": "Show more",
     "loading": "Loading…",
     "howItWorks": "How it works",
-    "privacy": "Privacy policy"
+    "privacy": "Privacy policy",
+    "emptyTitle": "No orders yet",
+    "emptyNotifyOn": "The bot will message you as soon as a new order appears.",
+    "emptyNotifyOff": "Turn on notifications — the bot will message you as soon as a new order appears.",
+    "notifyMe": "Notify me about new orders",
+    "filteredTitle": "Nothing found",
+    "filteredText": "No orders for this platform or category — see them all.",
+    "resetFilters": "Show all orders"
   },
   "orderCard": {
     "anyPlatform": "Any platform",
     "until": "until {{date}}",
     "left": "{{amount}} left",
     "hurry": " — hurry up",
-    "minViews": "from {{views}} views"
+    "minViews": "from {{views}} views",
+    "approxViews": "≈ {{views}} views"
   },
   "onboarding": {
     "aria": "Welcome to Fixum",
     "back": "‹ Back",
     "skip": "Skip",
-    "title": "Welcome",
-    "intro": "What would you like to do? You can do both later — the tabs are at the bottom.",
+    "title": "Who are you today?",
+    "intro": "You can switch any time — the toggle at the top of the screen.",
     "advertiserLabel": "For brands",
     "advertiserTitle": "Order ads",
     "advertiserText": "Set a budget — creators make videos, and you pay only for the views they get.",
@@ -102,7 +111,9 @@
     "save": "Save",
     "done": "Done",
     "sending": "Sending…",
-    "send": "Send"
+    "send": "Send",
+    "loadFailed": "Couldn't load",
+    "retry": "Try again"
   },
   "time": {
     "inDays_one": "in {{count}} day",
@@ -121,7 +132,8 @@
   "banned": {
     "title": "Account blocked",
     "reason": "Reason: {{reason}}",
-    "hint": "If this is a mistake, contact support."
+    "hint": "If this is a mistake, contact support.",
+    "write": "Contact support"
   },
   "reasonPicker": {
     "title": "If you reject — the reason",
@@ -175,45 +187,70 @@
     "whatsWrong": "What's wrong",
     "describe": "Describe what's wrong",
     "commentOptional": "Comment — optional",
-    "submit": "Send report"
+    "submit": "Send report",
+    "otherRequired": "For “Other”, describe the problem — the report can’t be sent without it."
   },
   "support": {
     "sendError": "Couldn't send",
     "sentTitle": "Message sent",
-    "sentText": "A manager will reply in the chat with the Fixum bot — you can continue the conversation there.",
+    "sentText": "We’ll reply here, in the chat with the bot, usually within a day.",
     "title": "Message a manager",
     "hint": "Questions, problems, payments — we'll reply in the chat with the bot",
-    "placeholder": "Your message"
+    "placeholder": "Your message",
+    "label": "Message"
   },
   "learn": {
     "title": "Learn",
     "subtitle": "How to work with orders and get paid",
     "watch": "Watch the video ›",
-    "soon": "Video lesson coming soon",
     "lessons": {
       "take": {
         "title": "How to take an order",
-        "text": "Pick a task in “Orders”: check the rate per 1,000 views, the remaining budget and the view threshold. Read the description and video requirements, then tap “Apply”. You have 7 days to publish and submit the video — after that the slot expires."
+        "text": "Pick a task in “Orders”: check the rate per 1,000 views, the remaining budget and the view threshold. Read the description and video requirements, then tap “Apply”. You have 7 days to publish and submit the video — after that the slot expires.",
+        "keys": [
+          "7 days to submit"
+        ]
       },
       "shoot": {
         "title": "How to shoot a video that fits the requirements",
-        "text": "Check the orientation and duration in the order card, and the reference if there is one. A moderator will reject a video that doesn't meet the requirements."
+        "text": "Check the orientation and duration in the order card, and the reference if there is one. A moderator will reject a video that doesn't meet the requirements.",
+        "keys": [
+          "orientation",
+          "length",
+          "reference"
+        ]
       },
       "submit": {
         "title": "How to submit a video and get paid",
-        "text": "Publish the video on your social media. Once it reaches the view threshold, send the link and the current view count in “My videos” — payment for the threshold is reserved right away. A moderator checks the views and credits you for all they see at review — that's the payment for the video; views gained after approval are not paid extra. While a video is under review, you can take the order again and submit the next one. The same video is paid once. Keep the post public: 5 days later we check it's still there, and if it's gone, the payment is cancelled."
+        "text": "Publish the video on your social media. Once it reaches the view threshold, send the link and the current view count in “My videos” — payment for the threshold is reserved right away. A moderator checks the views and credits you for all they see at review — that's the payment for the video; views gained after approval are not paid extra. While a video is under review, you can take the order again and submit the next one. The same video is paid once. Keep the post public: 5 days later we check it's still there, and if it's gone, the payment is cancelled.",
+        "keys": [
+          "threshold reserved",
+          "one video — one payout"
+        ]
       },
       "timing": {
         "title": "When to submit a video",
-        "text": "An order's budget is shared by all creators. When it runs out, the order closes on its own — and videos that weren't submitted in time can no longer be paid. So submit your video as soon as it reaches the view threshold, don't wait for bigger numbers: the moderator counts the views at review time, and you get paid while the order still has budget."
+        "text": "An order's budget is shared by all creators. When it runs out, the order closes on its own — and videos that weren't submitted in time can no longer be paid. So submit your video as soon as it reaches the view threshold, don't wait for bigger numbers: the moderator counts the views at review time, and you get paid while the order still has budget.",
+        "keys": [
+          "shared budget"
+        ]
       },
       "withdraw": {
         "title": "How to withdraw money",
-        "text": "Earnings for videos add up on your balance in USDT: “Profile” → “Balance”. The money for a video shows up right after approval, and you can withdraw it 5 days later, once we check the post is still there — this is the hold. It exists because sometimes a video gets approved and immediately deleted, while the advertiser paid for a placement that no longer exists. “Balance” shows how much is on hold, when the next amount is released, and how much you can withdraw. Add a USDT wallet on the TRC20 network in your profile and request a withdrawal of 10 USDT or more — a manager will send the money to that wallet."
+        "text": "Earnings for videos add up on your balance in USDT: “Profile” → “Balance”. The money for a video shows up right after approval, and you can withdraw it 5 days later, once we check the post is still there — this is the hold. It exists because sometimes a video gets approved and immediately deleted, while the advertiser paid for a placement that no longer exists. “Balance” shows how much is on hold, when the next amount is released, and how much you can withdraw. Add a USDT wallet on the TRC20 network in your profile and request a withdrawal of 10 USDT or more — a manager will send the money to that wallet.",
+        "keys": [
+          "5-day hold",
+          "from 10 USDT",
+          "TRC20"
+        ]
       },
       "rules": {
         "title": "Platform rules",
-        "text": "Don't leave contacts in videos or comments — communication and payments go through Fixum support. Someone else's or re-uploaded videos are not accepted."
+        "text": "Don't leave contacts in videos or comments — communication and payments go through Fixum support. Someone else's or re-uploaded videos are not accepted.",
+        "keys": [
+          "no contacts",
+          "your own videos only"
+        ]
       }
     }
   },
@@ -225,11 +262,13 @@
     "filterAria": "Filter",
     "active": "Active · {{count}}",
     "done": "Completed · {{count}}",
-    "emptyActive": "No active orders.",
-    "toCatalog": "Pick an order in the catalog",
     "attention": "Need your attention",
     "emptyDone": "Accepted and closed orders will appear here.",
-    "heldShort": "plus {{amount}} on hold"
+    "heldShort": "plus {{amount}} on hold",
+    "emptyTitle": "No submissions yet",
+    "emptyText": "Pick an order, shoot a video for the brief — you get paid for the views.",
+    "emptyDoneTitle": "Nothing here yet",
+    "openCatalog": "Open the catalog"
   },
   "submissionCard": {
     "status": {
@@ -254,7 +293,23 @@
     "wait": "One moment…",
     "resubmit": "Submit a new video",
     "orderExpired": "The order has expired — new videos are not accepted.",
-    "orderClosed": "The order is closed — new videos are not accepted."
+    "orderClosed": "The order is closed — new videos are not accepted.",
+    "step": {
+      "taken": "Taken",
+      "submitted": "Video submitted",
+      "review": "Under review",
+      "reviewNote": "A moderator will check the video and its views. Meanwhile you can take the order again and submit another one.",
+      "approved": "Approved",
+      "accrual": "Payout",
+      "hold": "5-day hold",
+      "holdUntil": "On hold until {{date}}",
+      "holdNote": "Keep the post public — otherwise the payout is cancelled.",
+      "withdraw": "Ready to withdraw",
+      "rejected": "Rejected",
+      "expired": "Slot expired — no video within 7 days"
+    },
+    "holdLeft": " · {{count}} d left",
+    "toggle": "Status details"
   },
   "balance": {
     "title": "Balance",
@@ -277,14 +332,17 @@
     "needWallet": "Add a USDT (TRC20) wallet — the payout goes there.",
     "addWallet": "Add it in your profile",
     "amount": "Amount to withdraw, USDT",
-    "walletHint": "A manager will send USDT on the TRC20 network to {{wallet}}. You can change it in your profile.",
+    "walletHint": "A manager sends the USDT manually — you'll get a notification.",
     "withdraw": "Withdraw",
     "minPayout": "The minimum withdrawal is {{amount}}.",
     "history": "Payout history",
     "reason": "Reason: “{{reason}}”",
     "perVideo": "Earnings for each video are in “My videos”.",
     "supportLabel": "Question about a payout — message a manager",
-    "supportAbout": "Question about a payout"
+    "supportAbout": "Question about a payout",
+    "all": "All",
+    "wallet": "USDT wallet · TRC20",
+    "changeWallet": "Change"
   },
   "order": {
     "loadError": "Couldn't load the order",
@@ -297,7 +355,6 @@
     "payout": "Payout",
     "payoutValue": "via Fixum, after moderator review",
     "task": "Task",
-    "video": "Video: {{format}}",
     "reference": "Reference and materials ›",
     "howItWorks": "How it works",
     "steps": [
@@ -314,7 +371,14 @@
     "claimed": "You've taken the order. When the video is ready, submit it in “My videos”.",
     "own": "This is your order — only others can apply to it.",
     "mySubmissions": "My videos",
-    "claim": "Apply"
+    "claim": "Apply",
+    "calcTitle": "How much you can earn",
+    "calcAria": "Video views",
+    "calcViews": "{{views}} views",
+    "calcNote": "We pay for the views at the moment a moderator checks the video — no more than the budget left. You can submit from {{views}} views.",
+    "budgetNote": "The budget is shared by all creators. When it runs out the order closes, so submit as soon as your video reaches the threshold.",
+    "leftViews": "≈ {{views}} views",
+    "requirements": "Video requirements"
   },
   "submit": {
     "alreadySent": "This application has already been submitted or wasn't found.",
@@ -332,14 +396,18 @@
     "viewsLabel": "Current views",
     "viewsPlaceholder": "at least {{views}}",
     "viewsHelp": "You can submit from {{views}} views.",
-    "estimate": " Approximate payout: {{amount}} — a moderator will calculate the exact amount.",
     "checkTitle": "Check before submitting",
     "check": [
-      "The video matches the task and format requirements",
-      "The post is public",
-      "The view count is the current one on the post: a moderator will verify it"
+      "The video follows the brief",
+      "The post is public and will stay up for 5 days after approval",
+      "The view count is what the post shows now"
     ],
-    "submit": "Send for review"
+    "submit": "Send for review",
+    "reserve": "We'll reserve {{amount}} right away",
+    "reserveNote": "That's the pay for the {{views}}-view threshold. The final amount is counted from the views at the moment a moderator checks the video.",
+    "reserveEstimate": " Right now that's ≈ {{amount}}.",
+    "checkCount": "{{done}} of {{total}}",
+    "checkHint": "Tick everything — a moderator rejects videos that don't meet the requirements, even with views."
   },
   "profile": {
     "loadError": "Couldn't load the profile",
@@ -368,7 +436,6 @@
     "walletHint": "TRC20 (TRON) only: a transfer to an address on another network will be lost. Leave empty to remove the wallet.",
     "walletEmpty": "Not set — you can't withdraw money without it.",
     "walletChange": "Change wallet",
-    "walletAdd": "Add wallet",
     "accountsTitle": "Connected accounts",
     "accountsHint": "Connect the accounts you post from — views will be counted automatically. You can add several on one platform: pick another account on the sign-in page. Advertisers won't see them.",
     "connected": "Connected — views are counted automatically",
@@ -394,13 +461,20 @@
     "linkPlaceholder": "Profile link: https://…",
     "addLink": "Add",
     "removeLink": "Remove link",
-    "linksHint": "TikTok, YouTube, VK, Instagram or X — you can add several accounts on one platform, up to 10 links."
+    "linksHint": "TikTok, YouTube, VK, Instagram or X — you can add several accounts on one platform, up to 10 links.",
+    "banReasonLabel": "Reason for the ban",
+    "groupPayouts": "Payouts",
+    "groupPublic": "Public profile",
+    "groupPublicHint": "Brands see this: name, photo, rating, socials and reviews.",
+    "groupSettings": "Settings",
+    "walletAddCta": "Add a USDT TRC20 wallet"
   },
   "myOrders": {
     "loadError": "Couldn't load your orders",
     "title": "My campaigns",
-    "new": "+ New",
-    "empty": "You have no orders yet. Post your first one — creators will see it after a moderator reviews it."
+    "empty": "You have no orders yet. Post your first one — creators will see it after a moderator reviews it.",
+    "place": "Place an order",
+    "emptyTitle": "No orders yet"
   },
   "myOrderCard": {
     "status": {
@@ -418,7 +492,6 @@
     "budget": "Budget {{amount}}",
     "until": " · until {{date}}",
     "pending": " · a moderator will review the order before it's published",
-    "usage": "{{percent}}% of budget spent · videos: {{approved}} · views: {{views}}",
     "report": "Report · videos: {{count}}",
     "toRate": "to rate: {{count}}",
     "totalSubmissions": "applications in total: {{count}}",
@@ -432,7 +505,10 @@
     "close": "Stop accepting",
     "similar": "Create similar",
     "delete": "Delete",
-    "frozen": "The order is frozen until the changes are approved: creators can't submit videos. Fix the changes or close the order."
+    "frozen": "The order is frozen until the changes are approved: creators can't submit videos. Fix the changes or close the order.",
+    "kpiViews": "views",
+    "kpiVideos": "videos",
+    "kpiBudget": "of budget"
   },
   "createOrder": {
     "vertical": "Vertical",
@@ -446,7 +522,6 @@
     "titleNew": "New order",
     "name": "Title",
     "namePlaceholder": "For example: headphones unboxing",
-    "brief": "What to film",
     "briefPlaceholder": "What must be shown or said, the style, what to avoid",
     "reference": "Reference or materials",
     "referencePlaceholder": "Link to an example video or files",
@@ -470,7 +545,29 @@
     "editNote": "The order will go back to review and leave the catalog until approved. Creators already working on it will be notified.",
     "newNote": "Creators will see the order after a moderator reviews it",
     "saveAndSend": "Save and send for review",
-    "send": "Send for review"
+    "send": "Send for review",
+    "blockTask": "What to shoot",
+    "task": "Brief",
+    "blockBudget": "Budget and terms",
+    "optional": "optional",
+    "byDefault": "default",
+    "defaultsNote": "Anything marked “default” can be left as is.",
+    "check": "Review and send",
+    "preview": {
+      "title": "Review your order",
+      "subtitle": "This is how creators will see it after moderation",
+      "card": "Catalog card",
+      "money": "Money",
+      "budget": "Budget",
+      "pool": "To creators",
+      "fee": "Platform fee",
+      "feeValue": "{{percent}}% · {{amount}}",
+      "moneyNote": "You only pay for views. When the budget runs out the order closes itself — you never spend more.",
+      "defaults": "Left as default",
+      "edit": "Edit",
+      "anyOrientation": "Any orientation",
+      "noDeadline": "No deadline"
+    }
   },
   "review": {
     "csvError": "Couldn't send the file",
@@ -488,9 +585,6 @@
     "funnel": "Funnel",
     "viewers": "Opened the order",
     "taken": "Took it on",
-    "expired": "Didn't submit in time",
-    "rejected": "Rejected by moderator",
-    "onReview": "Under review · approved",
     "platformViews": "{{videos}} · {{views}} views",
     "csvSent": "File sent to the bot chat",
     "csv": "CSV report — to the bot chat",
@@ -514,7 +608,12 @@
     "portfolio": "Allow showing the video in the creator's portfolio",
     "rate": "Rate",
     "videoFrom": "Video by {{name}}",
-    "reportVideo": "Report this video"
+    "reportVideo": "Report this video",
+    "reviewLabel": "Review — optional",
+    "approvedShort": "Approved",
+    "onReviewShort": "under review {{count}}",
+    "expiredShort": "missed the deadline {{count}}",
+    "rejectedShort": "rejected {{count}}"
   },
   "bot": {
     "intro": "👋 Fixum is a marketplace for video ads.\n\nAdvertisers post tasks, creators take them on and get paid for views.\n\nOrders, applications and moderation are in the app 👇\nQuestions? Just send a message here — a Fixum manager will reply.",
@@ -678,5 +777,36 @@
     "lowClicks": "The videos were watched {{views}} times, but only {{clicks}} people clicked the product link. Viewers don't go to the site: ask creators to directly invite people to the link in the description and show what the viewer gets.",
     "budgetEnding": "The videos are getting views, but the budget is almost spent — {{left}} left. To keep videos coming, increase the order budget.",
     "deadline": "Less than 2 days until the deadline, and less than half the budget is spent. Extend the deadline in “My campaigns” to collect more videos."
+  },
+  "roles": {
+    "aria": "Account",
+    "creator": "Creator",
+    "advertiser": "Brand"
+  },
+  "help": {
+    "title": "How it works",
+    "faqTitle": "FAQ",
+    "faq": [
+      {
+        "q": "Who checks the videos?",
+        "a": "A moderator checks every video against the brief and records its views. Only approved videos make it into the report."
+      },
+      {
+        "q": "What if a creator deletes the video?",
+        "a": "5 days after approval we check that the post is still up. If it is gone, the payout is cancelled and the money returns to the order budget."
+      },
+      {
+        "q": "How do I contact a creator?",
+        "a": "Contacts are hidden on both sides. Questions and disputes go through a manager in support."
+      }
+    ]
+  },
+  "account": {
+    "subtitle": "Brand · creators only see your name",
+    "views": "views of your ads",
+    "orders_one": "order",
+    "orders_other": "orders",
+    "approved_one": "video approved",
+    "approved_other": "videos approved"
   }
 }

@@ -29,6 +29,7 @@ import {
   ViewCounterService,
 } from '../submissions/view-counter.service';
 import { AnalyticsService } from './analytics.service';
+import { parseStatusFilter } from './status-filter';
 import {
   BansService,
   parseBanReason,
@@ -76,6 +77,14 @@ function parseVersion(body: unknown): Date {
   if (!version || Number.isNaN(version.getTime()))
     throw new BadRequestException('Откройте заказ заново');
   return version;
+}
+
+/** Начало периода из `days` (1–365); без него — всё время. */
+function periodStart(days?: number) {
+  if (days === undefined) return undefined;
+  if (days < 1 || days > 365)
+    throw new BadRequestException('Период — от 1 до 365 дней');
+  return new Date(Date.now() - days * DAY_MS);
 }
 
 /**
@@ -159,22 +168,28 @@ export class ModerationController {
   /** Воронка за последние `days` дней (1–365); без параметра — за всё время. */
   @Get('funnel')
   funnel(@Query('days', new ParseIntPipe({ optional: true })) days?: number) {
-    if (days !== undefined && (days < 1 || days > 365))
-      throw new BadRequestException('Период — от 1 до 365 дней');
-    return this.analytics.funnel(
-      days === undefined ? undefined : new Date(Date.now() - days * DAY_MS),
-    );
+    return this.analytics.funnel(periodStart(days));
+  }
+
+  /** Что работает — срезы по требованиям заказа и аудитория; период — как у воронки. */
+  @Get('what-works')
+  whatWorks(
+    @Query('days', new ParseIntPipe({ optional: true })) days?: number,
+  ) {
+    return this.analytics.whatWorks(periodStart(days));
   }
 
   /** Все заказы любого статуса — страница, новые первыми. */
   @Get('orders')
   async allOrders(
     @Query('page', new DefaultValuePipe(0), ParseIntPipe) rawPage: number,
+    @Query('status') status: unknown,
   ) {
     const page = Math.max(0, rawPage);
     const { items, total } = await this.ordersService.listAll(
       page * PAGE_SIZE,
       PAGE_SIZE,
+      parseStatusFilter(status),
     );
     return {
       items: items.map((o) => ({

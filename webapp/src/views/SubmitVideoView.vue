@@ -3,14 +3,17 @@ import { computed, nextTick, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { ApiError, fetchMySubmissions, type MySubmission, PLATFORM_NAMES, submitVideo } from '../api';
 import PlatformIcon from '../components/PlatformIcon.vue';
+import LoadState from '../components/LoadState.vue';
 import { i18next, tList } from '../i18n';
-import { describeVideoUrl, formatCpm, formatDeadline, formatMoney, formatViews } from '../format';
+import { describeVideoUrl, formatCpm, formatDeadline, formatMoney, formatViews, videoFormatParts } from '../format';
 
 // `id` отклика приходит из адреса /submissions/:id/video.
 const props = defineProps<{ id: string }>();
 
 const submission = ref<MySubmission>();
 const loadError = ref('');
+/** Ролик уже сдан или отклик не найден — повторять загрузку незачем. */
+const alreadySent = ref(false);
 const url = ref('');
 // '' — поле пустое; v-model.number отдаёт '' для пустого ввода.
 const views = ref<number | ''>('');
@@ -19,6 +22,26 @@ const estimate = computed(() => {
   const cpm = submission.value?.order.cpm;
   return cpm && views.value ? formatMoney(Math.floor((views.value * cpm) / 10) / 100) : '';
 });
+/** Резерв при сдаче — оплата за порог просмотров заказа (не за заявленные). */
+const reserve = computed(() => {
+  const o = submission.value?.order;
+  return o?.cpm ? formatMoney(Math.floor((o.minViews * o.cpm) / 10) / 100) : '';
+});
+
+/**
+ * Самопроверка перед сдачей: требования этого заказа (площадки, ориентация, длительность) и общие
+ * пункты. Пока не отмечено всё — отправить нельзя: ролики не по требованиям модератор отклоняет.
+ */
+const checks = computed(() =>
+  submission.value ? [...videoFormatParts(submission.value.order), ...tList('submit.check')] : [],
+);
+const checked = ref(new Set<string>());
+function toggleCheck(item: string) {
+  const next = new Set(checked.value);
+  if (!next.delete(item)) next.add(item);
+  checked.value = next;
+}
+const allChecked = computed(() => checks.value.every((c) => checked.value.has(c)));
 /** Распознанная ссылка — вместо длинного адреса показываем карточку ролика. */
 const video = computed(() => {
   const d = describeVideoUrl(url.value);
@@ -46,16 +69,19 @@ const sendError = ref('');
 const sent = ref(false);
 
 async function load() {
+  loadError.value = '';
   try {
     const found = (await fetchMySubmissions()).find((s) => s.id === Number(props.id));
     if (found?.status === 'IN_PROGRESS') submission.value = found;
-    else loadError.value = i18next.t('submit.alreadySent');
+    else alreadySent.value = true;
   } catch {
     loadError.value = i18next.t('submit.loadError');
   }
 }
 
 async function send() {
+  // Enter в поле отправляет форму в обход кнопки — та же проверка и здесь
+  if (!allChecked.value) return;
   sending.value = true;
   sendError.value = '';
   try {
@@ -76,10 +102,10 @@ void load();
   <main class="page">
     <h1>{{ $t('submit.title') }}</h1>
 
-    <p v-if="loadError" class="hint">
-      {{ loadError }} <RouterLink to="/submissions">{{ $t('submit.toSubmissions') }}</RouterLink>
+    <p v-if="alreadySent" class="hint">
+      {{ $t('submit.alreadySent') }} <RouterLink to="/submissions">{{ $t('submit.toSubmissions') }}</RouterLink>
     </p>
-    <p v-else-if="!submission" class="hint">{{ $t('common.loading') }}</p>
+    <LoadState v-else-if="loadError || !submission" :error="loadError" @retry="load" />
 
     <template v-else-if="sent">
       <p class="notice" role="status">
@@ -143,22 +169,31 @@ void load();
           :placeholder="$t('submit.viewsPlaceholder', { views: formatViews(submission.order.minViews) })"
           required
         />
-        <p class="hint help">
-          {{ $t('submit.viewsHelp', { views: formatViews(submission.order.minViews) })
-          }}<template v-if="estimate">{{ $t('submit.estimate', { amount: estimate }) }}</template>
-        </p>
+        <p class="hint help">{{ $t('submit.viewsHelp', { views: formatViews(submission.order.minViews) }) }}</p>
+        <div v-if="reserve" class="reserve">
+          <strong>{{ $t('submit.reserve', { amount: reserve }) }}</strong>
+          <span>
+            {{ $t('submit.reserveNote', { views: formatViews(submission.order.minViews) })
+            }}<template v-if="estimate">{{ $t('submit.reserveEstimate', { amount: estimate }) }}</template>
+          </span>
+        </div>
         <p v-if="sendError" class="error" role="alert">{{ sendError }}</p>
       </form>
 
-      <section class="tips">
-        <h2 class="section-title">{{ $t('submit.checkTitle') }}</h2>
-        <ul>
-          <li v-for="c in tList('submit.check')" :key="c">{{ c }}</li>
-        </ul>
-      </section>
+      <fieldset class="checks">
+        <legend class="checks-head">
+          <span>{{ $t('submit.checkTitle') }}</span>
+          <span class="hint">{{ $t('submit.checkCount', { done: checked.size, total: checks.length }) }}</span>
+        </legend>
+        <label v-for="c in checks" :key="c" class="check">
+          <input type="checkbox" :checked="checked.has(c)" @change="toggleCheck(c)" />
+          <span>{{ c }}</span>
+        </label>
+        <p v-if="!allChecked" class="hint help">{{ $t('submit.checkHint') }}</p>
+      </fieldset>
 
       <div class="bottom-bar">
-        <button type="submit" form="video-form" class="main-button" :disabled="sending || !url.trim() || !views">
+        <button type="submit" form="video-form" class="main-button" :disabled="sending || !url.trim() || !views || !allChecked">
           {{ sending ? $t('common.sending') : $t('submit.submit') }}
         </button>
       </div>
@@ -264,20 +299,55 @@ input:focus {
   padding: 0 16px;
   line-height: 1.4;
 }
-.tips {
+.reserve {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-}
-.tips ul {
-  margin: 0;
-  padding: 12px 16px 12px 34px;
+  gap: 4px;
+  padding: 12px 14px;
   border-radius: 14px;
-  background: var(--surface);
+  background: var(--success-soft);
+  color: var(--success-text);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.reserve strong {
+  font-size: 15px;
+}
+.checks {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  font-size: 16px;
+  margin: 0;
+  padding: 4px 16px 12px;
+  border: none;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+.checks-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  width: 100%;
+  padding: 12px 0 4px;
+  float: left;
+  font-weight: 800;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  font-size: 15px;
+  line-height: 1.35;
+}
+.check + .check {
+  border-top: 1px solid var(--separator);
+}
+.check input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--accent);
 }
 .notice {
   margin: 0;

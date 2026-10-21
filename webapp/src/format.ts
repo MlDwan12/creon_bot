@@ -2,7 +2,8 @@ import { PLATFORM_NAMES, type Platform, type VideoFormat } from './api';
 import { i18next, locale } from './i18n';
 
 /** «5 минут назад» / «5 minutes ago» — на текущем языке. */
-const relative = () => new Intl.RelativeTimeFormat(locale(), { numeric: 'auto' });
+const relative = () =>
+  new Intl.RelativeTimeFormat(locale(), { numeric: 'auto' });
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -17,7 +18,9 @@ export function formatDate(iso: string): string {
 /** «30 сентября · через 6 дн.» — для карточки заказа. */
 export function formatDeadline(iso: string): string {
   const days = Math.ceil((new Date(iso).getTime() - Date.now()) / DAY_MS);
-  return days > 0 ? `${formatDate(iso)} · ${i18next.t('time.inDays', { count: days })}` : formatDate(iso);
+  return days > 0
+    ? `${formatDate(iso)} · ${i18next.t('time.inDays', { count: days })}`
+    : formatDate(iso);
 }
 
 /** «2 часа назад», «вчера». */
@@ -52,8 +55,18 @@ export function formatViews(views: number): string {
   return views.toLocaleString(locale());
 }
 
+/** Сколько просмотров оплатит сумма по ставке за 1000 — «≈ …», поэтому до сотен вниз. */
+export function budgetViews(amount: number, cpm: number): number {
+  return Math.floor((amount / cpm) * 10) * 100;
+}
+
 /** «TikTok, Instagram · Вертикальное · 15–60 сек»; пусто — требований нет. */
 export function formatVideoFormat(f: VideoFormat): string {
+  return videoFormatParts(f).join(' · ');
+}
+
+/** Те же требования к ролику по отдельности — для плашек: площадки, ориентация, длительность. */
+export function videoFormatParts(f: VideoFormat): string[] {
   const { minDurationSec: min, maxDurationSec: max } = f;
   const duration =
     min && max
@@ -69,7 +82,12 @@ export function formatVideoFormat(f: VideoFormat): string {
       : f.orientation === 'HORIZONTAL'
         ? i18next.t('format.horizontal')
         : '';
-  return [formatPlatforms(f.platforms), orientation, duration].filter(Boolean).join(' · ');
+  return [formatPlatforms(f.platforms), orientation, duration].filter(Boolean);
+}
+
+/** Коротко для кнопок: 1 тыс., 50 тыс. (1K, 50K). */
+export function formatCompact(n: number): string {
+  return new Intl.NumberFormat(locale(), { notation: 'compact' }).format(n);
 }
 
 /** «TikTok, Instagram»; пусто — любая площадка. */
@@ -79,10 +97,16 @@ export function formatPlatforms(platforms: VideoFormat['platforms']): string {
 
 /** Сколько ждёт в очереди: «40 мин», «6 ч», «2 дн». */
 export function waitingFor(iso: string): string {
-  const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
+  const minutes = Math.max(
+    0,
+    Math.round((Date.now() - new Date(iso).getTime()) / 60_000),
+  );
   if (minutes < 60) return i18next.t('time.minutesShort', { count: minutes });
-  if (minutes < 24 * 60) return i18next.t('time.hoursShort', { count: Math.round(minutes / 60) });
-  return i18next.t('time.daysShort', { count: Math.round(minutes / (24 * 60)) });
+  if (minutes < 24 * 60)
+    return i18next.t('time.hoursShort', { count: Math.round(minutes / 60) });
+  return i18next.t('time.daysShort', {
+    count: Math.round(minutes / (24 * 60)),
+  });
 }
 
 /** Ждёт дольше 4 часов — подсвечиваем в очереди модератора. */
@@ -101,7 +125,9 @@ const PLATFORM_HOSTS: Record<Exclude<Platform, 'OTHER'>, string[]> = {
 };
 
 /** Площадка и короткий вид ссылки («tiktok.com/@anya/video/7312…») — для карточки ролика; не ссылка — null. */
-export function describeVideoUrl(url: string): { platform: Platform; short: string } | null {
+export function describeVideoUrl(
+  url: string,
+): { platform: Platform; short: string } | null {
   let u: URL;
   try {
     u = new URL(url.trim());

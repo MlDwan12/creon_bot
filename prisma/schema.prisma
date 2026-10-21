@@ -24,6 +24,9 @@ model User {
   language        String?
   /// language_code из Telegram — по нему язык, пока человек сам не выбрал; бот пишет на нём же.
   telegramLanguage String?
+  /// Кабинет, открытый в мини-аппе последним (webapp/src/role.ts); null — ещё не выбирал.
+  /// Только вкладки и стартовый экран: прав не даёт, быть можно и тем и другим.
+  cabinet    Cabinet?
   /// Заблокирован модератором: мини-апп показывает только экран блокировки, бот не пишет.
   bannedAt   DateTime?
   banReason  String?
@@ -40,6 +43,12 @@ model User {
 
   /// Ответ поддержки в теме → чей это пользователь (SupportService.fromSupport).
   @@index([supportTopicId])
+}
+
+/// Кабинет мини-аппа: креатора или заказчика (рекламодателя).
+enum Cabinet {
+  CREATOR
+  ADVERTISER
 }
 
 enum OrderStatus {

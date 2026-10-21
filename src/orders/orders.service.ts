@@ -239,9 +239,12 @@ export class OrdersService {
   }
 
   /** Все заказы любого статуса для модератора — страница, новые первыми. */
-  async listAll(skip: number, take: number) {
+  /** Все заказы для модератора, новые первыми; statuses — фильтр (пусто — все). */
+  async listAll(skip: number, take: number, statuses: OrderStatus[] = []) {
+    const where = statuses.length ? { status: { in: statuses } } : {};
     const [items, total] = await Promise.all([
       this.prisma.order.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         skip,
         take,
@@ -250,7 +253,7 @@ export class OrdersService {
           _count: { select: { submissions: true } },
         },
       }),
-      this.prisma.order.count(),
+      this.prisma.order.count({ where }),
     ]);
     return { items, total };
   }

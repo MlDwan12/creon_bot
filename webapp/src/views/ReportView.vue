@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError, createReport, reasonLabel, REPORT_REASONS, type ReportTarget } from '../api';
+import EmptyState from '../components/EmptyState.vue';
 import { i18next } from '../i18n';
 
 // /report?target=ORDER&id=12&title=… — одна форма на все жалобы; title только для заголовка.
@@ -43,13 +44,14 @@ async function send() {
   <main class="page">
     <p v-if="!valid" class="hint">{{ $t('report.invalid') }}</p>
 
-    <template v-else-if="sent">
-      <h1>{{ $t('report.sentTitle') }}</h1>
-      <p class="hint">{{ $t('report.sentText') }}</p>
-      <div class="bottom-bar">
-        <button type="button" class="main-button" @click="router.back()">{{ $t('common.done') }}</button>
-      </div>
-    </template>
+    <EmptyState v-else-if="sent" :title="$t('report.sentTitle')" :text="$t('report.sentText')" role="status">
+      <template #icon>
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12.5l4.5 4.5L19 7.5" />
+        </svg>
+      </template>
+      <button type="button" class="main-button" @click="router.back()">{{ $t('common.done') }}</button>
+    </EmptyState>
 
     <template v-else>
       <header class="head">
@@ -60,8 +62,8 @@ async function send() {
       <fieldset class="reasons">
         <legend class="section-title">{{ $t('report.whatsWrong') }}</legend>
         <label v-for="r in reasons" :key="r" class="reason">
+          <span>{{ reasonLabel(target, r) }}</span>
           <input v-model="reason" type="radio" name="reason" :value="r" />
-          {{ reasonLabel(target, r) }}
         </label>
       </fieldset>
 
@@ -69,8 +71,11 @@ async function send() {
         v-model="comment"
         rows="3"
         maxlength="500"
+        :required="reason === 'OTHER'"
+        :aria-describedby="reason === 'OTHER' ? 'other-required' : undefined"
         :placeholder="reason === 'OTHER' ? $t('report.describe') : $t('report.commentOptional')"
       />
+      <p v-if="reason === 'OTHER'" id="other-required" class="hint small">{{ $t('report.otherRequired') }}</p>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
 
       <div class="bottom-bar">
@@ -105,29 +110,37 @@ h1 {
   color: var(--hint);
   overflow-wrap: anywhere;
 }
+.hint.small {
+  margin-top: -8px;
+  font-size: 13px;
+}
 .reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin: 0;
   padding: 0;
   border: none;
-  border-radius: 14px;
-  background: var(--surface);
-  overflow: hidden;
 }
 .reasons legend {
   float: left;
   width: 100%;
-  padding: 12px 14px 4px;
+  padding: 0 0 4px;
 }
 .reason {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
-  min-height: 48px;
+  min-height: 52px;
   padding: 0 14px;
+  border: 1.5px solid var(--separator);
+  border-radius: 14px;
+  background: var(--surface);
   font-size: 16px;
 }
-.reason + .reason {
-  border-top: 1px solid var(--separator);
+.reason:has(input:checked) {
+  border-color: var(--accent);
 }
 .reason input {
   width: 20px;

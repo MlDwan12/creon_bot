@@ -14,6 +14,7 @@ import {
   StreamableFile,
   UseGuards,
 } from '@nestjs/common';
+import { Cabinet } from '@prisma/client';
 import type { Response } from 'express';
 import { ParseIdPipe } from '../common/parse-id.pipe';
 import { NotificationsService } from '../telegram/notifications.service';
@@ -69,6 +70,21 @@ export class ProfilesController {
     if (language !== null && !isLang(language))
       throw new BadRequestException(`language — ${LANGS.join(', ')} или null`);
     await this.profiles.updateLanguage(req.user.id, language);
+    return { ok: true };
+  }
+
+  /** Кабинет мини-аппа, открытый последним: creator или advertiser (webapp/src/role.ts). */
+  @Put('profile/cabinet')
+  async updateCabinet(
+    @Body('cabinet') cabinet: unknown,
+    @Req() req: ApiRequest,
+  ) {
+    if (cabinet !== 'creator' && cabinet !== 'advertiser')
+      throw new BadRequestException('cabinet — creator или advertiser');
+    await this.profiles.updateCabinet(
+      req.user.id,
+      cabinet === 'creator' ? Cabinet.CREATOR : Cabinet.ADVERTISER,
+    );
     return { ok: true };
   }
 

@@ -1,5 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { OrderStatus, Prisma, SubmissionStatus } from '@prisma/client';
+import {
+  Cabinet,
+  OrderCategory,
+  OrderStatus,
+  Prisma,
+  SubmissionStatus,
+  VideoOrientation,
+  VideoPlatform,
+} from '@prisma/client';
 import { fromMinor } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -244,4 +252,125 @@ export class AnalyticsService {
       },
     };
   }
+
+  /**
+   * «Что работает»: опубликованные за период заказы (по дате создания), разложенные по требованиям
+   * и ставке, и пользователи (зарегистрированные за период) по кабинету и тому, что они делали.
+   */
+  async whatWorks(since?: Date) {
+    const epoch = since ?? new Date(0);
+    const [rows, audience] = await Promise.all([
+      // cpmMinor ставит модератор при одобрении — так отбираем заказы, которые видели креаторы.
+      this.prisma.$queryRaw<OrderRow[]>(Prisma.sql`
+        SELECT o.category, o.orientation, o.platforms::text[] AS platforms,
+          o."maxDurationSec", o."cpmMinor",
+          (SELECT count(*) FROM "OrderView" v WHERE v."orderId" = o.id)::int AS opened,
+          (SELECT count(DISTINCT "creatorId") FROM "Submission" s WHERE s."orderId" = o.id)::int AS taken,
+          (SELECT count(*) FROM "Submission" s
+            WHERE s."orderId" = o.id AND s.status = 'MODERATOR_APPROVED')::int AS approved,
+          (SELECT count(*) FROM "Submission" s
+            WHERE s."orderId" = o.id AND s.status = 'MODERATOR_REJECTED')::int AS rejected,
+          (SELECT coalesce(sum(views), 0) FROM "Submission" s
+            WHERE s."orderId" = o.id AND s.status = 'MODERATOR_APPROVED')::int AS views
+        FROM "Order" o
+        WHERE o."cpmMinor" IS NOT NULL AND o."createdAt" >= ${epoch}`),
+      this.prisma.$queryRaw<
+        {
+          cabinet: Cabinet | null;
+          ordered: boolean;
+          submitted: boolean;
+          n: number;
+        }[]
+      >(Prisma.sql`
+        SELECT u.cabinet,
+          EXISTS (SELECT 1 FROM "Order" o WHERE o."advertiserId" = u.id) AS ordered,
+          EXISTS (SELECT 1 FROM "Submission" s
+            WHERE s."creatorId" = u.id AND s."submittedAt" IS NOT NULL) AS submitted,
+          count(*)::int AS n
+        FROM "User" u WHERE u."createdAt" >= ${epoch}
+        GROUP BY 1, 2, 3`),
+    ]);
+    return {
+      minOrders: MIN_ORDERS,
+      slices: {
+        category: slice(rows, (o) => [o.category]),
+        platform: slice(rows, (o) =>
+          o.platforms.length ? o.platforms : [ANY],
+        ),
+        orientation: slice(rows, (o) => [o.orientation ?? ANY]),
+        duration: slice(rows, (o) => [durationBucket(o.maxDurationSec)]),
+        cpm: slice(rows, (o) => [String(fromMinor(o.cpmMinor))]),
+      },
+      audience: audience.map((a) => ({
+        cabinet: a.cabinet,
+        activity:
+          a.ordered && a.submitted
+            ? 'both'
+            : a.ordered
+              ? 'orders'
+              : a.submitted
+                ? 'videos'
+                : 'none',
+        count: a.n,
+      })),
+    };
+  }
+}
+
+/** Срезы, где заказов меньше, клиент показывает серыми — «мало данных». */
+const MIN_ORDERS = 5;
+/** Требование не задано: любая площадка, ориентация, длительность. */
+const ANY = 'ANY';
+
+interface OrderRow {
+  category: OrderCategory;
+  orientation: VideoOrientation | null;
+  platforms: VideoPlatform[];
+  maxDurationSec: number | null;
+  cpmMinor: number;
+  opened: number;
+  taken: number;
+  approved: number;
+  rejected: number;
+  views: number;
+}
+
+/** По верхней границе длительности из требований: настоящую длину ролика мы не знаем. */
+function durationBucket(max: number | null) {
+  if (max === null) return ANY;
+  if (max <= 15) return '15';
+  if (max <= 30) return '30';
+  if (max <= 60) return '60';
+  return 'LONG';
+}
+
+/**
+ * Метрики по значению признака. Заказ с несколькими значениями (площадки) идёт в каждое.
+ * takeRate — креаторов взяли / открыли карточку, %; approveRate — одобрено из решённых, %.
+ */
+function slice(rows: OrderRow[], keys: (o: OrderRow) => string[]) {
+  const groups = new Map<string, OrderRow[]>();
+  for (const o of rows)
+    for (const k of keys(o)) groups.set(k, [...(groups.get(k) ?? []), o]);
+  const sum = (os: OrderRow[], f: (o: OrderRow) => number) =>
+    os.reduce((n, o) => n + f(o), 0);
+  const percent = (part: number, whole: number) =>
+    whole ? Math.round((part / whole) * 100) : null;
+  return [...groups]
+    .map(([key, os]) => {
+      const approved = sum(os, (o) => o.approved);
+      return {
+        key,
+        orders: os.length,
+        takeRate: percent(
+          sum(os, (o) => o.taken),
+          sum(os, (o) => o.opened),
+        ),
+        avgViews: approved
+          ? Math.round(sum(os, (o) => o.views) / approved)
+          : null,
+        approveRate: percent(approved, approved + sum(os, (o) => o.rejected)),
+      };
+    })
+    .sort((a, b) => b.orders - a.orders);
 }

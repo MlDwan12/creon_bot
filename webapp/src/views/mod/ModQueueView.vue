@@ -22,11 +22,31 @@ const router = useRouter();
 
 type Tab = 'orders' | 'videos' | 'holds' | 'reviews' | 'reports';
 const TABS: Tab[] = ['orders', 'videos', 'holds', 'reviews', 'reports'];
+const TAB_LIST: { id: Tab; label: string }[] = [
+  { id: 'videos', label: 'Видео' },
+  { id: 'orders', label: 'Заказы' },
+  { id: 'holds', label: 'Итоги' },
+  { id: 'reviews', label: 'Отзывы' },
+  { id: 'reports', label: 'Жалобы' },
+];
+/** Сколько ждёт в каждой вкладке — на чипах; всего — в строке сверху. */
+const counts = computed<Record<Tab, number>>(() => ({
+  orders: queue.value?.orders.length ?? 0,
+  videos: queue.value?.videos.length ?? 0,
+  holds: queue.value?.holds.length ?? 0,
+  reviews: queue.value?.reviews.length ?? 0,
+  reports: reports.value.length,
+}));
+const total = computed(() => TABS.reduce((sum, t) => sum + counts.value[t], 0));
 // Вкладка — в адресе (?tab=videos), чтобы «Назад» из карточки вернул на ту же вкладку.
+// Без неё — первая, где что-то ждёт: модератор сразу видит работу, а не пустой список.
 const tab = computed<Tab>(() =>
-  TABS.includes(route.query.tab as Tab) ? (route.query.tab as Tab) : 'orders',
+  TABS.includes(route.query.tab as Tab)
+    ? (route.query.tab as Tab)
+    : (TAB_LIST.find((t) => counts.value[t.id])?.id ?? 'videos'),
 );
-const setTab = (t: Tab) => router.replace({ query: t === 'orders' ? {} : { tab: t } });
+// вкладка по умолчанию зависит от очереди — выбранную пишем в адрес всегда
+const setTab = (t: Tab) => router.replace({ query: { tab: t } });
 
 const reports = ref<ModReportGroup[]>([]);
 const reportError = ref('');
@@ -119,42 +139,32 @@ void load();
 
 <template>
   <main class="page">
-    <div class="title-row">
-      <h1>Модерация</h1>
-      <RouterLink to="/mod/payouts" class="payouts-link">Выплаты ›</RouterLink>
-    </div>
+    <h1>Очередь</h1>
 
     <p v-if="error" class="hint">{{ error }}</p>
     <p v-else-if="!queue" class="hint">Загрузка…</p>
 
     <template v-else>
-      <div class="tiles">
-        <div class="tile"><strong>{{ queue.orders.length }}</strong><span>заказов ждут</span></div>
-        <div class="tile"><strong>{{ queue.videos.length }}</strong><span>видео ждут</span></div>
-        <div class="tile" :class="{ warn: oldest && isWaitingLong(oldest) }">
-          <strong>{{ oldest ? waitingFor(oldest) : '—' }}</strong><span>самое старое</span>
-        </div>
-      </div>
-
-      <div class="segmented" role="tablist" aria-label="Очередь">
-        <button type="button" role="tab" :aria-selected="tab === 'orders'" @click="setTab('orders')">
-          Заказы · {{ queue.orders.length }}
-        </button>
-        <button type="button" role="tab" :aria-selected="tab === 'videos'" @click="setTab('videos')">
-          Видео · {{ queue.videos.length }}
-        </button>
-        <button type="button" role="tab" :aria-selected="tab === 'holds'" @click="setTab('holds')">
-          Итоги · {{ queue.holds.length }}
-        </button>
-        <button type="button" role="tab" :aria-selected="tab === 'reviews'" @click="setTab('reviews')">
-          Отзывы · {{ queue.reviews.length }}
-        </button>
-        <button type="button" role="tab" :aria-selected="tab === 'reports'" @click="setTab('reports')">
-          Жалобы · {{ reports.length }}
+      <p class="summary">
+        {{ total ? `${total} ждут решения` : 'Всё разобрано' }}<template v-if="oldest">
+          · <span :class="{ long: isWaitingLong(oldest) }">самое старое — {{ waitingFor(oldest) }}</span></template
+        >
+      </p>
+      <!-- вкладки — чипами с прокруткой: пять подписей со счётчиками в ряд не помещаются -->
+      <div class="chips" role="tablist" aria-label="Очередь">
+        <button
+          v-for="t in TAB_LIST"
+          :key="t.id"
+          type="button"
+          role="tab"
+          :class="{ empty: !counts[t.id] }"
+          :aria-selected="tab === t.id"
+          @click="setTab(t.id)"
+        >
+          {{ t.label }}<span class="count">{{ counts[t.id] }}</span>
         </button>
       </div>
-
-      <p class="hint">Сначала самые старые</p>
+      <p class="hint">Сначала самые старые. Оранжевым — ждут дольше 4 часов</p>
 
       <template v-if="tab === 'reports'">
         <p v-if="reports.length === 0" class="empty list">Жалоб нет.</p>
@@ -184,7 +194,10 @@ void load();
           </ul>
 
           <div v-if="banningKey === keyOf(g)" class="ban-form">
-            <textarea v-model="banReason" rows="2" maxlength="500" placeholder="Причина — автор её увидит" />
+            <label class="field-label">
+              <span>Причина блокировки</span>
+              <textarea v-model="banReason" rows="2" maxlength="500" placeholder="Её увидит автор" />
+            </label>
             <div class="actions">
               <button type="button" @click="banningKey = ''">Отмена</button>
               <button type="button" class="danger" :disabled="!banReason.trim()" @click="resolve(g, true, banReason)">
@@ -218,7 +231,7 @@ void load();
           </div>
           <strong class="subject">{{ r.orderTitle }}</strong>
           <p class="quote">
-            <span v-if="r.hasContacts" class="flag" title="Похоже на контакты в обход площадки">⚠ </span>{{ r.review }}
+            <span v-if="r.hasContacts" class="flag" title="Похоже на контакты в обход площадки"><svg class="flag-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 3l9.5 17h-19z" /><path d="M12 10v4M12 17.5v.01" /></svg> </span>{{ r.review }}
           </p>
           <span class="hint">{{ r.advertiser }} о креаторе {{ r.creator }}</span>
           <div class="actions">
@@ -233,7 +246,7 @@ void load();
         <RouterLink v-for="o in queue.orders" :key="o.id" :to="`/mod/orders/${o.id}`" class="row">
           <span class="main">
             <span class="title">
-              <span v-if="o.hasContacts" class="flag" title="Похоже на контакты в обход площадки">⚠ </span>{{ o.title }}
+              <span v-if="o.hasContacts" class="flag" title="Похоже на контакты в обход площадки"><svg class="flag-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 3l9.5 17h-19z" /><path d="M12 10v4M12 17.5v.01" /></svg> </span>{{ o.title }}
             </span>
             <span class="sub">{{ o.advertiser }} · бюджет {{ formatMoney(o.budget) }}<span v-if="o.budgetRaised" class="flag"> ↑ повышен</span></span>
           </span>
@@ -273,16 +286,6 @@ void load();
 </template>
 
 <style scoped>
-.title-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.payouts-link {
-  color: var(--link);
-  font-weight: 600;
-  text-decoration: none;
-}
 .page {
   display: flex;
   flex-direction: column;
@@ -295,54 +298,58 @@ h1 {
   font-weight: 700;
   letter-spacing: -0.3px;
 }
-.tiles {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+.summary {
+  margin: -8px 0 0;
+  color: var(--hint);
+  font-size: 14px;
 }
-.tile {
+.summary .long {
+  color: var(--orange-text);
+  font-weight: 700;
+}
+.chips {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 12px;
-  border-radius: 14px;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 0 -16px;
+  padding: 0 16px;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to right, #000 85%, transparent);
+}
+.chips button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1.5px solid var(--separator);
+  border-radius: 22px;
   background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
 }
-.tile strong {
-  font-size: 24px;
-}
-.tile span {
-  font-size: 13px;
-  line-height: 1.25;
+.chips button.empty {
   color: var(--hint);
 }
-.tile.warn {
-  background: var(--orange-soft);
+.chips button[aria-selected='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
 }
-.tile.warn strong,
-.tile.warn span {
-  color: var(--orange-text);
-}
-.segmented {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  padding: 2px;
-  border-radius: 9px;
+.count {
+  min-width: 22px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border-radius: 11px;
   background: var(--fill);
-}
-.segmented button {
-  min-height: 34px;
-  border: none;
-  border-radius: 7px;
-  background: none;
-  color: var(--text);
   font-size: 12px;
-  line-height: 1.2;
-  padding: 4px 2px;
+  line-height: 22px;
+  text-align: center;
 }
-.segmented button[aria-selected='true'] {
-  background: var(--surface);
-  font-weight: 600;
+.chips button[aria-selected='true'] .count {
+  background: color-mix(in srgb, var(--accent-text) 22%, transparent);
 }
 .report {
   display: flex;
@@ -429,7 +436,7 @@ a.subject {
 }
 .ban-link {
   align-self: center;
-  min-height: 36px;
+  min-height: 44px;
   border: none;
   background: none;
   color: var(--danger);
@@ -443,8 +450,11 @@ a.subject {
 .flag {
   color: var(--orange-text);
 }
+.flag-icon {
+  vertical-align: -2px;
+}
 .stars {
-  color: var(--orange);
+  color: var(--accent);
   letter-spacing: 1px;
 }
 .list {

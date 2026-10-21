@@ -1,0 +1,108 @@
+<script setup lang="ts">
+import SupportLink from '../components/SupportLink.vue';
+import { i18next, tList } from '../i18n';
+
+/** Кабинет заказчика: как устроена реклама в Fixum и частые вопросы. Креатору то же — «Обучение». */
+const faq = () => i18next.t('help.faq', { returnObjects: true }) as unknown as { q: string; a: string }[];
+</script>
+
+<template>
+  <main class="page">
+    <h1>{{ $t('help.title') }}</h1>
+    <ol class="steps">
+      <li v-for="(s, i) in tList('onboarding.advertiser.steps')" :key="s">
+        <span class="num" aria-hidden="true">{{ i + 1 }}</span>
+        <span>{{ s }}</span>
+      </li>
+    </ol>
+
+    <h2 class="section-title">{{ $t('help.faqTitle') }}</h2>
+    <!-- <details> — раскрывается сам, без кода и с клавиатуры -->
+    <details v-for="f in faq()" :key="f.q" class="faq">
+      <summary>{{ f.q }}</summary>
+      <p>{{ f.a }}</p>
+    </details>
+
+    <SupportLink />
+  </main>
+</template>
+
+<style scoped>
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 16px calc(96px + var(--safe-bottom));
+}
+h1 {
+  margin: 0 0 4px;
+  font-size: 26px;
+}
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0;
+  padding: 16px;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  list-style: none;
+}
+.steps li {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 12px;
+  align-items: start;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+}
+.section-title {
+  margin-top: 8px;
+  padding: 0;
+}
+.faq {
+  border-radius: 18px;
+  background: var(--surface);
+}
+.faq summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  padding: 0 16px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+/* display: flex убирает стандартный треугольник — рисуем свою стрелку */
+.faq summary::after {
+  content: '›';
+  color: var(--hint);
+  font-size: 20px;
+  transform: rotate(90deg);
+  transition: transform 0.2s;
+}
+.faq[open] summary::after {
+  transform: rotate(-90deg);
+}
+.faq p {
+  margin: 0;
+  padding: 0 16px 16px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+</style>

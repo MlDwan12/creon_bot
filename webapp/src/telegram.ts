@@ -74,7 +74,9 @@ export function applyTheme(pref: ThemePref = themePref()) {
         : window.matchMedia('(prefers-color-scheme: dark)').matches;
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
   if (inTelegram) {
-    const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+    const bg = getComputedStyle(document.documentElement)
+      .getPropertyValue('--bg')
+      .trim();
     webApp!.setHeaderColor(bg);
     webApp!.setBackgroundColor(bg);
   }

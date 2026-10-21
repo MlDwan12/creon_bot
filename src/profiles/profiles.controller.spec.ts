@@ -35,3 +35,29 @@ describe('PUT /api/profile/wallet', () => {
     expect(walletChanged).not.toHaveBeenCalled();
   });
 });
+
+describe('PUT /api/profile/cabinet', () => {
+  const updateCabinet = jest.fn();
+  const controller = new ProfilesController(
+    { updateCabinet } as unknown as ProfilesService,
+    {} as ModeratorGuard,
+    {} as TelegramPhotosService,
+    {} as NotificationsService,
+  );
+  const req = { user: { id: 7 } as User } as ApiRequest;
+
+  it('creator и advertiser — в enum базы', async () => {
+    await controller.updateCabinet('creator', req);
+    await controller.updateCabinet('advertiser', req);
+    expect(updateCabinet.mock.calls).toEqual([
+      [7, 'CREATOR'],
+      [7, 'ADVERTISER'],
+    ]);
+  });
+
+  it('другое значение — 400', async () => {
+    await expect(controller.updateCabinet('moderator', req)).rejects.toThrow(
+      'cabinet — creator или advertiser',
+    );
+  });
+});

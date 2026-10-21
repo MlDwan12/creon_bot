@@ -77,8 +77,10 @@ const remove = () =>
 
     <div v-if="order.approved > 0 || order.usedPercent > 0" class="usage">
       <div class="bar" aria-hidden="true"><span :style="{ width: `${order.usedPercent}%` }" /></div>
-      <div class="hint">
-        {{ $t('myOrderCard.usage', { percent: order.usedPercent, approved: order.approved, views: formatViews(order.views) }) }}
+      <div class="kpis">
+        <span><b>{{ formatViews(order.views) }}</b>{{ $t('myOrderCard.kpiViews') }}</span>
+        <span><b>{{ order.approved }}</b>{{ $t('myOrderCard.kpiVideos') }}</span>
+        <span><b>{{ order.usedPercent }}%</b>{{ $t('myOrderCard.kpiBudget') }}</span>
       </div>
     </div>
 
@@ -158,6 +160,20 @@ const remove = () =>
   display: block;
   height: 100%;
   background: var(--accent);
+}
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  color: var(--hint);
+  font-size: 12px;
+}
+.kpis b {
+  display: block;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 16px;
+  white-space: nowrap;
 }
 .card {
   display: flex;
@@ -256,7 +272,7 @@ const remove = () =>
 }
 .buttons button {
   flex: 1 1 auto;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 12px;
   border: none;
   border-radius: 10px;

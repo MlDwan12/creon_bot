@@ -90,6 +90,11 @@ export interface MySubmission {
   videoUrl: string | null;
   comment: string | null;
   createdAt: string;
+  submittedAt: string | null;
+  /** Когда модератор одобрил или отклонил. */
+  decidedAt: string | null;
+  /** Одобрен, итога ещё нет — до когда холд (потом деньги можно вывести). */
+  holdEndsAt: string | null;
   /** До когда прислать видео (только «в работе»): конец слота или срок заказа, что раньше. */
   dueAt: string | null;
   /** На проверке — заявлено креатором, после одобрения — зафиксировано модератором. */
@@ -100,7 +105,8 @@ export interface MySubmission {
   finalized: boolean;
   /** Ссылка на товар для описания ролика — путь `/r/<код>` от адреса мини-аппа; null — у заказа нет товара. */
   trackPath: string | null;
-  order: {
+  /** VideoFormat — требования к ролику, для самопроверки перед сдачей. */
+  order: VideoFormat & {
     id: number;
     title: string;
     cpm: number | null;
@@ -285,6 +291,34 @@ export interface ModFunnel {
     /** На сейчас, не за период: начислено креаторам и не выплачено; из этого — в заявках. */
     debt: { owed: number; requested: number };
   };
+}
+
+/** Метрики заказов с одним значением признака — см. AnalyticsService.whatWorks. */
+export interface WhatWorksRow {
+  /** Значение признака: код категории, площадки, ориентации; длительность — '15'|'30'|'60'|'LONG';
+   *  ставка — USDT за 1000 просмотров строкой; 'ANY' — требование не задано. */
+  key: string;
+  orders: number;
+  /** Взяли в работу из открывших карточку, %. */
+  takeRate: number | null;
+  /** Средние просмотры одобренного ролика. */
+  avgViews: number | null;
+  /** Одобрено из решённых роликов, %. */
+  approveRate: number | null;
+}
+
+export type WhatWorksSlice = 'category' | 'platform' | 'orientation' | 'duration' | 'cpm';
+
+export interface WhatWorks {
+  /** Меньше заказов в строке — «мало данных». */
+  minOrders: number;
+  slices: Record<WhatWorksSlice, WhatWorksRow[]>;
+  /** Пользователи за период по последнему кабинету и тому, что делали. */
+  audience: {
+    cabinet: 'CREATOR' | 'ADVERTISER' | null;
+    activity: 'both' | 'orders' | 'videos' | 'none';
+    count: number;
+  }[];
 }
 
 export interface ModOrderRow {
@@ -655,11 +689,21 @@ type Me = {
   /** Язык интерфейса: выбранный в профиле или по Telegram; languageChosen — выбран ли вручную. */
   language: Lang;
   languageChosen: boolean;
+  /** Кабинет, открытый последним (role.ts); null — ещё не выбирал. */
+  cabinet: 'creator' | 'advertiser' | null;
+  /** Комиссия площадки для новых заказов, %: бюджет креаторам — без неё. */
+  feePercent: number;
 };
 let me: Promise<Me> | undefined;
 
 /** Один запрос на запуск: initData, а с ним и ответ, до перезапуска Mini App не меняется. */
 /** Язык интерфейса и бота; null — снова по языку Telegram. */
+/** Запомнить кабинет на сервере — тот же откроется на другом устройстве. */
+export function updateCabinet(cabinet: 'creator' | 'advertiser') {
+  me = undefined; // /api/me вернёт уже новый кабинет
+  return request<{ ok: true }>('PUT', '/api/profile/cabinet', { cabinet });
+}
+
 export function updateLanguage(language: Lang | null) {
   me = undefined; // /api/me вернёт уже новый язык
   return request<{ ok: true }>('PUT', '/api/profile/language', { language });
@@ -686,8 +730,14 @@ export function fetchModFunnel(days?: number) {
   return request<ModFunnel>('GET', `/api/mod/funnel${days ? `?days=${days}` : ''}`);
 }
 
-export function fetchAllOrders(page: number) {
-  return request<Page<ModOrderRow>>('GET', `/api/mod/orders?page=${page}`);
+export function fetchWhatWorks(days?: number) {
+  return request<WhatWorks>('GET', `/api/mod/what-works${days ? `?days=${days}` : ''}`);
+}
+
+/** statuses — фильтр по статусам; пусто — все. */
+export function fetchAllOrders(page: number, statuses: OrderStatus[] = []) {
+  const status = statuses.length ? `&status=${statuses.join(',')}` : '';
+  return request<Page<ModOrderRow>>('GET', `/api/mod/orders?page=${page}${status}`);
 }
 
 export function fetchModOrder(id: number) {
