@@ -9,7 +9,8 @@
     "modOrders": "Все заказы",
     "modStats": "Статистика",
     "aria": "Разделы",
-    "help": "Как это работает"
+    "help": "Как это работает",
+    "modPayouts": "Выплаты"
   },
   "categories": {
     "PRODUCT_REVIEW": "Обзор товара",

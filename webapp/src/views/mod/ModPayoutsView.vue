@@ -69,7 +69,11 @@ void load();
       </div>
       <RouterLink :to="`/mod/creators/${p.creatorId}`" class="creator">{{ p.creator }} · заявка #{{ p.id }}</RouterLink>
       <p v-if="p.banned" class="banned" role="alert">
-        🚫 Креатор заблокирован<template v-if="p.banned.reason">: {{ p.banned.reason }}</template>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M5.6 5.6l12.8 12.8" />
+        </svg>
+        Креатор заблокирован<template v-if="p.banned.reason">: {{ p.banned.reason }}</template>
       </p>
       <button v-if="p.wallet" type="button" class="wallet" @click="copyWallet(p.wallet)">
         <span>{{ p.wallet }}</span>

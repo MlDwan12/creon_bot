@@ -29,6 +29,7 @@ import {
   ViewCounterService,
 } from '../submissions/view-counter.service';
 import { AnalyticsService } from './analytics.service';
+import { parseStatusFilter } from './status-filter';
 import {
   BansService,
   parseBanReason,
@@ -170,11 +171,13 @@ export class ModerationController {
   @Get('orders')
   async allOrders(
     @Query('page', new DefaultValuePipe(0), ParseIntPipe) rawPage: number,
+    @Query('status') status: unknown,
   ) {
     const page = Math.max(0, rawPage);
     const { items, total } = await this.ordersService.listAll(
       page * PAGE_SIZE,
       PAGE_SIZE,
+      parseStatusFilter(status),
     );
     return {
       items: items.map((o) => ({

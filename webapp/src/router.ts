@@ -91,7 +91,7 @@ export const router = createRouter({
     { path: '/mod', component: ModQueueView },
     { path: '/mod/orders', component: ModAllOrdersView },
     { path: '/mod/stats', component: ModStatsView },
-    { path: '/mod/payouts', component: ModPayoutsView, meta: { back: true } },
+    { path: '/mod/payouts', component: ModPayoutsView },
     {
       path: '/mod/orders/:id',
       component: ModOrderView,

@@ -702,8 +702,10 @@ export function fetchModFunnel(days?: number) {
   return request<ModFunnel>('GET', `/api/mod/funnel${days ? `?days=${days}` : ''}`);
 }
 
-export function fetchAllOrders(page: number) {
-  return request<Page<ModOrderRow>>('GET', `/api/mod/orders?page=${page}`);
+/** statuses — фильтр по статусам; пусто — все. */
+export function fetchAllOrders(page: number, statuses: OrderStatus[] = []) {
+  const status = statuses.length ? `&status=${statuses.join(',')}` : '';
+  return request<Page<ModOrderRow>>('GET', `/api/mod/orders?page=${page}${status}`);
 }
 
 export function fetchModOrder(id: number) {

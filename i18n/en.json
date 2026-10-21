@@ -9,7 +9,8 @@
     "modOrders": "All orders",
     "modStats": "Stats",
     "aria": "Sections",
-    "help": "How it works"
+    "help": "How it works",
+    "modPayouts": "Payouts"
   },
   "categories": {
     "PRODUCT_REVIEW": "Product review",
