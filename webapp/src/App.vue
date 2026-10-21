@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import OnboardingOverlay from './components/OnboardingOverlay.vue';
+import RoleSwitch from './components/RoleSwitch.vue';
 import TabBar from './components/TabBar.vue';
 import { banned, fetchMe } from './api';
 import { i18next, setLang } from './i18n';
@@ -58,7 +59,11 @@ if (inTelegram) {
       {{ $t('common.support') }}
     </button>
   </main>
-  <RouterView v-else :key="lang" />
+  <template v-else>
+    <!-- на главных экранах вкладок: «Креатор / Заказчик» (role.ts) -->
+    <RoleSwitch v-if="route.meta.tab" :key="lang" />
+    <RouterView :key="lang" />
+  </template>
   <TabBar v-if="!banned" :key="lang" />
   <!-- matched пуст, пока роутер не решил, куда вести: иначе модератор мельком увидит онбординг. -->
   <OnboardingOverlay

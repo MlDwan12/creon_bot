@@ -7,7 +7,8 @@ import { ModeratorGuard } from './moderator.guard';
 
 /**
  * Кто открыл Mini App: модератору — его отдельное окно; supportUrl — ссылка на чат с ботом (null — поддержка выключена);
- * language — язык интерфейса. Права проверяет каждый эндпоинт.
+ * language — язык интерфейса; cabinet — кабинет, открытый последним (null — ещё не выбирал).
+ * Права проверяет каждый эндпоинт.
  */
 @Controller('api/me')
 @UseGuards(InitDataGuard, UserThrottlerGuard)
@@ -25,6 +26,7 @@ export class MeController {
       // язык интерфейса: выбранный в профиле или по Telegram; мини-апп переключается на него
       language: userLang(req.user),
       languageChosen: req.user.language !== null,
+      cabinet: req.user.cabinet?.toLowerCase() ?? null,
     };
   }
 }

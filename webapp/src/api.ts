@@ -655,11 +655,19 @@ type Me = {
   /** Язык интерфейса: выбранный в профиле или по Telegram; languageChosen — выбран ли вручную. */
   language: Lang;
   languageChosen: boolean;
+  /** Кабинет, открытый последним (role.ts); null — ещё не выбирал. */
+  cabinet: 'creator' | 'advertiser' | null;
 };
 let me: Promise<Me> | undefined;
 
 /** Один запрос на запуск: initData, а с ним и ответ, до перезапуска Mini App не меняется. */
 /** Язык интерфейса и бота; null — снова по языку Telegram. */
+/** Запомнить кабинет на сервере — тот же откроется на другом устройстве. */
+export function updateCabinet(cabinet: 'creator' | 'advertiser') {
+  me = undefined; // /api/me вернёт уже новый кабинет
+  return request<{ ok: true }>('PUT', '/api/profile/cabinet', { cabinet });
+}
+
 export function updateLanguage(language: Lang | null) {
   me = undefined; // /api/me вернёт уже новый язык
   return request<{ ok: true }>('PUT', '/api/profile/language', { language });

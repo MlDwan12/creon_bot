@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
+import { role } from '../role';
 
 const route = useRoute();
-/** У модератора свои вкладки — его окно отдельное. */
+/** У модератора свои вкладки — его окно отдельное; у креатора и заказчика — свои (role.ts). */
 const moderator = computed(() => route.path.startsWith('/mod'));
 </script>
 
@@ -33,6 +34,30 @@ const moderator = computed(() => route.path.startsWith('/mod'));
       </RouterLink>
     </template>
 
+    <template v-else-if="role === 'advertiser'">
+      <RouterLink to="/my-orders" class="tab" active-class="active">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="7" width="18" height="13" rx="2" />
+          <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 13h18" />
+        </svg>
+        {{ $t('tabs.myOrders') }}
+      </RouterLink>
+      <RouterLink to="/help" class="tab" active-class="active">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5V14M12 17.5v.01" />
+        </svg>
+        {{ $t('tabs.help') }}
+      </RouterLink>
+      <RouterLink to="/account" class="tab" active-class="active">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 20c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5" />
+        </svg>
+        {{ $t('tabs.profile') }}
+      </RouterLink>
+    </template>
+
     <template v-else>
       <RouterLink to="/" class="tab" exact-active-class="active">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
@@ -49,13 +74,6 @@ const moderator = computed(() => route.path.startsWith('/mod'));
           <path d="M10 9.5v5l4.5-2.5z" />
         </svg>
         {{ $t('tabs.submissions') }}
-      </RouterLink>
-      <RouterLink to="/my-orders" class="tab" active-class="active">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
-          <rect x="3" y="7" width="18" height="13" rx="2" />
-          <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 13h18" />
-        </svg>
-        {{ $t('tabs.myOrders') }}
       </RouterLink>
       <RouterLink to="/learn" class="tab" active-class="active">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
@@ -91,7 +109,7 @@ const moderator = computed(() => route.path.startsWith('/mod'));
 .bar {
   pointer-events: auto;
   display: grid;
-  /* 3 вкладки у модератора, 5 у остальных. */
+  /* 3 вкладки у модератора и заказчика, 4 у креатора. */
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   padding: 6px;

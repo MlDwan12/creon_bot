@@ -10,55 +10,23 @@ import {
   disconnectSocialAccount,
   fetchBalance,
   fetchCreator,
-  fetchMe,
   fetchMyProfile,
   fetchSocialAccounts,
   type SocialAccount,
   removeReview,
   unbanUser,
-  updateLanguage,
   updateNotifications,
   updateProfileLinks,
   updateWallet,
 } from '../api';
+import AppSettings from '../components/AppSettings.vue';
 import PlatformIcon from '../components/PlatformIcon.vue';
 import UserAvatar from '../components/UserAvatar.vue';
 import { describeVideoUrl, formatDate, formatMoney } from '../format';
-import { i18next, LANG_NAMES, LANGS, setLang, type Lang } from '../i18n';
-import { confirmAction, openExternalLink, safeUrl, setThemePref, themePref, type ThemePref } from '../telegram';
+import { i18next } from '../i18n';
+import { confirmAction, openExternalLink, safeUrl } from '../telegram';
 
 // Без id — свой профиль (/profile, ссылки можно редактировать); с id — чужой, только просмотр.
-// Тема — только для этого устройства (localStorage), как и сам выбор в Telegram.
-const THEMES: { value: ThemePref; label: string }[] = [
-  { value: 'auto', label: 'settings.themeAuto' },
-  { value: 'light', label: 'settings.themeLight' },
-  { value: 'dark', label: 'settings.themeDark' },
-];
-const theme = ref<ThemePref>(themePref());
-function pickTheme(pref: ThemePref) {
-  theme.value = pref;
-  setThemePref(pref);
-}
-
-// Язык — на сервере (User.language): на нём же пишет бот. auto — по языку Telegram.
-type LangPref = Lang | 'auto';
-const langPref = ref<LangPref>();
-const langError = ref('');
-void fetchMe()
-  .then((me) => (langPref.value = me.languageChosen ? me.language : 'auto'))
-  .catch(() => {});
-async function pickLang(pref: LangPref) {
-  langError.value = '';
-  try {
-    await updateLanguage(pref === 'auto' ? null : pref);
-    const me = await fetchMe();
-    langPref.value = pref;
-    setLang(me.language);
-  } catch {
-    langError.value = i18next.t('settings.languageError');
-  }
-}
-
 const props = defineProps<{ id?: string }>();
 const route = useRoute();
 /** В окне модератора (/mod/creators/:id) отзывы можно удалять. */
@@ -367,43 +335,7 @@ void load();
         <p v-if="notifyError" class="error" role="alert">{{ notifyError }}</p>
       </section>
 
-      <section v-if="own" class="block">
-        <h2 id="theme-label" class="section-title">{{ $t('settings.themeTitle') }}</h2>
-        <div class="segmented" role="radiogroup" aria-labelledby="theme-label">
-          <button
-            v-for="t in THEMES"
-            :key="t.value"
-            type="button"
-            role="radio"
-            :aria-checked="theme === t.value"
-            @click="pickTheme(t.value)"
-          >
-            {{ $t(t.label) }}
-          </button>
-        </div>
-      </section>
-
-      <section v-if="own" class="block">
-        <h2 id="lang-label" class="section-title">{{ $t('settings.languageTitle') }}</h2>
-        <div class="segmented" role="radiogroup" aria-labelledby="lang-label">
-          <button type="button" role="radio" :aria-checked="langPref === 'auto'" @click="pickLang('auto')">
-            {{ $t('settings.languageAuto') }}
-          </button>
-          <!-- названия языков — на самих языках: найдёт и тот, кто не понимает текущий -->
-          <button
-            v-for="l in LANGS"
-            :key="l"
-            type="button"
-            role="radio"
-            :lang="l"
-            :aria-checked="langPref === l"
-            @click="pickLang(l)"
-          >
-            {{ LANG_NAMES[l] }}
-          </button>
-        </div>
-        <p v-if="langError" class="error" role="alert">{{ langError }}</p>
-      </section>
+      <AppSettings v-if="own" />
 
       <section class="block">
         <h2 class="section-title">{{ $t('profile.linksTitle') }}</h2>
@@ -592,27 +524,6 @@ h1 {
   border-radius: 14px;
   background: var(--lime);
   color: var(--lime-text);
-  font-weight: 800;
-}
-.segmented {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
-  padding: 4px;
-  border-radius: 16px;
-  background: var(--fill);
-}
-.segmented button {
-  min-height: 44px;
-  border: none;
-  border-radius: 12px;
-  background: none;
-  color: var(--text);
-  font-size: 14px;
-  font-weight: 600;
-}
-.segmented button[aria-checked='true'] {
-  background: var(--surface);
   font-weight: 800;
 }
 .account-row > span {

@@ -8,7 +8,8 @@
     "modQueue": "Queue",
     "modOrders": "All orders",
     "modStats": "Stats",
-    "aria": "Sections"
+    "aria": "Sections",
+    "help": "How it works"
   },
   "categories": {
     "PRODUCT_REVIEW": "Product review",
@@ -53,8 +54,8 @@
     "aria": "Welcome to Fixum",
     "back": "‹ Back",
     "skip": "Skip",
-    "title": "Welcome",
-    "intro": "What would you like to do? You can do both later — the tabs are at the bottom.",
+    "title": "Who are you today?",
+    "intro": "You can switch any time — the toggle at the top of the screen.",
     "advertiserLabel": "For brands",
     "advertiserTitle": "Order ads",
     "advertiserText": "Set a budget — creators make videos, and you pay only for the views they get.",
@@ -681,5 +682,36 @@
     "lowClicks": "The videos were watched {{views}} times, but only {{clicks}} people clicked the product link. Viewers don't go to the site: ask creators to directly invite people to the link in the description and show what the viewer gets.",
     "budgetEnding": "The videos are getting views, but the budget is almost spent — {{left}} left. To keep videos coming, increase the order budget.",
     "deadline": "Less than 2 days until the deadline, and less than half the budget is spent. Extend the deadline in “My campaigns” to collect more videos."
+  },
+  "roles": {
+    "aria": "Account",
+    "creator": "Creator",
+    "advertiser": "Brand"
+  },
+  "help": {
+    "title": "How it works",
+    "faqTitle": "FAQ",
+    "faq": [
+      {
+        "q": "Who checks the videos?",
+        "a": "A moderator checks every video against the brief and records its views. Only approved videos make it into the report."
+      },
+      {
+        "q": "What if a creator deletes the video?",
+        "a": "5 days after approval we check that the post is still up. If it is gone, the payout is cancelled and the money returns to the order budget."
+      },
+      {
+        "q": "How do I contact a creator?",
+        "a": "Contacts are hidden on both sides. Questions and disputes go through a manager in support."
+      }
+    ]
+  },
+  "account": {
+    "subtitle": "Brand · creators only see your name",
+    "views": "views of your ads",
+    "orders_one": "order",
+    "orders_other": "orders",
+    "approved_one": "video approved",
+    "approved_other": "videos approved"
   }
 }

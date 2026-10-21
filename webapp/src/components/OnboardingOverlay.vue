@@ -1,51 +1,48 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { useTranslation } from 'i18next-vue';
 import { useRouter } from 'vue-router';
-import { closeOnboarding, onboardingOpen } from '../onboarding';
-
-type Role = 'advertiser' | 'creator';
+import { role, roleLoaded, ROLE_HOME, setRole, type Role } from '../role';
 
 /**
- * Приветствие: сначала выбор роли — бренд или креатор, потом короткие шаги для неё и кнопка сразу
- * к делу. Выбор ничего не запоминает: быть можно и тем и другим, вкладки внизу для обоих.
+ * Первый вход: выбор кабинета (креатор или заказчик), потом короткие шаги для него и кнопка сразу
+ * к делу. Показывается, пока роль не выбрана; дальше её меняет переключатель вверху экранов.
  */
-const ROLE_TO: Record<Role, string> = { advertiser: '/my-orders/new', creator: '/' };
-
 const { t } = useTranslation();
 /** Шаги роли — массив строк из словаря (onboarding.<роль>.steps). */
 const steps = (r: Role) => t(`onboarding.${r}.steps`, { returnObjects: true }) as unknown as string[];
 
 const router = useRouter();
-const role = ref<Role>();
-// Открыли заново ссылкой «Как это работает» — с выбора роли.
-watch(onboardingOpen, (open) => open && (role.value = undefined));
+/** Выбрана на первом шаге, но ещё не подтверждена: показываем её шаги. */
+const picked = ref<Role>();
+const open = computed(() => roleLoaded.value && (!role.value || !!picked.value));
 
-function start() {
-  const to = ROLE_TO[role.value!];
-  closeOnboarding();
+/** Запомнить роль и перейти: заказчика с кнопки действия — сразу в форму заказа. */
+function start(to: string) {
+  setRole(picked.value!);
+  picked.value = undefined;
   void router.push(to);
 }
 </script>
 
 <template>
-  <div v-if="onboardingOpen" class="onboarding" role="dialog" aria-modal="true" :aria-label="$t('onboarding.aria')">
-    <div class="top">
-      <button v-if="role" type="button" class="link" @click="role = undefined">{{ $t('onboarding.back') }}</button>
-      <span v-else class="logo" aria-hidden="true">
-        Fixum
-        <span class="logo-bar"><span /></span>
-      </span>
-      <button type="button" class="link" @click="closeOnboarding">{{ $t('onboarding.skip') }}</button>
+  <div v-if="open" class="onboarding" role="dialog" aria-modal="true" :aria-label="$t('onboarding.aria')">
+    <div v-if="picked" class="top">
+      <button type="button" class="link" @click="picked = undefined">{{ $t('onboarding.back') }}</button>
+      <button type="button" class="link" @click="start(ROLE_HOME[picked])">{{ $t('onboarding.skip') }}</button>
     </div>
 
-    <template v-if="!role">
+    <template v-if="!picked">
+      <div class="brand">
+        <img src="/logo.webp" alt="" width="128" height="128" />
+        <span>Fixum</span>
+      </div>
       <div class="intro">
         <h1>{{ $t('onboarding.title') }}</h1>
         <p>{{ $t('onboarding.intro') }}</p>
       </div>
 
-      <button type="button" class="role advertiser" @click="role = 'advertiser'">
+      <button type="button" class="role advertiser" @click="picked = 'advertiser'">
         <span class="role-head">
           <span class="role-icon">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -58,7 +55,7 @@ function start() {
         <span class="role-text">{{ $t('onboarding.advertiserText') }}</span>
       </button>
 
-      <button type="button" class="role creator" @click="role = 'creator'">
+      <button type="button" class="role creator" @click="picked = 'creator'">
         <span class="role-head">
           <span class="role-icon">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
@@ -75,10 +72,10 @@ function start() {
 
     <template v-else>
       <div class="intro">
-        <h1>{{ $t(`onboarding.${role}.title`) }}</h1>
+        <h1>{{ $t(`onboarding.${picked}.title`) }}</h1>
       </div>
       <ol class="steps">
-        <li v-for="(s, i) in steps(role)" :key="s">
+        <li v-for="(s, i) in steps(picked)" :key="s">
           <span class="num" aria-hidden="true">{{ i + 1 }}</span>
           <span>{{ s }}</span>
         </li>
@@ -86,7 +83,13 @@ function start() {
       <p class="note">
         {{ $t('onboarding.note') }}
       </p>
-      <button type="button" class="main-button start" @click="start">{{ $t(`onboarding.${role}.action`) }}</button>
+      <button
+        type="button"
+        class="main-button start"
+        @click="start(picked === 'advertiser' ? '/my-orders/new' : ROLE_HOME.creator)"
+      >
+        {{ $t(`onboarding.${picked}.action`) }}
+      </button>
     </template>
   </div>
 </template>
@@ -110,27 +113,23 @@ function start() {
   align-items: center;
   min-height: 44px;
 }
-.logo {
+.brand {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  align-items: center;
+  gap: 10px;
+  padding-top: 8px;
+}
+.brand img {
+  width: 128px;
+  height: 128px;
+  border-radius: 32px;
+}
+.brand span {
   font-family: var(--font-display);
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 700;
-  letter-spacing: -0.8px;
-  line-height: 1;
-}
-.logo-bar {
-  height: 5px;
-  border-radius: 3px;
-  background: var(--separator);
-}
-.logo-bar span {
-  display: block;
-  width: 60%;
-  height: 100%;
-  border-radius: 3px;
-  background: var(--accent);
+  letter-spacing: -0.6px;
 }
 .link {
   min-height: 44px;

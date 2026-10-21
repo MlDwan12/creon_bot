@@ -15,7 +15,6 @@ import { i18next } from '../i18n';
 import OrderCard from '../components/OrderCard.vue';
 import PlatformIcon from '../components/PlatformIcon.vue';
 import SupportLink from '../components/SupportLink.vue';
-import { onboardingOpen } from '../onboarding';
 
 // ref() — реактивное значение: поменяли `.value` в коде, и шаблон ниже перерисовался сам.
 const category = ref<OrderCategory>();
@@ -133,7 +132,7 @@ watch(platform, (p) => {
     </button>
 
     <footer class="footer">
-      <button type="button" class="quiet-link" @click="onboardingOpen = true">{{ $t('catalog.howItWorks') }}</button>
+      <RouterLink to="/learn" class="quiet-link">{{ $t('catalog.howItWorks') }}</RouterLink>
       <SupportLink />
       <RouterLink to="/privacy" class="quiet-link">{{ $t('catalog.privacy') }}</RouterLink>
     </footer>
