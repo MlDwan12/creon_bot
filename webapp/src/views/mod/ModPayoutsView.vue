@@ -78,7 +78,10 @@ void load();
       <p v-else class="hint">Кошелька в заявке нет — уточните реквизиты в теме креатора.</p>
 
       <template v-if="rejecting === p.id">
-        <textarea v-model="comment" rows="2" maxlength="500" placeholder="Причина — её увидит креатор" />
+        <label class="field-label">
+          <span>Причина отказа</span>
+          <textarea v-model="comment" rows="2" maxlength="500" placeholder="Её увидит креатор" />
+        </label>
         <div class="two">
           <button type="button" class="secondary" :disabled="busy" @click="rejecting = undefined">Отмена</button>
           <button type="button" class="reject" :disabled="busy || !comment.trim()" @click="decide(p, 'reject')">
@@ -194,11 +197,11 @@ textarea {
 }
 .approve {
   background: var(--success);
-  color: #fff;
+  color: var(--accent-text);
 }
 .reject {
   background: var(--danger);
-  color: #fff;
+  color: var(--accent-text);
 }
 .error {
   margin: 0;

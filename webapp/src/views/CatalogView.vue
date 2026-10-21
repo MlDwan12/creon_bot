@@ -171,7 +171,7 @@ watch(platform, (p) => {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 14px;
   border: 1.5px solid var(--separator);
   border-radius: 20px;
@@ -194,7 +194,7 @@ watch(platform, (p) => {
   gap: 6px;
 }
 .chips.soft button {
-  min-height: 34px;
+  min-height: 44px;
   padding: 0 12px;
   border: none;
   border-radius: 10px;

@@ -43,7 +43,10 @@ async function send() {
         <h1>{{ $t('support.title') }}</h1>
         <span class="hint">{{ about || $t('support.hint') }}</span>
       </header>
-      <textarea v-model="text" rows="6" maxlength="1000" :placeholder="$t('support.placeholder')" />
+      <label class="field-label">
+        <span>{{ $t('support.label') }}</span>
+        <textarea v-model="text" rows="6" maxlength="1000" :placeholder="$t('support.placeholder')" />
+      </label>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <div class="bottom-bar">
         <button type="button" class="main-button" :disabled="busy || !text.trim()" @click="send">

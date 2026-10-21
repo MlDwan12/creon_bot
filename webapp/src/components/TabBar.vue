@@ -8,7 +8,9 @@ const moderator = computed(() => route.path.startsWith('/mod'));
 </script>
 
 <template>
-  <nav class="tabbar" :aria-label="$t('tabs.aria')">
+  <!-- Подложка до края экрана: под плавающей плашкой не просвечивает прокрученный контент. -->
+  <div class="tabbar">
+  <nav class="bar" :aria-label="$t('tabs.aria')">
     <!-- RouterLink — ссылка, которая переключает экран без перезагрузки страницы. -->
     <template v-if="moderator">
       <RouterLink to="/mod" class="tab" exact-active-class="active">
@@ -71,15 +73,23 @@ const moderator = computed(() => route.path.startsWith('/mod'));
       </RouterLink>
     </template>
   </nav>
+  </div>
 </template>
 
 <style scoped>
-/* Плавающая тёмная плашка над краем экрана; активная вкладка — лаймовая «таблетка». */
 .tabbar {
   position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: var(--safe-bottom);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 16px 12px var(--safe-bottom);
+  background: linear-gradient(to bottom, transparent, var(--bg) 45%);
+  /* прозрачный верх подложки не перехватывает касания */
+  pointer-events: none;
+}
+/* Плавающая тёмная плашка над краем экрана; активная вкладка — лаймовая «таблетка». */
+.bar {
+  pointer-events: auto;
   display: grid;
   /* 3 вкладки у модератора, 5 у остальных. */
   grid-auto-flow: column;
@@ -95,10 +105,10 @@ const moderator = computed(() => route.path.startsWith('/mod'));
   align-items: center;
   justify-content: center;
   gap: 3px;
-  min-height: 48px;
+  min-height: 52px;
   border-radius: 20px;
   color: var(--ink-hint);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;

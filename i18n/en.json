@@ -183,7 +183,8 @@
     "sentText": "A manager will reply in the chat with the Fixum bot — you can continue the conversation there.",
     "title": "Message a manager",
     "hint": "Questions, problems, payments — we'll reply in the chat with the bot",
-    "placeholder": "Your message"
+    "placeholder": "Your message",
+    "label": "Message"
   },
   "learn": {
     "title": "Learn",
@@ -394,7 +395,8 @@
     "linkPlaceholder": "Profile link: https://…",
     "addLink": "Add",
     "removeLink": "Remove link",
-    "linksHint": "TikTok, YouTube, VK, Instagram or X — you can add several accounts on one platform, up to 10 links."
+    "linksHint": "TikTok, YouTube, VK, Instagram or X — you can add several accounts on one platform, up to 10 links.",
+    "banReasonLabel": "Reason for the ban"
   },
   "myOrders": {
     "loadError": "Couldn't load your orders",
@@ -514,7 +516,8 @@
     "portfolio": "Allow showing the video in the creator's portfolio",
     "rate": "Rate",
     "videoFrom": "Video by {{name}}",
-    "reportVideo": "Report this video"
+    "reportVideo": "Report this video",
+    "reviewLabel": "Review — optional"
   },
   "bot": {
     "intro": "👋 Fixum is a marketplace for video ads.\n\nAdvertisers post tasks, creators take them on and get paid for views.\n\nOrders, applications and moderation are in the app 👇\nQuestions? Just send a message here — a Fixum manager will reply.",

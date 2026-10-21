@@ -266,7 +266,10 @@ void load();
           <button type="button" class="edit" @click="unban">{{ $t('profile.unban') }}</button>
         </template>
         <template v-else-if="banning">
-          <textarea v-model="banReason" rows="2" maxlength="500" :placeholder="$t('profile.banReason')" />
+          <label class="field-label">
+            <span>{{ $t('profile.banReasonLabel') }}</span>
+            <textarea v-model="banReason" rows="2" maxlength="500" :placeholder="$t('profile.banReason')" />
+          </label>
           <div class="buttons">
             <button type="button" :disabled="busy" @click="banning = false">{{ $t('common.cancel') }}</button>
             <button type="button" class="danger" :disabled="busy || !banReason.trim()" @click="ban">{{ $t('profile.ban') }}</button>
@@ -617,7 +620,7 @@ h1 {
 }
 .account-action {
   flex: none;
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 14px;
   border: none;
   border-radius: 10px;
@@ -704,7 +707,7 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 36px;
+  min-height: 44px;
   max-width: 100%;
   padding: 0 14px 0 6px;
   overflow: hidden;
@@ -718,7 +721,7 @@ h1 {
 }
 .edit {
   align-self: flex-start;
-  min-height: 36px;
+  min-height: 44px;
   padding: 0;
   border: none;
   background: none;
@@ -833,7 +836,7 @@ h1 {
   height: 36px;
   border-radius: 10px;
   background: var(--ink);
-  color: #fff;
+  color: var(--ink-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -896,12 +899,12 @@ h1 {
 }
 .buttons .danger {
   background: var(--danger);
-  color: #fff;
+  color: var(--accent-text);
   font-weight: 600;
 }
 .remove {
   align-self: flex-start;
-  min-height: 36px;
+  min-height: 44px;
   padding: 0;
   border: none;
   background: none;

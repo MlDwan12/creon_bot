@@ -36,6 +36,15 @@ const props = defineProps<{ id?: string }>();
 const rubPerUsdt = ref<number | null>(null);
 void fetchRate().then((r) => (rubPerUsdt.value = r));
 
+/** Что стоит в форме нового заказа, пока рекламодатель не поменял: любое видео 15–60 сек, порог 250, без срока. */
+const DEFAULTS = {
+  minViews: 250,
+  minDurationSec: 15,
+  maxDurationSec: 60,
+  orientation: null,
+  deadlineDays: null,
+} as const;
+
 /** undefined — «не менять» (только при правке), null — без срока. */
 const DEADLINES: (number | null | undefined)[] = [3, 7, 14, 30, null];
 /** Подпись варианта срока: «7 дн», «нет», при правке — «как было». */
@@ -49,9 +58,10 @@ const route = useRoute();
 const router = useRouter();
 
 // reactive() — как ref(), но для объекта целиком: form.title и т.д. без `.value`.
-// Обязательно всё, кроме ссылки на товар, и значений по умолчанию нет — рекламодатель выбирает сам.
-// v-model.number отдаёт '' для пустого ввода; undefined у выбора — ещё не выбрали («Любое» — null,
-// «Любая площадка» — []). У срока при правке undefined — «как было», это тоже выбор.
+// Обязательно всё, кроме ссылки на товар. Требования к ролику и срок заполнены по умолчанию
+// (DEFAULTS) — не трогал, они и уйдут; тексты, категорию и бюджет рекламодатель задаёт сам.
+// v-model.number отдаёт '' для пустого ввода. «Любое» — null, «Любая площадка» — [], категория
+// undefined — ещё не выбрали. У срока при правке undefined — «как было».
 const form = reactive<
   Omit<
     NewOrderInput,
@@ -72,8 +82,8 @@ const form = reactive<
     minViews: number | '';
     minDurationSec: number | '';
     maxDurationSec: number | '';
-    orientation: NewOrderInput['orientation'] | undefined;
-    platforms: VideoPlatform[] | undefined;
+    orientation: NewOrderInput['orientation'];
+    platforms: VideoPlatform[];
     category: NewOrderInput['category'] | undefined;
     deadlineDays: number | null | undefined;
   }
@@ -83,16 +93,12 @@ const form = reactive<
   referenceUrl: '',
   targetUrl: '',
   budget: '',
-  minViews: '',
-  minDurationSec: '',
-  maxDurationSec: '',
-  orientation: undefined,
-  platforms: undefined,
+  ...DEFAULTS,
+  // при правке срок по умолчанию — «как было», а не «без срока»
+  deadlineDays: props.id === undefined ? DEFAULTS.deadlineDays : undefined,
+  platforms: [],
   category: undefined,
-  deadlineDays: undefined,
 });
-/** Выбрали срок: при правке «как было» (undefined) — тоже выбор, при создании — нет. */
-const deadlinePicked = computed(() => props.id !== undefined || form.deadlineDays !== undefined);
 /** Редактируемый заказ — для подсказки, что открытый уйдёт на повторную проверку. */
 const editing = ref<MyOrder>();
 const deadlines = computed(() => (props.id ? [undefined, ...DEADLINES] : DEADLINES));
@@ -124,27 +130,22 @@ async function prefill() {
 
 /** Отметить площадку или снять отметку; «Любая» — пустой список. */
 function togglePlatform(p: VideoPlatform) {
-  const list = form.platforms ?? [];
+  const list = form.platforms;
   form.platforms = list.includes(p) ? list.filter((x) => x !== p) : [...list, p];
 }
 
 async function submit() {
   error.value = '';
-  // Поля ввода проверяет браузер (required), выбор кнопками — здесь; тексты — те же, что у бэкенда.
-  const { orientation, platforms, category } = form;
-  const missing = (key: string) => {
-    error.value = i18next.t(key);
-  };
-  if (orientation === undefined) return missing('errors.chooseOrientation');
-  if (platforms === undefined) return missing('errors.choosePlatforms');
-  if (category === undefined) return missing('errors.chooseCategory');
-  if (!deadlinePicked.value) return missing('errors.chooseDeadline');
+  // Поля ввода проверяет браузер (required), категорию — здесь; текст — тот же, что у бэкенда.
+  const { category } = form;
+  if (category === undefined) {
+    error.value = i18next.t('errors.chooseCategory');
+    return;
+  }
   sending.value = true;
   try {
     const input = {
       ...form,
-      orientation,
-      platforms,
       category,
       referenceUrl: form.referenceUrl.trim() || null,
       targetUrl: form.targetUrl.trim() || null,
@@ -154,7 +155,7 @@ async function submit() {
       maxDurationSec: Number(form.maxDurationSec),
     };
     if (props.id) await updateOrder(Number(props.id), input);
-    // при создании «как было» не бывает — deadlinePicked выше гарантирует выбор
+    // при создании «как было» не бывает — срок по умолчанию null
     else await createOrder({ ...input, deadlineDays: form.deadlineDays ?? null });
     await router.replace('/my-orders');
   } catch (err) {
@@ -270,7 +271,7 @@ void prefill();
       <fieldset class="field">
         <legend class="section-title">{{ $t('createOrder.platforms') }}</legend>
         <div class="chips">
-          <button type="button" :aria-pressed="form.platforms?.length === 0" @click="form.platforms = []">
+          <button type="button" :aria-pressed="form.platforms.length === 0" @click="form.platforms = []">
             {{ $t('createOrder.anyPlatform') }}
           </button>
           <button
@@ -278,10 +279,10 @@ void prefill();
             :key="p"
             type="button"
             class="with-icon"
-            :aria-pressed="!!form.platforms?.includes(p)"
+            :aria-pressed="!!form.platforms.includes(p)"
             @click="togglePlatform(p)"
           >
-            <PlatformIcon :platform="p" :size="26" round :inverse="!!form.platforms?.includes(p)" />
+            <PlatformIcon :platform="p" :size="26" round :inverse="!!form.platforms.includes(p)" />
             {{ PLATFORM_NAMES[p] }}
           </button>
         </div>
@@ -440,7 +441,7 @@ legend {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 14px;
   border: 1.5px solid var(--separator);
   border-radius: 20px;
@@ -504,7 +505,7 @@ legend {
   background: var(--fill);
 }
 .segmented button {
-  min-height: 34px;
+  min-height: 44px;
   border: none;
   border-radius: 7px;
   background: none;

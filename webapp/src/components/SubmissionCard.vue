@@ -144,7 +144,7 @@ async function resubmit() {
   overflow-wrap: anywhere;
 }
 .copy {
-  min-height: 32px;
+  min-height: 44px;
   padding: 0 12px;
   border: none;
   border-radius: 8px;

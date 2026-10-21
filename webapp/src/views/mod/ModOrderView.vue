@@ -274,11 +274,11 @@ h1 {
 }
 .reject {
   background: var(--danger);
-  color: #fff;
+  color: var(--accent-text);
 }
 .approve {
   background: var(--success);
-  color: #fff;
+  color: var(--accent-text);
 }
 .reference {
   margin: 0;

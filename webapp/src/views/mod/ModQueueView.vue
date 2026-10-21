@@ -184,7 +184,10 @@ void load();
           </ul>
 
           <div v-if="banningKey === keyOf(g)" class="ban-form">
-            <textarea v-model="banReason" rows="2" maxlength="500" placeholder="Причина — автор её увидит" />
+            <label class="field-label">
+              <span>Причина блокировки</span>
+              <textarea v-model="banReason" rows="2" maxlength="500" placeholder="Её увидит автор" />
+            </label>
             <div class="actions">
               <button type="button" @click="banningKey = ''">Отмена</button>
               <button type="button" class="danger" :disabled="!banReason.trim()" @click="resolve(g, true, banReason)">
@@ -331,7 +334,7 @@ h1 {
   background: var(--fill);
 }
 .segmented button {
-  min-height: 34px;
+  min-height: 44px;
   border: none;
   border-radius: 7px;
   background: none;
@@ -429,7 +432,7 @@ a.subject {
 }
 .ban-link {
   align-self: center;
-  min-height: 36px;
+  min-height: 44px;
   border: none;
   background: none;
   color: var(--danger);

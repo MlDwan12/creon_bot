@@ -224,7 +224,7 @@ h1 {
   background: var(--fill);
 }
 .segmented button {
-  min-height: 34px;
+  min-height: 44px;
   border: none;
   border-radius: 7px;
   background: none;

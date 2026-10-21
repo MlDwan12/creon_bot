@@ -256,7 +256,7 @@ const remove = () =>
 }
 .buttons button {
   flex: 1 1 auto;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 12px;
   border: none;
   border-radius: 10px;

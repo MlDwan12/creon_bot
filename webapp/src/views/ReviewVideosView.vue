@@ -202,12 +202,15 @@ void load();
               ★
             </button>
           </div>
-          <textarea
-            v-model="feedback.review"
-            rows="3"
-            maxlength="500"
-            :placeholder="$t('review.reviewPlaceholder')"
-          />
+          <label class="field-label">
+            <span>{{ $t('review.reviewLabel') }}</span>
+            <textarea
+              v-model="feedback.review"
+              rows="3"
+              maxlength="500"
+              :placeholder="$t('review.reviewPlaceholder')"
+            />
+          </label>
           <label class="check">
             <input v-model="feedback.portfolioAllowed" type="checkbox" />
             {{ $t('review.portfolio') }}
@@ -301,7 +304,7 @@ void load();
   background: var(--fill);
 }
 .segmented button {
-  min-height: 32px;
+  min-height: 44px;
   padding: 0 10px;
   border: none;
   border-radius: 7px;
@@ -379,7 +382,7 @@ h1 {
   height: 52px;
   border-radius: 12px;
   background: var(--ink);
-  color: #fff;
+  color: var(--ink-text);
   display: flex;
   align-items: center;
   justify-content: center;
