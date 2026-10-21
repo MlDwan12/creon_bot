@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { RouterLink } from 'vue-router';
 import { fetchModFunnel, fetchModStats, type ModFunnel, type ModStats } from '../../api';
 import { formatMoney } from '../../format';
 
@@ -74,6 +75,11 @@ const steps = computed(() => {
         <div class="tile"><strong>{{ stats.submissions.rejected }}</strong><span>видео отклонено</span></div>
       </div>
     </template>
+
+    <RouterLink to="/mod/what-works" class="link-row">
+      <span>Что работает</span>
+      <small>какие заказы берут, смотрят и одобряют · аудитория</small>
+    </RouterLink>
 
     <div class="segmented" role="tablist" aria-label="Период воронки">
       <button
@@ -207,6 +213,24 @@ h1 {
 .tile span {
   font-size: 13px;
   color: var(--hint);
+}
+.link-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.link-row small {
+  color: var(--hint);
+  font-size: 13px;
+  font-weight: 400;
 }
 .hint {
   margin: 0;

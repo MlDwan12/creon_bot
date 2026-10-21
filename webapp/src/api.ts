@@ -293,6 +293,34 @@ export interface ModFunnel {
   };
 }
 
+/** Метрики заказов с одним значением признака — см. AnalyticsService.whatWorks. */
+export interface WhatWorksRow {
+  /** Значение признака: код категории, площадки, ориентации; длительность — '15'|'30'|'60'|'LONG';
+   *  ставка — USDT за 1000 просмотров строкой; 'ANY' — требование не задано. */
+  key: string;
+  orders: number;
+  /** Взяли в работу из открывших карточку, %. */
+  takeRate: number | null;
+  /** Средние просмотры одобренного ролика. */
+  avgViews: number | null;
+  /** Одобрено из решённых роликов, %. */
+  approveRate: number | null;
+}
+
+export type WhatWorksSlice = 'category' | 'platform' | 'orientation' | 'duration' | 'cpm';
+
+export interface WhatWorks {
+  /** Меньше заказов в строке — «мало данных». */
+  minOrders: number;
+  slices: Record<WhatWorksSlice, WhatWorksRow[]>;
+  /** Пользователи за период по последнему кабинету и тому, что делали. */
+  audience: {
+    cabinet: 'CREATOR' | 'ADVERTISER' | null;
+    activity: 'both' | 'orders' | 'videos' | 'none';
+    count: number;
+  }[];
+}
+
 export interface ModOrderRow {
   id: number;
   title: string;
@@ -700,6 +728,10 @@ export function fetchModStats() {
 /** Воронка за последние `days` дней; без аргумента — за всё время. См. src/api/analytics.service.ts. */
 export function fetchModFunnel(days?: number) {
   return request<ModFunnel>('GET', `/api/mod/funnel${days ? `?days=${days}` : ''}`);
+}
+
+export function fetchWhatWorks(days?: number) {
+  return request<WhatWorks>('GET', `/api/mod/what-works${days ? `?days=${days}` : ''}`);
 }
 
 /** statuses — фильтр по статусам; пусто — все. */

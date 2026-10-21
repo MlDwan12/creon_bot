@@ -1291,6 +1291,60 @@ describe('бизнес-метрики', () => {
   });
 });
 
+describe('что работает', () => {
+  it('срезы по требованиям заказа и аудитория по кабинету и делам', async () => {
+    const [advertiser, creator, idle] = [
+      await user(),
+      await user(),
+      await user(),
+    ];
+    await prisma.user.update({
+      where: { id: creator.id },
+      data: { cabinet: 'CREATOR' },
+    });
+    const order = await openOrder(advertiser.id);
+    await orders.markViewed(order.id, creator.id);
+    await orders.markViewed(order.id, idle.id);
+    const ok = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(ok.id, creator.id, videoUrl(), VIEWS);
+    await submissions.moderatorApprove(ok.id, 1n, VIEWS);
+    const bad = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(bad.id, creator.id, videoUrl(), VIEWS);
+    await submissions.moderatorReject(bad.id, 1n, 'брак');
+    // требования — после сдачи: ссылки тестовых роликов ни к какой площадке не относятся
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { platforms: ['TIKTOK', 'YOUTUBE'], maxDurationSec: 30 },
+    });
+    await pendingOrder(advertiser.id); // не опубликован — в срезы не идёт
+
+    const w = await analytics.whatWorks();
+    const row = { orders: 1, takeRate: 50, avgViews: VIEWS, approveRate: 50 };
+    expect(w.slices).toEqual({
+      category: [{ key: 'OTHER', ...row }],
+      platform: [
+        { key: 'TIKTOK', ...row },
+        { key: 'YOUTUBE', ...row },
+      ],
+      orientation: [{ key: 'ANY', ...row }],
+      duration: [{ key: '30', ...row }],
+      cpm: [{ key: '100', ...row }],
+    });
+    expect(w.audience).toEqual(
+      expect.arrayContaining([
+        { cabinet: null, activity: 'orders', count: 1 },
+        { cabinet: 'CREATOR', activity: 'videos', count: 1 },
+        { cabinet: null, activity: 'none', count: 1 },
+      ]),
+    );
+    expect(w.audience).toHaveLength(3);
+
+    const future = await analytics.whatWorks(new Date(Date.now() + DAY));
+    expect(future.slices.category).toEqual([]);
+    expect(future.audience).toEqual([]);
+  });
+});
+
 describe('профиль креатора', () => {
   /** Ролик креатора одобрен модератором, оценки ещё нет. */
   async function approvedVideo(advertiserId: number, creatorId: number) {

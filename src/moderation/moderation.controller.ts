@@ -79,6 +79,14 @@ function parseVersion(body: unknown): Date {
   return version;
 }
 
+/** Начало периода из `days` (1–365); без него — всё время. */
+function periodStart(days?: number) {
+  if (days === undefined) return undefined;
+  if (days < 1 || days > 365)
+    throw new BadRequestException('Период — от 1 до 365 дней');
+  return new Date(Date.now() - days * DAY_MS);
+}
+
 /**
  * Окно модератора в Mini App. Гонки двух модераторов над одним пунктом отсекают условные переходы
  * статусов (src/orders/order-status.ts, src/submissions/submission-status.ts).
@@ -160,11 +168,15 @@ export class ModerationController {
   /** Воронка за последние `days` дней (1–365); без параметра — за всё время. */
   @Get('funnel')
   funnel(@Query('days', new ParseIntPipe({ optional: true })) days?: number) {
-    if (days !== undefined && (days < 1 || days > 365))
-      throw new BadRequestException('Период — от 1 до 365 дней');
-    return this.analytics.funnel(
-      days === undefined ? undefined : new Date(Date.now() - days * DAY_MS),
-    );
+    return this.analytics.funnel(periodStart(days));
+  }
+
+  /** Что работает — срезы по требованиям заказа и аудитория; период — как у воронки. */
+  @Get('what-works')
+  whatWorks(
+    @Query('days', new ParseIntPipe({ optional: true })) days?: number,
+  ) {
+    return this.analytics.whatWorks(periodStart(days));
   }
 
   /** Все заказы любого статуса — страница, новые первыми. */

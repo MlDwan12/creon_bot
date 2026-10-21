@@ -18,6 +18,7 @@ import ModPayoutsView from './views/mod/ModPayoutsView.vue';
 import ModQueueView from './views/mod/ModQueueView.vue';
 import ModStatsView from './views/mod/ModStatsView.vue';
 import ModVideoView from './views/mod/ModVideoView.vue';
+import ModWhatWorksView from './views/mod/ModWhatWorksView.vue';
 import MyOrdersView from './views/MyOrdersView.vue';
 import MySubmissionsView from './views/MySubmissionsView.vue';
 import ReviewVideosView from './views/ReviewVideosView.vue';
@@ -92,6 +93,7 @@ export const router = createRouter({
     { path: '/mod/orders', component: ModAllOrdersView },
     { path: '/mod/stats', component: ModStatsView },
     { path: '/mod/payouts', component: ModPayoutsView },
+    { path: '/mod/what-works', component: ModWhatWorksView, meta: { back: true } },
     {
       path: '/mod/orders/:id',
       component: ModOrderView,
