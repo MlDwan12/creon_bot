@@ -48,6 +48,11 @@ async function withdraw() {
   }
 }
 
+/** TXy7…6tQ — целиком адрес виден в профиле. */
+function shortWallet(w: string) {
+  return w.length > 14 ? `${w.slice(0, 4)}…${w.slice(-6)}` : w;
+}
+
 void load();
 </script>
 
@@ -97,19 +102,27 @@ void load();
       </p>
       <form v-else-if="balance.available >= balance.minPayout" class="withdraw" @submit.prevent="withdraw">
         <label for="amount" class="section-title">{{ $t('balance.amount') }}</label>
-        <input
-          id="amount"
-          v-model.number="amount"
-          type="number"
-          inputmode="numeric"
-          :min="balance.minPayout"
-          :max="Math.floor(balance.available)"
-          step="1"
-          required
-        />
-        <p class="hint">
-          {{ $t('balance.walletHint', { wallet: balance.wallet }) }}
-        </p>
+        <div class="amount-row">
+          <input
+            id="amount"
+            v-model.number="amount"
+            type="number"
+            inputmode="numeric"
+            :min="balance.minPayout"
+            :max="Math.floor(balance.available)"
+            step="1"
+            required
+          />
+          <button type="button" class="all" @click="amount = Math.floor(balance.available)">{{ $t('balance.all') }}</button>
+        </div>
+        <div class="wallet-row">
+          <span>
+            <small>{{ $t('balance.wallet') }}</small>
+            <strong>{{ shortWallet(balance.wallet) }}</strong>
+          </span>
+          <RouterLink to="/profile">{{ $t('balance.changeWallet') }}</RouterLink>
+        </div>
+        <p class="hint">{{ $t('balance.walletHint') }}</p>
         <p v-if="error" class="error" role="alert">{{ error }}</p>
         <button type="submit" class="main-button" :disabled="busy || !amount">
           {{ busy ? $t('common.sending') : $t('balance.withdraw') }}
@@ -204,6 +217,50 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.amount-row {
+  display: flex;
+  gap: 8px;
+}
+.amount-row input {
+  flex: 1;
+  min-width: 0;
+}
+.all {
+  flex: none;
+  min-height: 50px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--link);
+  font-weight: 800;
+}
+.wallet-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.wallet-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wallet-row small {
+  color: var(--hint);
+  font-size: 12px;
+}
+.wallet-row a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--link);
+  font-weight: 700;
+  text-decoration: none;
 }
 .withdraw input {
   min-height: 50px;

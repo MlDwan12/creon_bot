@@ -90,6 +90,11 @@ export interface MySubmission {
   videoUrl: string | null;
   comment: string | null;
   createdAt: string;
+  submittedAt: string | null;
+  /** Когда модератор одобрил или отклонил. */
+  decidedAt: string | null;
+  /** Одобрен, итога ещё нет — до когда холд (потом деньги можно вывести). */
+  holdEndsAt: string | null;
   /** До когда прислать видео (только «в работе»): конец слота или срок заказа, что раньше. */
   dueAt: string | null;
   /** На проверке — заявлено креатором, после одобрения — зафиксировано модератором. */
@@ -100,7 +105,8 @@ export interface MySubmission {
   finalized: boolean;
   /** Ссылка на товар для описания ролика — путь `/r/<код>` от адреса мини-аппа; null — у заказа нет товара. */
   trackPath: string | null;
-  order: {
+  /** VideoFormat — требования к ролику, для самопроверки перед сдачей. */
+  order: VideoFormat & {
     id: number;
     title: string;
     cpm: number | null;

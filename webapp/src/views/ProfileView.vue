@@ -246,6 +246,63 @@ void load();
         <button v-else type="button" class="remove" @click="banning = true">{{ $t('profile.banUser') }}</button>
       </section>
 
+
+
+
+
+
+
+
+
+
+      <!-- Свой профиль — тремя группами: деньги, что видят заказчики, настройки. Чужой — только витрина. -->
+      <template v-if="own">
+        <h2 class="group">{{ $t('profile.groupPayouts') }}</h2>
+        <RouterLink v-if="balance" to="/balance" class="balance">
+          <span>
+            <small>{{ $t('submissions.balance') }}</small>
+            <strong>{{ formatMoney(balance.available) }}</strong>
+            <small v-if="balance.held">{{ $t('submissions.heldShort', { amount: formatMoney(balance.held) }) }}</small>
+          </span>
+          <span class="balance-action">{{ $t('submissions.withdraw') }}</span>
+        </RouterLink>
+        <section v-if="own" class="block">
+          <h2 class="section-title">{{ $t('profile.walletTitle') }}</h2>
+          <form v-if="editingWallet" class="links-form" @submit.prevent="saveWallet">
+            <label>
+              <span>{{ $t('profile.walletLabel') }}</span>
+              <input
+                v-model.trim="wallet"
+                autocomplete="off"
+                autocapitalize="off"
+                spellcheck="false"
+                maxlength="64"
+                placeholder="T…"
+              />
+            </label>
+            <p class="hint">{{ $t('profile.walletHint') }}</p>
+            <p v-if="walletError" class="error" role="alert">{{ walletError }}</p>
+            <div class="buttons">
+              <button type="button" :disabled="busy" @click="editingWallet = false">{{ $t('common.cancel') }}</button>
+              <button type="submit" class="primary" :disabled="busy">{{ $t('common.save') }}</button>
+            </div>
+          </form>
+          <template v-else-if="profile.wallet">
+            <p class="wallet">{{ profile.wallet }}</p>
+            <button type="button" class="edit" @click="startWallet">{{ $t('profile.walletChange') }}</button>
+          </template>
+          <!-- без кошелька вывести нельзя — заметно, с кнопкой, а не серой строкой -->
+          <div v-else class="wallet-cta">
+            <strong>{{ $t('profile.walletEmpty') }}</strong>
+            <button type="button" class="main-button" @click="startWallet">{{ $t('profile.walletAddCta') }}</button>
+          </div>
+        </section>
+      </template>
+
+      <template v-if="own">
+        <h2 class="group">{{ $t('profile.groupPublic') }}</h2>
+        <p class="hint group-hint">{{ $t('profile.groupPublicHint') }}</p>
+      </template>
       <div class="tiles">
         <div class="tile">
           <strong>{{ profile.rating ?? '—' }}</strong>
@@ -256,87 +313,6 @@ void load();
           <span>{{ $t('profile.approved') }}</span>
         </div>
       </div>
-
-      <RouterLink v-if="balance" to="/balance" class="balance">
-        <span>
-          <small>{{ $t('submissions.balance') }}</small>
-          <strong>{{ formatMoney(balance.available) }}</strong>
-          <small v-if="balance.held">{{ $t('submissions.heldShort', { amount: formatMoney(balance.held) }) }}</small>
-        </span>
-        <span class="balance-action">{{ $t('submissions.withdraw') }}</span>
-      </RouterLink>
-
-      <section v-if="own" class="block">
-        <h2 class="section-title">{{ $t('profile.walletTitle') }}</h2>
-        <form v-if="editingWallet" class="links-form" @submit.prevent="saveWallet">
-          <label>
-            <span>{{ $t('profile.walletLabel') }}</span>
-            <input
-              v-model.trim="wallet"
-              autocomplete="off"
-              autocapitalize="off"
-              spellcheck="false"
-              maxlength="64"
-              placeholder="T…"
-            />
-          </label>
-          <p class="hint">{{ $t('profile.walletHint') }}</p>
-          <p v-if="walletError" class="error" role="alert">{{ walletError }}</p>
-          <div class="buttons">
-            <button type="button" :disabled="busy" @click="editingWallet = false">{{ $t('common.cancel') }}</button>
-            <button type="submit" class="primary" :disabled="busy">{{ $t('common.save') }}</button>
-          </div>
-        </form>
-        <template v-else>
-          <p v-if="profile.wallet" class="wallet">{{ profile.wallet }}</p>
-          <p v-else class="hint">{{ $t('profile.walletEmpty') }}</p>
-          <button type="button" class="edit" @click="startWallet">
-            {{ profile.wallet ? $t('profile.walletChange') : $t('profile.walletAdd') }}
-          </button>
-        </template>
-      </section>
-
-      <section v-if="own && accounts.length" class="block">
-        <h2 class="section-title">{{ $t('profile.accountsTitle') }}</h2>
-        <p class="hint">{{ $t('profile.accountsHint') }}</p>
-        <template v-for="a in accounts" :key="a.platform">
-          <div v-for="acc in a.accounts" :key="acc.id" class="switch-row account-row">
-            <PlatformIcon :platform="a.platform" :size="40" />
-            <span>
-              {{ a.name }}{{ acc.label ? ` · ${acc.label}` : '' }}
-              <small>{{ $t('profile.connected') }}</small>
-            </span>
-            <button type="button" class="account-action quiet" @click="disconnectAccount(a, acc)">{{ $t('profile.disconnect') }}</button>
-          </div>
-          <div v-if="!a.accounts.length" class="switch-row account-row">
-            <PlatformIcon :platform="a.platform" :size="40" />
-            <span>
-              {{ a.name }}
-              <small>{{ $t('profile.notConnected') }}</small>
-            </span>
-            <button type="button" class="account-action" @click="connectAccount(a)">{{ $t('profile.connect') }}</button>
-          </div>
-          <button v-else-if="a.canAdd" type="button" class="add-account" @click="connectAccount(a)">
-            {{ $t('profile.addAccount', { name: a.name }) }}
-          </button>
-        </template>
-        <p v-if="accountsError" class="error" role="alert">{{ accountsError }}</p>
-      </section>
-
-      <section v-if="own" class="block">
-        <h2 class="section-title">{{ $t('profile.notificationsTitle') }}</h2>
-        <label class="switch-row">
-          <span>
-            {{ $t('profile.newOrders') }}
-            <small>{{ $t('profile.newOrdersHint') }}</small>
-          </span>
-          <input type="checkbox" role="switch" :checked="profile.notifyNewOrders ?? true" @change="toggleNewOrders" />
-        </label>
-        <p v-if="notifyError" class="error" role="alert">{{ notifyError }}</p>
-      </section>
-
-      <AppSettings v-if="own" />
-
       <section class="block">
         <h2 class="section-title">{{ $t('profile.linksTitle') }}</h2>
         <form v-if="editing" class="links-form" @submit.prevent="saveLinks">
@@ -384,7 +360,6 @@ void load();
           </button>
         </template>
       </section>
-
       <section v-if="profile.portfolio.length" class="block">
         <h2 class="section-title">{{ $t('profile.portfolio') }}</h2>
         <!-- рекламодателю ссылки не приходят (ведут на аккаунт креатора) — только названия работ -->
@@ -399,7 +374,6 @@ void load();
           </div>
         </template>
       </section>
-
       <section class="block">
         <h2 class="section-title">{{ $t('profile.reviews') }}</h2>
         <p v-if="!profile.reviews.length" class="hint">{{ $t('profile.noReviews') }}</p>
@@ -423,6 +397,48 @@ void load();
         </article>
         <p v-if="error && !editing" class="error" role="alert">{{ error }}</p>
       </section>
+
+      <template v-if="own">
+        <h2 class="group">{{ $t('profile.groupSettings') }}</h2>
+        <section v-if="own && accounts.length" class="block">
+          <h2 class="section-title">{{ $t('profile.accountsTitle') }}</h2>
+          <p class="hint">{{ $t('profile.accountsHint') }}</p>
+          <template v-for="a in accounts" :key="a.platform">
+            <div v-for="acc in a.accounts" :key="acc.id" class="switch-row account-row">
+              <PlatformIcon :platform="a.platform" :size="40" />
+              <span>
+                {{ a.name }}{{ acc.label ? ` · ${acc.label}` : '' }}
+                <small>{{ $t('profile.connected') }}</small>
+              </span>
+              <button type="button" class="account-action quiet" @click="disconnectAccount(a, acc)">{{ $t('profile.disconnect') }}</button>
+            </div>
+            <div v-if="!a.accounts.length" class="switch-row account-row">
+              <PlatformIcon :platform="a.platform" :size="40" />
+              <span>
+                {{ a.name }}
+                <small>{{ $t('profile.notConnected') }}</small>
+              </span>
+              <button type="button" class="account-action" @click="connectAccount(a)">{{ $t('profile.connect') }}</button>
+            </div>
+            <button v-else-if="a.canAdd" type="button" class="add-account" @click="connectAccount(a)">
+              {{ $t('profile.addAccount', { name: a.name }) }}
+            </button>
+          </template>
+          <p v-if="accountsError" class="error" role="alert">{{ accountsError }}</p>
+        </section>
+        <section v-if="own" class="block">
+          <h2 class="section-title">{{ $t('profile.notificationsTitle') }}</h2>
+          <label class="switch-row">
+            <span>
+              {{ $t('profile.newOrders') }}
+              <small>{{ $t('profile.newOrdersHint') }}</small>
+            </span>
+            <input type="checkbox" role="switch" :checked="profile.notifyNewOrders ?? true" @change="toggleNewOrders" />
+          </label>
+          <p v-if="notifyError" class="error" role="alert">{{ notifyError }}</p>
+        </section>
+        <AppSettings v-if="own" />
+      </template>
 
       <RouterLink
         v-if="!own && !moderator"
@@ -785,6 +801,31 @@ h1 {
 .quiet-link.start {
   align-self: flex-start;
   padding: 0;
+}
+/* группы своего профиля: «Выплаты», «Публичный профиль», «Настройки» */
+.group {
+  margin: 12px 0 -4px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+}
+.group-hint {
+  margin-top: -8px;
+}
+.wallet-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: var(--orange-soft);
+  color: var(--orange-text);
+  font-size: 15px;
+}
+.wallet-cta .main-button {
+  height: 48px;
+  background: var(--orange);
+  color: var(--lime-text);
 }
 .ban {
   display: flex;

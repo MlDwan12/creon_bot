@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router';
 import { categoryLabel, PLATFORM_NAMES, type OrderSummary } from '../api';
-import { formatDate, formatMoney, formatViews, timeAgo } from '../format';
+import { budgetViews, formatDate, formatMoney, formatViews, timeAgo } from '../format';
 import PlatformIcon from './PlatformIcon.vue';
 
 // Входные параметры компонента: <OrderCard :order="o" /> в CatalogView передаёт сюда заказ.
@@ -35,17 +35,16 @@ defineProps<{ order: OrderSummary }>();
       <div class="desc">{{ order.description }}</div>
     </div>
 
-    <div class="price">
-      <template v-if="order.cpm !== null">
-        <span class="money cpm">{{ formatMoney(order.cpm) }}</span>
-        <span class="per">{{ $t('money.perThousand') }}</span>
-      </template>
-      <span v-else class="per">{{ $t('money.cpmPending') }}</span>
+    <!-- лайм — деньги: ставка плашкой с тёмным текстом читается в обеих темах -->
+    <div v-if="order.cpm !== null" class="price">
+      <span class="money cpm">{{ formatMoney(order.cpm) }}</span>
+      <span class="per">{{ $t('money.perThousand') }}</span>
     </div>
+    <span v-else class="per">{{ $t('money.cpmPending') }}</span>
 
     <div class="meta">
       <span :class="['free', { low: order.budgetLow }]">
-        {{ $t('orderCard.left', { amount: formatMoney(order.free) }) }}<template v-if="order.budgetLow">{{ $t('orderCard.hurry') }}</template>
+        {{ $t('orderCard.left', { amount: formatMoney(order.free) }) }}<template v-if="order.cpm"> · {{ $t('orderCard.approxViews', { views: formatViews(budgetViews(order.free, order.cpm)) }) }}</template><template v-if="order.budgetLow">{{ $t('orderCard.hurry') }}</template>
       </span>
       <span>{{ $t('orderCard.minViews', { views: formatViews(order.minViews) }) }}</span>
     </div>
@@ -124,13 +123,20 @@ defineProps<{ order: OrderSummary }>();
   overflow: hidden;
 }
 .price {
+  align-self: flex-start;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: var(--lime);
+  color: var(--lime-text);
 }
 .cpm {
-  font-size: 24px;
-  color: var(--link);
+  font-size: 20px;
+}
+.price .per {
+  color: var(--lime-text);
 }
 .per {
   font-size: 12px;

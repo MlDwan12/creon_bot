@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import {
+  fetchMyProfile,
   fetchOpenOrders,
   categoryLabel,
   ORDER_CATEGORIES,
@@ -8,10 +9,12 @@ import {
   type OrderSummary,
   PLATFORM_NAMES,
   VIDEO_PLATFORMS,
+  updateNotifications,
   type VideoPlatform,
 } from '../api';
 import { RouterLink } from 'vue-router';
 import { i18next } from '../i18n';
+import EmptyState from '../components/EmptyState.vue';
 import OrderCard from '../components/OrderCard.vue';
 import PlatformIcon from '../components/PlatformIcon.vue';
 import SupportLink from '../components/SupportLink.vue';
@@ -56,6 +59,34 @@ async function load(reset: boolean) {
   } finally {
     if (requestId === lastRequest) loading.value = false;
   }
+}
+
+const filtered = computed(() => Boolean(category.value || platform.value));
+const empty = computed(() => !loading.value && !error.value && orders.value.length === 0);
+
+// Пустой каталог: предлагаем включить сообщения о новых заказах, если они выключены.
+// undefined — ещё не знаем (не показываем ни кнопку, ни текст про бота).
+const notifyOn = ref<boolean>();
+watch(
+  empty,
+  (e) => {
+    if (e && notifyOn.value === undefined)
+      fetchMyProfile().then((p) => (notifyOn.value = p.notifyNewOrders ?? true), () => {});
+  },
+  { immediate: true },
+);
+async function notifyMe() {
+  try {
+    await updateNotifications(true);
+    notifyOn.value = true;
+  } catch {
+    // не вышло — кнопка останется, можно нажать ещё раз
+  }
+}
+
+function resetFilters() {
+  category.value = undefined;
+  platform.value = undefined;
 }
 
 // Сменилась категория или площадка — грузим заново; immediate — и сразу при открытии экрана.
@@ -106,9 +137,28 @@ watch(platform, (p) => {
     </nav>
 
     <p v-if="error" class="hint">{{ error }}</p>
-    <p v-else-if="!loading && orders.length === 0" class="hint">
-      {{ $t('catalog.empty') }}
-    </p>
+    <EmptyState v-else-if="empty && filtered" :title="$t('catalog.filteredTitle')" :text="$t('catalog.filteredText')">
+      <template #icon>
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M20 20l-4-4" />
+        </svg>
+      </template>
+      <button type="button" class="main-button" @click="resetFilters">{{ $t('catalog.resetFilters') }}</button>
+    </EmptyState>
+    <EmptyState
+      v-else-if="empty"
+      :title="$t('catalog.emptyTitle')"
+      :text="notifyOn === undefined ? undefined : notifyOn ? $t('catalog.emptyNotifyOn') : $t('catalog.emptyNotifyOff')"
+    >
+      <template #icon>
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+          <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+        </svg>
+      </template>
+      <button v-if="notifyOn === false" type="button" class="main-button" @click="notifyMe">{{ $t('catalog.notifyMe') }}</button>
+    </EmptyState>
     <h2 v-else-if="total > 0" class="section-title count">{{ $t('catalog.openCount', { count: total }) }}</h2>
 
     <!-- Первая загрузка — заготовки карточек вместо пустого экрана. -->
@@ -164,6 +214,8 @@ watch(platform, (p) => {
   margin: 0 -16px;
   padding: 0 16px;
   scrollbar-width: none;
+  /* затухание у правого края: видно, что ряд прокручивается */
+  mask-image: linear-gradient(to right, #000 85%, transparent);
 }
 .chips button {
   flex: none;
@@ -183,9 +235,9 @@ watch(platform, (p) => {
   padding-left: 6px;
 }
 .chips button[aria-pressed='true'] {
-  border-color: var(--ink);
-  background: var(--ink);
-  color: var(--ink-text);
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
   font-weight: 800;
 }
 /* Категории — второй уровень фильтра: тише площадок. */
