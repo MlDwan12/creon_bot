@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router';
 import { fetchMySubmissions, type MySubmission } from '../api';
 import { i18next } from '../i18n';
 import EmptyState from '../components/EmptyState.vue';
+import LoadState from '../components/LoadState.vue';
 import SubmissionCard from '../components/SubmissionCard.vue';
 
 const items = ref<MySubmission[]>([]);
@@ -28,6 +29,8 @@ const done = computed(() =>
 );
 
 async function load() {
+  loading.value = true;
+  error.value = '';
   try {
     items.value = await fetchMySubmissions();
   } catch {
@@ -54,8 +57,7 @@ void load();
       </button>
     </div>
 
-    <p v-if="loading" class="hint">{{ $t('common.loading') }}</p>
-    <p v-else-if="error" class="hint">{{ error }}</p>
+    <LoadState v-if="loading || error" :error="error" @retry="load" />
 
     <template v-else-if="tab === 'active'">
       <EmptyState

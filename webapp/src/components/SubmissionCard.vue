@@ -299,7 +299,9 @@ async function resubmit() {
   background: var(--success-soft);
   color: var(--success-text);
 }
+/* тёмная обводка — лайм на белом сам по себе почти не виден; в тёмной теме она сливается с фоном */
 .now .dot {
+  border: 2px solid var(--lime-text);
   background: var(--lime);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--lime) 25%, transparent);
 }

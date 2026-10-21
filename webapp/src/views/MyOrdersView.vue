@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { fetchMyOrders, type MyOrder } from '../api';
 import EmptyState from '../components/EmptyState.vue';
+import LoadState from '../components/LoadState.vue';
 import MyOrderCard from '../components/MyOrderCard.vue';
 import { i18next } from '../i18n';
 
@@ -11,9 +12,10 @@ const loading = ref(true);
 const error = ref('');
 
 async function load() {
+  loading.value = true;
+  error.value = '';
   try {
     orders.value = await fetchMyOrders();
-    error.value = '';
   } catch {
     error.value = i18next.t('myOrders.loadError');
   } finally {
@@ -28,8 +30,7 @@ void load();
   <main class="page">
     <h1>{{ $t('myOrders.title') }}</h1>
 
-    <p v-if="loading" class="hint">{{ $t('common.loading') }}</p>
-    <p v-else-if="error" class="hint">{{ error }}</p>
+    <LoadState v-if="loading || error" :error="error" @retry="load" />
     <EmptyState v-else-if="orders.length === 0" :title="$t('myOrders.emptyTitle')" :text="$t('myOrders.empty')">
       <template #icon>
         <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">

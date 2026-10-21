@@ -111,7 +111,9 @@
     "save": "Save",
     "done": "Done",
     "sending": "Sending…",
-    "send": "Send"
+    "send": "Send",
+    "loadFailed": "Couldn't load",
+    "retry": "Try again"
   },
   "time": {
     "inDays_one": "in {{count}} day",
@@ -130,7 +132,8 @@
   "banned": {
     "title": "Account blocked",
     "reason": "Reason: {{reason}}",
-    "hint": "If this is a mistake, contact support."
+    "hint": "If this is a mistake, contact support.",
+    "write": "Contact support"
   },
   "reasonPicker": {
     "title": "If you reject — the reason",
@@ -184,12 +187,13 @@
     "whatsWrong": "What's wrong",
     "describe": "Describe what's wrong",
     "commentOptional": "Comment — optional",
-    "submit": "Send report"
+    "submit": "Send report",
+    "otherRequired": "For “Other”, describe the problem — the report can’t be sent without it."
   },
   "support": {
     "sendError": "Couldn't send",
     "sentTitle": "Message sent",
-    "sentText": "A manager will reply in the chat with the Fixum bot — you can continue the conversation there.",
+    "sentText": "We’ll reply here, in the chat with the bot, usually within a day.",
     "title": "Message a manager",
     "hint": "Questions, problems, payments — we'll reply in the chat with the bot",
     "placeholder": "Your message",

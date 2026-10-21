@@ -5,6 +5,7 @@ import { ApiError, categoryLabel, claimOrder, fetchOrder, PLATFORM_NAMES, type O
 import PlatformIcon from '../components/PlatformIcon.vue';
 import { i18next, tList } from '../i18n';
 import SupportLink from '../components/SupportLink.vue';
+import LoadState from '../components/LoadState.vue';
 import { budgetViews, formatCompact, formatDeadline, formatMoney, formatViews, videoFormatParts } from '../format';
 import { safeUrl } from '../telegram';
 
@@ -18,6 +19,7 @@ const claimError = ref('');
 const justClaimed = ref(false);
 
 async function load() {
+  loadError.value = '';
   try {
     order.value = await fetchOrder(Number(props.id));
   } catch (err) {
@@ -66,8 +68,7 @@ onUnmounted(() => clearInterval(refresh));
 
 <template>
   <main class="detail">
-    <p v-if="loadError" class="hint">{{ loadError }}</p>
-    <p v-else-if="!order" class="hint">{{ $t('common.loading') }}</p>
+    <LoadState v-if="loadError || !order" :error="loadError" @retry="load" />
 
     <template v-else>
       <!-- Главное о заказе — в одном ярком блоке: площадки, название, ставка, остаток. -->

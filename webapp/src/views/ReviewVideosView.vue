@@ -13,6 +13,7 @@ import {
 import PlatformIcon from '../components/PlatformIcon.vue';
 import SupportLink from '../components/SupportLink.vue';
 import UserAvatar from '../components/UserAvatar.vue';
+import LoadState from '../components/LoadState.vue';
 import { formatDate, formatMoney, formatViews } from '../format';
 import { i18next } from '../i18n';
 import { safeUrl } from '../telegram';
@@ -66,6 +67,7 @@ const error = ref('');
 const onModeration = ref(new Set<number>());
 
 async function load() {
+  loadError.value = '';
   try {
     data.value = await fetchOrderReport(Number(props.id));
   } catch (err) {
@@ -100,8 +102,7 @@ void load();
 
 <template>
   <main class="page">
-    <p v-if="loadError" class="hint">{{ loadError }}</p>
-    <p v-else-if="!data" class="hint">{{ $t('common.loading') }}</p>
+    <LoadState v-if="loadError || !data" :error="loadError" @retry="load" />
 
     <template v-else>
       <header class="head">

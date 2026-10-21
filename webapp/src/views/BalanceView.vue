@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { ApiError, type Balance, fetchBalance, fetchRate, requestPayout } from '../api';
 import SupportLink from '../components/SupportLink.vue';
+import LoadState from '../components/LoadState.vue';
 import { approxRub, formatDate, formatMoney } from '../format';
 import { i18next, locale } from '../i18n';
 
@@ -25,6 +26,7 @@ const rubPerUsdt = ref<number | null>(null);
 void fetchRate().then((r) => (rubPerUsdt.value = r));
 
 async function load() {
+  loadError.value = '';
   try {
     balance.value = await fetchBalance();
     // выводим целые USDT, без центов
@@ -60,8 +62,7 @@ void load();
   <main class="page">
     <h1>{{ $t('balance.title') }}</h1>
 
-    <p v-if="loadError" class="hint">{{ loadError }}</p>
-    <p v-else-if="!balance" class="hint">{{ $t('common.loading') }}</p>
+    <LoadState v-if="loadError || !balance" :error="loadError" @retry="load" />
 
     <template v-else>
       <!-- Две плашки: что можно вывести сейчас и что ещё в холде (HOLD_DAYS после одобрения). -->

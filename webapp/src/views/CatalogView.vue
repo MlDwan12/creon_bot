@@ -18,6 +18,7 @@ import EmptyState from '../components/EmptyState.vue';
 import OrderCard from '../components/OrderCard.vue';
 import PlatformIcon from '../components/PlatformIcon.vue';
 import SupportLink from '../components/SupportLink.vue';
+import LoadState from '../components/LoadState.vue';
 
 // ref() — реактивное значение: поменяли `.value` в коде, и шаблон ниже перерисовался сам.
 const category = ref<OrderCategory>();
@@ -136,7 +137,7 @@ watch(platform, (p) => {
       </button>
     </nav>
 
-    <p v-if="error" class="hint">{{ error }}</p>
+    <LoadState v-if="error" :error="error" @retry="load(true)" />
     <EmptyState v-else-if="empty && filtered" :title="$t('catalog.filteredTitle')" :text="$t('catalog.filteredText')">
       <template #icon>
         <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -162,13 +163,7 @@ watch(platform, (p) => {
     <h2 v-else-if="total > 0" class="section-title count">{{ $t('catalog.openCount', { count: total }) }}</h2>
 
     <!-- Первая загрузка — заготовки карточек вместо пустого экрана. -->
-    <template v-if="loading && orders.length === 0">
-      <div v-for="i in 3" :key="i" class="skeleton" aria-hidden="true">
-        <span class="bone short"></span>
-        <span class="bone"></span>
-        <span class="bone mid"></span>
-      </div>
-    </template>
+    <LoadState v-if="loading && orders.length === 0" />
     <OrderCard v-for="o in orders" :key="o.id" :order="o" />
 
     <button
@@ -268,31 +263,6 @@ watch(platform, (p) => {
 .hint {
   margin: 0;
   color: var(--hint);
-}
-.skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  border-radius: var(--radius-card);
-  background: var(--surface);
-  animation: pulse 1.4s ease-in-out infinite;
-}
-.bone {
-  height: 16px;
-  border-radius: 8px;
-  background: var(--fill);
-}
-.bone.short {
-  width: 40%;
-}
-.bone.mid {
-  width: 65%;
-}
-@keyframes pulse {
-  50% {
-    opacity: 0.5;
-  }
 }
 .more {
   min-height: 48px;

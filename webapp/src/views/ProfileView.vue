@@ -22,6 +22,7 @@ import {
 import AppSettings from '../components/AppSettings.vue';
 import PlatformIcon from '../components/PlatformIcon.vue';
 import UserAvatar from '../components/UserAvatar.vue';
+import LoadState from '../components/LoadState.vue';
 import { describeVideoUrl, formatDate, formatMoney } from '../format';
 import { i18next } from '../i18n';
 import { confirmAction, openExternalLink, safeUrl } from '../telegram';
@@ -40,6 +41,7 @@ const balance = ref<Balance>();
 if (own) void fetchBalance().then((b) => (balance.value = b), () => {});
 
 async function load() {
+  loadError.value = '';
   try {
     profile.value = own ? await fetchMyProfile() : await fetchCreator(Number(props.id));
     links.value = [...profile.value.links];
@@ -216,8 +218,7 @@ void load();
 
 <template>
   <main class="page">
-    <p v-if="loadError" class="hint">{{ loadError }}</p>
-    <p v-else-if="!profile" class="hint">{{ $t('common.loading') }}</p>
+    <LoadState v-if="loadError || !profile" :error="loadError" @retry="load" />
 
     <template v-else>
       <header class="head">

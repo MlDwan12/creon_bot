@@ -3,6 +3,7 @@ import { computed, nextTick, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { ApiError, fetchMySubmissions, type MySubmission, PLATFORM_NAMES, submitVideo } from '../api';
 import PlatformIcon from '../components/PlatformIcon.vue';
+import LoadState from '../components/LoadState.vue';
 import { i18next, tList } from '../i18n';
 import { describeVideoUrl, formatCpm, formatDeadline, formatMoney, formatViews, videoFormatParts } from '../format';
 
@@ -11,6 +12,8 @@ const props = defineProps<{ id: string }>();
 
 const submission = ref<MySubmission>();
 const loadError = ref('');
+/** Ролик уже сдан или отклик не найден — повторять загрузку незачем. */
+const alreadySent = ref(false);
 const url = ref('');
 // '' — поле пустое; v-model.number отдаёт '' для пустого ввода.
 const views = ref<number | ''>('');
@@ -66,10 +69,11 @@ const sendError = ref('');
 const sent = ref(false);
 
 async function load() {
+  loadError.value = '';
   try {
     const found = (await fetchMySubmissions()).find((s) => s.id === Number(props.id));
     if (found?.status === 'IN_PROGRESS') submission.value = found;
-    else loadError.value = i18next.t('submit.alreadySent');
+    else alreadySent.value = true;
   } catch {
     loadError.value = i18next.t('submit.loadError');
   }
@@ -98,10 +102,10 @@ void load();
   <main class="page">
     <h1>{{ $t('submit.title') }}</h1>
 
-    <p v-if="loadError" class="hint">
-      {{ loadError }} <RouterLink to="/submissions">{{ $t('submit.toSubmissions') }}</RouterLink>
+    <p v-if="alreadySent" class="hint">
+      {{ $t('submit.alreadySent') }} <RouterLink to="/submissions">{{ $t('submit.toSubmissions') }}</RouterLink>
     </p>
-    <p v-else-if="!submission" class="hint">{{ $t('common.loading') }}</p>
+    <LoadState v-else-if="loadError || !submission" :error="loadError" @retry="load" />
 
     <template v-else-if="sent">
       <p class="notice" role="status">
