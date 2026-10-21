@@ -10,6 +10,7 @@ import {
   rateVideo,
   sendReportCsv,
 } from '../api';
+import PlatformIcon from '../components/PlatformIcon.vue';
 import SupportLink from '../components/SupportLink.vue';
 import UserAvatar from '../components/UserAvatar.vue';
 import { formatDate, formatMoney, formatViews } from '../format';
@@ -28,6 +29,19 @@ const items = computed(() => {
     ? list
     : [...list].sort((a, b) => (b.approvedAt ?? '').localeCompare(a.approvedAt ?? ''));
 });
+/** Воронка полосами: открыли → взяли → одобрено; доля — от открывших карточку. */
+const funnelBars = computed(() => {
+  const f = data.value?.funnel;
+  if (!f) return [];
+  const pct = (n: number) => (f.viewers ? Math.round((n / f.viewers) * 100) : 0);
+  return [
+    { label: i18next.t('review.viewers'), value: f.viewers, percent: f.viewers ? 100 : 0, tone: '' },
+    { label: i18next.t('review.taken'), value: f.taken, percent: pct(f.taken), tone: '' },
+    { label: i18next.t('review.approvedShort'), value: f.approved, percent: pct(f.approved), tone: 'ok' },
+  ];
+});
+const maxPlatformViews = computed(() => Math.max(0, ...(data.value?.platforms ?? []).map((p) => p.views)));
+
 const csvState = ref<'idle' | 'sending' | 'sent'>('idle');
 const csvError = ref('');
 
@@ -95,44 +109,52 @@ void load();
         <h1>{{ $t('review.title') }}</h1>
       </header>
 
-      <section class="tiles">
-        <div class="tile">
-          <strong>{{ formatViews(data.summary.views) }}</strong><span>{{ $t('review.viewsLikes', { likes: formatViews(data.summary.likes) }) }}</span>
+      <section class="hero">
+        <span class="money views">{{ formatViews(data.summary.views) }}</span>
+        <span class="hint">{{ $t('review.viewsLikes', { likes: formatViews(data.summary.likes) }) }}</span>
+        <div class="bar" aria-hidden="true">
+          <span :style="{ width: `${Math.min(100, (data.summary.spent / data.summary.budget) * 100)}%` }" />
         </div>
-        <div class="tile"><strong>{{ data.summary.videos }}</strong><span>{{ $t('review.videosCreators', { creators: data.summary.creators }) }}</span></div>
-        <div class="tile">
-          <strong>{{ formatMoney(data.summary.spent) }}</strong><span>{{ $t('review.spentOf', { budget: formatMoney(data.summary.budget) }) }}</span>
-        </div>
-        <div class="tile">
-          <strong>{{ data.summary.cpm === null ? '—' : formatMoney(data.summary.cpm) }}</strong><span>{{ $t('review.perThousand') }}</span>
-        </div>
-        <div v-if="data.summary.clicks !== null" class="tile">
-          <strong>{{ formatViews(data.summary.clicks) }}</strong><span>{{ $t('review.clicks') }}</span>
-        </div>
+        <span class="hint">
+          <b>{{ formatMoney(data.summary.spent) }}</b> {{ $t('review.spentOf', { budget: formatMoney(data.summary.budget) })
+          }}<template v-if="data.summary.reserved">{{ $t('review.reserved', { amount: formatMoney(data.summary.reserved) }) }}</template>
+        </span>
       </section>
-      <p class="hint">
-        {{ $t('review.left', { amount: formatMoney(data.summary.left) })
-        }}<template v-if="data.summary.reserved">{{
-          $t('review.reserved', { amount: formatMoney(data.summary.reserved) })
-        }}</template>{{ $t('review.withFee') }}
-      </p>
+      <section class="kpis">
+        <div><b>{{ data.summary.videos }}</b>{{ $t('review.videosCreators', { creators: data.summary.creators }) }}</div>
+        <div><b>{{ data.summary.cpm === null ? '—' : formatMoney(data.summary.cpm) }}</b>{{ $t('review.perThousand') }}</div>
+        <div v-if="data.summary.clicks !== null"><b>{{ formatViews(data.summary.clicks) }}</b>{{ $t('review.clicks') }}</div>
+      </section>
+      <p class="hint">{{ $t('review.left', { amount: formatMoney(data.summary.left) }) }}{{ $t('review.withFee') }}</p>
 
-      <section class="rows" :aria-label="$t('review.funnel')">
-        <div class="row"><span>{{ $t('review.viewers') }}</span><span>{{ data.funnel.viewers }}</span></div>
-        <div class="row"><span>{{ $t('review.taken') }}</span><span>{{ data.funnel.taken }}</span></div>
-        <div class="row"><span>{{ $t('review.expired') }}</span><span>{{ data.funnel.expired }}</span></div>
-        <div class="row"><span>{{ $t('review.rejected') }}</span><span>{{ data.funnel.rejected }}</span></div>
-        <div class="row"><span>{{ $t('review.onReview') }}</span><span>{{ data.funnel.onReview }} · {{ data.funnel.approved }}</span></div>
+      <h2 class="section-title flush">{{ $t('review.funnel') }}</h2>
+      <section class="bars">
+        <div v-for="f in funnelBars" :key="f.label" class="bar-row">
+          <span>{{ f.label }}</span>
+          <b>{{ f.value }}</b>
+          <div class="track" aria-hidden="true"><span :class="f.tone" :style="{ width: `${f.percent}%` }" /></div>
+        </div>
+        <p class="funnel-rest">
+          {{ $t('review.onReviewShort', { count: data.funnel.onReview }) }} ·
+          {{ $t('review.expiredShort', { count: data.funnel.expired }) }} ·
+          {{ $t('review.rejectedShort', { count: data.funnel.rejected }) }}
+        </p>
       </section>
 
       <article v-for="i in data.insights" :key="i.code" class="insight">
-        <p>💡 {{ i.text }}</p>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0 0 12 3z" />
+        </svg>
+        <p>{{ i.text }}</p>
       </article>
 
-      <section v-if="data.platforms.length" class="rows">
-        <div v-for="p in data.platforms" :key="p.platform" class="row">
-          <span>{{ PLATFORM_NAMES[p.platform] }}</span>
-          <span>{{ $t('review.platformViews', { videos: p.videos, views: formatViews(p.views) }) }}</span>
+      <section v-if="data.platforms.length" class="bars">
+        <div v-for="p in data.platforms" :key="p.platform" class="bar-row">
+          <span class="platform"><PlatformIcon :platform="p.platform" :size="22" round />{{ PLATFORM_NAMES[p.platform] }}</span>
+          <small class="right">{{ $t('review.platformViews', { videos: p.videos, views: formatViews(p.views) }) }}</small>
+          <div class="track" aria-hidden="true">
+            <span :style="{ width: `${maxPlatformViews ? (p.views / maxPlatformViews) * 100 : 0}%` }" />
+          </div>
         </div>
       </section>
 
@@ -172,7 +194,9 @@ void load();
         </RouterLink>
 
         <a v-if="safeUrl(item.videoUrl)" :href="safeUrl(item.videoUrl)" target="_blank" rel="noopener noreferrer" class="video">
-          <span class="play" aria-hidden="true">▶</span>
+          <span class="play" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z" /></svg>
+          </span>
           <span class="link">
             <span class="url">{{ item.videoUrl }}</span>
             <strong>{{ $t('review.open') }}</strong>
@@ -199,7 +223,9 @@ void load();
               :class="{ on: n <= feedback.rating }"
               @click="feedback.rating = n"
             >
-              ★
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 2.5l2.9 6 6.6.8-4.9 4.5 1.3 6.5L12 17l-5.9 3.3 1.3-6.5L2.5 9.3l6.6-.8z" />
+              </svg>
             </button>
           </div>
           <label class="field-label">
@@ -223,7 +249,10 @@ void load();
             </button>
           </div>
         </fieldset>
-        <button v-else type="button" class="secondary" @click="startRating(item.id)">{{ $t('review.rate') }}</button>
+        <!-- оценку не меняют (бэкенд не даст) — кнопка только у неоценённых -->
+        <button v-else-if="!item.rating" type="button" class="secondary" @click="startRating(item.id)">
+          {{ $t('review.rate') }}
+        </button>
 
         <RouterLink
           :to="{ path: '/report', query: { target: 'VIDEO', id: item.id, title: $t('review.videoFrom', { name: item.creator }) } }"
@@ -242,51 +271,119 @@ void load();
 </template>
 
 <style scoped>
-.tiles {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 16px;
+  border-radius: var(--radius-card);
+  background: var(--surface);
 }
-.tile {
+.views {
+  font-size: 34px;
+}
+.hero .hint b {
+  color: var(--text);
+}
+.bar {
+  height: 8px;
+  margin: 10px 0 2px;
+  border-radius: 4px;
+  background: var(--fill);
+  overflow: hidden;
+}
+/* потрачено — лайм: это деньги */
+.bar span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--lime);
+}
+.kpis {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+.kpis div {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 12px 14px;
-  border-radius: 14px;
+  padding: 12px;
+  border-radius: 16px;
   background: var(--surface);
-}
-.tile strong {
-  font-size: 22px;
-}
-.tile span {
-  font-size: 13px;
   color: var(--hint);
+  font-size: 12px;
 }
-.rows {
-  border-radius: 14px;
+.kpis b {
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 16px;
+  white-space: nowrap;
+}
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--radius-card);
   background: var(--surface);
 }
-.rows .row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
-  font-size: 15px;
+.bar-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 14px;
 }
-.rows .row + .row {
+.bar-row .right {
+  color: var(--hint);
+  font-size: 13px;
+}
+.platform {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.track {
+  grid-column: 1 / -1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--fill);
+  overflow: hidden;
+}
+.track span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent);
+}
+.track span.ok {
+  background: var(--success-text);
+}
+.funnel-rest {
+  margin: 0;
+  padding-top: 10px;
   border-top: 1px solid var(--separator);
+  color: var(--hint);
+  font-size: 13px;
 }
 .insight {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: var(--surface);
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: var(--accent-soft);
+  color: var(--link);
+}
+.insight svg {
+  flex: none;
 }
 .insight p {
   margin: 0;
+  color: var(--text);
   font-size: 15px;
+  line-height: 1.45;
 }
 .title-row {
   display: flex;
@@ -406,7 +503,7 @@ h1 {
 }
 .rated {
   margin: 0;
-  color: var(--orange);
+  color: var(--accent);
   font-size: 22px;
 }
 .feedback {
@@ -428,16 +525,19 @@ h1 {
   gap: 4px;
 }
 .stars button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 44px;
   height: 44px;
+  padding: 0;
   border: none;
   background: none;
   color: var(--separator);
-  font-size: 32px;
-  line-height: 1;
 }
+/* фиолетовые звёзды: заметны в обеих темах (оранжевые на светлом фоне не дотягивали по контрасту) */
 .stars button.on {
-  color: var(--orange);
+  color: var(--accent);
 }
 .feedback textarea {
   padding: 10px 12px;

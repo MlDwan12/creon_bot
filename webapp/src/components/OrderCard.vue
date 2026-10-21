@@ -5,12 +5,13 @@ import { budgetViews, formatDate, formatMoney, formatViews, timeAgo } from '../f
 import PlatformIcon from './PlatformIcon.vue';
 
 // Входные параметры компонента: <OrderCard :order="o" /> в CatalogView передаёт сюда заказ.
-defineProps<{ order: OrderSummary }>();
+// preview — та же карточка, но не ссылка: предпросмотр в форме заказа, заказа ещё нет.
+defineProps<{ order: OrderSummary; preview?: boolean }>();
 </script>
 
 <template>
   <!-- {{ }} экранирует HTML сам, поэтому текст от пользователей безопасен. Не использовать v-html. -->
-  <RouterLink :to="`/orders/${order.id}`" class="card">
+  <component :is="preview ? 'div' : RouterLink" :to="preview ? undefined : `/orders/${order.id}`" class="card">
     <div class="top">
       <div class="tags">
         <span v-for="p in order.platforms" :key="p" class="tag platform">
@@ -48,7 +49,7 @@ defineProps<{ order: OrderSummary }>();
       </span>
       <span>{{ $t('orderCard.minViews', { views: formatViews(order.minViews) }) }}</span>
     </div>
-  </RouterLink>
+  </component>
 </template>
 
 <style scoped>

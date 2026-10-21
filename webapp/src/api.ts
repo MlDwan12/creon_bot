@@ -663,6 +663,8 @@ type Me = {
   languageChosen: boolean;
   /** Кабинет, открытый последним (role.ts); null — ещё не выбирал. */
   cabinet: 'creator' | 'advertiser' | null;
+  /** Комиссия площадки для новых заказов, %: бюджет креаторам — без неё. */
+  feePercent: number;
 };
 let me: Promise<Me> | undefined;
 

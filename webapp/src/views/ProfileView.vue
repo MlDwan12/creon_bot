@@ -365,11 +365,15 @@ void load();
         <!-- рекламодателю ссылки не приходят (ведут на аккаунт креатора) — только названия работ -->
         <template v-for="p in profile.portfolio" :key="p.submissionId">
           <a v-if="safeUrl(p.videoUrl)" :href="safeUrl(p.videoUrl)" target="_blank" rel="noopener noreferrer" class="item">
-            <span class="play" aria-hidden="true">▶</span>
+            <span class="play" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z" /></svg>
+            </span>
             <span>{{ p.orderTitle ?? $t('profile.otherOrder') }}</span>
           </a>
           <div v-else class="item">
-            <span class="play done" aria-hidden="true">✓</span>
+            <span class="play done" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7" /></svg>
+            </span>
             <span>{{ p.orderTitle ?? $t('profile.otherOrder') }}</span>
           </div>
         </template>
@@ -788,7 +792,7 @@ h1 {
   gap: 8px;
 }
 .stars {
-  color: var(--orange);
+  color: var(--accent);
   font-size: 17px;
   letter-spacing: 1px;
 }
