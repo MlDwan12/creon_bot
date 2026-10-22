@@ -170,6 +170,7 @@ export class StartUpdate
           sent: 'bot.supportSent',
           unsupported: 'bot.supportUnsupported',
           flood: 'bot.supportFlood',
+          busy: 'bot.supportBusy',
         }[result],
       ),
       Markup.removeKeyboard(),

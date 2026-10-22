@@ -82,6 +82,9 @@ const EXHAUSTED_MESSAGE = () => tr('errors.budgetShort');
  */
 export const MAX_IN_REVIEW = 3;
 
+/** Сколько помним просмотры ролика, посчитанные при сдаче (countedAtSubmit). */
+const SUBMIT_COUNT_TTL_MS = 15 * 60_000;
+
 const ALREADY_CLAIMED_MESSAGE = () => tr('errors.alreadyClaimed');
 
 /** Причина отклонения, когда публикацию удалили до конца холда — креатор увидит её. */
@@ -96,6 +99,10 @@ const isDuplicate = (err: unknown) =>
 @Injectable()
 export class SubmissionsService implements OnApplicationBootstrap {
   private readonly logger = new Logger(SubmissionsService.name);
+  private readonly submitCounts = new Map<
+    string,
+    { views: number | undefined; until: number }
+  >();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -249,15 +256,33 @@ export class SubmissionsService implements OnApplicationBootstrap {
       ? await expandTiktokShortLink(video.url)
       : video.url;
     if (!url) throw new BadRequestException(tr('errors.videoShortLink'));
-    const counted = (
-      await this.viewCounter.fetchViews([{ url, creatorId }])
-    ).get(url)?.views;
+    const counted = await this.countedAtSubmit(url, creatorId);
     return this.attachVideo(
       submissionId,
       creatorId,
       url,
       counted ?? video.views,
     );
+  }
+
+  /**
+   * Просмотры ролика при сдаче по API площадки; undefined — не посчитать. Запоминаем на
+   * SUBMIT_COUNT_TTL_MS: повторные сдачи той же ссылки («не хватило — ещё раз») не тратят квоту
+   * YouTube и платные чтения X.
+   * ponytail: в памяти процесса, инстанс один; старые записи вычищаются при каждой сдаче.
+   */
+  private async countedAtSubmit(url: string, creatorId: number) {
+    const now = Date.now();
+    for (const [k, v] of this.submitCounts)
+      if (v.until < now) this.submitCounts.delete(k);
+    const key = `${creatorId} ${url}`;
+    const cached = this.submitCounts.get(key);
+    if (cached) return cached.views;
+    const views = (await this.viewCounter.fetchViews([{ url, creatorId }])).get(
+      url,
+    )?.views;
+    this.submitCounts.set(key, { views, until: now + SUBMIT_COUNT_TTL_MS });
+    return views;
   }
 
   /**
