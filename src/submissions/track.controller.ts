@@ -22,3 +22,21 @@ export class TrackController {
     res.redirect(302, url);
   }
 }
+
+/**
+ * Ссылка на ролик в отчёте рекламодателя: /v/<код> → ролик на площадке. Ссылку площадки с ником
+ * креатора рекламодатель не видит (videoLinkForAdvertiser). Без авторизации — открывается в браузере.
+ */
+@Controller('v')
+export class VideoLinkController {
+  constructor(private readonly submissionsService: SubmissionsService) {}
+
+  @Get(':code')
+  async go(@Param('code') code: string, @Res() res: Response) {
+    const url = /^[\w-]{1,32}$/.test(code)
+      ? await this.submissionsService.videoByCode(code)
+      : null;
+    if (!url) throw new NotFoundException(tr('errors.linkNotFound'));
+    res.redirect(302, url);
+  }
+}

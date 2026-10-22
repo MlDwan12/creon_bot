@@ -391,6 +391,14 @@ describe('подключение аккаунта', () => {
       ],
     ]);
     expect(sent(statsSpy, 1).url).toContain('/m2/insights?metric=views');
+
+    // следующая страница не на Graph API — в её ссылке токен креатора, туда не идём
+    const evil = replies({
+      data: [],
+      paging: { next: 'https://evil.example/page?access_token=ig-long' },
+    });
+    await accounts.stats(creator.id, 'INSTAGRAM', ['NOTFOUND1']);
+    expect(evil).toHaveBeenCalledTimes(1);
   });
 
   it('Instagram: протух — продлеваем сам долгий токен', async () => {

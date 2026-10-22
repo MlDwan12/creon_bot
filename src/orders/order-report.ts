@@ -11,6 +11,17 @@ import { type Platform, PLATFORMS, platformOf } from '../common/platforms';
 import { budgetSpent } from './budget';
 
 /**
+ * Ссылка на ролик для рекламодателя — через свой редирект /v/<код> (VideoLinkController): в самой
+ * ссылке площадки ник креатора (tiktok.com/@anya/…), а стороны не видят контактов друг друга.
+ * На странице ролика ник всё равно есть — защита частичная, зато не в отчёте и CSV.
+ * null — у старого отклика нет кода.
+ */
+export function videoLinkForAdvertiser(trackCode: string | null) {
+  const base = (process.env.WEBAPP_URL ?? '').replace(/\/$/, '');
+  return trackCode ? `${base}/v/${trackCode}` : null;
+}
+
+/**
  * Отчёт рекламодателю по заказу: сводка, площадки и одобренные ролики (больше просмотров — выше).
  * Деньги — со стороны рекламодателя: выплаты креаторам вместе с комиссией, в USDT. Сколько
  * получил конкретный креатор, рекламодатель не видит.
@@ -48,7 +59,7 @@ export function buildOrderReport(
     });
     return {
       id: s.id,
-      videoUrl: s.videoUrl,
+      videoUrl: videoLinkForAdvertiser(s.trackCode),
       platform,
       creator: publicName(s.creator),
       creatorId: s.creatorId,

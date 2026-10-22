@@ -69,6 +69,7 @@ function serveWebapp(app: NestExpressApplication) {
   app.useStaticAssets(dir);
   // Роутер фронта на History API: /orders/5 — не файл, а экран, поэтому на такие пути отдаём index.html.
   // Пути с точкой — отсутствующие файлы, им честный 404. /r/<код> — ссылки на товар (TrackController),
+  // /v/<код> — на ролик в отчёте рекламодателя (VideoLinkController),
   // /oauth/… — возврат с площадок после подключения аккаунта (OAuthCallbackController).
   const index = join(dir, 'index.html');
   app.use((req: Request, res: Response, next: NextFunction) => {
@@ -76,6 +77,7 @@ function serveWebapp(app: NestExpressApplication) {
       req.method === 'GET' &&
       !req.path.startsWith('/api') &&
       !req.path.startsWith('/r/') &&
+      !req.path.startsWith('/v/') &&
       !req.path.startsWith('/oauth/') &&
       !req.path.includes('.')
     )

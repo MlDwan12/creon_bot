@@ -1,3 +1,4 @@
+import { isDbDate, isDbId } from '../common/validation';
 import { tr } from '../i18n/request-lang';
 import {
   BadRequestException,
@@ -92,7 +93,7 @@ export class OrdersController {
     let after: { createdAt: Date; id: number } | undefined;
     if (afterId !== undefined) {
       const createdAt = new Date(afterCreatedAt ?? '');
-      if (Number.isNaN(createdAt.getTime()))
+      if (!isDbId(afterId) || !isDbDate(createdAt))
         throw new BadRequestException(tr('errors.badPage'));
       after = { createdAt, id: afterId };
     }

@@ -1,3 +1,4 @@
+import { isDbDate } from '../common/validation';
 import {
   BadRequestException,
   Body,
@@ -111,7 +112,7 @@ export function walletChangedHoursBefore(
 function parseVersion(body: unknown): Date {
   const raw = (body as { version?: unknown } | null)?.version;
   const version = typeof raw === 'string' ? new Date(raw) : null;
-  if (!version || Number.isNaN(version.getTime()))
+  if (!version || !isDbDate(version))
     throw new BadRequestException('Откройте заказ заново');
   return version;
 }
@@ -222,7 +223,8 @@ export class ModerationController {
     @Query('page', new DefaultValuePipe(0), ParseIntPipe) rawPage: number,
     @Query('status') status: unknown,
   ) {
-    const page = Math.max(0, rawPage);
+    // огромный номер — смещение больше Int, Prisma упала бы с 500
+    const page = Math.min(Math.max(0, rawPage), 100_000);
     const { items, total } = await this.ordersService.listAll(
       page * PAGE_SIZE,
       PAGE_SIZE,

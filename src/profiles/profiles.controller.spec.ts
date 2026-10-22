@@ -17,8 +17,9 @@ describe('PUT /api/profile/wallet', () => {
     {} as TelegramPhotosService,
     { walletChanged } as unknown as NotificationsService,
   );
-  const req = (payoutWallet: string | null) =>
-    ({ user: { id: 1, payoutWallet } as User }) as ApiRequest;
+  const now = () => Math.floor(Date.now() / 1000);
+  const req = (payoutWallet: string | null, authDate = now()) =>
+    ({ user: { id: 1, payoutWallet } as User, authDate }) as ApiRequest;
 
   beforeEach(() => {
     walletChanged.mockClear();
@@ -37,6 +38,13 @@ describe('PUT /api/profile/wallet', () => {
       [1, WALLET, false],
       [1, null, true],
     ]);
+  });
+
+  it('вход старше часа — сменить кошелёк нельзя: утёкший initData живёт сутки', async () => {
+    await expect(
+      controller.updateWallet({ wallet: WALLET }, req(null, now() - 2 * 3600)),
+    ).rejects.toThrow('откройте мини-апп заново');
+    expect(updateWallet).not.toHaveBeenCalled();
   });
 
   it('тот же адрес — без уведомления', async () => {

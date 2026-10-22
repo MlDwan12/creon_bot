@@ -19,8 +19,14 @@ import { findExactContacts } from '../common/contacts';
 import { toMinor } from '../common/money';
 import { deadlineIn } from './deadline';
 
+/**
+ * Строка из формы: без невидимых символов форматирования — разворот текста (U+202E) подделал бы
+ * вид названия в каталоге и у модератора. Склейку эмодзи (ZWJ, U+200D) оставляем.
+ */
 function text(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
+  return typeof value === 'string'
+    ? value.replace(/(?!\u200d)\p{Cf}/gu, '').trim()
+    : '';
 }
 
 /**
@@ -179,7 +185,12 @@ export function parseCpm(body: unknown): number {
 export function parseBudgetConfirmed(body: unknown): number | null {
   const value = (body as { budgetConfirmed?: unknown } | null)?.budgetConfirmed;
   if (value === undefined || value === null) return null;
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)
+  if (
+    typeof value !== 'number' ||
+    !Number.isFinite(value) ||
+    value <= 0 ||
+    value > MAX_BUDGET
+  )
     throw new BadRequestException('budgetConfirmed — сумма в USDT');
   return toMinor(value);
 }

@@ -18,7 +18,21 @@ import { validateInitData } from './init-data.util';
 // Если понадобится короче — выдавать свою сессию/JWT при входе.
 const INIT_DATA_MAX_AGE_SECONDS = 24 * 60 * 60;
 
-export type ApiRequest = Request & { user: User };
+/** `authDate` — когда Telegram выдал initData (Unix-секунды, из проверенной подписи). */
+export type ApiRequest = Request & { user: User; authDate: number };
+
+/** Вход для смены кошелька и вывода — не старше часа: украденный initData живёт сутки. */
+const FRESH_LOGIN_SECONDS = 60 * 60;
+
+/**
+ * Деньги уходят наружу (кошелёк, вывод) — только со свежего входа: initData живёт сутки, и
+ * утёкший заголовок (скриншот, лог, прокси) иначе сутки давал бы сменить кошелёк и вывести всё.
+ * Мини-апп, открытый дольше часа, достаточно переоткрыть.
+ */
+export function assertFreshLogin(req: ApiRequest) {
+  if (Date.now() / 1000 - req.authDate > FRESH_LOGIN_SECONDS)
+    throw new ForbiddenException(tr('errors.reopenApp'));
+}
 
 /**
  * Авторизация Mini App: заголовок `Authorization: tma <initData>`.
@@ -44,6 +58,7 @@ export class InitDataGuard implements CanActivate {
           )
         : null;
     if (!tgUser) throw new UnauthorizedException();
+    req.authDate = Number(new URLSearchParams(raw).get('auth_date'));
 
     req.user = await this.usersService.findOrCreate({
       telegramId: BigInt(tgUser.id),

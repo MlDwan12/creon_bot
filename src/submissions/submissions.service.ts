@@ -377,6 +377,18 @@ export class SubmissionsService implements OnApplicationBootstrap {
    * считать уникальных по IP. Ролик, отклонённый и сданный заново новым откликом, хранит в описании
    * старую ссылку — её переходы останутся у отклонённого отклика и в отчёт не попадут.
    */
+  /**
+   * Ссылка на ролик по коду — для /v/<код> в отчёте рекламодателя: только одобренный ролик (в отчёт
+   * попадают они), без учёта перехода.
+   */
+  async videoByCode(trackCode: string) {
+    const submission = await this.prisma.submission.findFirst({
+      where: { trackCode, status: SubmissionStatus.MODERATOR_APPROVED },
+      select: { videoUrl: true },
+    });
+    return submission?.videoUrl ?? null;
+  }
+
   async click(trackCode: string) {
     const submission = await this.prisma.submission.findUnique({
       where: { trackCode },

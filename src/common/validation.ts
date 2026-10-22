@@ -36,3 +36,9 @@ export function isDbId(value: unknown): value is number {
     (value as number) <= MAX_DB_ID
   );
 }
+
+/** Дата, которую примет Postgres: JS считает верной и «-010000-01-01», а база ответит 500. */
+export function isDbDate(date: Date): boolean {
+  const year = date.getUTCFullYear();
+  return !Number.isNaN(date.getTime()) && year >= 2000 && year <= 2100;
+}

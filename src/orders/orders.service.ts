@@ -483,8 +483,9 @@ export class OrdersService {
 
   /**
    * Удаляет заказ вместе с откликами — только пока по нему никто не сдал видео: сданные работы
-   * нужны для разбора споров. Условие в самом `deleteMany`, поэтому видео, сданное между
-   * проверкой и удалением, удаление остановит.
+   * нужны для разбора споров. Под блокировкой строки заказа, как и сдача (lockBudget): условие
+   * `deleteMany` само по себе видит снимок на начало запроса и пропустило бы видео, сданное в
+   * ту же миллисекунду, — каскад стёр бы его.
    */
   async remove(orderId: number, advertiserId: number) {
     const order = await this.prisma.order.findUnique({
@@ -494,11 +495,16 @@ export class OrdersService {
     if (!order) throw new NotFoundException(tr('errors.orderNotFound'));
     if (order.advertiserId !== advertiserId)
       throw new ForbiddenException(tr('errors.notYourOrder'));
-    const { count } = await this.prisma.order.deleteMany({
-      where: {
-        id: orderId,
-        submissions: { none: { status: { notIn: NO_VIDEO } } },
-      },
+    const count = await this.prisma.$transaction(async (tx) => {
+      await lockOrder(tx, orderId);
+      return (
+        await tx.order.deleteMany({
+          where: {
+            id: orderId,
+            submissions: { none: { status: { notIn: NO_VIDEO } } },
+          },
+        })
+      ).count;
     });
     if (count === 0) throw new ForbiddenException(tr('errors.cantDelete'));
     return order;
