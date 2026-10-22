@@ -31,10 +31,11 @@ import { DAY_MS, extendedDeadline } from './deadline';
 import { type OrderFunnel, orderInsights } from './order-insights';
 import { buildOrderReport } from './order-report';
 import {
-  closeOpenOrders,
   FROZEN,
   isFrozen,
   lockOrder,
+  type OrderTerms,
+  termsOf,
   transitionOrder,
   tryTransitionOrder,
 } from './order-status';
@@ -341,6 +342,12 @@ export class OrdersService {
         })
       : [];
     await this.prisma.$transaction(async (tx) => {
+      // бюджет и условия — под блокировкой и из свежей строки: снятие модератором (moderatorClose)
+      // могло убрать ссылку из снимка, пока мы читали заказ выше
+      await lockOrder(tx, orderId);
+      const current = await tx.order.findUniqueOrThrow({
+        where: { id: orderId },
+      });
       await transitionOrder(
         tx,
         orderId,
@@ -349,8 +356,8 @@ export class OrdersService {
           status: OrderStatus.CLOSED,
           closedAt: new Date(),
           ...(frozen && {
-            ...(order.prevTerms as ReturnType<typeof termsOf> | null),
-            budgetMinor: order.approvedBudgetMinor!,
+            ...(current.prevTerms as OrderTerms | null),
+            budgetMinor: current.approvedBudgetMinor!,
           }),
         },
         tr('errors.onlyOpenClose'),
@@ -368,16 +375,34 @@ export class OrdersService {
    * Модератор снимает заказ по жалобе — в транзакции решения по жалобам (ReportsService.resolve).
    * Ссылка на товар убирается при любом статусе: /r/ в уже опубликованных роликах не должен вести
    * туда (фишинг) и у закрытого или истёкшего заказа; вернуть её можно только правкой через модератора.
-   * Открытый заказ закрывается, и, в отличие от закрытия рекламодателем, начатые ролики по нему не
-   * принимаются: слоты сгорают. Возвращает закрытый заказ с рекламодателем и откликами — для
-   * уведомлений; `null` — заказ не был открыт.
+   * Убирается и из снимка до правки: иначе закрытие замороженного заказа (close) вернуло бы её.
+   * Открытый или истёкший заказ закрывается (истёкший иначе снова открыли бы продлением), и, в
+   * отличие от закрытия рекламодателем, начатые ролики по нему не принимаются: слоты сгорают.
+   * Возвращает закрытый заказ с рекламодателем и откликами — для уведомлений; `null` — не закрыт.
    */
   async moderatorClose(tx: Prisma.TransactionClient, orderId: number) {
-    await tx.order.updateMany({
+    await lockOrder(tx, orderId);
+    const order = await tx.order.findUnique({ where: { id: orderId } });
+    if (!order) return null;
+    await tx.order.update({
       where: { id: orderId },
-      data: { targetUrl: null },
+      data: {
+        targetUrl: null,
+        ...(order.prevTerms && {
+          prevTerms: {
+            ...(order.prevTerms as Prisma.JsonObject),
+            targetUrl: null,
+          },
+        }),
+      },
     });
-    if ((await closeOpenOrders(tx, [orderId])) === 0) return null;
+    const closed = await tryTransitionOrder(
+      tx,
+      orderId,
+      [OrderStatus.OPEN, OrderStatus.EXPIRED],
+      { status: OrderStatus.CLOSED, closedAt: new Date() },
+    );
+    if (closed === 0) return null;
     await expireSlots(tx, [orderId]);
     return tx.order.findUniqueOrThrow({
       where: { id: orderId },
@@ -842,22 +867,4 @@ function changesNothing(
       v === undefined ||
       norm(k, v) === norm(k, order[k as keyof Order]),
   );
-}
-
-/** Условия заказа, по которым проверяют ролики, — снимок до правки (Order.prevTerms). */
-export function termsOf(order: Order) {
-  return {
-    title: order.title,
-    description: order.description,
-    referenceUrl: order.referenceUrl,
-    targetUrl: order.targetUrl,
-    category: order.category,
-    minViews: order.minViews,
-    // ролики, сданные до правки, оплачиваются по ставке, при которой их сдали (videoTerms)
-    cpmMinor: order.cpmMinor,
-    minDurationSec: order.minDurationSec,
-    maxDurationSec: order.maxDurationSec,
-    orientation: order.orientation,
-    platforms: order.platforms,
-  };
 }

@@ -143,6 +143,7 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
           s.id,
           Math.max(stats.views, s.views ?? 0),
           stats.likes,
+          true,
         );
         this.notifications.viewsFinalized(submission);
       } catch (err) {

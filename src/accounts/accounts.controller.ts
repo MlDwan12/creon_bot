@@ -14,11 +14,11 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { SocialPlatform } from '@prisma/client';
+import { SocialPlatform, type User } from '@prisma/client';
 import type { Response } from 'express';
 import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
-import { creatorLabel, escapeHtml } from '../common/format';
+import { escapeHtml } from '../common/format';
 import { ParseIdPipe } from '../common/parse-id.pipe';
 import { NotificationsService } from '../telegram/notifications.service';
 import { AccountsService } from './accounts.service';
@@ -93,7 +93,7 @@ export class OAuthCallbackController {
         text: tr('errors.oauthConfirmText', {
           platform: name,
           account: label ?? name,
-          profile: creatorLabel(user),
+          profile: profileLabel(user),
         }),
       });
     });
@@ -141,6 +141,18 @@ export class OAuthCallbackController {
         .send(page(tr('errors.oauthFailedTitle'), message));
     }
   }
+}
+
+/**
+ * Чей профиль Fixum на странице подтверждения. Имя в Telegram — свободный текст: «@victim» в имени
+ * не должен выглядеть как настоящий @victim, иначе пересланная ссылка подключит чужой аккаунт.
+ */
+function profileLabel(user: User) {
+  return user.username
+    ? `@${user.username}`
+    : tr('errors.oauthProfileNoUsername', {
+        name: user.firstName ?? `id${user.telegramId}`,
+      });
 }
 
 function page(title: string, text: string, extra = '') {
