@@ -51,23 +51,49 @@ import {
 
 const PAGE_SIZE = 20;
 
+/** Аккаунт, подключённый раньше стольких дней, модератору уже не подсвечиваем. */
+const FRESH_ACCOUNT_DAYS = 7;
+
 /**
  * Чей ролик — модератору: `verified` — посчитан по подключённому аккаунту креатора; `inProfile` —
  * автор есть в соцсетях профиля, но ссылки креатор вписал сам, владение не доказано (иначе
  * вписал бы чужой канал и сдал чужой ролик); `mismatch` — автор известен, но в профиле его нет;
  * `unknown` — площадка автора не отдала. Решает модератор: сдачу и одобрение это не запрещает.
  */
-export function videoAuthor(stats: CountedVideo | undefined, links: string[]) {
-  if (stats?.ownAccount)
-    return { status: 'verified', viaAccount: true, name: null, url: null };
+export function videoAuthor(
+  stats: CountedVideo | undefined,
+  links: string[],
+  now = Date.now(),
+) {
+  if (stats?.ownAccount) {
+    // аккаунт подключили недавно — так привязывают чужой аккаунт по пересланной ссылке входа
+    const days = stats.connectedAt
+      ? Math.floor((now - stats.connectedAt.getTime()) / DAY_MS)
+      : null;
+    return {
+      status: 'verified',
+      viaAccount: true,
+      name: null,
+      url: null,
+      connectedDaysAgo:
+        days !== null && days < FRESH_ACCOUNT_DAYS ? days : null,
+    };
+  }
   const a = stats?.author;
   if (!a)
-    return { status: 'unknown', viaAccount: false, name: null, url: null };
+    return {
+      status: 'unknown',
+      viaAccount: false,
+      name: null,
+      url: null,
+      connectedDaysAgo: null,
+    };
   return {
     status: authorInLinks(a, links) ? 'inProfile' : 'mismatch',
     viaAccount: false,
     name: [a.name, a.handle && `@${a.handle}`].filter(Boolean).join(' · '),
     url: authorUrl(a),
+    connectedDaysAgo: null,
   };
 }
 

@@ -8,6 +8,20 @@ const author = {
 };
 
 describe('videoAuthor', () => {
+  it('свежеподключённый аккаунт — модератору видно, сколько дней назад', () => {
+    const now = Date.parse('2026-10-22T12:00:00Z');
+    const at = (days: number) => new Date(now - days * 86_400_000);
+    const author = (days: number) =>
+      videoAuthor(
+        { views: 1, likes: null, ownAccount: true, connectedAt: at(days) },
+        [],
+        now,
+      ).connectedDaysAgo;
+    expect(author(0.5)).toBe(0);
+    expect(author(6.9)).toBe(6);
+    expect(author(7)).toBeNull();
+  });
+
   it('подтверждён только по подключённому аккаунту', () => {
     expect(
       videoAuthor({ views: 1, likes: null, ownAccount: true }, []).status,

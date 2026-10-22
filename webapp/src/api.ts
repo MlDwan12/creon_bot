@@ -421,6 +421,8 @@ export interface ModVideo {
   author: {
     status: 'verified' | 'inProfile' | 'mismatch' | 'unknown';
     viaAccount: boolean;
+    /** Аккаунт подключили столько дней назад (меньше 7) — повод проверить; null — давно или не по аккаунту. */
+    connectedDaysAgo: number | null;
     /** Канал или аккаунт автора: «Название · @handle». */
     name: string | null;
     url: string | null;

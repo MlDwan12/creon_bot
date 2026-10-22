@@ -373,6 +373,10 @@ model OAuthPending {
   /// PKCE: секрет, чей хеш ушёл в ссылку входа.
   verifier  String
   expiresAt DateTime
+  /// Вход на площадке прошёл, ждём подтверждения на странице возврата (AccountsService.confirm):
+  /// аккаунт (токены — зашифрованы) и state — новый одноразовый код, а не тот, что был в ссылке входа.
+  /// null — вход ещё не прошёл.
+  account   Json?
 
   @@index([expiresAt])
 }
