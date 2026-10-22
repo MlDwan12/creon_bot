@@ -10,8 +10,9 @@ const WALLET = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 
 describe('PUT /api/profile/wallet', () => {
   const walletChanged = jest.fn();
+  const updateWallet = jest.fn();
   const controller = new ProfilesController(
-    { updateWallet: jest.fn() } as unknown as ProfilesService,
+    { updateWallet } as unknown as ProfilesService,
     {} as ModeratorGuard,
     {} as TelegramPhotosService,
     { walletChanged } as unknown as NotificationsService,
@@ -19,7 +20,10 @@ describe('PUT /api/profile/wallet', () => {
   const req = (payoutWallet: string | null) =>
     ({ user: { id: 1, payoutWallet } as User }) as ApiRequest;
 
-  beforeEach(() => walletChanged.mockClear());
+  beforeEach(() => {
+    walletChanged.mockClear();
+    updateWallet.mockClear();
+  });
 
   it('смена и удаление кошелька — уведомление владельцу', async () => {
     await controller.updateWallet({ wallet: WALLET }, req(null));
@@ -28,11 +32,17 @@ describe('PUT /api/profile/wallet', () => {
       WALLET,
       null,
     ]);
+    // первый ввод — не смена: модератору у заявки на вывод предупреждение только о смене
+    expect(updateWallet.mock.calls).toEqual([
+      [1, WALLET, false],
+      [1, null, true],
+    ]);
   });
 
   it('тот же адрес — без уведомления', async () => {
     await controller.updateWallet({ wallet: ` ${WALLET} ` }, req(WALLET));
     expect(walletChanged).not.toHaveBeenCalled();
+    expect(updateWallet).not.toHaveBeenCalled();
   });
 });
 

@@ -807,6 +807,8 @@ export function termsOf(order: Order) {
     targetUrl: order.targetUrl,
     category: order.category,
     minViews: order.minViews,
+    // ролики, сданные до правки, оплачиваются по ставке, при которой их сдали (videoTerms)
+    cpmMinor: order.cpmMinor,
     minDurationSec: order.minDurationSec,
     maxDurationSec: order.maxDurationSec,
     orientation: order.orientation,

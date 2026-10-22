@@ -52,9 +52,10 @@ import {
 const PAGE_SIZE = 20;
 
 /**
- * Чей ролик — модератору: `verified` — посчитан по аккаунту креатора или автор есть в соцсетях его
- * профиля; `mismatch` — автор известен, но в профиле его нет; `unknown` — площадка автора не отдала.
- * Решает модератор: сдачу и одобрение это не запрещает.
+ * Чей ролик — модератору: `verified` — посчитан по подключённому аккаунту креатора; `inProfile` —
+ * автор есть в соцсетях профиля, но ссылки креатор вписал сам, владение не доказано (иначе
+ * вписал бы чужой канал и сдал чужой ролик); `mismatch` — автор известен, но в профиле его нет;
+ * `unknown` — площадка автора не отдала. Решает модератор: сдачу и одобрение это не запрещает.
  */
 export function videoAuthor(stats: CountedVideo | undefined, links: string[]) {
   if (stats?.ownAccount)
@@ -63,11 +64,21 @@ export function videoAuthor(stats: CountedVideo | undefined, links: string[]) {
   if (!a)
     return { status: 'unknown', viaAccount: false, name: null, url: null };
   return {
-    status: authorInLinks(a, links) ? 'verified' : 'mismatch',
+    status: authorInLinks(a, links) ? 'inProfile' : 'mismatch',
     viaAccount: false,
     name: [a.name, a.handle && `@${a.handle}`].filter(Boolean).join(' · '),
     url: authorUrl(a),
   };
+}
+
+/** За сколько часов до заявки сменили кошелёк, если меньше чем за 48; иначе null. */
+export function walletChangedHoursBefore(
+  changedAt: Date | null,
+  requestedAt: Date,
+): number | null {
+  if (!changedAt) return null;
+  const hours = (requestedAt.getTime() - changedAt.getTime()) / 3_600_000;
+  return hours >= 0 && hours < 48 ? Math.floor(hours) : null;
 }
 
 /** Версия заказа, которую модератор видел (`version` из GET /api/mod/orders/:id). */
@@ -331,7 +342,8 @@ export class ModerationController {
         title: terms.title,
         description: terms.description,
         ...videoFormat(terms),
-        cpm: fromMinor(s.order.cpmMinor),
+        // по ней начислят (videoTerms): сдан до правки — ставка до неё
+        cpm: fromMinor(terms.cpmMinor),
         minViews: terms.minViews,
         free: fromMinor(budget.free),
         termsBeforeEdit: prev !== null,
@@ -456,6 +468,11 @@ export class ModerationController {
       banned: p.creator.bannedAt
         ? { at: p.creator.bannedAt, reason: p.creator.banReason }
         : null,
+      // кошелёк сменили незадолго до заявки — так выводят деньги с угнанного аккаунта
+      walletChangedHoursBefore: walletChangedHoursBefore(
+        p.creator.walletChangedAt,
+        p.createdAt,
+      ),
       createdAt: p.createdAt,
     }));
   }

@@ -147,7 +147,12 @@ watch(() => props.id, load, { immediate: true });
       <p :class="['author', video.author.status]" :role="video.author.status === 'verified' ? undefined : 'alert'">
         <template v-if="video.author.status === 'verified'">
           <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z" /><path d="M8.5 12l2.5 2.5 4.5-5" /></svg>
-          Автор подтверждён: {{ video.author.viaAccount ? 'ролик с подключённого аккаунта креатора' : video.author.name }}
+          Автор подтверждён: ролик с подключённого аккаунта креатора
+        </template>
+        <template v-else-if="video.author.status === 'inProfile'">
+          Автор —
+          <a v-if="safeUrl(video.author.url)" :href="safeUrl(video.author.url)" target="_blank" rel="noopener noreferrer">{{ video.author.name || 'аккаунт' }}</a>,
+          есть в соцсетях креатора. Владение не подтверждено: ссылки креатор указал сам
         </template>
         <template v-else-if="video.author.status === 'mismatch'">
           <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 3l9.5 17h-19z" /><path d="M12 10v4M12 17.5v.01" /></svg>
@@ -252,6 +257,10 @@ watch(() => props.id, load, { immediate: true });
 .author.verified {
   background: var(--success-soft);
   color: var(--success-text);
+}
+.author.inProfile {
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
 .author a {
   color: inherit;

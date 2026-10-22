@@ -5,7 +5,7 @@ import {
   OrderStatus,
   type User,
 } from '@prisma/client';
-import { stripContacts } from './contacts';
+import { createHash } from 'node:crypto';
 
 /** Уведомления уходят с parse_mode HTML — пользовательский текст экранировать перед подстановкой. */
 export function escapeHtml(text: string): string {
@@ -53,13 +53,26 @@ export function formatMoney(amount: number): string {
   return `${amount.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} USDT`;
 }
 
+/** Код креатора без похожих I/1/O/0: по нему не узнать ни креатора, ни сколько их на площадке. */
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
 /**
- * Имя для другой стороны сделки — без @username: стороны общаются только через площадку,
- * чтобы не договаривались в обход неё. Контакты, вписанные в само имя («Аня @anya_ugc»), вырезаются.
+ * Имя креатора для рекламодателя — «Креатор А. · K7M2»: первая буква имени из Telegram и код по id,
+ * один и тот же у креатора везде. Само имя не показываем: его никто не модерирует, а контакт в нём
+ * («Аня тг anya», «＠anya», невидимые символы) фильтром не выловить. Стороны общаются только через площадку.
  * creatorLabel (с username) — только модераторам и поддержке.
+ * ponytail: 4 символа кода — ~1 млн значений, у тысяч креаторов изредка совпадут; станет мешать — 5.
  */
-export function publicName(user: User): string {
-  return stripContacts(user.firstName ?? '') || tr('errors.anonCreator');
+export function publicName(user: Pick<User, 'id' | 'firstName'>): string {
+  const hash = createHash('sha256').update(`creator:${user.id}`).digest();
+  const code = [...hash.subarray(0, 4)]
+    .map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length])
+    .join('');
+  const letter = (user.firstName ?? '')
+    .normalize('NFKC')
+    .match(/\p{L}/u)?.[0]
+    ?.toUpperCase();
+  return `${tr('errors.anonCreator')}${letter ? ` ${letter}.` : ''} · ${code}`;
 }
 
 export function creatorLabel(user: User): string {

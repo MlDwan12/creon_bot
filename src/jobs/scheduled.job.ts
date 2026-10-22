@@ -123,11 +123,12 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
   /**
    * Итог холда по роликам, чьи просмотры отдаёт API площадки (YouTube, X, а TikTok и VK — если
    * креатор подключил аккаунт), — без модератора.
-   * API не ответило — ролик остаётся в очереди «Итоги», итог введёт модератор.
+   * API не ответило — ролик остаётся в очереди «Итоги», итог введёт модератор. Ролики заблокированного
+   * креатора — тоже модератору: бан бывает за накрутку, деньги к выводу выпускать решает человек.
    */
   private async finalizeAutomatic() {
-    const due = (await this.submissionsService.listHoldDue()).filter((s) =>
-      this.viewCounter.isAutomatic(s.videoUrl),
+    const due = (await this.submissionsService.listHoldDue()).filter(
+      (s) => !s.creator.bannedAt && this.viewCounter.isAutomatic(s.videoUrl),
     );
     if (!due.length) return;
     const counted = await this.viewCounter.fetchViews(

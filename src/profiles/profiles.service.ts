@@ -142,10 +142,11 @@ export class ProfilesService {
     });
   }
 
-  updateWallet(userId: number, payoutWallet: string | null) {
+  /** `replaced` — был другой кошелёк: смена, а не первый ввод (User.walletChangedAt). */
+  updateWallet(userId: number, payoutWallet: string | null, replaced: boolean) {
     return this.prisma.user.update({
       where: { id: userId },
-      data: { payoutWallet },
+      data: { payoutWallet, ...(replaced && { walletChangedAt: new Date() }) },
     });
   }
 }
