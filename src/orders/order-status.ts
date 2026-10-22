@@ -1,6 +1,11 @@
 import { tr } from '../i18n/request-lang';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import { type Order, OrderStatus, Prisma } from '@prisma/client';
+import {
+  type Order,
+  OrderStatus,
+  Prisma,
+  type Submission,
+} from '@prisma/client';
 
 /*
  * Все смены статуса заказа — только здесь. Каждая — условный `updateMany` по текущему статусу:
@@ -74,18 +79,51 @@ export function fundOf<
   };
 }
 
+/** Условия заказа, по которым проверяют ролики: снимок при сдаче (Submission.terms) и до правки (Order.prevTerms). */
+export function termsOf(order: Order) {
+  return {
+    title: order.title,
+    description: order.description,
+    referenceUrl: order.referenceUrl,
+    targetUrl: order.targetUrl,
+    category: order.category,
+    minViews: order.minViews,
+    // ролик оплачивается по ставке, при которой его сдали (videoTerms)
+    cpmMinor: order.cpmMinor,
+    minDurationSec: order.minDurationSec,
+    maxDurationSec: order.maxDurationSec,
+    orientation: order.orientation,
+    platforms: order.platforms,
+  };
+}
+
+export type OrderTerms = ReturnType<typeof termsOf>;
+
 /**
- * Порог и ставка, по которым проверяют и оплачивают ролик: сдан до правки заказа — из снимка до
- * неё (Order.prevTerms), как видел креатор; иначе — текущие. В снимках до ставки в prevTerms — текущая.
+ * Условия, которые креатор видел при сдаче ролика, если они могли с тех пор измениться; null —
+ * действуют текущие. Снимок при сдаче (Submission.terms) переживает любое число правок заказа;
+ * у роликов, сданных до него, — снимок до правки (Order.prevTerms), если сдан раньше неё.
+ */
+export function submittedTerms(
+  order: Pick<Order, 'editedAt' | 'prevTerms'>,
+  submission: Pick<Submission, 'submittedAt' | 'terms'>,
+): Partial<OrderTerms> | null {
+  if (submission.terms) return submission.terms as Partial<OrderTerms>;
+  const { submittedAt } = submission;
+  return order.editedAt && submittedAt && submittedAt < order.editedAt
+    ? (order.prevTerms as Partial<OrderTerms> | null)
+    : null;
+}
+
+/**
+ * Порог и ставка, по которым проверяют и оплачивают ролик — те, что были при сдаче (submittedTerms).
+ * В старых снимках ставки нет — тогда текущая.
  */
 export function videoTerms(
   order: Pick<Order, 'minViews' | 'cpmMinor' | 'editedAt' | 'prevTerms'>,
-  submittedAt: Date | null,
+  submission: Pick<Submission, 'submittedAt' | 'terms'>,
 ) {
-  const prev =
-    order.editedAt && submittedAt && submittedAt < order.editedAt
-      ? (order.prevTerms as { minViews?: number; cpmMinor?: number } | null)
-      : null;
+  const prev = submittedTerms(order, submission);
   return {
     minViews: prev?.minViews ?? order.minViews,
     cpmMinor: prev?.cpmMinor ?? order.cpmMinor,

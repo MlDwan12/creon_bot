@@ -35,6 +35,7 @@ import {
   fundOf,
   isFrozen,
   lockOrder,
+  termsOf,
   videoTerms,
 } from '../orders/order-status';
 import {
@@ -335,6 +336,8 @@ export class SubmissionsService implements OnApplicationBootstrap {
             payoutMinor: payoutFor(order.minViews, order.cpmMinor!),
             status: SubmissionStatus.SUBMITTED,
             submittedAt: new Date(),
+            // условия при сдаче: по ним проверят и оплатят ролик, как бы заказ потом ни правили
+            terms: termsOf(order),
           },
           ACCEPTS_VIDEOS,
         );
@@ -476,7 +479,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
     likes: number | null = null,
   ) {
     const found = await this.mustFind(submissionId);
-    const { minViews } = videoTerms(found.order, found.submittedAt);
+    const { minViews } = videoTerms(found.order, found);
     if (views < minViews)
       throw new ForbiddenException(
         `Меньше порога (${minViews.toLocaleString('ru-RU')} просмотров) — такой ролик отклоните`,
@@ -486,7 +489,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
       // свой резерв ролик может использовать целиком — он уже в `spent`
       const current = await this.mustFind(submissionId, tx);
       const payoutMinor = Math.min(
-        payoutFor(views, videoTerms(order, current.submittedAt).cpmMinor!),
+        payoutFor(views, videoTerms(order, current).cpmMinor!),
         budget.free + current.payoutMinor,
       );
       await transitionSubmission(
@@ -616,11 +619,14 @@ export class SubmissionsService implements OnApplicationBootstrap {
    * Итог холда: через HOLD_DAYS после одобрения модератор (или API площадки) проверяет, что
    * публикация на месте, и фиксирует просмотры — только для отчёта рекламодателю. Оплата не меняется:
    * платим за просмотры, зафиксированные при одобрении. После итога деньги можно вывести.
+   * `automatic` — итог от API без модератора: креатора, которого забанили, пока шёл запрос к API,
+   * не завершаем — бан проверяется в самом обновлении, решение о деньгах за модератором.
    */
   async finalizeViews(
     submissionId: number,
     views: number,
     likes: number | null = null,
+    automatic = false,
   ) {
     const found = await this.mustFind(submissionId);
     return this.prisma.$transaction(async (tx) => {
@@ -639,6 +645,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
           id: submissionId,
           status: SubmissionStatus.MODERATOR_APPROVED,
           finalizedAt: null,
+          ...(automatic && { creator: { is: { bannedAt: null } } }),
         },
         data: {
           views,

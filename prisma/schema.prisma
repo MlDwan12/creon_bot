@@ -35,6 +35,9 @@ model User {
   banReason  String?
   /// Тема этого пользователя в группе поддержки (message_thread_id), создаётся при первом обращении.
   supportTopicId Int?
+  /// В какой группе эта тема (SUPPORT_CHAT_ID на момент создания): номер темы уникален только внутри
+  /// группы — после смены группы старый номер указал бы на чужую тему.
+  supportChatId  String?
 
   orders      Order[]
   submissions Submission[]
@@ -45,7 +48,7 @@ model User {
   oauthPendings  OAuthPending[]
 
   /// Ответ поддержки в теме → чей это пользователь (SupportService.fromSupport).
-  @@index([supportTopicId])
+  @@index([supportChatId, supportTopicId])
 }
 
 /// Кабинет мини-аппа: креатора или заказчика (рекламодателя).
@@ -218,6 +221,9 @@ model Submission {
   portfolioAllowed  Boolean          @default(false)
   createdAt         DateTime         @default(now())
   submittedAt       DateTime?
+  /// Условия заказа при сдаче (termsOf): по ним проверяют и оплачивают ролик, сколько бы раз заказ
+  /// ни правили потом. null — сдан до появления поля (тогда Order.prevTerms, src/orders/order-status.ts).
+  terms             Json?
   decidedAt         DateTime?
   /// Креатору напомнили, что слот сгорает меньше чем через сутки.
   slotReminderSentAt DateTime?
