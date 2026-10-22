@@ -61,7 +61,9 @@ const previewCard = computed<OrderSummary>(() => {
   return {
     ...o,
     cpm: Number(cpm.value) || null,
-    free: o.pool,
+    // как отдаёт API креаторам (freeForCreators): вниз до 100 USDT
+    free: Math.floor(o.pool / 100) * 100,
+    freeUnder: o.pool < 100 ? 100 : null,
     budgetLow: false,
   };
 });
