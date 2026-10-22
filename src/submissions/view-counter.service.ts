@@ -28,6 +28,8 @@ export interface VideoRef {
 export type CountedVideo = VideoStats & {
   author?: VideoAuthor;
   ownAccount?: true;
+  /** Когда креатор подключил аккаунт, по которому посчитано (ownAccount). */
+  connectedAt?: Date;
 };
 
 /**

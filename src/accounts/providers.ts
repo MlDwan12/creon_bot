@@ -61,6 +61,12 @@ export interface Provider {
   label(accessToken: string): Promise<string | null>;
   /** Просмотры по id роликов; нет в карте — посчитать не удалось (не его ролик, удалён, сбой). */
   stats(accessToken: string, ids: string[]): Promise<Map<string, VideoStats>>;
+  /**
+   * Владелец ролика по id, если площадка отдаёт по токену и чужие публичные ролики (VK video.get):
+   * ролик считается своим, только если владелец — сам подключённый аккаунт. Нет — площадка отдаёт
+   * по токену только ролики владельца (TikTok, Instagram).
+   */
+  ownerOf?(videoId: string): string;
 }
 
 /** Ключи площадки заданы — она включена. */
@@ -225,6 +231,8 @@ function vk(clientId: string): Provider {
     platform: SocialPlatform.VK,
     name: 'VK',
     videoId: vkVideoId,
+    // «-123_456» — ролик 456 владельца -123 (минус — сообщество: его ролики — не «свои», их проверяет модератор)
+    ownerOf: (videoId) => videoId.split('_')[0],
     authorizeUrl: ({ state, challenge, redirectUri }) =>
       `https://id.vk.ru/authorize?${new URLSearchParams({
         response_type: 'code',

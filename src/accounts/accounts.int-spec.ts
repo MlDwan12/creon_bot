@@ -67,6 +67,16 @@ const tiktokName = (name: string) => ({
   data: { user: { display_name: name } },
 });
 
+/** Вернулся с площадки и подтвердил на странице возврата «Подключить». */
+async function connect(
+  svc: AccountsService,
+  platform: 'TIKTOK' | 'VK' | 'INSTAGRAM',
+  query: Record<string, unknown>,
+) {
+  const { code } = await svc.complete(platform, query);
+  return svc.confirm(platform, code);
+}
+
 /** Креатор нажал «Подключить TikTok» и вернулся с кодом. */
 async function connectTiktok(
   userId: number,
@@ -76,7 +86,7 @@ async function connectTiktok(
 ) {
   const start = new URL(await accounts.start(userId, 'TIKTOK'));
   replies(tiktokTokens(n, openId), tiktokName(`Аня ${n}`));
-  await accounts.complete('TIKTOK', {
+  await connect(accounts, 'TIKTOK', {
     code,
     state: start.searchParams.get('state')!,
   });
@@ -90,6 +100,30 @@ afterEach(() => jest.restoreAllMocks());
 afterAll(() => prisma.$disconnect());
 
 describe('подключение аккаунта', () => {
+  it('пересланная ссылка входа: без «Подключить» на странице возврата аккаунт не привязывается', async () => {
+    const attacker = await user();
+    const start = new URL(await accounts.start(attacker.id, 'TIKTOK'));
+    const state = start.searchParams.get('state')!;
+    // ссылку открыла жертва и вошла в свой TikTok
+    replies(tiktokTokens(1, 'victim'), tiktokName('Жертва'));
+    const {
+      user: shownProfile,
+      label,
+      code,
+    } = await accounts.complete('TIKTOK', { code: 'c', state });
+    // на странице жертва видит чужой профиль Fixum — повод нажать «Это не я»
+    expect(shownProfile.id).toBe(attacker.id);
+    expect(label).toBe('Жертва');
+    expect(await prisma.socialAccount.count()).toBe(0);
+
+    // state из ссылки входа подтверждением не служит
+    await expect(accounts.confirm('TIKTOK', state)).rejects.toThrow('устарела');
+    await accounts.decline(code);
+    await expect(accounts.confirm('TIKTOK', code)).rejects.toThrow('устарела');
+    expect(await prisma.socialAccount.count()).toBe(0);
+    expect(await prisma.oAuthPending.count()).toBe(0);
+  });
+
   it('TikTok: вход → токены в базе только зашифрованными → просмотры его роликов', async () => {
     const creator = await user();
     const start = await connectTiktok(creator.id);
@@ -125,7 +159,12 @@ describe('подключение аккаунта', () => {
       error: { code: 'ok' },
     });
     const stats = await accounts.stats(creator.id, 'TIKTOK', ['111', '222']);
-    expect([...stats]).toEqual([['111', { views: 5000, likes: 40 }]]);
+    expect([...stats]).toEqual([
+      [
+        '111',
+        { views: 5000, likes: 40, connectedAt: expect.any(Date) as Date },
+      ],
+    ]);
     const { url: reqUrl, init, body: reqBody } = sent(spy, 0);
     expect(reqUrl).toContain('/v2/video/query/');
     expect(init.headers).toMatchObject({ Authorization: 'Bearer act.1' });
@@ -159,7 +198,7 @@ describe('подключение аккаунта', () => {
     );
     const start = new URL(await accounts.start(creator.id, 'TIKTOK'));
     replies(tiktokTokens(1), tiktokName('Аня'));
-    await other.complete('TIKTOK', {
+    await connect(other, 'TIKTOK', {
       code: 'c',
       state: start.searchParams.get('state')!,
     });
@@ -212,7 +251,7 @@ describe('подключение аккаунта', () => {
       },
       { user: { first_name: 'Аня', last_name: 'Котова' } },
     );
-    await accounts.complete('VK', {
+    await connect(accounts, 'VK', {
       payload: JSON.stringify({
         code: 'vk-code',
         state: start.searchParams.get('state'),
@@ -235,6 +274,20 @@ describe('подключение аккаунта', () => {
       deviceId: 'dev-1',
       label: 'Аня Котова',
     });
+
+    // video.get отдаёт по токену и чужие публичные ролики — их своими не считаем и не спрашиваем
+    const stats = replies({
+      response: {
+        items: [{ owner_id: 42, id: 1, views: 500, likes: { count: 5 } }],
+      },
+    });
+    const counted = await accounts.stats(creator.id, 'VK', [
+      '42_1',
+      '-777_2', // клип чужого сообщества
+      '43_3', // ролик другого пользователя
+    ]);
+    expect([...counted.keys()]).toEqual(['42_1']);
+    expect(new URLSearchParams(sent(stats, 0).body).get('videos')).toBe('42_1');
   });
 
   it('несколько аккаунтов площадки: просмотры ищем по всем, отключается только свой', async () => {
@@ -306,7 +359,7 @@ describe('подключение аккаунта', () => {
       { access_token: 'ig-long', expires_in: 5_184_000 },
       { username: 'anya.reels' },
     );
-    await accounts.complete('INSTAGRAM', {
+    await connect(accounts, 'INSTAGRAM', {
       code: 'ig-code#_',
       state: start.searchParams.get('state')!,
     });
@@ -331,7 +384,12 @@ describe('подключение аккаунта', () => {
       { data: [{ name: 'views', values: [{ value: 1234 }] }] },
     );
     const stats = await accounts.stats(creator.id, 'INSTAGRAM', ['C8abcD12']);
-    expect([...stats]).toEqual([['C8abcD12', { views: 1234, likes: 9 }]]);
+    expect([...stats]).toEqual([
+      [
+        'C8abcD12',
+        { views: 1234, likes: 9, connectedAt: expect.any(Date) as Date },
+      ],
+    ]);
     expect(sent(statsSpy, 1).url).toContain('/m2/insights?metric=views');
   });
 

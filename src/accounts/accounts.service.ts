@@ -123,14 +123,15 @@ export class AccountsService {
   }
 
   /**
-   * Callback площадки: проверяем state (одноразовый, ваш ли это вход), меняем код на токены и
-   * сохраняем. Тот же аккаунт подключили снова — обновляем его. Аккаунт площадки уже у другого
-   * креатора — отказ: чужие ролики за свои не выдать.
+   * Callback площадки: проверяем state (одноразовый, ваш ли это вход) и меняем код на токены, но
+   * не подключаем: ссылку входа могли переслать другому («подключи, пожалуйста»), и его аккаунт
+   * ушёл бы к пославшему. Аккаунт ждёт подтверждения под новым одноразовым кодом — его знает только
+   * страница возврата, где тот, кто вошёл, видит, к чьему профилю Fixum подключает (confirm/decline).
    */
   async complete(
     platform: SocialPlatform,
     rawQuery: Record<string, unknown>,
-  ): Promise<{ user: User; name: string }> {
+  ): Promise<{ user: User; name: string; label: string | null; code: string }> {
     const provider = this.mustProvider(platform);
     const query = callbackParams(rawQuery);
     // одноразовый: удаляем сразу — даже неудачная попытка его сжигает
@@ -149,6 +150,7 @@ export class AccountsService {
       : null;
     if (
       !pending ||
+      pending.account !== null ||
       pending.platform !== platform ||
       pending.expiresAt.getTime() < Date.now()
     )
@@ -172,13 +174,53 @@ export class AccountsService {
       );
     }
 
-    // имя — только для профиля: не отдали — подключаем без него
+    // имя — для страницы подтверждения и профиля: не отдали — подключаем без него
     const label = await provider.label(tokens.accessToken).catch(() => null);
-    const data = { ...this.encrypted(tokens), label };
+    const code = randomState();
+    await this.prisma.oAuthPending.create({
+      data: {
+        state: code,
+        userId: pending.userId,
+        platform,
+        verifier: '',
+        expiresAt: new Date(Date.now() + PENDING_TTL_MS),
+        account: { ...this.encrypted(tokens), label },
+      },
+    });
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: pending.userId },
+    });
+    return { user, name: provider.name, label, code };
+  }
+
+  /**
+   * Тот, кто вошёл на площадке, подтвердил подключение на странице возврата — сохраняем аккаунт.
+   * Тот же аккаунт подключили снова — обновляем его. Аккаунт площадки уже у другого креатора —
+   * отказ: чужие ролики за свои не выдать.
+   */
+  async confirm(
+    platform: SocialPlatform,
+    code: string,
+  ): Promise<{ user: User; name: string }> {
+    const provider = this.mustProvider(platform);
+    const pending = await this.takeConfirmation(code);
+    if (
+      !pending?.account ||
+      pending.platform !== platform ||
+      pending.expiresAt.getTime() < Date.now()
+    )
+      throw new BadRequestException(tr('errors.oauthExpired'));
+    const account = pending.account as unknown as ReturnType<
+      AccountsService['encrypted']
+    > & { label: string | null };
+    const data = {
+      ...account,
+      accessExpiresAt: new Date(account.accessExpiresAt),
+    };
     try {
       const existing = await this.prisma.socialAccount.findUnique({
         where: {
-          platform_externalId: { platform, externalId: tokens.externalId },
+          platform_externalId: { platform, externalId: data.externalId },
         },
       });
       if (existing && existing.userId !== pending.userId)
@@ -210,6 +252,25 @@ export class AccountsService {
     return { user, name: provider.name };
   }
 
+  /** «Это не я» на странице возврата — подключение отменяется, токены не сохраняются. */
+  async decline(code: string) {
+    await this.takeConfirmation(code);
+  }
+
+  /** Ожидающее подтверждения подключение по коду — одноразово: удаляем сразу. */
+  private takeConfirmation(code: string) {
+    return this.prisma.oAuthPending
+      .delete({ where: { state: code, account: { not: Prisma.DbNull } } })
+      .catch((err: unknown) => {
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2025'
+        )
+          return null;
+        throw err;
+      });
+  }
+
   /** Отключить свой аккаунт; чужой id — ничего не происходит. */
   async disconnect(userId: number, accountId: number) {
     await this.prisma.socialAccount.deleteMany({
@@ -227,8 +288,8 @@ export class AccountsService {
     userId: number,
     platform: SocialPlatform,
     videoIds: string[],
-  ): Promise<Map<string, VideoStats>> {
-    const out = new Map<string, VideoStats>();
+  ): Promise<Map<string, VideoStats & { connectedAt: Date }>> {
+    const out = new Map<string, VideoStats & { connectedAt: Date }>();
     const provider = this.providers.get(platform);
     if (!provider || !videoIds.length) return out;
     const accounts = await this.prisma.socialAccount.findMany({
@@ -238,10 +299,17 @@ export class AccountsService {
     let left = videoIds;
     for (const account of accounts) {
       if (!left.length) break;
+      // VK отдаёт по токену и чужие ролики — спрашиваем только ролики этого аккаунта
+      const own = provider.ownerOf
+        ? left.filter((id) => provider.ownerOf!(id) === account.externalId)
+        : left;
+      if (!own.length) continue;
       try {
         const token = await this.accessToken(account, provider);
         if (!token) continue;
-        for (const [id, s] of await provider.stats(token, left)) out.set(id, s);
+        // когда подключили — модератору: свежий аккаунт и чужой популярный ролик — повод проверить
+        for (const [id, s] of await provider.stats(token, own))
+          out.set(id, { ...s, connectedAt: account.createdAt });
         recordExternalApi(provider.platform, true);
         left = left.filter((id) => !out.has(id));
       } catch (err) {
