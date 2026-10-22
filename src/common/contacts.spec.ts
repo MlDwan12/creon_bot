@@ -1,4 +1,4 @@
-import { findContacts, findExactContacts, stripContacts } from './contacts';
+import { findContacts, findExactContacts } from './contacts';
 
 describe('findContacts', () => {
   it.each([
@@ -42,14 +42,45 @@ describe('findExactContacts', () => {
   });
 });
 
-describe('stripContacts', () => {
+describe('обходы фильтра', () => {
   it.each([
-    ['Аня @anya_ugc', 'Аня'],
-    ['Иван +7 999 123-45-67', 'Иван'],
-    ['t.me/ivan Иван', 'Иван'],
-    ['@anya_ugc', ''],
-    ['Анна-Мария', 'Анна-Мария'],
-  ])('%s → «%s»', (name, expected) => {
-    expect(stripContacts(name)).toBe(expected);
+    ['＠ivan_petrov', '@ivan_petrov'], // полноширинный @
+    ['@iv\u200ban_petrov', '@ivan_petrov'], // невидимый символ внутри
+    ['пишите @ ivan_petrov', '@ ivan_petrov'], // пробел после @
+    ['@аnya_ugc', '@аnya_ugc'], // кириллическая «а»
+    ['https://t%2Eme/ivan', 'https://t.me/ivan'],
+    ['https://%74.me/ivan', 'https://t.me/ivan'],
+    ['https://bit.ly/3abc', 'https://bit.ly/3abc'],
+    ['https://linktr.ee/brand', 'https://linktr.ee/brand'],
+    ['taplink.cc/brand', 'taplink.cc/brand'],
+    ['+380 67 123 45 67', '+380 67 123 45 67'],
+    ['+1 (555) 123-4567', '+1 (555) 123-4567'],
+  ])('явный контакт: %s', (text, fragment) => {
+    expect(findExactContacts(text)).toContain(fragment);
   });
+
+  it.each([
+    'https://habit.ly/page', // не bit.ly
+    'https://pivk.com/x', // не vk.com
+    'Цена 1500 руб., +20% к охватам',
+    'https://www.ozon.ru/product/123',
+  ])('не контакт: %s', (text) => {
+    expect(findExactContacts(text)).toEqual([]);
+  });
+
+  it('профиль на площадке — подсказка модератору, не отказ', () => {
+    for (const url of [
+      'https://x.com/brand',
+      'https://www.youtube.com/channel/UC123abc',
+    ]) {
+      expect(findExactContacts(url)).toEqual([]);
+      expect(findContacts(url)).toHaveLength(1);
+    }
+    expect(findContacts('https://x.com/brand/status/123')).toEqual([]);
+  });
+});
+
+it('ссылка с www. и поддоменом — тоже контакт', () => {
+  expect(findExactContacts('https://www.instagram.com/brand')).toHaveLength(1);
+  expect(findExactContacts('https://m.vk.com/brand')).toHaveLength(1);
 });

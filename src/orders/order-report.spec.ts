@@ -97,7 +97,7 @@ describe('переходы по ссылке на товар', () => {
 });
 
 describe('reportCsv', () => {
-  it('BOM, «;», кавычки и формулы в именах экранированы', () => {
+  it('BOM и «;»; имя из Telegram (с формулой) в файл не попадает — только буква и код', () => {
     const csv = reportCsv(
       buildOrderReport(order, [
         video('MODERATOR_APPROVED', 'https://vk.com/clip1', 500, 4_000, {
@@ -106,8 +106,9 @@ describe('reportCsv', () => {
       ]),
     );
     expect(csv.startsWith('﻿"Креатор";"Площадка"')).toBe(true);
-    expect(csv).toContain(
-      `"'=HYPERLINK(""x"")";"VK";"https://vk.com/clip1";"500";"";"";"2026-10-01"`,
+    expect(csv).not.toContain('HYPERLINK');
+    expect(csv).toMatch(
+      /"Креатор H\. · [A-Z2-9]{4}";"VK";"https:\/\/vk\.com\/clip1";"500";"";"";"2026-10-01"/,
     );
   });
 });

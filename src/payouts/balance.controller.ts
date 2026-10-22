@@ -62,8 +62,8 @@ export class BalanceController {
         `💸 <b>Заявка на вывод #${payout.id}</b>`,
         `Креатор: ${escapeHtml(creatorLabel(payout.creator))} (#u${payout.creator.telegramId})`,
         `Сумма: ${formatMoney(fromMinor(payout.amountMinor))}`,
-        `Кошелёк USDT (TRC20): <code>${escapeHtml(payout.wallet ?? '')}</code>`,
-        'После перевода отметьте заявку в мини-аппе: Модерация → Выплаты.',
+        // кошелёк — только модераторам (в мини-аппе): в группе поддержки могут быть и другие
+        'Кошелёк и отметка о переводе — в мини-аппе: Модерация → Выплаты.',
       ].join('\n'),
     );
     return { ok: true };

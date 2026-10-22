@@ -92,9 +92,13 @@ export class ProfilesController {
   @Put('profile/wallet')
   async updateWallet(@Body() body: unknown, @Req() req: ApiRequest) {
     const wallet = parseWallet(body);
-    await this.profiles.updateWallet(req.user.id, wallet);
-    if (wallet !== req.user.payoutWallet)
-      this.notifications.walletChanged(req.user, wallet);
+    if (wallet === req.user.payoutWallet) return { ok: true };
+    await this.profiles.updateWallet(
+      req.user.id,
+      wallet,
+      req.user.payoutWallet !== null,
+    );
+    this.notifications.walletChanged(req.user, wallet);
     return { ok: true };
   }
 

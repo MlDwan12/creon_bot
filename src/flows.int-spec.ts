@@ -11,6 +11,7 @@ import { ReportsService } from './reports/reports.service';
 import { MAX_ACTIVE_ORDERS, OrdersService } from './orders/orders.service';
 import { PrismaService } from './prisma/prisma.service';
 import {
+  MAX_IN_REVIEW,
   SLOT_DAYS,
   SubmissionsService,
 } from './submissions/submissions.service';
@@ -209,6 +210,75 @@ describe('отклик', () => {
         VIEWS,
       ),
     ).rejects.toThrow('уже сдан');
+  });
+
+  it('ключ по старому правилу (ник в ссылке TikTok) пересчитывается по id ролика, дубль — в лог', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const order = await openOrder(advertiser.id);
+    // как до ключа по id: один ролик, ник в разном регистре — ключи разные, оба одобрены
+    const old = (url: string, videoKey: string) =>
+      prisma.submission.create({
+        data: {
+          orderId: order.id,
+          creatorId: creator.id,
+          status: 'MODERATOR_APPROVED',
+          videoUrl: url,
+          videoKey,
+        },
+      });
+    const first = await old(
+      'https://www.tiktok.com/@anya/video/12345',
+      'tiktok.com/@anya/video/12345',
+    );
+    const dup = await old(
+      'https://www.tiktok.com/@ANYA/video/12345',
+      'tiktok.com/@ANYA/video/12345',
+    );
+
+    expect(await submissions.backfillVideoKeys()).toEqual({
+      filled: 1,
+      duplicates: [dup.id],
+    });
+    const key = async (id: number) =>
+      (await prisma.submission.findUniqueOrThrow({ where: { id } })).videoKey;
+    expect(await key(first.id)).toBe('tiktok:12345');
+
+    const other = await openOrder(advertiser.id);
+    const s = await submissions.claim(other.id, creator.id);
+    await expect(
+      submissions.attachVideo(
+        s.id,
+        creator.id,
+        'https://www.tiktok.com/@someone/video/12345',
+        VIEWS,
+      ),
+    ).rejects.toThrow('уже сдан');
+  });
+
+  it(`на проверке у креатора по заказу — не больше ${MAX_IN_REVIEW} роликов`, async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const order = await openOrder(advertiser.id);
+    const submit = async () => {
+      const s = await submissions.claim(order.id, creator.id);
+      await submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS);
+      return s;
+    };
+    const first = await submit();
+    await submit();
+    await submit();
+    const fourth = await submissions.claim(order.id, creator.id);
+    const attach = () =>
+      submissions.attachVideo(fourth.id, creator.id, videoUrl(), VIEWS);
+    await expect(attach()).rejects.toThrow('дождитесь решения');
+
+    // одобренный в лимит не входит — тот же отклик теперь сдаётся
+    await submissions.moderatorApprove(first.id, 1n, VIEWS);
+    await attach();
+    expect(
+      await prisma.submission.count({
+        where: { orderId: order.id, status: 'SUBMITTED' },
+      }),
+    ).toBe(MAX_IN_REVIEW);
   });
 
   it('двойной тап создаёт один отклик', async () => {
@@ -603,6 +673,54 @@ describe('правка заказа — защита', () => {
       orders.update(order.id, adv.id, { ...edit, budgetMinor: 1_200_000 }),
     ).rejects.toThrow('нельзя сделать меньше');
     await orders.update(order.id, adv.id, { ...edit, budgetMinor: 1_300_000 });
+  });
+
+  /** Ролик на проверке, сданный за минуту до правки заказа. */
+  async function videoBeforeEdit(orderId: number, creatorId: number) {
+    const s = await submissions.claim(orderId, creatorId);
+    await submissions.attachVideo(s.id, creatorId, videoUrl(), VIEWS);
+    await prisma.submission.update({
+      where: { id: s.id },
+      data: { submittedAt: new Date(Date.now() - 60_000) },
+    });
+    return s;
+  }
+
+  it('неоплаченное повышение бюджета не тратится на ролики, пока правку не одобрили', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    const s = await videoBeforeEdit(order.id, creator.id);
+    await orders.update(order.id, adv.id, {
+      ...edit,
+      budgetMinor: BUDGET * 10,
+    });
+
+    // 1 000 000 просмотров × 100 USDT за 1000 = 100 000 USDT, а оплачен фонд 40 000 USDT
+    const approved = await submissions.moderatorApprove(s.id, 1n, 1_000_000);
+    expect(approved.submission.payoutMinor).toBe(4_000_000);
+  });
+
+  it('ролик, сданный до правки, — по порогу и ставке до неё', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    const s = await videoBeforeEdit(order.id, creator.id);
+    // порог поднят выше просмотров ролика, ставка при одобрении правки — впятеро выше
+    await orders.update(order.id, adv.id, { ...edit, minViews: 5000 });
+    await approveOrder(order.id, 1n, CPM * 5);
+
+    const approved = await submissions.moderatorApprove(s.id, 1n, VIEWS);
+    expect(approved.submission.payoutMinor).toBe(10_000); // 1000 просмотров × 100 USDT за 1000
+
+    // после правки — новые условия
+    const next = await submissions.claim(order.id, creator.id);
+    await expect(
+      submissions.attachVideo(next.id, creator.id, videoUrl(), VIEWS),
+    ).rejects.toThrow();
+    await submissions.attachVideo(next.id, creator.id, videoUrl(), 5000);
+    expect(
+      (await submissions.moderatorApprove(next.id, 1n, 5000)).submission
+        .payoutMinor,
+    ).toBe(250_000); // 5000 × 500 USDT за 1000
   });
 
   it('срок «как было» у заказа на проверке не съедается временем до правки', async () => {
@@ -1124,9 +1242,9 @@ describe('баланс и вывод', () => {
     await expect(payouts.requestPayout(creator.id, 10_000)).rejects.toThrow(
       'кошелёк',
     );
-    await profiles.updateWallet(creator.id, WALLET);
+    await profiles.updateWallet(creator.id, WALLET, false);
     const p = await payouts.requestPayout(creator.id, 10_000);
-    await profiles.updateWallet(creator.id, null);
+    await profiles.updateWallet(creator.id, null, true);
     expect(
       (await prisma.payout.findUnique({ where: { id: p.id } }))?.wallet,
     ).toBe(WALLET);
@@ -1413,7 +1531,7 @@ describe('профиль креатора', () => {
     expect(await profiles.canView(stranger, creator.id, false)).toBe(false);
   });
 
-  it('рекламодателю — только имя, без @username и соцсетей', async () => {
+  it('рекламодателю — буква имени и код, без имени, @username и соцсетей', async () => {
     const creator = await prisma.user.create({
       data: {
         telegramId: nextTelegramId++,
@@ -1425,7 +1543,7 @@ describe('профиль креатора', () => {
     await acceptedVideo((await user()).id, creator.id, 5, true);
 
     const forAdvertiser = await profiles.profile(creator.id, false);
-    expect(forAdvertiser.name).toBe('Аня');
+    expect(forAdvertiser.name).toMatch(/^Креатор А\. · \w{4}$/);
     // портфолио — только названия работ: ссылка обычно ведёт на аккаунт креатора
     expect(forAdvertiser.portfolio).toHaveLength(1);
     expect(forAdvertiser.portfolio[0].videoUrl).toBeNull();

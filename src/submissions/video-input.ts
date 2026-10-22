@@ -1,6 +1,11 @@
 import { tr } from '../i18n/request-lang';
 import { BadRequestException } from '@nestjs/common';
-import { PLATFORMS, platformOf } from '../common/platforms';
+import {
+  PLATFORMS,
+  isTiktokShortLink,
+  platformOf,
+  videoIdKey,
+} from '../common/platforms';
 import { MAX_URL_LENGTH, VIDEO_URL_RE } from '../common/validation';
 import { parseViews } from '../orders/order-input';
 
@@ -23,5 +28,9 @@ export function parseVideoSubmission(body: unknown) {
           .join(', '),
       }),
     );
+  // Без id ролика один ролик сдали бы дважды под разными ссылками (Submission.videoKey).
+  // Короткую ссылку TikTok раскрывает SubmissionsService.submitVideo.
+  if (!videoIdKey(url) && !isTiktokShortLink(url))
+    throw new BadRequestException(tr('errors.videoNotPost'));
   return { url, views: parseViews(b.views) };
 }

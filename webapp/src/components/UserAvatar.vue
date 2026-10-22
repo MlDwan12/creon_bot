@@ -15,7 +15,13 @@ watch(
   { immediate: true },
 );
 
-const initials = () => props.name.replace('@', '').slice(0, 2).toUpperCase();
+// Креатор для заказчика — «Креатор А. · L6LW» (publicName на сервере): буква и код, иначе у всех «КР»
+const ALIAS = /(?:(\p{L})\. )?· (\w)\w{3}$/u;
+const initials = () => {
+  const alias = props.name.match(ALIAS);
+  if (alias) return `${alias[1] ?? ''}${alias[2]}`;
+  return props.name.replace('@', '').slice(0, 2).toUpperCase();
+};
 </script>
 
 <template>

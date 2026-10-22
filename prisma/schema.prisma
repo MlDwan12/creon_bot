@@ -18,6 +18,9 @@ model User {
   socialLinks String[] @default([])
   /// Кошелёк USDT (TRC20) для выплат — видят только сам креатор и модераторы (src/payouts/trc20.ts).
   payoutWallet String?
+  /// Когда кошелёк сменили на другой (первый ввод не считается) — модератор видит свежую смену у
+  /// заявки на вывод: так выводят деньги с угнанного аккаунта.
+  walletChangedAt DateTime?
   /// Присылать ли сообщение о каждом новом заказе в каталоге — переключатель в профиле.
   notifyNewOrders Boolean @default(true)
   /// Язык интерфейса, выбранный в профиле (src/i18n/i18n.ts, LANGS); null — по языку Telegram.

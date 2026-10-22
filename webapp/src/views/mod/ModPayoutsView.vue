@@ -75,6 +75,9 @@ void load();
         </svg>
         Креатор заблокирован<template v-if="p.banned.reason">: {{ p.banned.reason }}</template>
       </p>
+      <p v-if="p.walletChangedHoursBefore !== null" class="banned" role="alert">
+        Кошелёк сменён {{ p.walletChangedHoursBefore < 1 ? 'меньше чем за час' : `за ${p.walletChangedHoursBefore} ч` }} до заявки — уточните у креатора через поддержку, что это он
+      </p>
       <button v-if="p.wallet" type="button" class="wallet" @click="copyWallet(p.wallet)">
         <span>{{ p.wallet }}</span>
         <small>{{ copied === p.wallet ? 'Скопировано' : 'Скопировать' }}</small>

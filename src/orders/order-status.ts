@@ -56,6 +56,42 @@ export function isFrozen(order: Pick<Order, 'status' | 'cpmMinor'>) {
   return order.cpmMinor !== null && FROZEN.includes(order.status);
 }
 
+/**
+ * Фонд заказа для резерва и начислений: пока правка не одобрена — не больше одобренного бюджета.
+ * Правка пишет новый бюджет в строку сразу, а доплату за повышение модератор подтверждает при
+ * одобрении — иначе ролики на проверке оплатили бы из неоплаченного повышения.
+ */
+export function fundOf<
+  T extends Pick<
+    Order,
+    'status' | 'cpmMinor' | 'budgetMinor' | 'approvedBudgetMinor'
+  >,
+>(order: T): T {
+  if (!isFrozen(order) || order.approvedBudgetMinor === null) return order;
+  return {
+    ...order,
+    budgetMinor: Math.min(order.budgetMinor, order.approvedBudgetMinor),
+  };
+}
+
+/**
+ * Порог и ставка, по которым проверяют и оплачивают ролик: сдан до правки заказа — из снимка до
+ * неё (Order.prevTerms), как видел креатор; иначе — текущие. В снимках до ставки в prevTerms — текущая.
+ */
+export function videoTerms(
+  order: Pick<Order, 'minViews' | 'cpmMinor' | 'editedAt' | 'prevTerms'>,
+  submittedAt: Date | null,
+) {
+  const prev =
+    order.editedAt && submittedAt && submittedAt < order.editedAt
+      ? (order.prevTerms as { minViews?: number; cpmMinor?: number } | null)
+      : null;
+  return {
+    minViews: prev?.minViews ?? order.minViews,
+    cpmMinor: prev?.cpmMinor ?? order.cpmMinor,
+  };
+}
+
 /** Закрыть открытые заказы из списка; уже не открытые не трогает. */
 export async function closeOpenOrders(db: Db, orderIds: number[]) {
   const { count } = await db.order.updateMany({

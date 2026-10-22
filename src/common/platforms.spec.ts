@@ -1,7 +1,10 @@
 import {
   authorInLinks,
+  expandTiktokShortLink,
   instagramShortcode,
+  isTiktokShortLink,
   tiktokVideoId,
+  videoIdKey,
   videoKey,
   vkVideoId,
 } from './platforms';
@@ -11,17 +14,43 @@ describe('videoKey', () => {
     ['https://youtu.be/dQw4w9WgXcQ', 'youtube:dQw4w9WgXcQ'],
     ['https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=5', 'youtube:dQw4w9WgXcQ'],
     ['https://m.youtube.com/shorts/dQw4w9WgXcQ', 'youtube:dQw4w9WgXcQ'],
+    ['https://youtu.be/dQw4w9WgXcQ/', 'youtube:dQw4w9WgXcQ'],
+    ['https://www.youtube.com/v/dQw4w9WgXcQ', 'youtube:dQw4w9WgXcQ'],
+    // один ролик под разными ссылками — один ключ: иначе его оплатили бы дважды
     [
-      'https://www.tiktok.com/@anya/video/123/?is_from_webapp=1',
-      'tiktok.com/@anya/video/123',
+      'https://www.tiktok.com/@anya/video/12345/?is_from_webapp=1',
+      'tiktok:12345',
     ],
-    ['https://WWW.Instagram.com/reel/AbC/', 'instagram.com/reel/AbC'],
-    ['https://vk.com/feed?z=video-1_2%2Fall', 'vk.com/feed?z=video-1_2/all'],
-    ['https://vk.com/video-1_2?list=x', 'vk.com/video-1_2'],
+    ['https://www.tiktok.com/@ANYA/video/12345', 'tiktok:12345'],
+    ['https://www.tiktok.com/@other/video/12345', 'tiktok:12345'],
+    ['https://m.tiktok.com/v/12345.html', 'tiktok:12345'],
+    ['https://WWW.Instagram.com/reel/AbCdE/', 'instagram:AbCdE'],
+    ['https://instagram.com/p/AbCdE', 'instagram:AbCdE'],
+    ['https://www.instagram.com/anya/reels/AbCdE/', 'instagram:AbCdE'],
+    ['https://vk.com/feed?z=video-1_2%2Fall', 'vk:-1_2'],
+    ['https://vk.com/video-1_2?list=x', 'vk:-1_2'],
+    ['https://vkvideo.ru/video-1_2', 'vk:-1_2'],
+    ['https://vk.com/clip-1_2', 'vk:-1_2'],
     ['https://x.com/anya/status/1789?s=20', 'x:1789'],
     ['https://twitter.com/Other/status/1789/video/1', 'x:1789'],
+    // ?v= в ссылке другой площадки не занимает чужой ролик YouTube
+    ['https://www.tiktok.com/@x/video/12345?v=dQw4w9WgXcQ', 'tiktok:12345'],
+    // старые ссылки без id — по домену и пути
+    ['https://www.tiktok.com/@anya/', 'tiktok.com/@anya'],
   ])('%s → %s', (url, key) => {
     expect(videoKey(url)).toBe(key);
+  });
+});
+
+describe('videoIdKey', () => {
+  it.each([
+    'https://vm.tiktok.com/ZMabc/',
+    'https://www.youtube.com/@channel',
+    'https://evilyoutu.be/dQw4w9WgXcQ',
+    'https://example.com/watch?v=dQw4w9WgXcQ',
+    'https://x.com/anya',
+  ])('%s — не ролик', (url) => {
+    expect(videoIdKey(url)).toBeNull();
   });
 });
 
@@ -88,5 +117,65 @@ describe('authorInLinks', () => {
     [x, 'https://www.youtube.com/@anya', false],
   ])('%o + %s → %s', (author, link, expected) => {
     expect(authorInLinks(author, ['не ссылка', link])).toBe(expected);
+  });
+});
+
+describe('expandTiktokShortLink', () => {
+  /** Подменный fetch: адрес → куда редиректит. */
+  const redirects =
+    (map: Record<string, string>): typeof fetch =>
+    (input) =>
+      Promise.resolve(
+        new Response(null, {
+          status: 301,
+          headers: map[String(input)] ? { location: map[String(input)] } : {},
+        }),
+      );
+
+  it('раскрывает в ссылку на ролик без меток, по цепочке редиректов', async () => {
+    expect(
+      await expandTiktokShortLink(
+        'https://vm.tiktok.com/ZMabc/',
+        redirects({
+          'https://vm.tiktok.com/ZMabc/':
+            'https://m.tiktok.com/v/12345.html?_r=1',
+          'https://m.tiktok.com/v/12345.html':
+            'https://www.tiktok.com/@anya/video/12345?_t=x',
+        }),
+      ),
+    ).toBe('https://m.tiktok.com/v/12345.html');
+  });
+
+  it.each([
+    ['чужой домен', 'https://evil.com/@a/video/12345'],
+    ['http вместо https', 'http://www.tiktok.com/@a/video/12345'],
+    ['не ролик', 'https://www.tiktok.com/@anya'],
+  ])('%s — null', async (_, location) => {
+    expect(
+      await expandTiktokShortLink(
+        'https://vm.tiktok.com/ZMabc/',
+        redirects({ 'https://vm.tiktok.com/ZMabc/': location }),
+      ),
+    ).toBeNull();
+  });
+
+  it('TikTok не ответил — null', async () => {
+    expect(
+      await expandTiktokShortLink('https://vm.tiktok.com/ZMabc/', () =>
+        Promise.reject(new Error('timeout')),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('isTiktokShortLink', () => {
+  it.each([
+    ['https://vm.tiktok.com/ZMabc/', true],
+    ['https://vt.tiktok.com/ZSabc/', true],
+    ['https://www.tiktok.com/t/ZTabc/', true],
+    ['https://www.tiktok.com/@anya/video/12345', false],
+    ['https://vm.tiktok.com.evil.com/ZMabc/', false],
+  ])('%s → %s', (url, short) => {
+    expect(isTiktokShortLink(url)).toBe(short);
   });
 });
