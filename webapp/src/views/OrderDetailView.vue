@@ -52,7 +52,8 @@ const views = computed(() => calcViews.value ?? presets.value[Math.min(2, preset
 const earning = computed(() => {
   const o = order.value;
   if (!o?.cpm || !views.value) return 0;
-  return Math.min(o.free, Math.round(((views.value / 1000) * o.cpm) * 100) / 100);
+  // остаток округлён вниз (меньше 100 — freeUnder): не обещаем больше, чем точно есть
+  return Math.min(o.freeUnder ?? o.free, Math.round(((views.value / 1000) * o.cpm) * 100) / 100);
 });
 
 void load();
@@ -88,8 +89,9 @@ onUnmounted(() => clearInterval(refresh));
         </div>
         <span v-else>{{ $t('order.cpmPending') }}</span>
         <span :class="['free', { low: order.budgetLow }]">
-          {{ $t('order.left', { amount: formatMoney(order.free) })
-          }}<template v-if="order.cpm"> · {{ $t('order.leftViews', { views: formatViews(budgetViews(order.free, order.cpm)) }) }}</template
+          <template v-if="order.freeUnder">{{ $t('order.leftUnder', { amount: formatMoney(order.freeUnder) }) }}</template
+          ><template v-else>{{ $t('order.left', { amount: formatMoney(order.free) })
+          }}<template v-if="order.cpm"> · {{ $t('order.leftViews', { views: formatViews(budgetViews(order.free, order.cpm)) }) }}</template></template
           ><template v-if="order.budgetLow">{{ $t('orderCard.hurry') }}</template>
         </span>
       </header>

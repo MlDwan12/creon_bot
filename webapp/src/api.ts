@@ -55,8 +55,10 @@ export interface OrderSummary extends VideoFormat {
   cpm: number | null;
   /** Ролик можно сдать, когда он наберёт столько просмотров. */
   minViews: number;
-  /** Сколько ещё осталось на выплаты креаторам, USDT. */
+  /** Сколько ещё осталось на выплаты креаторам, USDT — округлено вниз до 100 (точное не показываем). */
   free: number;
+  /** Осталось меньше этой суммы (free тогда 0); null — free как есть. */
+  freeUnder: number | null;
   /** Осталось меньше 30% фонда — подсвечиваем «успейте». */
   budgetLow: boolean;
   category: OrderCategory;
@@ -766,8 +768,8 @@ type Me = {
   languageChosen: boolean;
   /** Кабинет, открытый последним (role.ts); null — ещё не выбирал. */
   cabinet: 'creator' | 'advertiser' | null;
-  /** Комиссия площадки для новых заказов, %: бюджет креаторам — без неё. */
-  feePercent: number;
+  /** Комиссия площадки для новых заказов, %: бюджет креаторам — без неё; в кабинете креатора — null. */
+  feePercent: number | null;
 };
 let me: Promise<Me> | undefined;
 

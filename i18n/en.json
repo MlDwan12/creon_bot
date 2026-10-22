@@ -56,7 +56,8 @@
     "left": "{{amount}} left",
     "hurry": " — hurry up",
     "minViews": "from {{views}} views",
-    "approxViews": "≈ {{views}} views"
+    "approxViews": "≈ {{views}} views",
+    "leftUnder": "less than {{amount}} left"
   },
   "onboarding": {
     "aria": "Welcome to Fixum",
@@ -378,7 +379,8 @@
     "calcNote": "We pay for the views at the moment a moderator checks the video — no more than the budget left. You can submit from {{views}} views.",
     "budgetNote": "The budget is shared by all creators. When it runs out the order closes, so submit as soon as your video reaches the threshold.",
     "leftViews": "≈ {{views}} views",
-    "requirements": "Video requirements"
+    "requirements": "Video requirements",
+    "leftUnder": "Less than {{amount}} left"
   },
   "submit": {
     "alreadySent": "This application has already been submitted or wasn't found.",

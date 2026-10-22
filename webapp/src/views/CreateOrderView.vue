@@ -168,7 +168,7 @@ function validate(): boolean {
 // Проверка перед отправкой нового заказа: карточка, как её увидят креаторы, и деньги с комиссией.
 const previewing = ref(false);
 const feePercent = ref<number>();
-void fetchMe().then((me) => (feePercent.value = me.feePercent), () => {});
+void fetchMe().then((me) => (feePercent.value = me.feePercent ?? undefined), () => {});
 const previewOrder = computed<OrderSummary>(() => ({
   id: 0,
   title: form.title,
@@ -177,6 +177,7 @@ const previewOrder = computed<OrderSummary>(() => ({
   cpm: null,
   minViews: Number(form.minViews),
   free: pool.value ?? Number(form.budget),
+  freeUnder: null,
   budgetLow: false,
   category: form.category!,
   deadline: null,

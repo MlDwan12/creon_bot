@@ -45,7 +45,8 @@ defineProps<{ order: OrderSummary; preview?: boolean }>();
 
     <div class="meta">
       <span :class="['free', { low: order.budgetLow }]">
-        {{ $t('orderCard.left', { amount: formatMoney(order.free) }) }}<template v-if="order.cpm"> · {{ $t('orderCard.approxViews', { views: formatViews(budgetViews(order.free, order.cpm)) }) }}</template><template v-if="order.budgetLow">{{ $t('orderCard.hurry') }}</template>
+        <template v-if="order.freeUnder">{{ $t('orderCard.leftUnder', { amount: formatMoney(order.freeUnder) }) }}</template
+        ><template v-else>{{ $t('orderCard.left', { amount: formatMoney(order.free) }) }}<template v-if="order.cpm"> · {{ $t('orderCard.approxViews', { views: formatViews(budgetViews(order.free, order.cpm)) }) }}</template></template><template v-if="order.budgetLow">{{ $t('orderCard.hurry') }}</template>
       </span>
       <span>{{ $t('orderCard.minViews', { views: formatViews(order.minViews) }) }}</span>
     </div>
