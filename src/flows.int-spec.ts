@@ -175,6 +175,30 @@ describe('отклик', () => {
     );
   });
 
+  it('повторная сдача той же ссылки не тратит квоту площадки: просмотры запомнены', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const order = await openOrder(advertiser.id);
+    const s = await submissions.claim(order.id, creator.id);
+    // меньше порога (250) — сдать нельзя, креатор пробует ещё
+    const fetchViews = jest.fn(() =>
+      Promise.resolve(
+        new Map([
+          ['https://youtu.be/dQw4w9WgXcQ', { views: 100, likes: null }],
+        ]),
+      ),
+    );
+    const counted = new SubmissionsService(prisma, {
+      fetchViews,
+    } as unknown as ViewCounterService);
+    const video = { url: 'https://youtu.be/dQw4w9WgXcQ', views: 9999 };
+
+    for (let i = 0; i < 3; i++)
+      await expect(
+        counted.submitVideo(s.id, creator.id, video),
+      ).rejects.toThrow('наберёт');
+    expect(fetchViews).toHaveBeenCalledTimes(1);
+  });
+
   it('старым роликам ставится ключ: повторно не сдать, дубль остаётся без ключа', async () => {
     const [advertiser, creator] = [await user(), await user()];
     const order = await openOrder(advertiser.id);
@@ -570,6 +594,38 @@ describe('правка заказа', () => {
       decidedAt: null,
     });
     expect(updated.submissions.map((s) => s.creatorId)).toEqual([creator.id]);
+  });
+
+  it('пустая правка ничего не делает; уведомления — только при заморозке и заново в очереди', async () => {
+    const adv = await user();
+    const order = await openOrder(adv.id);
+    const same = {
+      title: 'Заказ',
+      description: 'Описание',
+      budgetMinor: BUDGET,
+      minViews: 250,
+      category: 'OTHER' as const,
+    };
+    const noop = await orders.update(order.id, adv.id, same);
+    expect(noop.notify).toEqual({ moderators: false, creators: false });
+    expect(await statusOf(order.id)).toBe('OPEN');
+
+    // первая правка открытого: на проверку, креаторы узнают о заморозке
+    expect((await orders.update(order.id, adv.id, edit)).notify).toEqual({
+      moderators: true,
+      creators: true,
+    });
+    // ещё правка, пока на проверке, — никого не будит
+    expect(
+      (await orders.update(order.id, adv.id, { ...edit, title: 'Ещё раз' }))
+        .notify,
+    ).toEqual({ moderators: false, creators: false });
+    // отклонённую отправили снова — модераторам: заказ заново в очереди
+    await rejectOrder(order.id, 1n, 'Уточните задание');
+    expect((await orders.update(order.id, adv.id, edit)).notify).toEqual({
+      moderators: true,
+      creators: false,
+    });
   });
 
   it('рассылка о новом заказе — только при первой публикации, не после правки', async () => {

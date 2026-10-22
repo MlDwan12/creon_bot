@@ -533,6 +533,17 @@ export class OrdersService {
     const order = await this.mustFind(orderId);
     if (order.advertiserId !== advertiserId)
       throw new ForbiddenException(tr('errors.notYourOrder'));
+    // Пустая правка не замораживает заказ и никого не будит: иначе ею держали бы заказ замороженным
+    // и слали уведомления по кругу. Отклонённую можно отправить заново и без изменений.
+    const queued: OrderStatus[] = [
+      OrderStatus.OPEN,
+      OrderStatus.PENDING_MODERATION,
+    ];
+    if (queued.includes(order.status) && changesNothing(order, data))
+      return {
+        ...(await this.withActiveCreators(orderId)),
+        notify: { moderators: false, creators: false },
+      };
     const now = new Date();
     // Срок «как было» у заказа на проверке — это ещё «N дней от отправки на проверку»: переносим его
     // вместе с моментом отправки, иначе время до правки съело бы дни креаторов.
@@ -576,7 +587,15 @@ export class OrdersService {
         tr('errors.editWhich'),
       );
     });
-    return this.withActiveCreators(orderId);
+    return {
+      ...(await this.withActiveCreators(orderId)),
+      notify: {
+        // уже на проверке — карточка в очереди просто обновилась
+        moderators: order.status !== OrderStatus.PENDING_MODERATION,
+        // о заморозке креаторы узнают один раз — при первой правке открытого заказа
+        creators: order.status === OrderStatus.OPEN,
+      },
+    };
   }
 
   /** Заказ с рекламодателем и креаторами, чья работа по нему ещё не решена, — для уведомлений. */
@@ -796,6 +815,27 @@ export class OrdersService {
     if (!order) throw new NotFoundException(tr('errors.orderNotFound'));
     return order;
   }
+}
+
+/** Правка оставляет заказ как есть: те же поля, срок не передан (или «без срока» и было без срока). */
+function changesNothing(
+  order: Order,
+  data: Parameters<OrdersService['update']>[2],
+): boolean {
+  if (
+    data.deadline !== undefined &&
+    !(data.deadline === null && !order.deadline)
+  )
+    return false;
+  // площадки — набор: порядок в форме не важен
+  const norm = (k: string, v: unknown) =>
+    JSON.stringify(k === 'platforms' ? [...(v as string[])].sort() : v);
+  return Object.entries(data).every(
+    ([k, v]) =>
+      k === 'deadline' ||
+      v === undefined ||
+      norm(k, v) === norm(k, order[k as keyof Order]),
+  );
 }
 
 /** Условия заказа, по которым проверяют ролики, — снимок до правки (Order.prevTerms). */

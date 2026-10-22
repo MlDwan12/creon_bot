@@ -96,12 +96,12 @@ export class MyOrdersController {
     @Body() body: unknown,
     @Req() req: ApiRequest,
   ) {
-    const order = await this.ordersService.update(
+    const { notify, ...order } = await this.ordersService.update(
       id,
       req.user.id,
       parseOrderEdit(body),
     );
-    this.notifications.orderEdited(order);
+    this.notifications.orderEdited(order, notify);
     return { ok: true };
   }
 
