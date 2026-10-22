@@ -19,7 +19,11 @@ import type { Response } from 'express';
 import { ParseIdPipe } from '../common/parse-id.pipe';
 import { NotificationsService } from '../telegram/notifications.service';
 import { TelegramPhotosService } from '../telegram/telegram-photos.service';
-import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
+import {
+  type ApiRequest,
+  assertFreshLogin,
+  InitDataGuard,
+} from '../auth/init-data.guard';
 import { ModeratorGuard } from '../auth/moderator.guard';
 import { parseWallet } from '../payouts/trc20';
 import { parseLinks } from './profile-input';
@@ -93,6 +97,7 @@ export class ProfilesController {
   async updateWallet(@Body() body: unknown, @Req() req: ApiRequest) {
     const wallet = parseWallet(body);
     if (wallet === req.user.payoutWallet) return { ok: true };
+    assertFreshLogin(req);
     await this.profiles.updateWallet(
       req.user.id,
       wallet,

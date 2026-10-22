@@ -455,7 +455,10 @@ function instagram(appId: string, appSecret: string): Provider {
           const stats = toStats(views, m.like_count);
           if (stats) out.set(m.shortcode, stats);
         }
-        next = r.paging?.next;
+        // в ссылке следующей страницы — токен креатора: идём по ней, только если она на Graph API
+        next = r.paging?.next?.startsWith(`${GRAPH}/`)
+          ? r.paging.next
+          : undefined;
       }
       return out;
     },
@@ -480,10 +483,14 @@ export function toStats(
   views: string | number | undefined,
   likes: string | number | undefined,
 ): VideoStats | null {
-  const v = Math.min(Number(views ?? NaN), MAX_VIEWS);
-  if (!Number.isFinite(v)) return null;
-  const l = Math.min(Number(likes ?? NaN), MAX_VIEWS);
-  return { views: v, likes: Number.isFinite(l) ? l : null };
+  // целые от 0: дробное или отрицательное из ответа площадки упало бы при записи в базу (Int)
+  const count = (raw: string | number | undefined) => {
+    const n = Math.floor(Math.min(Number(raw ?? NaN), MAX_VIEWS));
+    return Number.isFinite(n) ? Math.max(0, n) : null;
+  };
+  const v = count(views);
+  if (v === null) return null;
+  return { views: v, likes: count(likes) };
 }
 
 export function chunks<T>(items: T[], size: number): T[][] {

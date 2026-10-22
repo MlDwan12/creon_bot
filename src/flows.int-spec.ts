@@ -510,6 +510,22 @@ describe('ссылка на товар', () => {
     });
     expect(clicks).toBe(1);
   });
+
+  it('ссылка на ролик для рекламодателя (/v/) ведёт на ролик — только одобренный, переход не считается', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    const s = await submissions.claim(order.id, creator.id);
+    const url = videoUrl();
+    await submissions.attachVideo(s.id, creator.id, url, VIEWS);
+    expect(await submissions.videoByCode(s.trackCode!)).toBeNull();
+
+    await submissions.moderatorApprove(s.id, 1n, VIEWS);
+    expect(await submissions.videoByCode(s.trackCode!)).toBe(url);
+    expect(
+      (await prisma.submission.findUniqueOrThrow({ where: { id: s.id } }))
+        .clicks,
+    ).toBe(0);
+  });
 });
 
 describe('каталог', () => {
@@ -1735,6 +1751,24 @@ describe('жалобы', () => {
     await expect(
       reports.create(creator, report('ORDER', pending.id)),
     ).rejects.toThrow('Не найдено');
+  });
+
+  it('на закрытый заказ — только тот, кто по нему работал: перебором id не узнать, какие заказы есть', async () => {
+    const [advertiser, worked, stranger] = [
+      await user(),
+      await user(),
+      await user(),
+    ];
+    const order = await openOrder(advertiser.id);
+    await submissions.claim(order.id, worked.id);
+    await orders.close(order.id, advertiser.id);
+
+    await expect(
+      reports.create(stranger, report('ORDER', order.id)),
+    ).rejects.toThrow('Не найдено');
+    await expect(
+      reports.create(worked, report('ORDER', order.id)),
+    ).resolves.toContain('заказ');
   });
 
   it('причина — из списка своего типа; «Другое» — только с комментарием', () => {

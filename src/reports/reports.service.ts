@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  OrderStatus,
   Prisma,
   ReportStatus,
   ReportTarget,
@@ -127,11 +128,19 @@ export class ReportsService {
   ): Promise<string | null> {
     switch (target) {
       case ReportTarget.ORDER: {
-        const order = await this.prisma.order.findUnique({ where: { id } });
+        // открытый — его видят все в каталоге; закрытый и истёкший — только те, кто по нему работал:
+        // иначе перебором id по ответу жалобы узнавали бы, какие заказы есть
+        const order = await this.prisma.order.findUnique({
+          where: { id },
+          include: {
+            submissions: { where: { creatorId: reporter.id }, take: 1 },
+          },
+        });
         const visible =
           order &&
           order.advertiserId !== reporter.id &&
-          titleVisibleToCreators(order);
+          titleVisibleToCreators(order) &&
+          (order.status === OrderStatus.OPEN || order.submissions.length > 0);
         return visible ? `заказ «${order.title}»` : null;
       }
       case ReportTarget.VIDEO: {

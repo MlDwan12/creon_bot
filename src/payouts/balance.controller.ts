@@ -3,7 +3,11 @@ import { Throttle } from '@nestjs/throttler';
 import { SupportService } from '../support/support.service';
 import { creatorLabel, escapeHtml, formatMoney } from '../common/format';
 import { fromMinor } from '../common/money';
-import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
+import {
+  type ApiRequest,
+  assertFreshLogin,
+  InitDataGuard,
+} from '../auth/init-data.guard';
 import {
   MIN_PAYOUT,
   parsePayoutAmount,
@@ -53,6 +57,7 @@ export class BalanceController {
   @Post('withdraw')
   @Throttle({ default: { limit: 10, ttl: 60 * 60_000 } })
   async withdraw(@Body('amount') amount: unknown, @Req() req: ApiRequest) {
+    assertFreshLogin(req);
     const payout = await this.payouts.requestPayout(
       req.user.id,
       parsePayoutAmount(amount),

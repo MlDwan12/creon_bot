@@ -19,6 +19,7 @@ import { InjectBot } from 'nestjs-telegraf';
 import { fromMinor } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
 import { HOLD_DAYS } from '../orders/budget';
+import { videoLinkForAdvertiser } from '../orders/order-report';
 import { SLOT_DAYS } from '../submissions/submissions.service';
 import { Context, Markup, Telegraf, TelegramError } from 'telegraf';
 import {
@@ -248,7 +249,7 @@ export class NotificationsService
         t('notify.newVideo', {
           title: escapeHtml(submission.order.title),
           views: num(lang, views),
-          url: escapeHtml(submission.videoUrl ?? ''),
+          url: escapeHtml(videoLinkForAdvertiser(submission.trackCode) ?? ''),
         }),
       `/my-orders/${submission.order.id}/review`,
       true,

@@ -6,8 +6,9 @@ services:
       POSTGRES_USER: creon
       POSTGRES_PASSWORD: creon
       POSTGRES_DB: creon_bot
+    # только localhost: Docker обходит ufw, и на сервере база с паролем creon/creon была бы открыта всем
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
     volumes:
       - db_data:/var/lib/postgresql/data
     # api ждёт готовности базы: иначе миграции при старте падают на ещё не поднявшемся Postgres
@@ -29,7 +30,7 @@ services:
     # не резолвится: не работают бот, аватарки и /api/me
     dns: [1.1.1.1, 8.8.8.8]
     ports:
-      - '3000:3000'
+      - '127.0.0.1:3000:3000'
     depends_on:
       db:
         condition: service_healthy
