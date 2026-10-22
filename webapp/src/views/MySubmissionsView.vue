@@ -1,18 +1,16 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { RouterLink } from 'vue-router';
-import { type Balance, fetchBalance, fetchMySubmissions, type MySubmission } from '../api';
-import { formatMoney } from '../format';
+import { fetchMySubmissions, type MySubmission } from '../api';
 import { i18next } from '../i18n';
+import EmptyState from '../components/EmptyState.vue';
+import LoadState from '../components/LoadState.vue';
 import SubmissionCard from '../components/SubmissionCard.vue';
 
 const items = ref<MySubmission[]>([]);
 const loading = ref(true);
 const error = ref('');
 const tab = ref<'active' | 'done'>('active');
-const balance = ref<Balance>();
-// баланс — второстепенное: не загрузился — просто не показываем
-void fetchBalance().then((b) => (balance.value = b), () => {});
 
 const ACTIVE = ['IN_PROGRESS', 'SUBMITTED', 'MODERATOR_APPROVED'];
 
@@ -31,6 +29,8 @@ const done = computed(() =>
 );
 
 async function load() {
+  loading.value = true;
+  error.value = '';
   try {
     items.value = await fetchMySubmissions();
   } catch {
@@ -47,14 +47,6 @@ void load();
   <main class="page">
     <h1>{{ $t('submissions.title') }}</h1>
 
-    <RouterLink v-if="balance" to="/balance" class="balance">
-      <span>
-        <small>{{ $t('submissions.balance') }}</small>
-        <strong>{{ formatMoney(balance.available) }}</strong>
-        <small v-if="balance.held">{{ $t('submissions.heldShort', { amount: formatMoney(balance.held) }) }}</small>
-      </span>
-      <span class="balance-action">{{ $t('submissions.withdraw') }}</span>
-    </RouterLink>
 
     <div class="segmented" role="tablist" :aria-label="$t('submissions.filterAria')">
       <button type="button" role="tab" :aria-selected="tab === 'active'" @click="tab = 'active'">
@@ -65,14 +57,22 @@ void load();
       </button>
     </div>
 
-    <p v-if="loading" class="hint">{{ $t('common.loading') }}</p>
-    <p v-else-if="error" class="hint">{{ error }}</p>
+    <LoadState v-if="loading || error" :error="error" @retry="load" />
 
     <template v-else-if="tab === 'active'">
-      <p v-if="active.length + attention.length === 0" class="hint">
-        {{ $t('submissions.emptyActive') }}
-        <RouterLink to="/">{{ $t('submissions.toCatalog') }}</RouterLink>
-      </p>
+      <EmptyState
+        v-if="active.length + attention.length === 0"
+        :title="$t('submissions.emptyTitle')"
+        :text="$t('submissions.emptyText')"
+      >
+        <template #icon>
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+            <rect x="3" y="5" width="18" height="14" rx="3" />
+            <path d="M10 9.5v5l4.5-2.5z" />
+          </svg>
+        </template>
+        <RouterLink to="/" class="main-button">{{ $t('submissions.openCatalog') }}</RouterLink>
+      </EmptyState>
       <SubmissionCard v-for="s in active" :key="s.id" :submission="s" />
       <template v-if="attention.length">
         <h2 class="section-title flush">{{ $t('submissions.attention') }}</h2>
@@ -81,7 +81,13 @@ void load();
     </template>
 
     <template v-else>
-      <p v-if="done.length === 0" class="hint">{{ $t('submissions.emptyDone') }}</p>
+      <EmptyState v-if="done.length === 0" :title="$t('submissions.emptyDoneTitle')" :text="$t('submissions.emptyDone')">
+        <template #icon>
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12.5l4.5 4.5L19 7" />
+          </svg>
+        </template>
+      </EmptyState>
       <SubmissionCard v-for="s in done" :key="s.id" :submission="s" />
     </template>
   </main>
@@ -108,7 +114,7 @@ h1 {
   background: var(--fill);
 }
 .segmented button {
-  min-height: 34px;
+  min-height: 44px;
   border: none;
   border-radius: 7px;
   background: none;
@@ -127,39 +133,6 @@ h1 {
   color: var(--hint);
 }
 /* Баланс — тёмная плашка с лаймовой суммой, как в макете. */
-.balance {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 18px;
-  border-radius: var(--radius-card);
-  background: var(--ink);
-  color: var(--ink-text);
-  text-decoration: none;
-}
-.balance span:first-child {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.balance small {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink-hint);
-}
-.balance strong {
-  font-family: var(--font-display);
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--lime);
-}
-.balance-action {
-  padding: 10px 14px;
-  border-radius: 14px;
-  background: var(--lime);
-  color: var(--lime-text);
-  font-weight: 800;
-}
 .hint a {
   color: var(--link);
 }

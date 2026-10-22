@@ -113,19 +113,34 @@ jobs:
           # тема проекта в группе алертов (группа с темами); пусто — в общий чат
           ALERT_THREAD_ID: ${{ secrets.ALERT_THREAD_ID }}
           STATUS: ${{ job.status }}
+          # сообщение коммита — только через env: в run его текст стал бы кодом
+          COMMIT_MSG: ${{ github.event.workflow_run.head_commit.message }}
+          COMMIT_AUTHOR: ${{ github.event.workflow_run.head_commit.author.name }}
+          COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.event.workflow_run.head_sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           [ -n "$ALERT_BOT_TOKEN" ] && [ -n "$ALERT_CHAT_ID" ] || exit 0
+          # у merge-коммита PR первая строка — «Merge pull request #N from …», заголовок PR — третья: берём «#N заголовок»
+          title=$(printf '%s\n' "$COMMIT_MSG" | sed -n '1p')
+          case "$title" in
+            'Merge pull request #'*) pr=${title#Merge pull request }; title="${pr%% *} $(printf '%s\n' "$COMMIT_MSG" | sed -n '3p')" ;;
+          esac
+          about="${SHA:0:7} · $COMMIT_AUTHOR
+          $title
+          $COMMIT_URL"
           if [ "$STATUS" = success ]; then
-            text="✓ Fixum выкачен ($STAND): ${SHA:0:7}"; silent=true
+            text="✓ Fixum выкачен ($STAND)
+          $about"; silent=true
           else
-            text="✗ Выкатка Fixum ($STAND) ${SHA:0:7} не удалась (откат на прошлую версию, если был возможен) — лог: $RUN_URL"; silent=false
+            text="✗ Выкатка Fixum ($STAND) не удалась (откат на прошлую версию, если был возможен)
+          $about
+          лог: $RUN_URL"; silent=false
           fi
           # без -f: при ошибке Telegram объясняет причину в description — её и выводим
           res=$(curl -sS --max-time 10 "https://api.telegram.org/bot$ALERT_BOT_TOKEN/sendMessage" \
             --data-urlencode "chat_id=$ALERT_CHAT_ID" --data-urlencode "text=$text" \
             ${ALERT_THREAD_ID:+--data "message_thread_id=$ALERT_THREAD_ID"} \
-            --data "disable_notification=$silent") || res=''
+            --data "disable_notification=$silent" --data "disable_web_page_preview=true") || res=''
           case "$res" in
             *'"ok":true'*) ;;
             *) echo "::warning::не удалось отправить итог в Telegram: $(echo "$res" | grep -o '"description":"[^"]*"')" ;;

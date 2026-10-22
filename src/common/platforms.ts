@@ -45,10 +45,12 @@ export function youtubeId(url: string): string | null {
   } catch {
     return null;
   }
-  const id = u.hostname.toLowerCase().endsWith('youtu.be')
-    ? u.pathname.slice(1)
+  // ?v= бывает и в ссылке другой площадки — без проверки домена чужой ролик заняли бы ей
+  if (!isOnHosts(u.hostname, PLATFORMS.YOUTUBE.hosts)) return null;
+  const id = isOnHosts(u.hostname, ['youtu.be'])
+    ? u.pathname.split('/')[1]
     : (u.searchParams.get('v') ??
-      u.pathname.match(/^\/(?:shorts|embed|live)\/([^/]+)/)?.[1]);
+      u.pathname.match(/^\/(?:shorts|embed|live|v)\/([^/]+)/)?.[1]);
   return id && /^[\w-]{11}$/.test(id) ? id : null;
 }
 
@@ -66,7 +68,7 @@ export function xPostId(url: string): string | null {
 
 /**
  * id ролика TikTok: tiktok.com/@автор/video/ID, m.tiktok.com/v/ID.html.
- * ponytail: короткие vm.tiktok.com/… не раскрываем — такой ролик считается вручную.
+ * Короткие vm.tiktok.com/… при сдаче раскрываются в полную ссылку (expandTiktokShortLink).
  */
 export function tiktokVideoId(url: string): string | null {
   let u: URL;
@@ -116,19 +118,89 @@ export function instagramShortcode(url: string): string | null {
   );
 }
 
+/** Короткая ссылка TikTok из «Поделиться»: vm.tiktok.com/…, vt.tiktok.com/…, tiktok.com/t/…. */
+export function isTiktokShortLink(url: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  return (
+    isOnHosts(u.hostname, ['vm.tiktok.com', 'vt.tiktok.com']) ||
+    (isOnHosts(u.hostname, PLATFORMS.TIKTOK.hosts) &&
+      /^\/t\/\w+/.test(u.pathname))
+  );
+}
+
 /**
- * Ссылка на ролик в одном виде — чтобы тот же ролик не сдали дважды под разными ссылками.
- * YouTube — по id ролика (watch?v=, youtu.be, shorts — один ролик); X — по id поста (x.com и
- * twitter.com, любой ник в ссылке — один пост); остальное — домен без www/m
- * и путь без хвостового «/», без параметров (метки соцсетей вроде ?is_from_webapp ролик не меняют).
- * У VK ролик бывает в параметре z (vk.com/feed?z=video-1_2) — его оставляем.
- * ponytail: короткие ссылки (vm.tiktok.com/…) не раскрываем — нужен запрос к площадке.
+ * Полная ссылка на ролик из короткой TikTok: идём по редиректам сами, только по https и доменам
+ * TikTok и не больше 3 раз, пока в ссылке не появится id ролика. Метки (?_r=…) отбрасываем.
+ * null — TikTok не ответил или увёл не на ролик: креатор пришлёт полную ссылку.
+ */
+export async function expandTiktokShortLink(
+  url: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<string | null> {
+  let current = url;
+  for (let hop = 0; hop < 3; hop++) {
+    let location: string | null;
+    try {
+      const res = await fetchFn(current, {
+        redirect: 'manual',
+        signal: AbortSignal.timeout(5000),
+      });
+      await res.body?.cancel();
+      location = res.headers.get('location');
+    } catch {
+      return null;
+    }
+    if (!location) return null;
+    let next: URL;
+    try {
+      next = new URL(location, current);
+    } catch {
+      return null;
+    }
+    if (
+      next.protocol !== 'https:' ||
+      !isOnHosts(next.hostname, PLATFORMS.TIKTOK.hosts)
+    )
+      return null;
+    current = `${next.origin}${next.pathname}`;
+    if (tiktokVideoId(current)) return current;
+  }
+  return null;
+}
+
+const VIDEO_IDS = [
+  ['youtube', youtubeId],
+  ['x', xPostId],
+  ['tiktok', tiktokVideoId],
+  ['instagram', instagramShortcode],
+  ['vk', vkVideoId],
+] as const;
+
+/**
+ * Ключ ролика по его id на площадке — чтобы тот же ролик не сдали дважды под разными ссылками:
+ * ник в ссылке, его регистр, /p/ или /reel/, vk.com или vkvideo.ru ролик не меняют.
+ * null — ссылка не на конкретный ролик (профиль, короткая vm.tiktok.com/… до раскрытия).
+ */
+export function videoIdKey(url: string): string | null {
+  for (const [platform, idOf] of VIDEO_IDS) {
+    const id = idOf(url);
+    if (id) return `${platform}:${id}`;
+  }
+  return null;
+}
+
+/**
+ * Ключ ролика для Submission.videoKey: по id (videoIdKey). Ссылки старых роликов, сданных до проверки
+ * id, — домен без www/m и путь без хвостового «/» и параметров (у VK — с параметром z).
  */
 export function videoKey(url: string): string {
-  const yt = youtubeId(url);
-  if (yt) return `youtube:${yt}`;
-  const x = xPostId(url);
-  if (x) return `x:${x}`;
+  const key = videoIdKey(url);
+  if (key) return key;
   const u = new URL(url);
   const host = u.hostname.toLowerCase().replace(/^(?:www|m)\./, '');
   const path = u.pathname.replace(/\/+$/, '');

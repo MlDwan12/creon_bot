@@ -239,9 +239,12 @@ export class OrdersService {
   }
 
   /** Все заказы любого статуса для модератора — страница, новые первыми. */
-  async listAll(skip: number, take: number) {
+  /** Все заказы для модератора, новые первыми; statuses — фильтр (пусто — все). */
+  async listAll(skip: number, take: number, statuses: OrderStatus[] = []) {
+    const where = statuses.length ? { status: { in: statuses } } : {};
     const [items, total] = await Promise.all([
       this.prisma.order.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         skip,
         take,
@@ -250,7 +253,7 @@ export class OrdersService {
           _count: { select: { submissions: true } },
         },
       }),
-      this.prisma.order.count(),
+      this.prisma.order.count({ where }),
     ]);
     return { items, total };
   }
@@ -480,8 +483,9 @@ export class OrdersService {
 
   /**
    * Удаляет заказ вместе с откликами — только пока по нему никто не сдал видео: сданные работы
-   * нужны для разбора споров. Условие в самом `deleteMany`, поэтому видео, сданное между
-   * проверкой и удалением, удаление остановит.
+   * нужны для разбора споров. Под блокировкой строки заказа, как и сдача (lockBudget): условие
+   * `deleteMany` само по себе видит снимок на начало запроса и пропустило бы видео, сданное в
+   * ту же миллисекунду, — каскад стёр бы его.
    */
   async remove(orderId: number, advertiserId: number) {
     const order = await this.prisma.order.findUnique({
@@ -491,11 +495,16 @@ export class OrdersService {
     if (!order) throw new NotFoundException(tr('errors.orderNotFound'));
     if (order.advertiserId !== advertiserId)
       throw new ForbiddenException(tr('errors.notYourOrder'));
-    const { count } = await this.prisma.order.deleteMany({
-      where: {
-        id: orderId,
-        submissions: { none: { status: { notIn: NO_VIDEO } } },
-      },
+    const count = await this.prisma.$transaction(async (tx) => {
+      await lockOrder(tx, orderId);
+      return (
+        await tx.order.deleteMany({
+          where: {
+            id: orderId,
+            submissions: { none: { status: { notIn: NO_VIDEO } } },
+          },
+        })
+      ).count;
     });
     if (count === 0) throw new ForbiddenException(tr('errors.cantDelete'));
     return order;
@@ -530,6 +539,17 @@ export class OrdersService {
     const order = await this.mustFind(orderId);
     if (order.advertiserId !== advertiserId)
       throw new ForbiddenException(tr('errors.notYourOrder'));
+    // Пустая правка не замораживает заказ и никого не будит: иначе ею держали бы заказ замороженным
+    // и слали уведомления по кругу. Отклонённую можно отправить заново и без изменений.
+    const queued: OrderStatus[] = [
+      OrderStatus.OPEN,
+      OrderStatus.PENDING_MODERATION,
+    ];
+    if (queued.includes(order.status) && changesNothing(order, data))
+      return {
+        ...(await this.withActiveCreators(orderId)),
+        notify: { moderators: false, creators: false },
+      };
     const now = new Date();
     // Срок «как было» у заказа на проверке — это ещё «N дней от отправки на проверку»: переносим его
     // вместе с моментом отправки, иначе время до правки съело бы дни креаторов.
@@ -573,7 +593,15 @@ export class OrdersService {
         tr('errors.editWhich'),
       );
     });
-    return this.withActiveCreators(orderId);
+    return {
+      ...(await this.withActiveCreators(orderId)),
+      notify: {
+        // уже на проверке — карточка в очереди просто обновилась
+        moderators: order.status !== OrderStatus.PENDING_MODERATION,
+        // о заморозке креаторы узнают один раз — при первой правке открытого заказа
+        creators: order.status === OrderStatus.OPEN,
+      },
+    };
   }
 
   /** Заказ с рекламодателем и креаторами, чья работа по нему ещё не решена, — для уведомлений. */
@@ -795,6 +823,27 @@ export class OrdersService {
   }
 }
 
+/** Правка оставляет заказ как есть: те же поля, срок не передан (или «без срока» и было без срока). */
+function changesNothing(
+  order: Order,
+  data: Parameters<OrdersService['update']>[2],
+): boolean {
+  if (
+    data.deadline !== undefined &&
+    !(data.deadline === null && !order.deadline)
+  )
+    return false;
+  // площадки — набор: порядок в форме не важен
+  const norm = (k: string, v: unknown) =>
+    JSON.stringify(k === 'platforms' ? [...(v as string[])].sort() : v);
+  return Object.entries(data).every(
+    ([k, v]) =>
+      k === 'deadline' ||
+      v === undefined ||
+      norm(k, v) === norm(k, order[k as keyof Order]),
+  );
+}
+
 /** Условия заказа, по которым проверяют ролики, — снимок до правки (Order.prevTerms). */
 export function termsOf(order: Order) {
   return {
@@ -804,6 +853,8 @@ export function termsOf(order: Order) {
     targetUrl: order.targetUrl,
     category: order.category,
     minViews: order.minViews,
+    // ролики, сданные до правки, оплачиваются по ставке, при которой их сдали (videoTerms)
+    cpmMinor: order.cpmMinor,
     minDurationSec: order.minDurationSec,
     maxDurationSec: order.maxDurationSec,
     orientation: order.orientation,

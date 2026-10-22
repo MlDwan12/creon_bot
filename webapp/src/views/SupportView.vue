@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError, sendSupportMessage } from '../api';
+import EmptyState from '../components/EmptyState.vue';
 import { i18next } from '../i18n';
 
 // /support?about=… — «Вопрос по заказу #12»: тема уходит менеджеру вместе с текстом.
@@ -30,20 +31,26 @@ async function send() {
 
 <template>
   <main class="page">
-    <template v-if="sent">
-      <h1>{{ $t('support.sentTitle') }}</h1>
-      <p class="hint">{{ $t('support.sentText') }}</p>
-      <div class="bottom-bar">
-        <button type="button" class="main-button" @click="router.back()">{{ $t('common.done') }}</button>
-      </div>
-    </template>
+    <EmptyState v-if="sent" :title="$t('support.sentTitle')" :text="$t('support.sentText')" role="status">
+      <template #icon>
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12.5l4.5 4.5L19 7.5" />
+        </svg>
+      </template>
+      <button type="button" class="main-button" @click="router.back()">{{ $t('common.done') }}</button>
+    </EmptyState>
 
     <template v-else>
       <header class="head">
         <h1>{{ $t('support.title') }}</h1>
-        <span class="hint">{{ about || $t('support.hint') }}</span>
+        <span class="hint">{{ $t('support.hint') }}</span>
       </header>
-      <textarea v-model="text" rows="6" maxlength="1000" :placeholder="$t('support.placeholder')" />
+      <p v-if="about" class="topic">{{ about }}</p>
+      <label class="field-label">
+        <span>{{ $t('support.label') }}</span>
+        <textarea v-model="text" rows="6" maxlength="1000" :placeholder="$t('support.placeholder')" />
+      </label>
+      <span class="counter" aria-hidden="true">{{ text.length }} / 1000</span>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <div class="bottom-bar">
         <button type="button" class="main-button" :disabled="busy || !text.trim()" @click="send">
@@ -75,6 +82,24 @@ h1 {
   margin: 0;
   font-size: 15px;
   color: var(--hint);
+}
+.topic {
+  align-self: flex-start;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.counter {
+  align-self: flex-end;
+  margin-top: -10px;
+  color: var(--hint);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 textarea {
   padding: 10px 12px;

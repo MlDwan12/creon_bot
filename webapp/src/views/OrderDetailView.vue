@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { onUnmounted, ref } from 'vue';
+import { computed, onUnmounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { ApiError, categoryLabel, claimOrder, fetchOrder, PLATFORM_NAMES, type OrderDetail } from '../api';
 import PlatformIcon from '../components/PlatformIcon.vue';
 import { i18next, tList } from '../i18n';
 import SupportLink from '../components/SupportLink.vue';
-import { formatDeadline, formatMoney, formatVideoFormat, formatViews } from '../format';
+import LoadState from '../components/LoadState.vue';
+import { budgetViews, formatCompact, formatDeadline, formatMoney, formatViews, videoFormatParts } from '../format';
 import { safeUrl } from '../telegram';
 
 // `id` приходит из адреса /orders/:id (в router.ts у маршрута `props: true`).
@@ -18,6 +19,7 @@ const claimError = ref('');
 const justClaimed = ref(false);
 
 async function load() {
+  loadError.value = '';
   try {
     order.value = await fetchOrder(Number(props.id));
   } catch (err) {
@@ -39,6 +41,21 @@ async function claim() {
   }
 }
 
+// Калькулятор: сколько принесёт ролик с таким числом просмотров — от порога заказа и выше.
+const calcViews = ref<number>();
+const presets = computed(() => {
+  const min = order.value?.minViews ?? 0;
+  return [...new Set([min, 1_000, 10_000, 50_000])].filter((v) => v >= min).sort((a, b) => a - b);
+});
+const views = computed(() => calcViews.value ?? presets.value[Math.min(2, presets.value.length - 1)]);
+/** Выплата за просмотры по ставке, но не больше свободного остатка бюджета. */
+const earning = computed(() => {
+  const o = order.value;
+  if (!o?.cpm || !views.value) return 0;
+  // остаток округлён вниз (меньше 100 — freeUnder): не обещаем больше, чем точно есть
+  return Math.min(o.freeUnder ?? o.free, Math.round(((views.value / 1000) * o.cpm) * 100) / 100);
+});
+
 void load();
 
 // Остаток бюджета меняется, пока другие креаторы сдают ролики, — обновляем, пока экран открыт
@@ -52,8 +69,7 @@ onUnmounted(() => clearInterval(refresh));
 
 <template>
   <main class="detail">
-    <p v-if="loadError" class="hint">{{ loadError }}</p>
-    <p v-else-if="!order" class="hint">{{ $t('common.loading') }}</p>
+    <LoadState v-if="loadError || !order" :error="loadError" @retry="load" />
 
     <template v-else>
       <!-- Главное о заказе — в одном ярком блоке: площадки, название, ставка, остаток. -->
@@ -73,9 +89,34 @@ onUnmounted(() => clearInterval(refresh));
         </div>
         <span v-else>{{ $t('order.cpmPending') }}</span>
         <span :class="['free', { low: order.budgetLow }]">
-          {{ $t('order.left', { amount: formatMoney(order.free) }) }}<template v-if="order.budgetLow">{{ $t('orderCard.hurry') }}</template>
+          <template v-if="order.freeUnder">{{ $t('order.leftUnder', { amount: formatMoney(order.freeUnder) }) }}</template
+          ><template v-else>{{ $t('order.left', { amount: formatMoney(order.free) })
+          }}<template v-if="order.cpm"> · {{ $t('order.leftViews', { views: formatViews(budgetViews(order.free, order.cpm)) }) }}</template></template
+          ><template v-if="order.budgetLow">{{ $t('orderCard.hurry') }}</template>
         </span>
       </header>
+
+      <section v-if="order.cpm" class="calc" aria-labelledby="calc-title">
+        <h2 id="calc-title">{{ $t('order.calcTitle') }}</h2>
+        <div class="presets" role="radiogroup" :aria-label="$t('order.calcAria')">
+          <button
+            v-for="v in presets"
+            :key="v"
+            type="button"
+            role="radio"
+            :aria-checked="views === v"
+            @click="calcViews = v"
+          >
+            {{ formatCompact(v) }}
+          </button>
+        </div>
+        <div class="result">
+          <span>{{ $t('order.calcViews', { views: formatViews(views) }) }}</span>
+          <span class="money">{{ formatMoney(earning) }}</span>
+        </div>
+        <p class="note">{{ $t('order.calcNote', { views: formatViews(order.minViews) }) }}</p>
+        <p class="note">{{ $t('order.budgetNote') }}</p>
+      </section>
 
       <section class="rows">
         <div class="row">
@@ -95,7 +136,9 @@ onUnmounted(() => clearInterval(refresh));
       <section class="block">
         <h2 class="section-title">{{ $t('order.task') }}</h2>
         <div class="text">{{ order.description }}</div>
-        <p v-if="formatVideoFormat(order)" class="format">{{ $t('order.video', { format: formatVideoFormat(order) }) }}</p>
+        <ul v-if="videoFormatParts(order).length" class="req" :aria-label="$t('order.requirements')">
+          <li v-for="part in videoFormatParts(order)" :key="part">{{ part }}</li>
+        </ul>
         <a v-if="safeUrl(order.referenceUrl)" :href="safeUrl(order.referenceUrl)" target="_blank" rel="noopener noreferrer" class="reference">
           {{ $t('order.reference') }}
         </a>
@@ -235,12 +278,82 @@ h1 {
   flex-direction: column;
   gap: 6px;
 }
-.format {
+.req {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   margin: 0;
-  padding: 12px 16px;
-  border-radius: 14px;
+  padding: 0;
+  list-style: none;
+}
+.req li {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+.calc {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 16px;
+  border-radius: var(--radius-card);
   background: var(--surface);
-  font-size: 15px;
+}
+.calc h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 16px;
+}
+.presets {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+.presets button {
+  min-height: 44px;
+  border: 1.5px solid var(--separator);
+  border-radius: 14px;
+  background: none;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+.presets button[aria-checked='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.result {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 10px 14px;
+  border-radius: 16px;
+  background: var(--fill);
+  color: var(--hint);
+  font-size: 14px;
+}
+/* сумма — лаймовой плашкой, как все деньги: читается и в светлой теме */
+.result .money {
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: var(--lime);
+  color: var(--lime-text);
+  font-size: 20px;
+}
+.note {
+  margin: 0;
+  color: var(--hint);
+  font-size: 13px;
+  line-height: 1.45;
 }
 .reference {
   padding: 12px 16px;

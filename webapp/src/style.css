@@ -175,6 +175,18 @@ body:has(.bottom-bar) .tabbar {
   text-decoration: none;
 }
 
+/* Видимая подпись над полем: плейсхолдер исчезает при вводе, подпись — нет. */
+.field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* текст подписи — в span: у полей `font: inherit`, жирный шрифт им не нужен */
+.field-label > span {
+  font-size: 15px;
+  font-weight: 700;
+}
+
 /* Подпись для экранных дикторов, глазами не видна. */
 .visually-hidden {
   position: absolute;

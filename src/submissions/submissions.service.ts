@@ -1,6 +1,7 @@
 import { tr, trNum } from '../i18n/request-lang';
 import { randomBytes } from 'node:crypto';
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -22,8 +23,20 @@ import {
 } from '../orders/budget';
 import { DAY_MS } from '../orders/deadline';
 import { titleVisibleToCreators } from '../common/format';
-import { PLATFORMS, platformOf, videoKey } from '../common/platforms';
-import { closeOpenOrders, isFrozen, lockOrder } from '../orders/order-status';
+import {
+  PLATFORMS,
+  expandTiktokShortLink,
+  isTiktokShortLink,
+  platformOf,
+  videoKey,
+} from '../common/platforms';
+import {
+  closeOpenOrders,
+  fundOf,
+  isFrozen,
+  lockOrder,
+  videoTerms,
+} from '../orders/order-status';
 import {
   transitionSubmission,
   tryTransitionSubmission,
@@ -63,6 +76,15 @@ const ACCEPTS_VIDEOS: Prisma.OrderWhereInput = {
 // Свободного остатка может не хватать и из-за резерва роликов на проверке — тогда он ещё вернётся.
 const EXHAUSTED_MESSAGE = () => tr('errors.budgetShort');
 
+/**
+ * Роликов одного креатора на проверке по заказу: каждый резервирует оплату за порог, и без
+ * предела один креатор занял бы весь фонд роликами с выдуманными просмотрами до решения модератора.
+ */
+export const MAX_IN_REVIEW = 3;
+
+/** Сколько помним просмотры ролика, посчитанные при сдаче (countedAtSubmit). */
+const SUBMIT_COUNT_TTL_MS = 15 * 60_000;
+
 const ALREADY_CLAIMED_MESSAGE = () => tr('errors.alreadyClaimed');
 
 /** Причина отклонения, когда публикацию удалили до конца холда — креатор увидит её. */
@@ -77,6 +99,10 @@ const isDuplicate = (err: unknown) =>
 @Injectable()
 export class SubmissionsService implements OnApplicationBootstrap {
   private readonly logger = new Logger(SubmissionsService.name);
+  private readonly submitCounts = new Map<
+    string,
+    { views: number | undefined; until: number }
+  >();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -90,26 +116,28 @@ export class SubmissionsService implements OnApplicationBootstrap {
   }
 
   /**
-   * Ключ ролика для сданных до появления videoKey — чтобы их не сдали повторно (Submission_video_once).
-   * Если тот же ролик уже на проверке или оплачен по другому отклику, ключ не ставим (индекс не даст):
-   * такие дубли логируем для модераторов, остальное заполнится.
-   * ponytail: по строке на запрос и повтор дублей при каждом старте — старых роликов сотни, не миллионы.
+   * Ключ ролика по текущему правилу (videoKey) — у сданных до него или по старому правилу, чтобы их
+   * не сдали повторно (Submission_video_once). Если тот же ролик уже на проверке или оплачен по
+   * другому отклику, ключ не меняем (индекс не даст): такие дубли логируем для модераторов —
+   * возможно, один ролик оплачен дважды.
+   * ponytail: по строке на запрос и повтор дублей при каждом старте — роликов сотни, не миллионы.
    */
   async backfillVideoKeys() {
     const rows = await this.prisma.submission.findMany({
-      where: { videoKey: null, videoUrl: { not: null } },
-      select: { id: true, videoUrl: true },
+      where: { videoUrl: { not: null } },
+      select: { id: true, videoUrl: true, videoKey: true },
       orderBy: { id: 'asc' },
     });
     const duplicates: number[] = [];
     let filled = 0;
-    for (const { id, videoUrl } of rows) {
+    for (const { id, videoUrl, videoKey: current } of rows) {
       let key: string;
       try {
         key = videoKey(videoUrl!);
       } catch {
         continue; // не ссылка — сравнивать не с чем
       }
+      if (key === current) continue;
       try {
         await this.prisma.submission.update({
           where: { id },
@@ -123,7 +151,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
     }
     if (duplicates.length)
       this.logger.warn(
-        `Один ролик сдан несколько раз — отклики без ключа: ${duplicates.join(', ')}`,
+        `Один ролик сдан несколько раз — проверьте, не оплачен ли дважды; отклики: ${duplicates.join(', ')}`,
       );
     return { filled, duplicates };
   }
@@ -223,15 +251,38 @@ export class SubmissionsService implements OnApplicationBootstrap {
     video: { url: string; views: number },
   ) {
     await this.assertCanSubmit(submissionId, creatorId, video.url);
-    const counted = (
-      await this.viewCounter.fetchViews([{ url: video.url, creatorId }])
-    ).get(video.url)?.views;
+    // после проверки прав: запрос к TikTok — только по своему отклику
+    const url = isTiktokShortLink(video.url)
+      ? await expandTiktokShortLink(video.url)
+      : video.url;
+    if (!url) throw new BadRequestException(tr('errors.videoShortLink'));
+    const counted = await this.countedAtSubmit(url, creatorId);
     return this.attachVideo(
       submissionId,
       creatorId,
-      video.url,
+      url,
       counted ?? video.views,
     );
+  }
+
+  /**
+   * Просмотры ролика при сдаче по API площадки; undefined — не посчитать. Запоминаем на
+   * SUBMIT_COUNT_TTL_MS: повторные сдачи той же ссылки («не хватило — ещё раз») не тратят квоту
+   * YouTube и платные чтения X.
+   * ponytail: в памяти процесса, инстанс один; старые записи вычищаются при каждой сдаче.
+   */
+  private async countedAtSubmit(url: string, creatorId: number) {
+    const now = Date.now();
+    for (const [k, v] of this.submitCounts)
+      if (v.until < now) this.submitCounts.delete(k);
+    const key = `${creatorId} ${url}`;
+    const cached = this.submitCounts.get(key);
+    if (cached) return cached.views;
+    const views = (await this.viewCounter.fetchViews([{ url, creatorId }])).get(
+      url,
+    )?.views;
+    this.submitCounts.set(key, { views, until: now + SUBMIT_COUNT_TTL_MS });
+    return views;
   }
 
   /**
@@ -261,6 +312,18 @@ export class SubmissionsService implements OnApplicationBootstrap {
       return await this.prisma.$transaction(async (tx) => {
         const { order, budget } = await this.lockBudget(tx, submission.orderId);
         if (budget.exhausted) throw new ForbiddenException(EXHAUSTED_MESSAGE());
+        // под блокировкой заказа: параллельные сдачи лимит не обойдут
+        const inReview = await tx.submission.count({
+          where: {
+            orderId: submission.orderId,
+            creatorId,
+            status: SubmissionStatus.SUBMITTED,
+          },
+        });
+        if (inReview >= MAX_IN_REVIEW)
+          throw new ForbiddenException(
+            tr('errors.tooManyInReview', { max: MAX_IN_REVIEW }),
+          );
         await transitionSubmission(
           tx,
           submissionId,
@@ -314,6 +377,18 @@ export class SubmissionsService implements OnApplicationBootstrap {
    * считать уникальных по IP. Ролик, отклонённый и сданный заново новым откликом, хранит в описании
    * старую ссылку — её переходы останутся у отклонённого отклика и в отчёт не попадут.
    */
+  /**
+   * Ссылка на ролик по коду — для /v/<код> в отчёте рекламодателя: только одобренный ролик (в отчёт
+   * попадают они), без учёта перехода.
+   */
+  async videoByCode(trackCode: string) {
+    const submission = await this.prisma.submission.findFirst({
+      where: { trackCode, status: SubmissionStatus.MODERATOR_APPROVED },
+      select: { videoUrl: true },
+    });
+    return submission?.videoUrl ?? null;
+  }
+
   async click(trackCode: string) {
     const submission = await this.prisma.submission.findUnique({
       where: { trackCode },
@@ -401,16 +476,17 @@ export class SubmissionsService implements OnApplicationBootstrap {
     likes: number | null = null,
   ) {
     const found = await this.mustFind(submissionId);
-    if (views < found.order.minViews)
+    const { minViews } = videoTerms(found.order, found.submittedAt);
+    if (views < minViews)
       throw new ForbiddenException(
-        `Меньше порога (${found.order.minViews.toLocaleString('ru-RU')} просмотров) — такой ролик отклоните`,
+        `Меньше порога (${minViews.toLocaleString('ru-RU')} просмотров) — такой ролик отклоните`,
       );
     return this.prisma.$transaction(async (tx) => {
       const { order, budget } = await this.lockBudget(tx, found.orderId);
       // свой резерв ролик может использовать целиком — он уже в `spent`
       const current = await this.mustFind(submissionId, tx);
       const payoutMinor = Math.min(
-        payoutFor(views, order.cpmMinor!),
+        payoutFor(views, videoTerms(order, current.submittedAt).cpmMinor!),
         budget.free + current.payoutMinor,
       );
       await transitionSubmission(
@@ -488,10 +564,13 @@ export class SubmissionsService implements OnApplicationBootstrap {
   }
 
   /** Свободный остаток фонда заказа — показать модератору при проверке ролика. */
-  async orderBudget(order: Parameters<typeof budgetState>[0] & { id: number }) {
+  async orderBudget(
+    order: Parameters<typeof budgetState>[0] &
+      Parameters<typeof fundOf>[0] & { id: number },
+  ) {
     const spent =
       (await spentByOrder(this.prisma, [order.id])).get(order.id) ?? 0;
-    return budgetState(order, spent);
+    return budgetState(fundOf(order), spent);
   }
 
   /** Одобренные ролики, у которых закончился холд, — модератору проверить публикацию и зафиксировать итог. */
@@ -643,7 +722,9 @@ export class SubmissionsService implements OnApplicationBootstrap {
    */
   private async lockBudget(tx: Prisma.TransactionClient, orderId: number) {
     await lockOrder(tx, orderId);
-    const order = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
+    const order = fundOf(
+      await tx.order.findUniqueOrThrow({ where: { id: orderId } }),
+    );
     const spent = (await spentByOrder(tx, [orderId])).get(orderId) ?? 0;
     return { order, budget: budgetState(order, spent) };
   }

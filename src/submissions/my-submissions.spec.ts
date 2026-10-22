@@ -141,3 +141,21 @@ describe('toMySubmissions — изменённый заказ на провер�
     expect(row.order.title).toBe('Заказ #3 — изменён, сдача роликов на паузе');
   });
 });
+
+describe('toMySubmissions — холд', () => {
+  const decided = new Date('2026-10-20T10:00:00Z');
+
+  it('одобрен без итога — конец холда через HOLD_DAYS; с итогом и на проверке — нет', () => {
+    const [held, final, onReview] = toMySubmissions([
+      submission(3, 1, 'MODERATOR_APPROVED', { decidedAt: decided }),
+      submission(2, 2, 'MODERATOR_APPROVED', {
+        decidedAt: decided,
+        finalizedAt: new Date('2026-10-25T10:00:00Z'),
+      }),
+      submission(1, 3, 'SUBMITTED'),
+    ]);
+    expect(held.holdEndsAt).toEqual(new Date('2026-10-25T10:00:00Z'));
+    expect(final.holdEndsAt).toBeNull();
+    expect(onReview.holdEndsAt).toBeNull();
+  });
+});

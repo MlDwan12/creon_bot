@@ -3,6 +3,8 @@ import {
   BadRequestException,
   Body,
   Controller,
+  HttpException,
+  HttpStatus,
   NotFoundException,
   Post,
   Req,
@@ -33,6 +35,12 @@ export class SupportController {
     if (text.length > MAX_SUPPORT_MESSAGE)
       throw new BadRequestException(
         tr('errors.supportTooLong', { max: MAX_SUPPORT_MESSAGE }),
+      );
+    const allowed = this.support.allowMessage(Number(req.user.telegramId));
+    if (allowed !== 'ok')
+      throw new HttpException(
+        tr(allowed === 'flood' ? 'errors.supportFlood' : 'errors.supportBusy'),
+        HttpStatus.TOO_MANY_REQUESTS,
       );
     await this.support.fromApp(req.user, text);
     return { ok: true };

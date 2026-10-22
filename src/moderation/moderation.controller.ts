@@ -1,3 +1,4 @@
+import { isDbDate } from '../common/validation';
 import {
   BadRequestException,
   Body,
@@ -29,6 +30,7 @@ import {
   ViewCounterService,
 } from '../submissions/view-counter.service';
 import { AnalyticsService } from './analytics.service';
+import { parseStatusFilter } from './status-filter';
 import {
   BansService,
   parseBanReason,
@@ -50,32 +52,77 @@ import {
 
 const PAGE_SIZE = 20;
 
+/** Аккаунт, подключённый раньше стольких дней, модератору уже не подсвечиваем. */
+const FRESH_ACCOUNT_DAYS = 7;
+
 /**
- * Чей ролик — модератору: `verified` — посчитан по аккаунту креатора или автор есть в соцсетях его
- * профиля; `mismatch` — автор известен, но в профиле его нет; `unknown` — площадка автора не отдала.
- * Решает модератор: сдачу и одобрение это не запрещает.
+ * Чей ролик — модератору: `verified` — посчитан по подключённому аккаунту креатора; `inProfile` —
+ * автор есть в соцсетях профиля, но ссылки креатор вписал сам, владение не доказано (иначе
+ * вписал бы чужой канал и сдал чужой ролик); `mismatch` — автор известен, но в профиле его нет;
+ * `unknown` — площадка автора не отдала. Решает модератор: сдачу и одобрение это не запрещает.
  */
-export function videoAuthor(stats: CountedVideo | undefined, links: string[]) {
-  if (stats?.ownAccount)
-    return { status: 'verified', viaAccount: true, name: null, url: null };
+export function videoAuthor(
+  stats: CountedVideo | undefined,
+  links: string[],
+  now = Date.now(),
+) {
+  if (stats?.ownAccount) {
+    // аккаунт подключили недавно — так привязывают чужой аккаунт по пересланной ссылке входа
+    const days = stats.connectedAt
+      ? Math.floor((now - stats.connectedAt.getTime()) / DAY_MS)
+      : null;
+    return {
+      status: 'verified',
+      viaAccount: true,
+      name: null,
+      url: null,
+      connectedDaysAgo:
+        days !== null && days < FRESH_ACCOUNT_DAYS ? days : null,
+    };
+  }
   const a = stats?.author;
   if (!a)
-    return { status: 'unknown', viaAccount: false, name: null, url: null };
+    return {
+      status: 'unknown',
+      viaAccount: false,
+      name: null,
+      url: null,
+      connectedDaysAgo: null,
+    };
   return {
-    status: authorInLinks(a, links) ? 'verified' : 'mismatch',
+    status: authorInLinks(a, links) ? 'inProfile' : 'mismatch',
     viaAccount: false,
     name: [a.name, a.handle && `@${a.handle}`].filter(Boolean).join(' · '),
     url: authorUrl(a),
+    connectedDaysAgo: null,
   };
+}
+
+/** За сколько часов до заявки сменили кошелёк, если меньше чем за 48; иначе null. */
+export function walletChangedHoursBefore(
+  changedAt: Date | null,
+  requestedAt: Date,
+): number | null {
+  if (!changedAt) return null;
+  const hours = (requestedAt.getTime() - changedAt.getTime()) / 3_600_000;
+  return hours >= 0 && hours < 48 ? Math.floor(hours) : null;
 }
 
 /** Версия заказа, которую модератор видел (`version` из GET /api/mod/orders/:id). */
 function parseVersion(body: unknown): Date {
   const raw = (body as { version?: unknown } | null)?.version;
   const version = typeof raw === 'string' ? new Date(raw) : null;
-  if (!version || Number.isNaN(version.getTime()))
+  if (!version || !isDbDate(version))
     throw new BadRequestException('Откройте заказ заново');
   return version;
+}
+
+/** Начало периода из `days` (1–365); без него — всё время. */
+function periodStart(days?: number) {
+  if (days === undefined) return undefined;
+  if (days < 1 || days > 365)
+    throw new BadRequestException('Период — от 1 до 365 дней');
+  return new Date(Date.now() - days * DAY_MS);
 }
 
 /**
@@ -159,22 +206,29 @@ export class ModerationController {
   /** Воронка за последние `days` дней (1–365); без параметра — за всё время. */
   @Get('funnel')
   funnel(@Query('days', new ParseIntPipe({ optional: true })) days?: number) {
-    if (days !== undefined && (days < 1 || days > 365))
-      throw new BadRequestException('Период — от 1 до 365 дней');
-    return this.analytics.funnel(
-      days === undefined ? undefined : new Date(Date.now() - days * DAY_MS),
-    );
+    return this.analytics.funnel(periodStart(days));
+  }
+
+  /** Что работает — срезы по требованиям заказа и аудитория; период — как у воронки. */
+  @Get('what-works')
+  whatWorks(
+    @Query('days', new ParseIntPipe({ optional: true })) days?: number,
+  ) {
+    return this.analytics.whatWorks(periodStart(days));
   }
 
   /** Все заказы любого статуса — страница, новые первыми. */
   @Get('orders')
   async allOrders(
     @Query('page', new DefaultValuePipe(0), ParseIntPipe) rawPage: number,
+    @Query('status') status: unknown,
   ) {
-    const page = Math.max(0, rawPage);
+    // огромный номер — смещение больше Int, Prisma упала бы с 500
+    const page = Math.min(Math.max(0, rawPage), 100_000);
     const { items, total } = await this.ordersService.listAll(
       page * PAGE_SIZE,
       PAGE_SIZE,
+      parseStatusFilter(status),
     );
     return {
       items: items.map((o) => ({
@@ -316,7 +370,8 @@ export class ModerationController {
         title: terms.title,
         description: terms.description,
         ...videoFormat(terms),
-        cpm: fromMinor(s.order.cpmMinor),
+        // по ней начислят (videoTerms): сдан до правки — ставка до неё
+        cpm: fromMinor(terms.cpmMinor),
         minViews: terms.minViews,
         free: fromMinor(budget.free),
         termsBeforeEdit: prev !== null,
@@ -441,6 +496,11 @@ export class ModerationController {
       banned: p.creator.bannedAt
         ? { at: p.creator.bannedAt, reason: p.creator.banReason }
         : null,
+      // кошелёк сменили незадолго до заявки — так выводят деньги с угнанного аккаунта
+      walletChangedHoursBefore: walletChangedHoursBefore(
+        p.creator.walletChangedAt,
+        p.createdAt,
+      ),
       createdAt: p.createdAt,
     }));
   }

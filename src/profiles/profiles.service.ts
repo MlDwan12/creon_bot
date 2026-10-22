@@ -1,6 +1,6 @@
 import { tr } from '../i18n/request-lang';
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { SubmissionStatus, type User } from '@prisma/client';
+import { type Cabinet, SubmissionStatus, type User } from '@prisma/client';
 import { creatorLabel, publicName } from '../common/format';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -128,6 +128,13 @@ export class ProfilesService {
     });
   }
 
+  updateCabinet(userId: number, cabinet: Cabinet) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { cabinet },
+    });
+  }
+
   updateNotifications(userId: number, notifyNewOrders: boolean) {
     return this.prisma.user.update({
       where: { id: userId },
@@ -135,10 +142,11 @@ export class ProfilesService {
     });
   }
 
-  updateWallet(userId: number, payoutWallet: string | null) {
+  /** `replaced` — был другой кошелёк: смена, а не первый ввод (User.walletChangedAt). */
+  updateWallet(userId: number, payoutWallet: string | null, replaced: boolean) {
     return this.prisma.user.update({
       where: { id: userId },
-      data: { payoutWallet },
+      data: { payoutWallet, ...(replaced && { walletChangedAt: new Date() }) },
     });
   }
 }

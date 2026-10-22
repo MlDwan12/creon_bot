@@ -3,7 +3,11 @@ import { Throttle } from '@nestjs/throttler';
 import { SupportService } from '../support/support.service';
 import { creatorLabel, escapeHtml, formatMoney } from '../common/format';
 import { fromMinor } from '../common/money';
-import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
+import {
+  type ApiRequest,
+  assertFreshLogin,
+  InitDataGuard,
+} from '../auth/init-data.guard';
 import {
   MIN_PAYOUT,
   parsePayoutAmount,
@@ -53,6 +57,7 @@ export class BalanceController {
   @Post('withdraw')
   @Throttle({ default: { limit: 10, ttl: 60 * 60_000 } })
   async withdraw(@Body('amount') amount: unknown, @Req() req: ApiRequest) {
+    assertFreshLogin(req);
     const payout = await this.payouts.requestPayout(
       req.user.id,
       parsePayoutAmount(amount),
@@ -62,8 +67,8 @@ export class BalanceController {
         `💸 <b>Заявка на вывод #${payout.id}</b>`,
         `Креатор: ${escapeHtml(creatorLabel(payout.creator))} (#u${payout.creator.telegramId})`,
         `Сумма: ${formatMoney(fromMinor(payout.amountMinor))}`,
-        `Кошелёк USDT (TRC20): <code>${escapeHtml(payout.wallet ?? '')}</code>`,
-        'После перевода отметьте заявку в мини-аппе: Модерация → Выплаты.',
+        // кошелёк — только модераторам (в мини-аппе): в группе поддержки могут быть и другие
+        'Кошелёк и отметка о переводе — в мини-аппе: Модерация → Выплаты.',
       ].join('\n'),
     );
     return { ok: true };

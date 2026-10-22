@@ -13,7 +13,7 @@ import {
   PLATFORM_NAMES,
 } from '../../api';
 import ReasonPicker from '../../components/ReasonPicker.vue';
-import { formatCpm, formatDate, formatMoney, formatVideoFormat, formatViews, timeAgo } from '../../format';
+import { formatCpm, formatDate, formatMoney, formatViews, timeAgo, videoFormatParts } from '../../format';
 import { confirmAction, safeUrl } from '../../telegram';
 
 const props = defineProps<{ id: string }>();
@@ -37,10 +37,22 @@ const comment = ref('');
 const busy = ref(false);
 const error = ref('');
 
+/** Нажали «Отклонить» — показываем причины; одобрить или отклонить без причины нельзя спутать. */
+const rejecting = ref(false);
+/** Сверка с требованиями заказа — памятка модератору, одобрить можно и без всех галочек. */
+const checked = ref(new Set<string>());
+function toggleCheck(item: string) {
+  const next = new Set(checked.value);
+  if (!next.delete(item)) next.add(item);
+  checked.value = next;
+}
+
 async function load() {
   video.value = undefined;
   loadError.value = '';
   comment.value = '';
+  rejecting.value = false;
+  checked.value = new Set();
   try {
     video.value = await fetchModVideo(Number(props.id));
     // Просмотры из API площадки точнее заявленных — подставляем их.
@@ -134,20 +146,45 @@ watch(() => props.id, load, { immediate: true });
 
       <p :class="['author', video.author.status]" :role="video.author.status === 'verified' ? undefined : 'alert'">
         <template v-if="video.author.status === 'verified'">
-          ✅ Автор подтверждён: {{ video.author.viaAccount ? 'ролик с подключённого аккаунта креатора' : video.author.name }}
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z" /><path d="M8.5 12l2.5 2.5 4.5-5" /></svg>
+          Автор подтверждён: ролик с подключённого аккаунта креатора<template v-if="video.author.connectedDaysAgo !== null"
+            >. Аккаунт подключён {{ video.author.connectedDaysAgo === 0 ? 'сегодня' : `${video.author.connectedDaysAgo} дн. назад` }} — если ролик чужой и популярный, уточните у креатора через поддержку</template
+          >
+        </template>
+        <template v-else-if="video.author.status === 'inProfile'">
+          Автор —
+          <a v-if="safeUrl(video.author.url)" :href="safeUrl(video.author.url)" target="_blank" rel="noopener noreferrer">{{ video.author.name || 'аккаунт' }}</a>,
+          есть в соцсетях креатора. Владение не подтверждено: ссылки креатор указал сам
         </template>
         <template v-else-if="video.author.status === 'mismatch'">
-          ⚠ Автор —
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 3l9.5 17h-19z" /><path d="M12 10v4M12 17.5v.01" /></svg>
+          Автор —
           <a v-if="safeUrl(video.author.url)" :href="safeUrl(video.author.url)" target="_blank" rel="noopener noreferrer">{{ video.author.name || 'аккаунт' }}</a>,
           его нет в соцсетях креатора — проверьте, что ролик его
         </template>
-        <template v-else>⚠ Авторство не проверено — сверьте аккаунт ролика с соцсетями креатора</template>
+        <template v-else>
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 3l9.5 17h-19z" /><path d="M12 10v4M12 17.5v.01" /></svg>
+          Авторство не проверено — сверьте аккаунт ролика с соцсетями креатора
+        </template>
       </p>
 
       <section class="block">
-        <h2 class="section-title">Сверьте с заданием</h2>
-        <div class="text">{{ video.order.description }}</div>
-        <p v-if="formatVideoFormat(video.order)" class="text">Ролик: {{ formatVideoFormat(video.order) }}</p>
+        <h2 class="section-title">
+          Сверьте с заданием<template v-if="videoFormatParts(video.order).length">
+            · {{ checked.size }} из {{ videoFormatParts(video.order).length }}</template
+          >
+        </h2>
+        <div v-if="videoFormatParts(video.order).length" class="checks">
+          <label v-for="part in videoFormatParts(video.order)" :key="part" class="check">
+            <input type="checkbox" :checked="checked.has(part)" @change="toggleCheck(part)" />
+            <span>{{ part }}</span>
+          </label>
+        </div>
+        <!-- текст задания длинный — свёрнут, требования выше видны сразу -->
+        <details class="task" :open="!videoFormatParts(video.order).length">
+          <summary>Текст задания</summary>
+          <div class="text">{{ video.order.description }}</div>
+        </details>
       </section>
 
       <section class="rows">
@@ -175,14 +212,21 @@ watch(() => props.id, load, { immediate: true });
       </label>
 
       <template v-if="video.status === 'SUBMITTED'">
-        <ReasonPicker v-model="comment" :presets="PRESETS" />
+        <!-- причины — только когда решили отклонить: так «Отклонить» не нажать по ошибке -->
+        <ReasonPicker v-if="rejecting" id="reasons" v-model="comment" :presets="PRESETS" />
         <p v-if="error" class="error" role="alert">{{ error }}</p>
 
-        <div class="bottom-bar two">
-          <button type="button" class="reject" :disabled="busy || !comment.trim()" @click="decide('reject')">
+        <div v-if="rejecting" class="bottom-bar two">
+          <button type="button" class="secondary" :disabled="busy" @click="rejecting = false">Отмена</button>
+          <button type="button" class="reject-confirm" :disabled="busy || !comment.trim()" @click="decide('reject')">
             Отклонить
           </button>
-          <button type="button" class="approve" :disabled="busy || !views" @click="decide('approve')">Одобрить</button>
+        </div>
+        <div v-else class="bottom-bar two">
+          <button type="button" class="reject" :disabled="busy" @click="rejecting = true">Отклонить</button>
+          <button type="button" class="approve" :disabled="busy || !views" @click="decide('approve')">
+            Одобрить<template v-if="estimate"> · {{ estimate }}</template>
+          </button>
         </div>
       </template>
       <template v-else-if="holdEndsAt && holdEndsAt <= new Date()">
@@ -215,6 +259,10 @@ watch(() => props.id, load, { immediate: true });
 .author.verified {
   background: var(--success-soft);
   color: var(--success-text);
+}
+.author.inProfile {
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
 .author a {
   color: inherit;
@@ -330,8 +378,12 @@ h1 {
 }
 .bottom-bar.two {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* «Одобрить · 2,5 USDT» длиннее «Отклонить» — ей больше места, без переноса */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
   gap: 10px;
+}
+.bottom-bar button {
+  white-space: nowrap;
 }
 .bottom-bar button {
   height: 50px;
@@ -343,12 +395,63 @@ h1 {
 .bottom-bar button:disabled {
   opacity: 0.5;
 }
+/* первый шаг отказа — спокойная кнопка, красная — только подтверждение с причиной */
+.reject,
+.secondary {
+  background: var(--fill);
+  color: var(--text);
+}
 .reject {
+  color: var(--danger);
+}
+.reject-confirm {
   background: var(--danger);
-  color: #fff;
+  color: var(--accent-text);
+}
+.author {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.author .icon {
+  flex: none;
+  margin-top: 1px;
+}
+.checks {
+  display: flex;
+  flex-direction: column;
+  padding: 0 16px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  font-size: 15px;
+}
+.check + .check {
+  border-top: 1px solid var(--separator);
+}
+.check input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--success);
+}
+.task summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--link);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
 }
 .approve {
   background: var(--success);
-  color: #fff;
+  color: var(--accent-text);
 }
 </style>

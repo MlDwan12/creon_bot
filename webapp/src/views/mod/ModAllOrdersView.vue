@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
-import { fetchAllOrders, type ModOrderRow } from '../../api';
+import { fetchAllOrders, type ModOrderRow, type OrderStatus } from '../../api';
 import { formatMoney, timeAgo } from '../../format';
 
 const STATUS: Record<ModOrderRow['status'], { label: string; tone: string }> = {
@@ -13,16 +13,32 @@ const STATUS: Record<ModOrderRow['status'], { label: string; tone: string }> = {
   EDIT_REJECTED: { label: 'Правки отклонены', tone: 'danger' },
 };
 
+/** Фильтр по статусу: «Закрыты» — и закрытые вручную, и по сроку; «Отклонены» — и правки. */
+const FILTERS: { label: string; statuses: OrderStatus[] }[] = [
+  { label: 'Все', statuses: [] },
+  { label: 'На проверке', statuses: ['PENDING_MODERATION'] },
+  { label: 'Опубликованы', statuses: ['OPEN'] },
+  { label: 'Закрыты', statuses: ['CLOSED', 'EXPIRED'] },
+  { label: 'Отклонены', statuses: ['REJECTED', 'EDIT_REJECTED'] },
+];
+// храним подпись, а не объект: ref оборачивает объект в прокси, и сравнение с FILTERS не сработает
+const filterLabel = ref(FILTERS[0].label);
+const filter = computed(() => FILTERS.find((f) => f.label === filterLabel.value)!);
+
 const orders = ref<ModOrderRow[]>([]);
 const total = ref(0);
 const page = ref(-1);
 const loading = ref(false);
 const error = ref('');
 
+let lastRequest = 0;
 async function loadMore() {
+  // сменили фильтр, пока грузилась страница, — старый ответ не подмешиваем
+  const requestId = ++lastRequest;
   loading.value = true;
   try {
-    const res = await fetchAllOrders(page.value + 1);
+    const res = await fetchAllOrders(page.value + 1, filter.value.statuses);
+    if (requestId !== lastRequest) return;
     orders.value.push(...res.items);
     total.value = res.total;
     page.value += 1;
@@ -33,14 +49,37 @@ async function loadMore() {
   }
 }
 
-void loadMore();
+watch(
+  filter,
+  () => {
+    orders.value = [];
+    page.value = -1;
+    error.value = '';
+    void loadMore();
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
   <main class="page">
     <h1>Все заказы</h1>
+    <div class="chips" role="radiogroup" aria-label="Статус">
+      <button
+        v-for="f in FILTERS"
+        :key="f.label"
+        type="button"
+        role="radio"
+        :aria-checked="filterLabel === f.label"
+        @click="filterLabel = f.label"
+      >
+        {{ f.label }}
+      </button>
+    </div>
     <p v-if="error" class="hint">{{ error }}</p>
-    <p v-else-if="!loading && orders.length === 0" class="hint">Заказов пока нет.</p>
+    <p v-else-if="!loading && orders.length === 0" class="hint">
+      {{ filter.statuses.length ? 'С таким статусом заказов нет.' : 'Заказов пока нет.' }}
+    </p>
 
     <div v-if="orders.length" class="list">
       <RouterLink v-for="o in orders" :key="o.id" :to="`/mod/orders/${o.id}`" class="row">
@@ -61,6 +100,31 @@ void loadMore();
 </template>
 
 <style scoped>
+.chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 0 -16px;
+  padding: 0 16px;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to right, #000 85%, transparent);
+}
+.chips button {
+  flex: none;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1.5px solid var(--separator);
+  border-radius: 22px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+.chips button[aria-checked='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
 .page {
   display: flex;
   flex-direction: column;

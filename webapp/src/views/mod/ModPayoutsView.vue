@@ -69,7 +69,14 @@ void load();
       </div>
       <RouterLink :to="`/mod/creators/${p.creatorId}`" class="creator">{{ p.creator }} · заявка #{{ p.id }}</RouterLink>
       <p v-if="p.banned" class="banned" role="alert">
-        🚫 Креатор заблокирован<template v-if="p.banned.reason">: {{ p.banned.reason }}</template>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M5.6 5.6l12.8 12.8" />
+        </svg>
+        Креатор заблокирован<template v-if="p.banned.reason">: {{ p.banned.reason }}</template>
+      </p>
+      <p v-if="p.walletChangedHoursBefore !== null" class="banned" role="alert">
+        Кошелёк сменён {{ p.walletChangedHoursBefore < 1 ? 'меньше чем за час' : `за ${p.walletChangedHoursBefore} ч` }} до заявки — уточните у креатора через поддержку, что это он
       </p>
       <button v-if="p.wallet" type="button" class="wallet" @click="copyWallet(p.wallet)">
         <span>{{ p.wallet }}</span>
@@ -78,7 +85,10 @@ void load();
       <p v-else class="hint">Кошелька в заявке нет — уточните реквизиты в теме креатора.</p>
 
       <template v-if="rejecting === p.id">
-        <textarea v-model="comment" rows="2" maxlength="500" placeholder="Причина — её увидит креатор" />
+        <label class="field-label">
+          <span>Причина отказа</span>
+          <textarea v-model="comment" rows="2" maxlength="500" placeholder="Её увидит креатор" />
+        </label>
         <div class="two">
           <button type="button" class="secondary" :disabled="busy" @click="rejecting = undefined">Отмена</button>
           <button type="button" class="reject" :disabled="busy || !comment.trim()" @click="decide(p, 'reject')">
@@ -194,11 +204,11 @@ textarea {
 }
 .approve {
   background: var(--success);
-  color: #fff;
+  color: var(--accent-text);
 }
 .reject {
   background: var(--danger);
-  color: #fff;
+  color: var(--accent-text);
 }
 .error {
   margin: 0;

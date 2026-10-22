@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import {
+  parseBudgetConfirmed,
   parseCpm,
   parseOrderEdit,
   parseOrderInput,
@@ -21,6 +22,16 @@ const valid = {
 };
 
 describe('parseOrderInput', () => {
+  it('невидимые символы форматирования вырезаются, склейка эмодзи — нет', () => {
+    const r = parseOrderInput({
+      ...valid,
+      title: 'Обзор \u202eтовара\u200b',
+      description: 'Семья 👨\u200d👩\u200d👧',
+    });
+    expect(r.title).toBe('Обзор товара');
+    expect(r.description).toBe('Семья 👨\u200d👩\u200d👧');
+  });
+
   it('чистит пробелы, без цены — «договорная», срок — в дату', () => {
     const before = Date.now();
     const r = parseOrderInput(valid);
@@ -184,5 +195,14 @@ describe('parseOrderEdit', () => {
 
   it('бюджет — в центы', () => {
     expect(parseOrderEdit(base).budgetMinor).toBe(10_000);
+  });
+});
+
+describe('parseBudgetConfirmed', () => {
+  it('больше предела бюджета — 400, а не 500 от базы', () => {
+    expect(() => parseBudgetConfirmed({ budgetConfirmed: 1e12 })).toThrow(
+      BadRequestException,
+    );
+    expect(parseBudgetConfirmed({ budgetConfirmed: 100 })).toBe(10_000);
   });
 });

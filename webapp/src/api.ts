@@ -3,7 +3,10 @@ import { i18next, type Lang } from './i18n';
 import { getInitData } from './telegram';
 
 /** Аккаунт заблокирован — App.vue показывает экран блокировки вместо любого экрана. */
-export const banned = ref<{ reason: string | null; supportUrl: string | null } | null>(null);
+export const banned = ref<{
+  reason: string | null;
+  supportUrl: string | null;
+} | null>(null);
 
 export type OrderCategory =
   | 'PRODUCT_REVIEW'
@@ -52,8 +55,10 @@ export interface OrderSummary extends VideoFormat {
   cpm: number | null;
   /** Ролик можно сдать, когда он наберёт столько просмотров. */
   minViews: number;
-  /** Сколько ещё осталось на выплаты креаторам, USDT. */
+  /** Сколько ещё осталось на выплаты креаторам, USDT — округлено вниз до 100 (точное не показываем). */
   free: number;
+  /** Осталось меньше этой суммы (free тогда 0); null — free как есть. */
+  freeUnder: number | null;
   /** Осталось меньше 30% фонда — подсвечиваем «успейте». */
   budgetLow: boolean;
   category: OrderCategory;
@@ -77,7 +82,13 @@ export type SubmissionStatus =
   | 'SLOT_EXPIRED';
 
 /** EXPIRED — закрыт по сроку (рекламодатель может продлить), CLOSED — закрыт им вручную. */
-export type OrderStatus = 'PENDING_MODERATION' | 'OPEN' | 'REJECTED' | 'CLOSED' | 'EXPIRED' | 'EDIT_REJECTED';
+export type OrderStatus =
+  | 'PENDING_MODERATION'
+  | 'OPEN'
+  | 'REJECTED'
+  | 'CLOSED'
+  | 'EXPIRED'
+  | 'EDIT_REJECTED';
 
 /** Ответ `GET /api/submissions`: каждое видео — своя карточка. См. src/api/my-submissions.ts. */
 export interface MySubmission {
@@ -90,6 +101,11 @@ export interface MySubmission {
   videoUrl: string | null;
   comment: string | null;
   createdAt: string;
+  submittedAt: string | null;
+  /** Когда модератор одобрил или отклонил. */
+  decidedAt: string | null;
+  /** Одобрен, итога ещё нет — до когда холд (потом деньги можно вывести). */
+  holdEndsAt: string | null;
   /** До когда прислать видео (только «в работе»): конец слота или срок заказа, что раньше. */
   dueAt: string | null;
   /** На проверке — заявлено креатором, после одобрения — зафиксировано модератором. */
@@ -100,7 +116,8 @@ export interface MySubmission {
   finalized: boolean;
   /** Ссылка на товар для описания ролика — путь `/r/<код>` от адреса мини-аппа; null — у заказа нет товара. */
   trackPath: string | null;
-  order: {
+  /** VideoFormat — требования к ролику, для самопроверки перед сдачей. */
+  order: VideoFormat & {
     id: number;
     title: string;
     cpm: number | null;
@@ -155,7 +172,8 @@ export interface NewOrderInput extends VideoFormat {
 }
 
 /** Площадка ролика — по ссылке на публикацию (src/common/platforms.ts). */
-export type Platform = 'TIKTOK' | 'YOUTUBE' | 'VK' | 'INSTAGRAM' | 'X' | 'OTHER';
+export type Platform =
+  'TIKTOK' | 'YOUTUBE' | 'VK' | 'INSTAGRAM' | 'X' | 'OTHER';
 
 export const PLATFORM_NAMES: Record<Platform, string> = {
   TIKTOK: 'TikTok',
@@ -168,7 +186,13 @@ export const PLATFORM_NAMES: Record<Platform, string> = {
 
 /** Площадки, которые рекламодатель может указать в заказе (enum VideoPlatform на бэкенде). */
 export type VideoPlatform = Exclude<Platform, 'OTHER'>;
-export const VIDEO_PLATFORMS: VideoPlatform[] = ['TIKTOK', 'INSTAGRAM', 'YOUTUBE', 'VK', 'X'];
+export const VIDEO_PLATFORMS: VideoPlatform[] = [
+  'TIKTOK',
+  'INSTAGRAM',
+  'YOUTUBE',
+  'VK',
+  'X',
+];
 
 /** Ответ `GET /api/my-orders/:id/report` — см. src/api/order-report.ts. Деньги в USDT, с комиссией. */
 export interface OrderReport {
@@ -191,7 +215,14 @@ export interface OrderReport {
   };
   platforms: { platform: Platform; videos: number; views: number }[];
   /** Воронка: открыли карточку → взяли → не успели / на проверке / отклонено / одобрено. */
-  funnel: { viewers: number; taken: number; expired: number; onReview: number; rejected: number; approved: number };
+  funnel: {
+    viewers: number;
+    taken: number;
+    expired: number;
+    onReview: number;
+    rejected: number;
+    approved: number;
+  };
   /** Советы, что поправить в заказе. */
   insights: { code: string; text: string }[];
   /** Одобренные ролики, больше просмотров — выше. */
@@ -210,7 +241,6 @@ export interface OrderReport {
   }[];
 }
 
-
 /** Ответы `/api/mod/*` — см. src/api/moderation.controller.ts. */
 export interface ModQueue {
   orders: {
@@ -225,9 +255,19 @@ export interface ModQueue {
     /** В тексте похоже на контакты для связи в обход площадки. */
     hasContacts: boolean;
   }[];
-  videos: { id: number; orderTitle: string; creator: string; submittedAt: string | null }[];
+  videos: {
+    id: number;
+    orderTitle: string;
+    creator: string;
+    submittedAt: string | null;
+  }[];
   /** Холд закончился — проверить публикацию и зафиксировать итог. */
-  holds: { id: number; orderTitle: string; creator: string; decidedAt: string | null }[];
+  holds: {
+    id: number;
+    orderTitle: string;
+    creator: string;
+    decidedAt: string | null;
+  }[];
   /** Отзывы рекламодателей с текстом — в профиле креатора только после проверки. */
   reviews: {
     submissionId: number;
@@ -242,7 +282,13 @@ export interface ModQueue {
 }
 
 export interface ModStats {
-  orders: { pending: number; open: number; rejected: number; closed: number; total: number };
+  orders: {
+    pending: number;
+    open: number;
+    rejected: number;
+    closed: number;
+    total: number;
+  };
   submissions: { pending: number; approved: number; rejected: number };
 }
 
@@ -285,6 +331,35 @@ export interface ModFunnel {
     /** На сейчас, не за период: начислено креаторам и не выплачено; из этого — в заявках. */
     debt: { owed: number; requested: number };
   };
+}
+
+/** Метрики заказов с одним значением признака — см. AnalyticsService.whatWorks. */
+export interface WhatWorksRow {
+  /** Значение признака: код категории, площадки, ориентации; длительность — '15'|'30'|'60'|'LONG';
+   *  ставка — USDT за 1000 просмотров строкой; 'ANY' — требование не задано. */
+  key: string;
+  orders: number;
+  /** Взяли в работу из открывших карточку, %. */
+  takeRate: number | null;
+  /** Средние просмотры одобренного ролика. */
+  avgViews: number | null;
+  /** Одобрено из решённых роликов, %. */
+  approveRate: number | null;
+}
+
+export type WhatWorksSlice =
+  'category' | 'platform' | 'orientation' | 'duration' | 'cpm';
+
+export interface WhatWorks {
+  /** Меньше заказов в строке — «мало данных». */
+  minOrders: number;
+  slices: Record<WhatWorksSlice, WhatWorksRow[]>;
+  /** Пользователи за период по последнему кабинету и тому, что делали. */
+  audience: {
+    cabinet: 'CREATOR' | 'ADVERTISER' | null;
+    activity: 'both' | 'orders' | 'videos' | 'none';
+    count: number;
+  }[];
 }
 
 export interface ModOrderRow {
@@ -341,12 +416,15 @@ export interface ModVideo {
   /** Лайки по данным API площадки; null — нет API или автор их скрыл. */
   autoLikes: number | null;
   /**
-   * Чей ролик: verified — посчитан по аккаунту креатора (`viaAccount`) или автор есть в его соцсетях;
-   * mismatch — автора нет в профиле; unknown — площадка автора не отдала, сверить вручную.
+   * Чей ролик: verified — посчитан по подключённому аккаунту креатора; inProfile — автор есть в
+   * соцсетях профиля, но владение не подтверждено; mismatch — автора нет в профиле;
+   * unknown — площадка автора не отдала, сверить вручную.
    */
   author: {
-    status: 'verified' | 'mismatch' | 'unknown';
+    status: 'verified' | 'inProfile' | 'mismatch' | 'unknown';
     viaAccount: boolean;
+    /** Аккаунт подключили столько дней назад (меньше 7) — повод проверить; null — давно или не по аккаунту. */
+    connectedDaysAgo: number | null;
     /** Канал или аккаунт автора: «Название · @handle». */
     name: string | null;
     url: string | null;
@@ -405,9 +483,10 @@ export interface ModPayout {
   creatorId: number;
   /** Креатор заблокирован — заявку подали до бана. */
   banned: { at: string; reason: string | null } | null;
+  /** Кошелёк сменили за столько часов до заявки (меньше 48); null — не меняли. */
+  walletChangedHoursBefore: number | null;
   createdAt: string;
 }
-
 
 /** Профиль креатора — см. src/api/profiles.service.ts. */
 export interface CreatorProfile {
@@ -433,7 +512,11 @@ export interface CreatorProfile {
     orderTitle: string | null;
     decidedAt: string | null;
   }[];
-  portfolio: { submissionId: number; videoUrl: string | null; orderTitle: string | null }[];
+  portfolio: {
+    submissionId: number;
+    videoUrl: string | null;
+    orderTitle: string | null;
+  }[];
 }
 
 /** Оценка рекламодателя одобренному ролику. */
@@ -487,7 +570,10 @@ async function request<T>(
       } | null;
       if (typeof data?.message === 'string') userMessage = data.message;
       if (data?.banned)
-        banned.value = { reason: data.reason ?? null, supportUrl: data.supportUrl ?? null };
+        banned.value = {
+          reason: data.reason ?? null,
+          supportUrl: data.supportUrl ?? null,
+        };
     }
     throw new ApiError(res.status, userMessage);
   }
@@ -498,7 +584,11 @@ async function request<T>(
  * Страница каталога. `after` — последний показанный заказ (без него — первая страница).
  * hasMore — есть ли следующая; total — для заголовка, может отставать на полминуты.
  */
-export function fetchOpenOrders(after?: OrderSummary, category?: OrderCategory, platform?: VideoPlatform) {
+export function fetchOpenOrders(
+  after?: OrderSummary,
+  category?: OrderCategory,
+  platform?: VideoPlatform,
+) {
   const query = new URLSearchParams();
   if (after) {
     query.set('afterId', String(after.id));
@@ -506,7 +596,10 @@ export function fetchOpenOrders(after?: OrderSummary, category?: OrderCategory, 
   }
   if (category) query.set('category', category);
   if (platform) query.set('platform', platform);
-  return request<{ items: OrderSummary[]; hasMore: boolean; total: number }>('GET', `/api/orders?${query}`);
+  return request<{ items: OrderSummary[]; hasMore: boolean; total: number }>(
+    'GET',
+    `/api/orders?${query}`,
+  );
 }
 
 export function fetchOrder(id: number) {
@@ -521,11 +614,19 @@ export function fetchMySubmissions() {
   return request<MySubmission[]>('GET', '/api/submissions');
 }
 
-export function submitVideo(submissionId: number, videoUrl: string, views: number) {
-  return request<{ ok: true }>('POST', `/api/submissions/${submissionId}/video`, {
-    videoUrl,
-    views,
-  });
+export function submitVideo(
+  submissionId: number,
+  videoUrl: string,
+  views: number,
+) {
+  return request<{ ok: true }>(
+    'POST',
+    `/api/submissions/${submissionId}/video`,
+    {
+      videoUrl,
+      views,
+    },
+  );
 }
 
 export function fetchMyOrders() {
@@ -595,7 +696,9 @@ export function fetchCreatorPhoto(id: number): Promise<string | null> {
     photo = fetch(`/api/creators/${id}/photo`, {
       headers: { Authorization: `tma ${getInitData()}` },
     })
-      .then(async (res) => (res.ok ? URL.createObjectURL(await res.blob()) : null))
+      .then(async (res) =>
+        res.ok ? URL.createObjectURL(await res.blob()) : null,
+      )
       .catch(() => null);
     photos.set(id, photo);
   }
@@ -607,7 +710,9 @@ export function updateProfileLinks(links: string[]) {
 }
 
 export function updateNotifications(newOrders: boolean) {
-  return request<{ ok: true }>('PUT', '/api/profile/notifications', { newOrders });
+  return request<{ ok: true }>('PUT', '/api/profile/notifications', {
+    newOrders,
+  });
 }
 
 /** Пустая строка — убрать кошелёк. */
@@ -632,7 +737,10 @@ export function fetchSocialAccounts() {
 
 /** Ссылка на вход на площадке — открыть во внешнем браузере. */
 export function connectSocialAccount(platform: SocialAccount['platform']) {
-  return request<{ url: string }>('POST', `/api/accounts/${platform.toLowerCase()}/connect`);
+  return request<{ url: string }>(
+    'POST',
+    `/api/accounts/${platform.toLowerCase()}/connect`,
+  );
 }
 
 export function disconnectSocialAccount(accountId: number) {
@@ -641,7 +749,10 @@ export function disconnectSocialAccount(accountId: number) {
 
 /** Модератор: опубликовать отзыв с проверки в профиле креатора. */
 export function approveReview(submissionId: number) {
-  return request<{ ok: true }>('POST', `/api/mod/reviews/${submissionId}/approve`);
+  return request<{ ok: true }>(
+    'POST',
+    `/api/mod/reviews/${submissionId}/approve`,
+  );
 }
 
 /** Модератор: удалить отзыв (оценку и текст) — опубликованный или с проверки. */
@@ -655,11 +766,21 @@ type Me = {
   /** Язык интерфейса: выбранный в профиле или по Telegram; languageChosen — выбран ли вручную. */
   language: Lang;
   languageChosen: boolean;
+  /** Кабинет, открытый последним (role.ts); null — ещё не выбирал. */
+  cabinet: 'creator' | 'advertiser' | null;
+  /** Комиссия площадки для новых заказов, %: бюджет креаторам — без неё; в кабинете креатора — null. */
+  feePercent: number | null;
 };
 let me: Promise<Me> | undefined;
 
 /** Один запрос на запуск: initData, а с ним и ответ, до перезапуска Mini App не меняется. */
 /** Язык интерфейса и бота; null — снова по языку Telegram. */
+/** Запомнить кабинет на сервере — тот же откроется на другом устройстве. */
+export function updateCabinet(cabinet: 'creator' | 'advertiser') {
+  me = undefined; // /api/me вернёт уже новый кабинет
+  return request<{ ok: true }>('PUT', '/api/profile/cabinet', { cabinet });
+}
+
 export function updateLanguage(language: Lang | null) {
   me = undefined; // /api/me вернёт уже новый язык
   return request<{ ok: true }>('PUT', '/api/profile/language', { language });
@@ -683,11 +804,26 @@ export function fetchModStats() {
 
 /** Воронка за последние `days` дней; без аргумента — за всё время. См. src/api/analytics.service.ts. */
 export function fetchModFunnel(days?: number) {
-  return request<ModFunnel>('GET', `/api/mod/funnel${days ? `?days=${days}` : ''}`);
+  return request<ModFunnel>(
+    'GET',
+    `/api/mod/funnel${days ? `?days=${days}` : ''}`,
+  );
 }
 
-export function fetchAllOrders(page: number) {
-  return request<Page<ModOrderRow>>('GET', `/api/mod/orders?page=${page}`);
+export function fetchWhatWorks(days?: number) {
+  return request<WhatWorks>(
+    'GET',
+    `/api/mod/what-works${days ? `?days=${days}` : ''}`,
+  );
+}
+
+/** statuses — фильтр по статусам; пусто — все. */
+export function fetchAllOrders(page: number, statuses: OrderStatus[] = []) {
+  const status = statuses.length ? `&status=${statuses.join(',')}` : '';
+  return request<Page<ModOrderRow>>(
+    'GET',
+    `/api/mod/orders?page=${page}${status}`,
+  );
 }
 
 export function fetchModOrder(id: number) {
@@ -705,7 +841,10 @@ export function moderateOrder(
   version: string,
   extra: { comment?: string; cpm?: number; budgetConfirmed?: number } = {},
 ) {
-  return request<{ ok: true }>('POST', `/api/mod/orders/${id}/${decision}`, { version, ...extra });
+  return request<{ ok: true }>('POST', `/api/mod/orders/${id}/${decision}`, {
+    version,
+    ...extra,
+  });
 }
 
 export function fetchModVideo(id: number) {
@@ -718,7 +857,11 @@ export function moderateVideo(
   decision: 'approve' | 'reject',
   body: { views?: number; likes?: number | null; comment?: string },
 ) {
-  return request<{ ok: true }>('POST', `/api/mod/videos/${id}/${decision}`, body);
+  return request<{ ok: true }>(
+    'POST',
+    `/api/mod/videos/${id}/${decision}`,
+    body,
+  );
 }
 
 let rate: Promise<number | null> | undefined;
@@ -747,13 +890,24 @@ export function fetchModPayouts() {
 }
 
 /** Отметить заявку выплаченной или отклонить с причиной — сумма вернётся на баланс. */
-export function decidePayout(id: number, decision: 'paid' | 'reject', comment?: string) {
-  return request<{ ok: true }>('POST', `/api/mod/payouts/${id}/${decision}`, comment === undefined ? undefined : { comment });
+export function decidePayout(
+  id: number,
+  decision: 'paid' | 'reject',
+  comment?: string,
+) {
+  return request<{ ok: true }>(
+    'POST',
+    `/api/mod/payouts/${id}/${decision}`,
+    comment === undefined ? undefined : { comment },
+  );
 }
 
 /** Итог холда: публикация на месте, просмотры — для отчёта. */
 export function finalizeVideo(id: number, views: number, likes: number | null) {
-  return request<{ ok: true }>('POST', `/api/mod/videos/${id}/finalize`, { views, likes });
+  return request<{ ok: true }>('POST', `/api/mod/videos/${id}/finalize`, {
+    views,
+    likes,
+  });
 }
 
 /** При итоге публикации нет — начисление из холда отменяется. */
@@ -766,14 +920,31 @@ export type ReportTarget = 'ORDER' | 'VIDEO' | 'REVIEW' | 'PROFILE';
 
 /** Причины жалоб по типу объекта; коды проверяет бэкенд (src/reports), названия — в словаре (reportReasons). */
 export const REPORT_REASONS: Record<ReportTarget, string[]> = {
-  ORDER: ['FRAUD', 'PROHIBITED', 'FAKE_REVIEWS', 'PERSONAL_DATA', 'SPAM', 'OFF_PLATFORM', 'OTHER'],
-  VIDEO: ['STOLEN', 'UNAVAILABLE', 'BRAND_NEGATIVE', 'BLACKMAIL', 'OFF_PLATFORM', 'OTHER'],
+  ORDER: [
+    'FRAUD',
+    'PROHIBITED',
+    'FAKE_REVIEWS',
+    'PERSONAL_DATA',
+    'SPAM',
+    'OFF_PLATFORM',
+    'OTHER',
+  ],
+  VIDEO: [
+    'STOLEN',
+    'UNAVAILABLE',
+    'BRAND_NEGATIVE',
+    'BLACKMAIL',
+    'OFF_PLATFORM',
+    'OTHER',
+  ],
   REVIEW: ['INSULT', 'FALSE', 'PERSONAL_DATA', 'OFF_PLATFORM', 'OTHER'],
   PROFILE: ['IMPERSONATION', 'OFFENSIVE', 'OFF_PLATFORM', 'OTHER'],
 };
 
 export function reasonLabel(target: ReportTarget, code: string): string {
-  return REPORT_REASONS[target].includes(code) ? i18next.t(`reportReasons.${target}.${code}`) : code;
+  return REPORT_REASONS[target].includes(code)
+    ? i18next.t(`reportReasons.${target}.${code}`)
+    : code;
 }
 
 /** Сообщение менеджеру из мини-аппа; ответ придёт в чат с ботом. */
@@ -805,7 +976,13 @@ export interface ModReportGroup {
     profileId: number | null;
     orderId: number | null;
   } | null;
-  reports: { id: number; reason: string; comment: string | null; reporter: string; createdAt: string }[];
+  reports: {
+    id: number;
+    reason: string;
+    comment: string | null;
+    reporter: string;
+    createdAt: string;
+  }[];
 }
 
 export function fetchModReports() {
@@ -831,7 +1008,9 @@ export function resolveReports(
 }
 
 export function banUser(userId: number, reason: string) {
-  return request<{ ok: true }>('POST', `/api/mod/users/${userId}/ban`, { reason });
+  return request<{ ok: true }>('POST', `/api/mod/users/${userId}/ban`, {
+    reason,
+  });
 }
 
 export function unbanUser(userId: number) {

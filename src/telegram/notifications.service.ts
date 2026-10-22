@@ -19,6 +19,7 @@ import { InjectBot } from 'nestjs-telegraf';
 import { fromMinor } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
 import { HOLD_DAYS } from '../orders/budget';
+import { videoLinkForAdvertiser } from '../orders/order-report';
 import { SLOT_DAYS } from '../submissions/submissions.service';
 import { Context, Markup, Telegraf, TelegramError } from 'telegraf';
 import {
@@ -101,14 +102,18 @@ export class NotificationsService
 
   /**
    * Рекламодатель изменил заказ: модераторам — на повторную проверку; креаторам, которые уже
-   * работают по нему, — что условия изменились.
+   * работают по нему, — что условия изменились. Кому слать — решает OrdersService.update (`notify`).
    */
-  orderEdited(order: Order & { advertiser: User } & OrderWithCreators) {
-    this.toModerators(
-      this.orderCard('✏️ <b>Заказ изменён — снова на проверку</b>', order),
-      `/mod/orders/${order.id}`,
-    );
-    if (order.submissions.length)
+  orderEdited(
+    order: Order & { advertiser: User } & OrderWithCreators,
+    notify: { moderators: boolean; creators: boolean },
+  ) {
+    if (notify.moderators)
+      this.toModerators(
+        this.orderCard('✏️ <b>Заказ изменён — снова на проверку</b>', order),
+        `/mod/orders/${order.id}`,
+      );
+    if (notify.creators && order.submissions.length)
       this.toCreators(
         order,
         // по номеру, не по названию: новое название ещё не проверено модератором — в нём может быть контакт
@@ -244,7 +249,7 @@ export class NotificationsService
         t('notify.newVideo', {
           title: escapeHtml(submission.order.title),
           views: num(lang, views),
-          url: escapeHtml(submission.videoUrl ?? ''),
+          url: escapeHtml(videoLinkForAdvertiser(submission.trackCode) ?? ''),
         }),
       `/my-orders/${submission.order.id}/review`,
       true,

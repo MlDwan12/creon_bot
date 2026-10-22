@@ -1,3 +1,4 @@
+import { isDbDate, isDbId } from '../common/validation';
 import { tr } from '../i18n/request-lang';
 import {
   BadRequestException,
@@ -29,7 +30,8 @@ const PAGE_SIZE = 20;
 /**
  * Креатору — ставка, свободный остаток фонда выплат в USDT и «осталось мало» (подсветка «успейте»).
  * Бюджет рекламодателя и комиссию площадки не показываем, поэтому и долю остатка — только флаг:
- * по остатку и проценту фонд, а с ним и бюджет, вычисляется.
+ * по остатку и проценту фонд, а с ним и бюджет, вычисляется. Остаток — округлённым вниз
+ * (freeForCreators): по точному у нового заказа виден бюджет, а по его падению — чужие начисления.
  */
 function toPublic(
   order: Awaited<ReturnType<OrdersService['listOpen']>>['items'][number],
@@ -42,12 +44,24 @@ function toPublic(
     ...videoFormat(order),
     minViews: order.minViews,
     cpm: fromMinor(order.cpmMinor),
-    free: fromMinor(order.freeMinor),
+    ...freeForCreators(order.freeMinor),
     budgetLow: isBudgetLow(order.freeMinor, payoutPool(order)),
     category: order.category,
     deadline: order.deadline,
     createdAt: order.createdAt,
   };
+}
+
+/** Шаг округления остатка для креаторов, USDT. */
+const FREE_STEP = 100;
+
+/**
+ * Остаток фонда для креаторов: вниз до FREE_STEP USDT; меньше шага — `free` 0 и `freeUnder` —
+ * «осталось меньше 100 USDT».
+ */
+export function freeForCreators(freeMinor: number) {
+  const free = Math.floor(fromMinor(freeMinor) / FREE_STEP) * FREE_STEP;
+  return { free, freeUnder: free === 0 ? FREE_STEP : null };
 }
 
 /** Свободно меньше 30% фонда выплат — в каталоге подсвечиваем «успейте». */
@@ -79,7 +93,7 @@ export class OrdersController {
     let after: { createdAt: Date; id: number } | undefined;
     if (afterId !== undefined) {
       const createdAt = new Date(afterCreatedAt ?? '');
-      if (Number.isNaN(createdAt.getTime()))
+      if (!isDbId(afterId) || !isDbDate(createdAt))
         throw new BadRequestException(tr('errors.badPage'));
       after = { createdAt, id: afterId };
     }

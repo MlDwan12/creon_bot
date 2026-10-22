@@ -2,6 +2,8 @@ import { tr } from '../i18n/request-lang';
 import { type Order, type Submission, SubmissionStatus } from '@prisma/client';
 import { fromMinor } from '../common/money';
 import { titleVisibleToCreators } from '../common/format';
+import { HOLD_DAYS } from '../orders/budget';
+import { videoFormat } from '../orders/order-input';
 import { slotDueAt } from './submissions.service';
 
 /**
@@ -35,6 +37,15 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
       payout: fromMinor(row.payoutMinor),
       finalized: row.finalizedAt !== null,
       createdAt: row.createdAt,
+      // Для шкалы статусов: сдан, проверен модератором и до когда холд (одобрен, итога ещё нет).
+      submittedAt: row.submittedAt,
+      decidedAt: row.decidedAt,
+      holdEndsAt:
+        row.status === SubmissionStatus.MODERATOR_APPROVED &&
+        row.decidedAt &&
+        !row.finalizedAt
+          ? new Date(row.decidedAt.getTime() + HOLD_DAYS * 24 * 60 * 60 * 1000)
+          : null,
       // Ссылка на товар для описания ролика; адрес сайта добавляет мини-апп. null — у заказа нет товара.
       trackPath:
         row.order.targetUrl && row.trackCode ? `/r/${row.trackCode}` : null,
@@ -52,6 +63,8 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
         minViews: row.order.minViews,
         deadline: row.order.deadline,
         status: row.order.status,
+        // требования к ролику — для самопроверки перед сдачей
+        ...videoFormat(row.order),
       },
     };
   });

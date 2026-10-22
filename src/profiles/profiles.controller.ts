@@ -14,11 +14,16 @@ import {
   StreamableFile,
   UseGuards,
 } from '@nestjs/common';
+import { Cabinet } from '@prisma/client';
 import type { Response } from 'express';
 import { ParseIdPipe } from '../common/parse-id.pipe';
 import { NotificationsService } from '../telegram/notifications.service';
 import { TelegramPhotosService } from '../telegram/telegram-photos.service';
-import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
+import {
+  type ApiRequest,
+  assertFreshLogin,
+  InitDataGuard,
+} from '../auth/init-data.guard';
 import { ModeratorGuard } from '../auth/moderator.guard';
 import { parseWallet } from '../payouts/trc20';
 import { parseLinks } from './profile-input';
@@ -72,13 +77,33 @@ export class ProfilesController {
     return { ok: true };
   }
 
+  /** Кабинет мини-аппа, открытый последним: creator или advertiser (webapp/src/role.ts). */
+  @Put('profile/cabinet')
+  async updateCabinet(
+    @Body('cabinet') cabinet: unknown,
+    @Req() req: ApiRequest,
+  ) {
+    if (cabinet !== 'creator' && cabinet !== 'advertiser')
+      throw new BadRequestException('cabinet — creator или advertiser');
+    await this.profiles.updateCabinet(
+      req.user.id,
+      cabinet === 'creator' ? Cabinet.CREATOR : Cabinet.ADVERTISER,
+    );
+    return { ok: true };
+  }
+
   /** Кошелёк USDT (TRC20) для выплат; пусто — убрать. Смена — уведомление владельцу. */
   @Put('profile/wallet')
   async updateWallet(@Body() body: unknown, @Req() req: ApiRequest) {
     const wallet = parseWallet(body);
-    await this.profiles.updateWallet(req.user.id, wallet);
-    if (wallet !== req.user.payoutWallet)
-      this.notifications.walletChanged(req.user, wallet);
+    if (wallet === req.user.payoutWallet) return { ok: true };
+    assertFreshLogin(req);
+    await this.profiles.updateWallet(
+      req.user.id,
+      wallet,
+      req.user.payoutWallet !== null,
+    );
+    this.notifications.walletChanged(req.user, wallet);
     return { ok: true };
   }
 

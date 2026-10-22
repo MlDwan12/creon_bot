@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import OnboardingOverlay from './components/OnboardingOverlay.vue';
+import RoleSwitch from './components/RoleSwitch.vue';
 import TabBar from './components/TabBar.vue';
 import { banned, fetchMe } from './api';
 import { i18next, setLang } from './i18n';
@@ -50,15 +51,24 @@ if (inTelegram) {
     {{ $t('common.back') }}
   </button>
   <main v-if="banned" class="banned">
-    <div class="banned-icon" aria-hidden="true">🚫</div>
+    <div class="banned-icon" aria-hidden="true">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" />
+        <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
+      </svg>
+    </div>
     <h1>{{ $t('banned.title') }}</h1>
-    <p v-if="banned.reason">{{ $t('banned.reason', { reason: banned.reason }) }}</p>
+    <p v-if="banned.reason" class="banned-reason">{{ $t('banned.reason', { reason: banned.reason }) }}</p>
     <p class="hint">{{ $t('banned.hint') }}</p>
     <button v-if="banned.supportUrl" type="button" class="main-button" @click="openTelegramLink(banned.supportUrl)">
-      {{ $t('common.support') }}
+      {{ $t('banned.write') }}
     </button>
   </main>
-  <RouterView v-else :key="lang" />
+  <template v-else>
+    <!-- на главных экранах вкладок: «Креатор / Заказчик» (role.ts) -->
+    <RoleSwitch v-if="route.meta.tab" :key="lang" />
+    <RouterView :key="lang" />
+  </template>
   <TabBar v-if="!banned" :key="lang" />
   <!-- matched пуст, пока роутер не решил, куда вести: иначе модератор мельком увидит онбординг. -->
   <OnboardingOverlay
@@ -76,7 +86,14 @@ if (inTelegram) {
   text-align: center;
 }
 .banned-icon {
-  font-size: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--link);
 }
 .banned h1 {
   margin: 0;
@@ -87,6 +104,11 @@ if (inTelegram) {
   font-size: 16px;
   line-height: 1.4;
   overflow-wrap: anywhere;
+}
+.banned .banned-reason {
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--surface);
 }
 .banned .hint {
   color: var(--hint);

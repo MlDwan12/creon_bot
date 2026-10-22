@@ -53,7 +53,7 @@ function pick(preset: string | null) {
   gap: 8px;
 }
 .chips button {
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 14px;
   border: 2px solid transparent;
   border-radius: 18px;

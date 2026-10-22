@@ -57,6 +57,14 @@
         flex-direction: column;
         gap: 10px;
       }
+      .splash-img {
+        align-self: center;
+        width: 112px;
+        height: 112px;
+        margin-bottom: 8px;
+        border-radius: 28px;
+        box-shadow: 0 12px 32px rgba(23, 20, 31, 0.35);
+      }
       .splash-word {
         font-family: 'Unbounded', system-ui, sans-serif;
         font-size: 52px;
@@ -93,6 +101,7 @@
     <div id="app">
       <div class="splash">
         <div class="splash-logo" role="progressbar" aria-label="Fixum загружается">
+          <img class="splash-img" src="/logo.webp" alt="" width="112" height="112" />
           <span class="splash-word">Fixum</span>
           <span class="splash-bar"></span>
         </div>
