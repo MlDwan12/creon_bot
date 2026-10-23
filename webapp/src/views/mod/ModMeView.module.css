@@ -196,3 +196,12 @@
 .links .link-row {
   margin-top: 0;
 }
+/* «Как работать модератору» — кнопка, а выглядит как ссылки рядом */
+button.link-row {
+  border: none;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}

@@ -8,6 +8,7 @@ import {
   sendModActionsCsv,
 } from '../../api';
 import { formatMoney, timeAgo } from '../../format';
+import { openModOnboarding } from '../../components/ModOnboarding';
 import { ACTION_LABELS } from './labels';
 import s from './ModMeView.module.css';
 
@@ -279,6 +280,10 @@ export default function ModMeView() {
           <span>Что работает</span>
           <small>какие заказы берут, смотрят и одобряют · аудитория</small>
         </Link>
+        <button type="button" className={s.linkRow} onClick={openModOnboarding}>
+          <span>Как работать модератору</span>
+          <small>очередь, проверка, выплаты, баны и правила площадки</small>
+        </button>
       </nav>
     </main>
   );
