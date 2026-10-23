@@ -1,0 +1,132 @@
+.chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 0 -16px;
+  padding: 0 16px;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to right, #000 85%, transparent);
+}
+/* Мышью ряд не прокрутить свайпом (компьютер) — там чипы переносятся на следующую строку. */
+@media (hover: hover) and (pointer: fine) {
+  .chips {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    mask-image: none;
+  }
+}
+.chips button {
+  flex: none;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1.5px solid var(--separator);
+  border-radius: 22px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+.chips button[aria-checked='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 16px calc(96px + var(--safe-bottom));
+}
+.page h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.list {
+  border-radius: 14px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 14px;
+  color: var(--text);
+  text-decoration: none;
+}
+.row + .row {
+  border-top: 1px solid var(--separator);
+}
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-grow: 1;
+  min-width: 0;
+}
+.title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.sub {
+  font-size: 13px;
+  color: var(--hint);
+}
+.badge {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge.success {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+.badge.warn {
+  background: var(--orange-soft);
+  color: var(--orange-text);
+}
+.badge.danger {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+.badge.muted {
+  background: var(--fill);
+  color: var(--hint);
+}
+.more {
+  min-height: 44px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--link);
+  font-size: 16px;
+  font-weight: 600;
+}
+.hint {
+  margin: 0;
+  color: var(--hint);
+}
+.search {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+.search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.title {
+  overflow-wrap: anywhere;
+}

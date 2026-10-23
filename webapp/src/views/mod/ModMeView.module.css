@@ -189,3 +189,10 @@
     padding: 8px 2px;
   }
 }
+.links {
+  display: grid;
+  gap: 8px;
+}
+.links .link-row {
+  margin-top: 0;
+}

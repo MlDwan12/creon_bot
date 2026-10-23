@@ -12,6 +12,9 @@ import { PrismaService } from '../prisma/prisma.service';
 
 const T = ModeratorActionType;
 
+/** moderatorId перенесённых банов: до журнала не записывалось, кто банил. */
+const UNKNOWN_MODERATOR = '0';
+
 /** Подписи действий — в кабинете и CSV. Окно модератора только на русском. */
 export const ACTION_LABELS: Record<ModeratorActionType, string> = {
   ORDER_APPROVE: 'Заказ опубликован',
@@ -76,6 +79,8 @@ export class ModeratorActionsService {
     objectId: number;
     reportTarget?: ReportTarget;
     amountMinor?: number | null;
+    /** Причина блокировки или отказа. */
+    comment?: string | null;
     /** С какого момента объект ждал решения. */
     waitingSince?: Date | null;
   }) {
@@ -132,7 +137,7 @@ export class ModeratorActionsService {
         ...this.moderatorIds,
         ...rows.map((r) => r.moderatorId.toString()),
       ]),
-    ];
+    ].filter((id) => id !== UNKNOWN_MODERATOR);
     const labels = await this.labels(ids);
     return ids.map((id) => {
       const mine = rows.filter((r) => r.moderatorId.toString() === id);
@@ -189,17 +194,18 @@ export class ModeratorActionsService {
   }
 
   /** Имена модераторов: @username или имя из Telegram — если модератор хоть раз открывал мини-апп. */
-  private async labels(ids: string[]) {
+  async labels(ids: string[]) {
     const users = await this.prisma.user.findMany({
       where: { telegramId: { in: ids.map((id) => BigInt(id)) } },
       select: { telegramId: true, username: true, firstName: true },
     });
-    return new Map(
-      users.map((u) => [
+    return new Map([
+      [UNKNOWN_MODERATOR, 'модератор неизвестен'],
+      ...users.map((u): [string, string] => [
         u.telegramId.toString(),
         u.username ? `@${u.username}` : (u.firstName ?? `id${u.telegramId}`),
       ]),
-    );
+    ]);
   }
 }
 

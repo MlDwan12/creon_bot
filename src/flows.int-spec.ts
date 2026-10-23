@@ -1,6 +1,7 @@
 import type { ConfigService } from '@nestjs/config';
 import { OrderStatus } from '@prisma/client';
 import { ModeratorGuard } from './auth/moderator.guard';
+import { ModUsersService } from './moderation/mod-users.service';
 import { ModeratorActionsService } from './moderation/moderator-actions.service';
 import { AnalyticsService } from './moderation/analytics.service';
 import { BansService } from './moderation/bans.service';
@@ -50,6 +51,9 @@ const users = new UsersService(prisma);
 const payouts = new PayoutsService(prisma);
 const moderatorActions = new ModeratorActionsService(prisma, {
   get: () => '777,888',
+} as unknown as ConfigService);
+const modUsers = new ModUsersService(prisma, moderatorActions, {
+  get: () => '777',
 } as unknown as ConfigService);
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -2184,5 +2188,59 @@ describe('журнал модераторов', () => {
 
     const csv = await moderatorActions.csv(undefined, 888n);
     expect(csv.split('\r\n')).toHaveLength(1); // только заголовок
+  });
+});
+
+describe('вкладка «Люди»', () => {
+  it('список: фильтр «заблокированные» и поиск; история: жалоба, решение, бан — кто и за что', async () => {
+    const [bad, reporter, other] = [await user(), await user(), await user()];
+    await prisma.report.create({
+      data: {
+        reporterId: reporter.id,
+        target: 'PROFILE',
+        targetId: bad.id,
+        reason: 'FRAUD',
+        comment: 'просит оплату напрямую',
+      },
+    });
+    await moderatorActions.log({
+      moderatorId: 777n,
+      type: 'REPORT_ACTION',
+      objectId: bad.id,
+      reportTarget: 'PROFILE',
+    });
+    await bans.ban(bad.id, 'обход площадки');
+    await moderatorActions.log({
+      moderatorId: 777n,
+      type: 'USER_BAN',
+      objectId: bad.id,
+      comment: 'обход площадки',
+    });
+    // чужая жалоба и бан другого — не в истории bad
+    await moderatorActions.log({
+      moderatorId: 777n,
+      type: 'USER_BAN',
+      objectId: other.id,
+    });
+
+    const banned = await modUsers.list('', 'banned', 0);
+    expect(banned.items.map((u) => u.id)).toEqual([bad.id]);
+    expect(banned.items[0].banned?.reason).toBe('обход площадки');
+    expect(
+      (await modUsers.list(`@${reporter.username}`, 'all', 0)).items.map(
+        (u) => u.id,
+      ),
+    ).toEqual([reporter.id]);
+
+    const h = (await modUsers.history(bad.id))!;
+    expect(h.ban).toMatchObject({ reason: 'обход площадки', by: 'id777' });
+    expect(
+      h.events.map((e) => (e.kind === 'report' ? 'report' : e.type)).sort(),
+    ).toEqual(['REPORT_ACTION', 'USER_BAN', 'report']);
+    const r = h.events.find((e) => e.kind === 'report');
+    expect(r).toMatchObject({
+      reporter: `@${reporter.username}`,
+      comment: 'просит оплату напрямую',
+    });
   });
 });
