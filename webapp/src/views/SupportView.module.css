@@ -1,0 +1,54 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 16px calc(96px + var(--safe-bottom));
+}
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.page h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+.hint {
+  margin: 0;
+  font-size: 15px;
+  color: var(--hint);
+}
+.topic {
+  align-self: flex-start;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.counter {
+  align-self: flex-end;
+  margin-top: -10px;
+  color: var(--hint);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.page textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--separator);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  resize: vertical;
+}
+.error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--danger);
+}

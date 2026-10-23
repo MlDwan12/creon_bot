@@ -15,7 +15,7 @@ ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholde
 RUN yarn prisma:generate
 RUN yarn build
 
-# --- webapp: собрать Mini App (Vue) в статику, её раздаёт Nest (src/main.ts) ---
+# --- webapp: собрать Mini App (React) в статику, её раздаёт Nest (src/main.ts) ---
 FROM node:22-alpine AS webapp
 WORKDIR /webapp
 COPY webapp/package.json webapp/yarn.lock ./

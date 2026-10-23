@@ -1,0 +1,197 @@
+.track {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.track code {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.copy {
+  min-height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  background: var(--fill);
+  color: var(--text);
+  font-size: 14px;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.title {
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin: -4px;
+  padding: 4px;
+  border: none;
+  border-radius: 14px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+.payout {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: var(--lime);
+  color: var(--lime-text);
+  font-size: 15px;
+}
+.chevron {
+  flex: none;
+  margin-left: auto;
+  color: var(--hint);
+  transition: transform 0.2s;
+}
+.chevron.up {
+  transform: rotate(180deg);
+}
+.steps {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 4px 0 0;
+  list-style: none;
+}
+.steps li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  column-gap: 12px;
+  padding-bottom: 14px;
+}
+.steps li:last-child {
+  padding-bottom: 0;
+}
+/* линия между точками */
+.steps li:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 24px;
+  bottom: 0;
+  width: 2px;
+  background: var(--separator);
+}
+.steps li.done:not(:last-child)::before {
+  background: var(--success-text);
+}
+.dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  border-radius: 50%;
+}
+.done .dot {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+/* тёмная обводка — лайм на белом сам по себе почти не виден; в тёмной теме она сливается с фоном */
+.now .dot {
+  border: 2px solid var(--lime-text);
+  background: var(--lime);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--lime) 25%, transparent);
+}
+.next .dot {
+  border: 2px solid var(--separator);
+}
+.fail .dot {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.step-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 2px;
+  font-size: 15px;
+}
+.step-text span {
+  color: var(--hint);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.next .step-text strong {
+  color: var(--hint);
+  font-weight: 600;
+}
+.fail .step-text strong {
+  color: var(--danger);
+}
+.status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+/* Статус — цветная плашка: цвет вместе со словом, не одним цветом. */
+.label {
+  padding: 5px 10px;
+  border-radius: 13px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.label.accent {
+  background: var(--accent-soft);
+  color: var(--link);
+}
+.label.warn {
+  background: var(--orange-soft);
+  color: var(--orange-text);
+}
+.label.success {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+.label.danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.hint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--hint);
+}
+.action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border: none;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 16px;
+  font-weight: 800;
+  text-decoration: none;
+}
+.error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--danger);
+}

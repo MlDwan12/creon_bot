@@ -1,0 +1,102 @@
+.catalog {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  /* Снизу место под плавающие вкладки. */
+  padding: 20px 16px calc(96px + var(--safe-bottom));
+}
+.head h1 {
+  margin: 0 0 4px;
+  font-size: 26px;
+  font-weight: 700;
+}
+.head p {
+  margin: 0;
+  font-size: 15px;
+  color: var(--hint);
+}
+.chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 0 -16px;
+  padding: 0 16px;
+  scrollbar-width: none;
+  /* затухание у правого края: видно, что ряд прокручивается */
+  mask-image: linear-gradient(to right, #000 85%, transparent);
+}
+.chips button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1.5px solid var(--separator);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.chips button.with-icon {
+  padding-left: 6px;
+}
+.chips button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 800;
+}
+/* Мышью ряд не прокрутить свайпом (компьютер) — там чипы переносятся на следующую строку. */
+@media (hover: hover) and (pointer: fine) {
+  .chips {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    mask-image: none;
+  }
+}
+/* Категории — второй уровень фильтра: тише площадок. */
+.chips.soft {
+  gap: 6px;
+}
+.chips.soft button {
+  min-height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--hint);
+  font-size: 13px;
+}
+.chips.soft button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--link);
+}
+.count {
+  padding: 0;
+  font-size: 15px;
+  font-weight: 800;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+}
+.hint {
+  margin: 0;
+  color: var(--hint);
+}
+.more {
+  min-height: 48px;
+  border: none;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--link);
+  font-size: 16px;
+  font-weight: 700;
+}
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+}

@@ -1,9 +1,9 @@
-import { ref } from 'vue';
 import { i18next, setLang, type Lang } from './i18n';
+import { createStore } from './store';
 import { getInitData } from './telegram';
 
-/** Аккаунт заблокирован — App.vue показывает экран блокировки вместо любого экрана. */
-export const banned = ref<{
+/** Аккаунт заблокирован — App.tsx показывает экран блокировки вместо любого экрана. */
+export const banned = createStore<{
   reason: string | null;
   supportUrl: string | null;
 } | null>(null);
@@ -570,10 +570,10 @@ async function request<T>(
       } | null;
       if (typeof data?.message === 'string') userMessage = data.message;
       if (data?.banned)
-        banned.value = {
+        banned.set({
           reason: data.reason ?? null,
           supportUrl: data.supportUrl ?? null,
-        };
+        });
     }
     throw new ApiError(res.status, userMessage);
   }
@@ -790,13 +790,15 @@ export function fetchMe() {
   // неудачный запрос не запоминаем — иначе сбой сети считался бы ответом до перезапуска
   // язык с сервера главнее догадки при запуске (выбран в профиле, в т.ч. на другом устройстве) —
   // применяем при каждом ответе: экран профиля не покажет «Русский» при английском интерфейсе
-  return (me ??= request<Me>('GET', '/api/me').then((m) => {
-    if (m.language !== i18next.language) setLang(m.language);
-    return m;
-  }).catch((err) => {
-    me = undefined;
-    throw err;
-  }));
+  return (me ??= request<Me>('GET', '/api/me')
+    .then((m) => {
+      if (m.language !== i18next.language) setLang(m.language);
+      return m;
+    })
+    .catch((err) => {
+      me = undefined;
+      throw err;
+    }));
 }
 
 export function fetchModQueue() {
