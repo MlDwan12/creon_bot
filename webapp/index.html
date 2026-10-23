@@ -9,8 +9,10 @@
     <title>Fixum</title>
     <!-- Шрифт логотипа — заранее, чтобы заставка не мигнула системным шрифтом -->
     <link rel="preload" href="/fonts/unbounded-latin.woff2" as="font" type="font/woff2" crossorigin />
-    <!-- Официальный SDK Mini Apps: его отдаёт сам Telegram, без npm-пакетов посередине -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Официальный SDK Mini Apps — копия telegram.org/js/telegram-web-app.js с нашего домена:
+         у части провайдеров telegram.org заблокирован, и тогда мини-апп висел на сером экране Telegram.
+         ponytail: копия не обновляется сама — новые методы SDK появятся после повторного скачивания -->
+    <script src="/telegram-web-app.js"></script>
     <!-- Стили заставки — здесь, а не в style.css: она видна до того, как загрузится код приложения -->
     <style>
       @font-face {

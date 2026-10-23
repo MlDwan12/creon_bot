@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { fetchMe, updateLanguage } from '../api';
-import { i18next, LANG_NAMES, LANGS, setLang, type Lang } from '../i18n';
+import { i18next, LANG_NAMES, LANGS, type Lang } from '../i18n';
 import { setThemePref, themePref, type ThemePref } from '../telegram';
 
 /** Оформление и язык — одинаковые в профиле креатора и заказчика. */
@@ -29,9 +29,8 @@ async function pickLang(pref: LangPref) {
   langError.value = '';
   try {
     await updateLanguage(pref === 'auto' ? null : pref);
-    const me = await fetchMe();
+    await fetchMe(); // применит новый язык
     langPref.value = pref;
-    setLang(me.language);
   } catch {
     langError.value = i18next.t('settings.languageError');
   }

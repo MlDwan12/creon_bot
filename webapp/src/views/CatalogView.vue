@@ -50,7 +50,7 @@ async function load(reset: boolean) {
   error.value = '';
   try {
     // Следующая страница — заказы старше последнего показанного (курсор, а не номер страницы).
-    const res = await fetchOpenOrders(reset ? undefined : orders.value.at(-1), category.value, platform.value);
+    const res = await fetchOpenOrders(reset ? undefined : orders.value[orders.value.length - 1], category.value, platform.value);
     if (requestId !== lastRequest) return;
     orders.value = reset ? res.items : [...orders.value, ...res.items];
     total.value = res.total;
