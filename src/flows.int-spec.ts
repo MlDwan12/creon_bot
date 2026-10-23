@@ -554,6 +554,41 @@ describe('каталог', () => {
     expect(next.items.map((o) => o.id)).toEqual([ids[1], ids[0]]);
   });
 
+  it('фильтры каталога — только категории и площадки, где есть открытые заказы', async () => {
+    const adv = await user();
+    const beauty = await openOrder(adv.id);
+    const gaming = await openOrder(adv.id);
+    const any = await openOrder(adv.id);
+    await prisma.order.update({
+      where: { id: beauty.id },
+      data: { category: 'BEAUTY', platforms: ['TIKTOK'] },
+    });
+    await prisma.order.update({
+      where: { id: gaming.id },
+      data: { category: 'GAMING', platforms: ['YOUTUBE'] },
+    });
+    await prisma.order.update({
+      where: { id: any.id },
+      data: { category: 'FITNESS', platforms: [] },
+    });
+    await pendingOrder(adv.id); // на модерации — не в каталоге, его категории OTHER в фильтрах нет
+
+    const all = await orders.openFacets(undefined, undefined);
+    expect(all.categories.sort()).toEqual(['BEAUTY', 'FITNESS', 'GAMING']);
+    // заказ без площадок подходит для любой — значит, есть все
+    expect(all.platforms).toHaveLength(5);
+    // перекрёстно: категории — для выбранной площадки, площадки — для выбранной категории
+    expect(
+      (await orders.openFacets(undefined, 'TIKTOK')).categories.sort(),
+    ).toEqual(['BEAUTY', 'FITNESS']);
+    expect((await orders.openFacets(undefined, 'VK')).categories).toEqual([
+      'FITNESS',
+    ]);
+    expect((await orders.openFacets('GAMING', undefined)).platforms).toEqual([
+      'YOUTUBE',
+    ]);
+  });
+
   it('фильтр по площадке: заказы для неё и без ограничений; ролик с другой площадки не сдать', async () => {
     const [adv, creator] = [await user(), await user()];
     const any = await openOrder(adv.id);

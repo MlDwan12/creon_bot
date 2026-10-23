@@ -596,10 +596,13 @@ export function fetchOpenOrders(
   }
   if (category) query.set('category', category);
   if (platform) query.set('platform', platform);
-  return request<{ items: OrderSummary[]; hasMore: boolean; total: number }>(
-    'GET',
-    `/api/orders?${query}`,
-  );
+  return request<{
+    items: OrderSummary[];
+    hasMore: boolean;
+    total: number;
+    /** Только к первой странице: где есть открытые заказы (категории — с учётом площадки, и наоборот). */
+    facets?: { categories: OrderCategory[]; platforms: VideoPlatform[] };
+  }>('GET', `/api/orders?${query}`);
 }
 
 export function fetchOrder(id: number) {

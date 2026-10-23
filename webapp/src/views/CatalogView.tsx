@@ -42,6 +42,11 @@ export default function CatalogView() {
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  /** Где есть открытые заказы — фильтры только с ними; undefined — ещё не знаем. */
+  const [facets, setFacets] = useState<{
+    categories: OrderCategory[];
+    platforms: VideoPlatform[];
+  }>();
 
   const lastRequest = useRef(0);
   const ordersRef = useRef(orders);
@@ -67,6 +72,7 @@ export default function CatalogView() {
         setOrders(reset ? res.items : [...shown, ...res.items]);
         setTotal(res.total);
         setHasMore(res.hasMore);
+        if (res.facets) setFacets(res.facets);
       } catch {
         if (requestId === lastRequest.current) setError(t('catalog.loadError'));
       } finally {
@@ -109,6 +115,14 @@ export default function CatalogView() {
     }
   }
 
+  // Чипы — только там, где есть заказы; выбранный остаётся, даже если заказы кончились, — чтобы его снять.
+  const shownPlatforms = VIDEO_PLATFORMS.filter(
+    (p) => p === platform || facets?.platforms.includes(p),
+  );
+  const shownCategories = ORDER_CATEGORIES.filter(
+    (c) => c === category || facets?.categories.includes(c),
+  );
+
   function resetFilters() {
     setCategory(undefined);
     setPlatform(undefined);
@@ -121,55 +135,61 @@ export default function CatalogView() {
         <p>{t('catalog.subtitle')}</p>
       </header>
 
-      <nav className={s.chips} aria-label={t('catalog.platformsAria')}>
-        <button
-          type="button"
-          aria-pressed={!platform}
-          onClick={() => setPlatform(undefined)}
-        >
-          {t('catalog.allPlatforms')}
-        </button>
-        {VIDEO_PLATFORMS.map((p) => (
+      {/* пустой ряд не показываем: заказов нет ни в одной */}
+      {shownPlatforms.length > 0 && (
+        <nav className={s.chips} aria-label={t('catalog.platformsAria')}>
           <button
-            key={p}
             type="button"
-            className={s.withIcon}
-            aria-pressed={platform === p}
-            onClick={() => setPlatform(p)}
+            aria-pressed={!platform}
+            onClick={() => setPlatform(undefined)}
           >
-            <PlatformIcon
-              platform={p}
-              size={24}
-              round
-              inverse={platform === p}
-            />
-            {PLATFORM_NAMES[p]}
+            {t('catalog.allPlatforms')}
           </button>
-        ))}
-      </nav>
+          {shownPlatforms.map((p) => (
+            <button
+              key={p}
+              type="button"
+              className={s.withIcon}
+              aria-pressed={platform === p}
+              onClick={() => setPlatform(p)}
+            >
+              <PlatformIcon
+                platform={p}
+                size={24}
+                round
+                inverse={platform === p}
+              />
+              {PLATFORM_NAMES[p]}
+            </button>
+          ))}
+        </nav>
+      )}
 
-      <nav
-        className={`${s.chips} ${s.soft}`}
-        aria-label={t('catalog.categoriesAria')}
-      >
-        <button
-          type="button"
-          aria-pressed={!category}
-          onClick={() => setCategory(undefined)}
+      {/* пустой ряд не показываем: заказов нет ни в одной */}
+      {shownCategories.length > 0 && (
+        <nav
+          className={`${s.chips} ${s.soft}`}
+          aria-label={t('catalog.categoriesAria')}
         >
-          {t('catalog.allCategories')}
-        </button>
-        {ORDER_CATEGORIES.map((c) => (
           <button
-            key={c}
             type="button"
-            aria-pressed={category === c}
-            onClick={() => setCategory(c)}
+            aria-pressed={!category}
+            onClick={() => setCategory(undefined)}
           >
-            {categoryLabel(c)}
+            {t('catalog.allCategories')}
           </button>
-        ))}
-      </nav>
+          {shownCategories.map((c) => (
+            <button
+              key={c}
+              type="button"
+              aria-pressed={category === c}
+              onClick={() => setCategory(c)}
+            >
+              {categoryLabel(c)}
+            </button>
+          ))}
+        </nav>
+      )}
 
       {error ? (
         <LoadState error={error} onRetry={() => void load(true)} />
