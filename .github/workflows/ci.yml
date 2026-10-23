@@ -7,9 +7,17 @@ on:
   pull_request:
     branches: [main, develop]
 
+# Новый пуш в ту же ветку отменяет прошлый запуск — зависший не копит минуты рядом с новым.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
+    # Обычный прогон — несколько минут; завис (как на скачивании кэша) — GitHub снимет сам через 20,
+    # а не через 6 часов по умолчанию.
+    timeout-minutes: 20
     env:
       DATABASE_URL: postgresql://creon:creon@localhost:5432/creon_bot
 
@@ -31,13 +39,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Без кэша yarn: он разросся до ~600 МБ и упирался в лимит трафика кэша Actions на аккаунт
+      # («Egress is over the account limit») — установка из npm с нуля быстрее его скачивания.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: yarn
-          cache-dependency-path: |
-            yarn.lock
-            webapp/yarn.lock
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile

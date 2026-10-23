@@ -101,7 +101,7 @@ export default function TabBar() {
               </svg>
               {t('tabs.modOrders')}
             </NavLink>
-            <NavLink to="/mod/stats" end className={tabClass}>
+            <NavLink to="/mod/users" className={tabClass}>
               <svg
                 width="24"
                 height="24"
@@ -112,9 +112,36 @@ export default function TabBar() {
                 strokeLinecap="round"
                 aria-hidden="true"
               >
-                <path d="M4 20V11M10 20V5M16 20v-7M21 20H3" />
+                <circle cx="9" cy="8" r="3.5" />
+                <path d="M2.5 20c1-3.2 3.5-4.8 6.5-4.8s5.5 1.6 6.5 4.8" />
+                <path d="M16 4.8a3.5 3.5 0 0 1 0 6.4M18.5 15.6c1.6.7 2.6 2.2 3 4.4" />
               </svg>
-              {t('tabs.modStats')}
+              {t('tabs.modUsers')}
+            </NavLink>
+            {/* статистика и «Что работает» открываются из «Я» — вкладка подсвечена и там */}
+            <NavLink
+              to="/mod/me"
+              className={({ isActive }) =>
+                tabClass({
+                  isActive:
+                    isActive || /^\/mod\/(stats|what-works)/.test(pathname),
+                })
+              }
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 20c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5" />
+              </svg>
+              {t('tabs.modMe')}
             </NavLink>
           </>
         ) : role === 'advertiser' ? (

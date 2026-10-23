@@ -8,6 +8,7 @@ import {
   useNavigate,
 } from 'react-router';
 import s from './App.module.css';
+import ModOnboarding from './components/ModOnboarding';
 import OnboardingOverlay from './components/OnboardingOverlay';
 import RoleSwitch from './components/RoleSwitch';
 import TabBar from './components/TabBar';
@@ -155,6 +156,8 @@ export default function App() {
       <Outlet key={`${lang}:${pathname}`} />
       <TabBar key={`tabs:${lang}`} />
       {!inModeration && pathname !== '/privacy' && <OnboardingOverlay />}
+      {/* модератору — своё введение: его окно и правила площадки */}
+      {inModeration && <ModOnboarding />}
     </>
   );
 }

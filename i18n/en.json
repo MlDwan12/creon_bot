@@ -6,8 +6,10 @@
     "learn": "Learn",
     "profile": "Profile",
     "modQueue": "Queue",
-    "modOrders": "All orders",
+    "modOrders": "Orders",
+    "modUsers": "People",
     "modStats": "Stats",
+    "modMe": "Me",
     "aria": "Sections",
     "help": "How it works",
     "modPayouts": "Payouts"

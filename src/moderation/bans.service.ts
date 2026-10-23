@@ -82,7 +82,7 @@ export class BansService {
   /**
    * Решение по всем жалобам на объект и, если указана причина, бан его автора. Уже заблокированного
    * не блокируем повторно (и другой модератор мог успеть) — мера по жалобам применяется всё равно.
-   * Возвращает, кого уведомить: жалобщиков, заказ, закрытый по мере, и заказы забаненного.
+   * Возвращает, кого уведомить: жалобщиков, заказ, закрытый по мере, и заказы забаненного, — и кого забанили.
    */
   async resolveReports(
     decision: ReturnType<typeof parseReportDecision>,
@@ -102,13 +102,16 @@ export class BansService {
       moderatorTelegramId,
     );
     let bannedOrders: Awaited<ReturnType<BansService['ban']>> = [];
+    /** Кого заблокировали этим решением; null — бана не было (или другой модератор успел раньше). */
+    let bannedUserId: number | null = null;
     if (toBan)
       try {
         bannedOrders = await this.ban(toBan, banReason!);
+        bannedUserId = toBan;
       } catch (err) {
         if (!(err instanceof ForbiddenException)) throw err;
       }
-    return { reporters, closedOrder, bannedOrders };
+    return { reporters, closedOrder, bannedOrders, bannedUserId };
   }
 
   /** Модераторы задаются в env — их не блокируют. Возвращает пользователя. */

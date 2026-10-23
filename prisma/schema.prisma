@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["partialIndexes"]
 }
 
@@ -8,42 +8,42 @@ datasource db {
 }
 
 model User {
-  id         Int      @id @default(autoincrement())
-  telegramId BigInt   @unique
-  username   String?
-  firstName  String?
-  createdAt  DateTime @default(now())
+  id               Int       @id @default(autoincrement())
+  telegramId       BigInt    @unique
+  username         String?
+  firstName        String?
+  createdAt        DateTime  @default(now())
   /// Ссылки креатора на свои соцсети, по порядку; на одной площадке может быть несколько аккаунтов.
   /// Площадка — по домену ссылки (src/profiles/profile-input.ts, parseLinks).
-  socialLinks String[] @default([])
+  socialLinks      String[]  @default([])
   /// Кошелёк USDT (TRC20) для выплат — видят только сам креатор и модераторы (src/payouts/trc20.ts).
-  payoutWallet String?
+  payoutWallet     String?
   /// Когда кошелёк сменили на другой (первый ввод не считается) — модератор видит свежую смену у
   /// заявки на вывод: так выводят деньги с угнанного аккаунта.
-  walletChangedAt DateTime?
+  walletChangedAt  DateTime?
   /// Присылать ли сообщение о каждом новом заказе в каталоге — переключатель в профиле.
-  notifyNewOrders Boolean @default(true)
+  notifyNewOrders  Boolean   @default(true)
   /// Язык интерфейса, выбранный в профиле (src/i18n/i18n.ts, LANGS); null — по языку Telegram.
-  language        String?
+  language         String?
   /// language_code из Telegram — по нему язык, пока человек сам не выбрал; бот пишет на нём же.
   telegramLanguage String?
   /// Кабинет, открытый в мини-аппе последним (webapp/src/role.ts); null — ещё не выбирал.
   /// Только вкладки и стартовый экран: прав не даёт, быть можно и тем и другим.
-  cabinet    Cabinet?
+  cabinet          Cabinet?
   /// Заблокирован модератором: мини-апп показывает только экран блокировки, бот не пишет.
-  bannedAt   DateTime?
-  banReason  String?
+  bannedAt         DateTime?
+  banReason        String?
   /// Тема этого пользователя в группе поддержки (message_thread_id), создаётся при первом обращении.
-  supportTopicId Int?
+  supportTopicId   Int?
   /// В какой группе эта тема (SUPPORT_CHAT_ID на момент создания): номер темы уникален только внутри
   /// группы — после смены группы старый номер указал бы на чужую тему.
-  supportChatId  String?
+  supportChatId    String?
 
-  orders      Order[]
-  submissions Submission[]
-  orderViews  OrderView[]
-  reports     Report[]
-  payouts     Payout[]
+  orders         Order[]
+  submissions    Submission[]
+  orderViews     OrderView[]
+  reports        Report[]
+  payouts        Payout[]
   socialAccounts SocialAccount[]
   oauthPendings  OAuthPending[]
 
@@ -83,7 +83,9 @@ enum VideoOrientation {
   HORIZONTAL
 }
 
-/** Площадки роликов — коды из src/common/platforms.ts (PLATFORMS). */
+/**
+ * Площадки роликов — коды из src/common/platforms.ts (PLATFORMS).
+ */
 enum VideoPlatform {
   TIKTOK
   YOUTUBE
@@ -105,55 +107,55 @@ enum OrderCategory {
 }
 
 model Order {
-  id               Int           @id @default(autoincrement())
-  advertiser       User          @relation(fields: [advertiserId], references: [id])
-  advertiserId     Int
-  title            String
-  description      String
+  id                     Int               @id @default(autoincrement())
+  advertiser             User              @relation(fields: [advertiserId], references: [id])
+  advertiserId           Int
+  title                  String
+  description            String
   /// Ссылка на референс или материалы (бриф, пример ролика). Контакты в ней не пропускает order-input.
-  referenceUrl     String?
+  referenceUrl           String?
   /// Страница товара. Креатор ставит в описание ролика не её, а свою ссылку /r/<trackCode> —
   /// так считаем переходы. Мессенджеры и соцсети не пропускает order-input.
-  targetUrl        String?
+  targetUrl              String?
   /// Деньги — в сотых долях валюты (копейки, центы); в API — целые единицы, см. src/common/money.ts.
-  currency         Currency      @default(USDT)
+  currency               Currency          @default(USDT)
   /// Всё, что платит рекламодатель, включая комиссию площадки.
-  budgetMinor      Int
+  budgetMinor            Int
   /// Бюджет, который одобрил модератор последним; null — ещё не одобряли. Правка бюджета пишется
   /// в budgetMinor сразу — повышение сверх этого модератор подтверждает отдельно (доплата получена).
-  approvedBudgetMinor Int?
+  approvedBudgetMinor    Int?
   /// Комиссия площадки в процентах на момент создания: креаторам — budget × (100 − fee) / 100.
-  feePercent       Int
+  feePercent             Int
   /// Выплата креатору за 1000 просмотров. Ставит модератор при одобрении; до этого null.
-  cpmMinor         Int?
+  cpmMinor               Int?
   /// Ролик можно сдать, только когда он набрал столько просмотров.
-  minViews         Int           @default(250)
-  category         OrderCategory @default(OTHER)
+  minViews               Int               @default(250)
+  category               OrderCategory     @default(OTHER)
   /// Требования к ролику: длительность в секундах и ориентация; null — любая.
-  minDurationSec   Int?
-  maxDurationSec   Int?
-  orientation      VideoOrientation?
+  minDurationSec         Int?
+  maxDurationSec         Int?
+  orientation            VideoOrientation?
   /// Где можно публиковать ролик; пусто — на любой площадке.
-  platforms        VideoPlatform[] @default([])
-  deadline         DateTime?
-  status           OrderStatus   @default(PENDING_MODERATION)
-  moderatorId      BigInt?
-  moderatorComment String?
-  createdAt        DateTime      @default(now())
+  platforms              VideoPlatform[]   @default([])
+  deadline               DateTime?
+  status                 OrderStatus       @default(PENDING_MODERATION)
+  moderatorId            BigInt?
+  moderatorComment       String?
+  createdAt              DateTime          @default(now())
   /// Когда последний раз отправлен на проверку: при создании и при каждой правке. От него считаются
   /// сдвиг срока при публикации и время модерации (createdAt после правки уже не подходит).
-  moderationRequestedAt DateTime @default(now())
-  decidedAt        DateTime?
-  closedAt         DateTime?
+  moderationRequestedAt  DateTime          @default(now())
+  decidedAt              DateTime?
+  closedAt               DateTime?
   /// Креаторам напомнили, что срок истекает меньше чем через сутки. Сбрасывается при продлении.
   deadlineReminderSentAt DateTime?
   /// Рекламодателю отправлены советы по заказу (src/orders/order-insights.ts) — раз на заказ.
-  insightsSentAt DateTime?
+  insightsSentAt         DateTime?
   /// Когда началась последняя правка опубликованного заказа. Пока правку не одобрили (статус
   /// PENDING_MODERATION или EDIT_REJECTED), заказ заморожен: ролики не сдают, слоты не сгорают.
-  editedAt       DateTime?
+  editedAt               DateTime?
   /// Условия до этой правки — модератору: ролики, сданные раньше editedAt, проверяют по ним.
-  prevTerms      Json?
+  prevTerms              Json?
 
   submissions Submission[]
   views       OrderView[]
@@ -186,58 +188,58 @@ enum SubmissionStatus {
 }
 
 model Submission {
-  id                Int              @id @default(autoincrement())
-  order             Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderId           Int
-  creator           User             @relation(fields: [creatorId], references: [id])
-  creatorId         Int
-  videoUrl          String?
+  id                 Int              @id @default(autoincrement())
+  order              Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId            Int
+  creator            User             @relation(fields: [creatorId], references: [id])
+  creatorId          Int
+  videoUrl           String?
   /// Ссылка, приведённая к одному виду (src/common/platforms.ts, videoKey): один ролик — одна оплата.
-  videoKey          String?
+  videoKey           String?
   /// Код ссылки /r/<код> на страницу товара (Order.targetUrl): переходы считаются по креатору.
-  trackCode         String?          @unique
+  trackCode          String?          @unique
   /// Сколько раз перешли по ссылке креатора — для отчёта рекламодателю, на выплату не влияет.
-  clicks            Int              @default(0)
-  status            SubmissionStatus @default(IN_PROGRESS)
-  moderatorId       BigInt?
-  moderatorComment  String?
+  clicks             Int              @default(0)
+  status             SubmissionStatus @default(IN_PROGRESS)
+  moderatorId        BigInt?
+  moderatorComment   String?
   /// Просмотры: при сдаче — сколько указал креатор, после одобрения — сколько зафиксировал модератор.
-  views             Int?
+  views              Int?
   /// Лайки — для отчёта рекламодателю, на выплату не влияют. YouTube — из API, иначе вводит
   /// модератор по желанию; null — неизвестно.
-  likes             Int?
+  likes              Int?
   /// Деньги креатору за ролик: на проверке — резерв из бюджета, после одобрения — начислено.
   /// Отклонили — 0. Вместе по заказу не больше фонда выплат (src/orders/budget.ts).
-  payoutMinor       Int              @default(0)
+  payoutMinor        Int              @default(0)
   /// Холд закончился: через HOLD_DAYS после одобрения публикация на месте, просмотры для отчёта зафиксированы.
-  finalizedAt       DateTime?
+  finalizedAt        DateTime?
   /// Оценка рекламодателя 1–5 одобренному ролику, по желанию; менять нельзя, модератор может удалить.
-  rating            Int?
-  review            String?
+  rating             Int?
+  review             String?
   /// Отзыв с текстом ждёт модератора с этого момента; пока не null — в профиле креатора его нет.
   /// Оценка без текста публикуется сразу (src/submissions/submissions.service.ts, rate).
-  reviewQueuedAt    DateTime?
+  reviewQueuedAt     DateTime?
   /// Рекламодатель разрешил показывать видео в портфолио креатора.
-  portfolioAllowed  Boolean          @default(false)
-  createdAt         DateTime         @default(now())
-  submittedAt       DateTime?
+  portfolioAllowed   Boolean          @default(false)
+  createdAt          DateTime         @default(now())
+  submittedAt        DateTime?
   /// Условия заказа при сдаче (termsOf): по ним проверяют и оплачивают ролик, сколько бы раз заказ
   /// ни правили потом. null — сдан до появления поля (тогда Order.prevTerms, src/orders/order-status.ts).
-  terms             Json?
-  decidedAt         DateTime?
+  terms              Json?
+  decidedAt          DateTime?
   /// Креатору напомнили, что слот сгорает меньше чем через сутки.
   slotReminderSentAt DateTime?
 
-  /// Отклики по заказу; внешний ключ Postgres сам не индексирует.
-  @@index([orderId])
   /// Один отклик «в работе» на креатора и заказ — дубль (двойной тап) отсекает сама база.
   @@unique([orderId, creatorId], map: "Submission_one_in_progress", where: { status: "IN_PROGRESS" })
+  /// Один ролик нельзя сдать дважды — ни в тот же заказ, ни в другой, пока он на проверке или одобрен.
+  @@unique([videoKey], map: "Submission_video_once", where: raw("status = ANY (ARRAY['SUBMITTED'::\"SubmissionStatus\", 'MODERATOR_APPROVED'::\"SubmissionStatus\"])"))
+  /// Отклики по заказу; внешний ключ Postgres сам не индексирует.
+  @@index([orderId])
   /// «Мои отклики», профиль креатора, рейтинг.
   @@index([creatorId])
   /// Очередь модерации видео (SUBMITTED, старые первыми) и счётчики по статусам.
   @@index([status, submittedAt])
-  /// Один ролик нельзя сдать дважды — ни в тот же заказ, ни в другой, пока он на проверке или одобрен.
-  @@unique([videoKey], map: "Submission_video_once", where: raw("status = ANY (ARRAY['SUBMITTED'::\"SubmissionStatus\", 'MODERATOR_APPROVED'::\"SubmissionStatus\"])"))
 }
 
 /// На что жалоба. VIDEO и REVIEW — по id отклика (Submission), PROFILE — по id пользователя.
@@ -301,12 +303,12 @@ model Payout {
   createdAt   DateTime     @default(now())
   decidedAt   DateTime?
 
+  /// Одна открытая заявка на креатора — вторую (двойной тап) не пустит сама база.
+  @@unique([creatorId], map: "Payout_one_requested", where: { status: "REQUESTED" })
   /// История выплат креатора.
   @@index([creatorId])
   /// Очередь заявок (REQUESTED, старые первыми).
   @@index([status, createdAt])
-  /// Одна открытая заявка на креатора — вторую (двойной тап) не пустит сама база.
-  @@unique([creatorId], map: "Payout_one_requested", where: { status: "REQUESTED" })
 }
 
 /// Очередь уведомлений в чат бота (src/telegram/notifications.service.ts). Пишется при событии,
@@ -331,7 +333,9 @@ model Notification {
   @@index([priority, sendAfter])
 }
 
-/** Площадки, где креатор подключает свой аккаунт (OAuth): по его токену берём просмотры его роликов. */
+/**
+ * Площадки, где креатор подключает свой аккаунт (OAuth): по его токену берём просмотры его роликов.
+ */
 enum SocialPlatform {
   TIKTOK
   VK
@@ -360,10 +364,10 @@ model SocialAccount {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  /// У креатора может быть несколько аккаунтов одной площадки (AccountsService, MAX_PER_PLATFORM).
-  @@index([userId, platform])
   /// Один аккаунт площадки — одному креатору: чужой аккаунт к себе не подключить.
   @@unique([platform, externalId])
+  /// У креатора может быть несколько аккаунтов одной площадки (AccountsService, MAX_PER_PLATFORM).
+  @@index([userId, platform])
 }
 
 /**
@@ -397,4 +401,52 @@ model JobLease {
   /// Случайный id процесса-держателя.
   holder String
   until  DateTime
+}
+
+/// Что сделал модератор — тип строки журнала ModeratorAction.
+enum ModeratorActionType {
+  ORDER_APPROVE
+  ORDER_REJECT
+  VIDEO_APPROVE
+  VIDEO_REJECT
+  /// Итог холда зафиксирован: публикация на месте.
+  HOLD_FINALIZE
+  /// При итоге холда публикации нет — начисление отменено.
+  PUBLICATION_DELETED
+  REVIEW_APPROVE
+  REVIEW_REMOVE
+  /// Жалобы на объект: мера применена.
+  REPORT_ACTION
+  /// Жалобы на объект: нарушений нет.
+  REPORT_DISMISS
+  PAYOUT_PAID
+  PAYOUT_REJECT
+  USER_BAN
+  USER_UNBAN
+}
+
+/// Журнал решений модераторов — кабинет модератора, таблица команды и выгрузка CSV
+/// (src/moderation/moderator-actions.service.ts). Строки только добавляются: повторная модерация
+/// не затирает прежнюю, как moderatorId в самих заказах и роликах.
+model ModeratorAction {
+  id           Int                 @id @default(autoincrement())
+  /// Telegram ID модератора (MODERATOR_IDS) — как moderatorId в Order/Submission/Payout.
+  moderatorId  BigInt
+  type         ModeratorActionType
+  /// id заказа, отклика (ролик, холд, отзыв), заявки на вывод, пользователя; у жалоб — id объекта жалобы.
+  objectId     Int
+  /// У жалоб — на что они: ссылку на объект в кабинете строим по нему.
+  reportTarget ReportTarget?
+  /// Деньги решения, центы USDT: выплата, начисление за ролик, бюджет заказа.
+  amountMinor  Int?
+  /// Сколько объект ждал решения, секунды; null — неизвестно (бан, отзыв).
+  waitedSec    Int?
+  /// Причина: блокировки, отказа (заказ, ролик, выплата) — для истории пользователя.
+  comment      String?
+  createdAt    DateTime            @default(now())
+
+  /// Кабинет модератора: его действия за период, новые первыми.
+  @@index([moderatorId, createdAt])
+  /// Таблица команды и выгрузка: все действия за период.
+  @@index([createdAt])
 }

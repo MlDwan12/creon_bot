@@ -1,6 +1,8 @@
 import type { ConfigService } from '@nestjs/config';
 import { OrderStatus } from '@prisma/client';
 import { ModeratorGuard } from './auth/moderator.guard';
+import { ModUsersService } from './moderation/mod-users.service';
+import { ModeratorActionsService } from './moderation/moderator-actions.service';
 import { AnalyticsService } from './moderation/analytics.service';
 import { BansService } from './moderation/bans.service';
 import { ProfilesService } from './profiles/profiles.service';
@@ -47,6 +49,12 @@ const moderators = new ModeratorGuard({
 const bans = new BansService(prisma, reports, moderators);
 const users = new UsersService(prisma);
 const payouts = new PayoutsService(prisma);
+const moderatorActions = new ModeratorActionsService(prisma, {
+  get: () => '777,888',
+} as unknown as ConfigService);
+const modUsers = new ModUsersService(prisma, moderatorActions, {
+  get: () => '777',
+} as unknown as ConfigService);
 
 const DAY = 24 * 60 * 60 * 1000;
 /** Каждый сданный ролик — своя ссылка: один ролик нельзя сдать дважды (Submission_video_once). */
@@ -101,7 +109,7 @@ const statusOf = async (orderId: number) =>
 
 beforeEach(() =>
   prisma.$executeRawUnsafe(
-    'TRUNCATE "Report", "Submission", "Order", "User" RESTART IDENTITY CASCADE',
+    'TRUNCATE "ModeratorAction", "Report", "Submission", "Order", "User" RESTART IDENTITY CASCADE',
   ),
 );
 afterAll(() => prisma.$disconnect());
@@ -2126,5 +2134,113 @@ describe('блокировка', () => {
       await prisma.user.findUniqueOrThrow({ where: { id: u.id } }),
     ).toMatchObject({ bannedAt: null, banReason: null });
     await expect(bans.unban(u.id)).rejects.toThrow('не заблокирован');
+  });
+});
+
+describe('журнал модераторов', () => {
+  it('сводка по каждому из MODERATOR_IDS: счётчики, сумма выплат, медиана ожидания', async () => {
+    const ago = (min: number) => new Date(Date.now() - min * 60_000);
+    for (const [type, objectId, waitMin, amountMinor] of [
+      ['ORDER_APPROVE', 1, 10, 50_000],
+      ['ORDER_REJECT', 2, 30, null],
+      ['ORDER_APPROVE', 3, 50, 70_000],
+      ['PAYOUT_PAID', 4, 5, 1_250],
+    ] as const)
+      await moderatorActions.log({
+        moderatorId: 777n,
+        type,
+        objectId,
+        amountMinor,
+        waitingSince: ago(waitMin),
+      });
+    // старое действие — вне периода в 7 дней
+    await prisma.moderatorAction.create({
+      data: {
+        moderatorId: 777n,
+        type: 'VIDEO_APPROVE',
+        objectId: 5,
+        createdAt: ago(10 * 24 * 60),
+      },
+    });
+
+    const week = await moderatorActions.stats(ago(7 * 24 * 60));
+    const me = week.find((m) => m.moderatorId === '777')!;
+    expect(me.counts).toMatchObject({
+      ORDER_APPROVE: 2,
+      ORDER_REJECT: 1,
+      PAYOUT_PAID: 1,
+      VIDEO_APPROVE: 0,
+    });
+    expect(me.paid).toBe(12.5);
+    // медиана по заказам — из 10, 30 и 50 минут
+    expect(me.medianWaitSec.orders).toBeGreaterThanOrEqual(30 * 60 - 5);
+    expect(me.medianWaitSec.orders).toBeLessThanOrEqual(30 * 60 + 5);
+    expect(me.medianWaitSec.videos).toBeNull();
+    // второй модератор без действий — тоже в таблице, с нулями
+    expect(
+      week.find((m) => m.moderatorId === '888')?.counts.ORDER_APPROVE,
+    ).toBe(0);
+
+    const all = await moderatorActions.stats();
+    expect(all.find((m) => m.moderatorId === '777')!.counts.VIDEO_APPROVE).toBe(
+      1,
+    );
+
+    const csv = await moderatorActions.csv(undefined, 888n);
+    expect(csv.split('\r\n')).toHaveLength(1); // только заголовок
+  });
+});
+
+describe('вкладка «Люди»', () => {
+  it('список: фильтр «заблокированные» и поиск; история: жалоба, решение, бан — кто и за что', async () => {
+    const [bad, reporter, other] = [await user(), await user(), await user()];
+    await prisma.report.create({
+      data: {
+        reporterId: reporter.id,
+        target: 'PROFILE',
+        targetId: bad.id,
+        reason: 'FRAUD',
+        comment: 'просит оплату напрямую',
+      },
+    });
+    await moderatorActions.log({
+      moderatorId: 777n,
+      type: 'REPORT_ACTION',
+      objectId: bad.id,
+      reportTarget: 'PROFILE',
+    });
+    await bans.ban(bad.id, 'обход площадки');
+    await moderatorActions.log({
+      moderatorId: 777n,
+      type: 'USER_BAN',
+      objectId: bad.id,
+      comment: 'обход площадки',
+    });
+    // чужая жалоба и бан другого — не в истории bad
+    await moderatorActions.log({
+      moderatorId: 777n,
+      type: 'USER_BAN',
+      objectId: other.id,
+    });
+
+    const banned = await modUsers.list('', 'banned', 0);
+    expect(banned.items.map((u) => u.id)).toEqual([bad.id]);
+    expect(banned.items[0].banned?.reason).toBe('обход площадки');
+    expect(
+      (await modUsers.list(`@${reporter.username}`, 'all', 0)).items.map(
+        (u) => u.id,
+      ),
+    ).toEqual([reporter.id]);
+
+    const h = (await modUsers.history(bad.id))!;
+    expect(h.ban).toMatchObject({ reason: 'обход площадки', by: 'id777' });
+    expect(
+      h.events.map((e) => (e.kind === 'report' ? 'report' : e.type)).sort(),
+    ).toEqual(['REPORT_ACTION', 'USER_BAN', 'report']);
+    const r = h.events.find((e) => e.kind === 'report');
+    expect(r).toMatchObject({
+      reporter: `@${reporter.username}`,
+      comment: 'просит оплату напрямую',
+    });
   });
 });

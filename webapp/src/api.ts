@@ -827,6 +827,119 @@ export function fetchWhatWorks(days?: number) {
   );
 }
 
+/** Строка вкладки «Люди» — см. src/moderation/mod-users.service.ts. */
+export interface ModUserRow {
+  id: number;
+  label: string;
+  telegramId: string;
+  createdAt: string;
+  banned: { at: string; reason: string | null } | null;
+  /** Брал заказы: одобрено роликов и доступно к выводу, USDT. */
+  creator: { approved: number; available: number } | null;
+  /** Размещал заказы: всего и открыто. */
+  advertiser: { orders: number; open: number } | null;
+}
+export type ModUsersFilter = 'all' | 'creators' | 'advertisers' | 'banned';
+
+export function fetchModUsers(
+  search: string,
+  filter: ModUsersFilter,
+  page: number,
+) {
+  const query = new URLSearchParams({ search, filter, page: String(page) });
+  return request<{ items: ModUserRow[]; total: number }>(
+    'GET',
+    `/api/mod/users?${query}`,
+  );
+}
+
+/** История модерации пользователя: жалобы на него, решения по ним, блокировки. */
+export interface ModUserHistory {
+  ban: { at: string; reason: string | null; by: string | null } | null;
+  events: (
+    | {
+        kind: 'report';
+        at: string;
+        target: ReportTarget;
+        targetId: number;
+        reason: string;
+        comment: string | null;
+        reporter: string;
+        reporterId: number;
+        status: 'OPEN' | 'ACTIONED' | 'DISMISSED';
+      }
+    | {
+        kind: 'action';
+        at: string;
+        type: ModeratorActionType;
+        target: ReportTarget | null;
+        targetId: number;
+        comment: string | null;
+        moderator: string;
+      }
+  )[];
+}
+
+export function fetchUserHistory(userId: number) {
+  return request<ModUserHistory>('GET', `/api/mod/users/${userId}/history`);
+}
+
+/** Действие модератора — журнал ModeratorAction (src/moderation/moderator-actions.service.ts). */
+export type ModeratorActionType =
+  | 'ORDER_APPROVE'
+  | 'ORDER_REJECT'
+  | 'VIDEO_APPROVE'
+  | 'VIDEO_REJECT'
+  | 'HOLD_FINALIZE'
+  | 'PUBLICATION_DELETED'
+  | 'REVIEW_APPROVE'
+  | 'REVIEW_REMOVE'
+  | 'REPORT_ACTION'
+  | 'REPORT_DISMISS'
+  | 'PAYOUT_PAID'
+  | 'PAYOUT_REJECT'
+  | 'USER_BAN'
+  | 'USER_UNBAN';
+
+export interface ModeratorStats {
+  moderatorId: string;
+  label: string;
+  counts: Record<ModeratorActionType, number>;
+  /** Проведено выплат, USDT. */
+  paid: number;
+  /** Медиана ожидания до решения, секунды; null — решений этого вида не было. */
+  medianWaitSec: Record<
+    'orders' | 'videos' | 'holds' | 'reports' | 'payouts',
+    number | null
+  >;
+}
+
+/** Кабинет модератора: команда за период (с ним самим) и его последние действия. */
+export interface ModMe {
+  moderatorId: string;
+  team: ModeratorStats[];
+  recent: {
+    id: number;
+    type: ModeratorActionType;
+    objectId: number;
+    reportTarget: ReportTarget | null;
+    amount: number | null;
+    createdAt: string;
+  }[];
+}
+
+export function fetchModMe(days?: number) {
+  return request<ModMe>('GET', `/api/mod/me${days ? `?days=${days}` : ''}`);
+}
+
+/** Действия за период файлом CSV в чат с ботом: свои или всей команды. */
+export function sendModActionsCsv(
+  days: number | undefined,
+  scope: 'me' | 'team',
+) {
+  return request<{ ok: true }>('POST', '/api/mod/me/csv', { days, scope });
+}
+
 /** statuses — фильтр по статусам; пусто — все. */
 export function fetchAllOrders(page: number, statuses: OrderStatus[] = []) {
   const status = statuses.length ? `&status=${statuses.join(',')}` : '';

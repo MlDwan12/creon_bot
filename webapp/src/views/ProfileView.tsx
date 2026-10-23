@@ -21,6 +21,7 @@ import {
 } from '../api';
 import AppSettings from '../components/AppSettings';
 import LoadState from '../components/LoadState';
+import ModHistory from '../components/ModHistory';
 import PlatformIcon from '../components/PlatformIcon';
 import UserAvatar from '../components/UserAvatar';
 import { describeVideoUrl, formatDate, formatMoney } from '../format';
@@ -315,6 +316,9 @@ export default function ProfileView() {
             </button>
           )}
         </section>
+      )}
+      {moderator && (
+        <ModHistory userId={profile.id} version={profile.ban?.at ?? 'active'} />
       )}
 
       {/* Свой профиль — тремя группами: деньги, что видят заказчики, настройки. Чужой — только витрина. */}
