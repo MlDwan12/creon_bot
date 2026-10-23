@@ -70,8 +70,29 @@ export const MAX_ACTIVE_ORDERS = 10;
 const CHANGED_WHILE_VIEWED =
   'Заказ уже обработан или изменён, пока вы его смотрели — откройте его заново';
 
-/** Сколько живёт число «N открытых заказов» в заголовке каталога. */
+/** Сколько живёт число «N открытых заказов» в заголовке каталога (и список фильтров с заказами). */
 const OPEN_COUNT_TTL_MS = 30_000;
+
+/** Открытые заказы каталога с фильтрами. Заказ без площадок подходит для любой. */
+function openWhere(
+  category: OrderCategory | undefined,
+  platform: VideoPlatform | undefined,
+): Prisma.OrderWhereInput {
+  return {
+    status: OrderStatus.OPEN,
+    ...(category ? { category } : {}),
+    ...(platform
+      ? {
+          AND: {
+            OR: [
+              { platforms: { isEmpty: true } },
+              { platforms: { has: platform } },
+            ],
+          },
+        }
+      : {}),
+  };
+}
 
 @Injectable()
 export class OrdersService {
@@ -81,6 +102,13 @@ export class OrdersService {
   private readonly openCounts = new Map<
     string,
     { value: number; at: number }
+  >();
+  private readonly facets = new Map<
+    string,
+    {
+      value: { categories: OrderCategory[]; platforms: VideoPlatform[] };
+      at: number;
+    }
   >();
 
   // ponytail: count и create не атомарны — два одновременных запроса могут дать 11-й заказ.
@@ -148,21 +176,7 @@ export class OrdersService {
     after: { createdAt: Date; id: number } | undefined,
     take: number,
   ) {
-    const where: Prisma.OrderWhereInput = {
-      status: OrderStatus.OPEN,
-      ...(category ? { category } : {}),
-      // Заказ без площадок подходит для любой.
-      ...(platform
-        ? {
-            AND: {
-              OR: [
-                { platforms: { isEmpty: true } },
-                { platforms: { has: platform } },
-              ],
-            },
-          }
-        : {}),
-    };
+    const where = openWhere(category, platform);
     const [rows, total] = await Promise.all([
       this.prisma.order.findMany({
         where: after
@@ -199,6 +213,42 @@ export class OrdersService {
       ...o,
       freeMinor: budgetState(o, spent.get(o.id) ?? 0).free,
     }));
+  }
+
+  /**
+   * Какие категории и площадки есть среди открытых заказов — фильтры каталога показывают только их,
+   * чтобы креатор не перебирал пустые. Перекрёстно: категории — с учётом выбранной площадки,
+   * площадки — с учётом выбранной категории. Заказ без площадок подходит для любой.
+   */
+  async openFacets(
+    category: OrderCategory | undefined,
+    platform: VideoPlatform | undefined,
+  ) {
+    const key = `${category ?? 'ALL'}:${platform ?? 'ALL'}`;
+    const cached = this.facets.get(key);
+    if (cached && Date.now() - cached.at < OPEN_COUNT_TTL_MS)
+      return cached.value;
+    const [byCategory, byPlatforms] = await Promise.all([
+      this.prisma.order.groupBy({
+        by: ['category'],
+        where: openWhere(undefined, platform),
+      }),
+      // наборов площадок немного (их пять), поэтому distinct по массиву, а не по каждому заказу
+      this.prisma.order.findMany({
+        where: openWhere(category, undefined),
+        distinct: ['platforms'],
+        select: { platforms: true },
+      }),
+    ]);
+    const platforms = byPlatforms.some((o) => o.platforms.length === 0)
+      ? Object.values(VideoPlatform)
+      : [...new Set(byPlatforms.flatMap((o) => o.platforms))];
+    const value = {
+      categories: byCategory.map((c) => c.category),
+      platforms,
+    };
+    this.facets.set(key, { value, at: Date.now() });
+    return value;
   }
 
   private async countOpen(key: string, where: Prisma.OrderWhereInput) {

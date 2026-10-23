@@ -33,7 +33,7 @@ function initialLang(): Lang {
 
 void i18next.use(initReactI18next).init({
   lng: initialLang(),
-  fallbackLng: 'ru',
+  fallbackLng: 'en',
   resources: { ru: { translation: ru }, en: { translation: en } },
   // React сам экранирует текст в разметке
   interpolation: { escapeValue: false },
