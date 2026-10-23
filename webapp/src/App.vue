@@ -5,7 +5,7 @@ import OnboardingOverlay from './components/OnboardingOverlay.vue';
 import RoleSwitch from './components/RoleSwitch.vue';
 import TabBar from './components/TabBar.vue';
 import { banned, fetchMe } from './api';
-import { i18next, setLang } from './i18n';
+import { i18next } from './i18n';
 import { inTelegram, openTelegramLink, webApp } from './telegram';
 
 const route = useRoute();
@@ -27,9 +27,7 @@ if (inTelegram) {
   webApp!.BackButton.onClick(goBack);
   // «⋯ → Настройки» в шапке Telegram ведёт в поддержку — на любом экране, не занимая места.
   void fetchMe()
-    .then(({ supportUrl, isModerator, language }) => {
-      // язык с сервера главнее догадки при запуске (выбран в профиле на другом устройстве)
-      if (language !== i18next.language) setLang(language);
+    .then(({ supportUrl, isModerator }) => {
       if (!supportUrl) return;
       // форма в мини-аппе, а не переход в чат: так приложение не сворачивается
       const path = isModerator ? '/mod/support' : '/support';

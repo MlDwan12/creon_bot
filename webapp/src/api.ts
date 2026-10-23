@@ -1,5 +1,5 @@
 import { ref } from 'vue';
-import { i18next, type Lang } from './i18n';
+import { i18next, setLang, type Lang } from './i18n';
 import { getInitData } from './telegram';
 
 /** Аккаунт заблокирован — App.vue показывает экран блокировки вместо любого экрана. */
@@ -788,7 +788,12 @@ export function updateLanguage(language: Lang | null) {
 
 export function fetchMe() {
   // неудачный запрос не запоминаем — иначе сбой сети считался бы ответом до перезапуска
-  return (me ??= request<Me>('GET', '/api/me').catch((err) => {
+  // язык с сервера главнее догадки при запуске (выбран в профиле, в т.ч. на другом устройстве) —
+  // применяем при каждом ответе: экран профиля не покажет «Русский» при английском интерфейсе
+  return (me ??= request<Me>('GET', '/api/me').then((m) => {
+    if (m.language !== i18next.language) setLang(m.language);
+    return m;
+  }).catch((err) => {
     me = undefined;
     throw err;
   }));
