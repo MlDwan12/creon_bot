@@ -1,0 +1,138 @@
+.onboarding {
+  position: fixed;
+  inset: 0;
+  /* поверх вкладок и нижних кнопок экранов */
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 16px var(--safe-bottom);
+  background: var(--bg);
+  overflow-y: auto;
+  /* докрутили до конца — дальше не прокручивается экран под окном */
+  overscroll-behavior: contain;
+}
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 44px;
+}
+.counter {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--hint);
+}
+.link {
+  min-height: 44px;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--hint);
+  font-size: 15px;
+  font-weight: 600;
+}
+.dots {
+  display: flex;
+  gap: 6px;
+}
+.dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--fill);
+}
+.dots .on {
+  width: 22px;
+  background: var(--accent);
+}
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  background: var(--accent-soft);
+  color: var(--link);
+}
+.onboarding h1 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.15;
+}
+.points {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 16px;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  list-style: none;
+}
+.points li {
+  display: grid;
+  grid-template-columns: 8px 1fr;
+  gap: 10px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+/* маркер — точка цвета акцента, вровень с первой строкой */
+.points li::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  margin-top: 7px;
+  border-radius: 4px;
+  background: var(--accent);
+}
+.buttons {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  margin-top: auto;
+}
+.back {
+  height: 54px;
+  padding: 0 18px;
+  border: none;
+  border-radius: var(--radius-button);
+  background: var(--fill);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 800;
+}
+/* Низкий экран (iPhone SE и меньше): плотнее, чтобы шаг помещался без прокрутки */
+@media (max-height: 640px) {
+  .onboarding {
+    gap: 10px;
+    padding-top: 8px;
+  }
+  .top {
+    min-height: 36px;
+  }
+  .icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 13px;
+  }
+  .icon svg {
+    width: 22px;
+    height: 22px;
+  }
+  .onboarding h1 {
+    font-size: 22px;
+  }
+  .points {
+    gap: 8px;
+    padding: 12px 14px;
+  }
+  .points li {
+    font-size: 14px;
+    line-height: 1.35;
+  }
+  .points li::before {
+    margin-top: 6px;
+  }
+}
