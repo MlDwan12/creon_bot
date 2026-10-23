@@ -1,0 +1,237 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 16px calc(96px + var(--safe-bottom));
+}
+.page h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.summary {
+  margin: -8px 0 0;
+  color: var(--hint);
+  font-size: 14px;
+}
+.summary .long {
+  color: var(--orange-text);
+  font-weight: 700;
+}
+.chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 0 -16px;
+  padding: 0 16px;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to right, #000 85%, transparent);
+}
+/* Мышью ряд не прокрутить свайпом (компьютер) — там чипы переносятся на следующую строку. */
+@media (hover: hover) and (pointer: fine) {
+  .chips {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    mask-image: none;
+  }
+}
+.chips button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1.5px solid var(--separator);
+  border-radius: 22px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+.chips button.empty {
+  color: var(--hint);
+}
+.chips button[aria-selected='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.count {
+  min-width: 22px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border-radius: 11px;
+  background: var(--fill);
+  font-size: 12px;
+  line-height: 22px;
+  text-align: center;
+}
+.chips button[aria-selected='true'] .count {
+  background: color-mix(in srgb, var(--accent-text) 22%, transparent);
+}
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.report-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.badge {
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 600;
+}
+.subject {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+a.subject {
+  color: var(--link);
+}
+.quote {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--fill);
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.reasons {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+}
+.actions button {
+  flex: 1;
+  min-height: 44px;
+  border: none;
+  border-radius: 10px;
+  background: var(--fill);
+  color: var(--text);
+  font-size: 15px;
+}
+.actions .danger {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  font-weight: 600;
+}
+.ban-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ban-form textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--separator);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+.ban-link {
+  align-self: center;
+  min-height: 44px;
+  border: none;
+  background: none;
+  color: var(--danger);
+  font-size: 14px;
+}
+.error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--danger);
+}
+.flag {
+  color: var(--orange-text);
+}
+.flag-icon {
+  vertical-align: -2px;
+}
+.stars {
+  color: var(--accent);
+  letter-spacing: 1px;
+}
+.list {
+  border-radius: 14px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 14px;
+  color: var(--text);
+  text-decoration: none;
+}
+.row + .row {
+  border-top: 1px solid var(--separator);
+}
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-grow: 1;
+  min-width: 0;
+}
+.title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.sub {
+  font-size: 14px;
+  color: var(--hint);
+}
+.wait {
+  flex: none;
+  font-size: 13px;
+  color: var(--hint);
+}
+.wait.long {
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: var(--orange-soft);
+  color: var(--orange-text);
+  font-weight: 600;
+}
+.chevron {
+  color: var(--hint);
+  font-size: 22px;
+}
+.hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--hint);
+}
+.empty {
+  margin: 0;
+  padding: 16px;
+  color: var(--hint);
+}

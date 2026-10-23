@@ -1,0 +1,207 @@
+.author {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  background: var(--orange-soft);
+  color: var(--orange-text);
+}
+.author.verified {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+.author.inProfile {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.author a {
+  color: inherit;
+}
+.rows {
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  font-size: 15px;
+}
+.row + .row {
+  border-top: 1px solid var(--separator);
+}
+.row span:first-child {
+  color: var(--hint);
+}
+.views {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.views input {
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+.views input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.head a {
+  color: var(--link);
+  font-weight: 600;
+  text-decoration: none;
+}
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 16px calc(96px + var(--safe-bottom));
+}
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.page h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+.video {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 20px;
+  background: var(--ink);
+  color: var(--ink-text);
+  text-decoration: none;
+}
+.link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.url {
+  font-size: 13px;
+  color: var(--ink-hint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.link strong {
+  color: var(--link);
+}
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.text {
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  font-size: 15px;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+.hint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--hint);
+}
+.error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--danger);
+}
+.page :global(.bottom-bar).two {
+  display: grid;
+  /* «Одобрить · 2,5 USDT» длиннее «Отклонить» — ей больше места, без переноса */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  gap: 10px;
+}
+.page :global(.bottom-bar) button {
+  white-space: nowrap;
+}
+.page :global(.bottom-bar) button {
+  height: 50px;
+  border: none;
+  border-radius: 12px;
+  font-size: 17px;
+  font-weight: 600;
+}
+.page :global(.bottom-bar) button:disabled {
+  opacity: 0.5;
+}
+/* первый шаг отказа — спокойная кнопка, красная — только подтверждение с причиной */
+.reject,
+.secondary {
+  background: var(--fill);
+  color: var(--text);
+}
+.reject {
+  color: var(--danger);
+}
+.reject-confirm {
+  background: var(--danger);
+  color: var(--accent-text);
+}
+.author {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.author .icon {
+  flex: none;
+  margin-top: 1px;
+}
+.checks {
+  display: flex;
+  flex-direction: column;
+  padding: 0 16px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  font-size: 15px;
+}
+.check + .check {
+  border-top: 1px solid var(--separator);
+}
+.check input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--success);
+}
+.task summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--link);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.approve {
+  background: var(--success);
+  color: var(--accent-text);
+}

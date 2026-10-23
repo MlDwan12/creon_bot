@@ -1,0 +1,169 @@
+.cpm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cpm input {
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+.cpm input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 16px calc(96px + var(--safe-bottom));
+}
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.badge {
+  align-self: flex-start;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: var(--fill);
+  font-size: 13px;
+  font-weight: 600;
+}
+.badge.pending {
+  background: var(--orange-soft);
+  color: var(--orange-text);
+}
+.page h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+.rows {
+  border-radius: 14px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: 16px;
+}
+.row span:first-child {
+  color: var(--hint);
+}
+.row + .row {
+  border-top: 1px solid var(--separator);
+}
+.text {
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  font-size: 16px;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+.contacts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--orange-soft);
+  color: var(--orange-text);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.hint {
+  margin: 0;
+  color: var(--hint);
+}
+.error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--danger);
+}
+.page :global(.bottom-bar).two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.page :global(.bottom-bar) button {
+  height: 50px;
+  border: none;
+  border-radius: 12px;
+  font-size: 17px;
+  font-weight: 600;
+}
+.page :global(.bottom-bar) button:disabled {
+  opacity: 0.5;
+}
+/* первый шаг отказа — спокойная кнопка, красная — только подтверждение с причиной */
+.reject,
+.secondary {
+  background: var(--fill);
+  color: var(--text);
+}
+.reject {
+  color: var(--danger);
+}
+.reject-confirm {
+  background: var(--danger);
+  color: var(--accent-text);
+}
+.contacts strong {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.contacts .icon {
+  flex: none;
+  margin-top: 2px;
+}
+.presets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.presets button {
+  min-height: 48px;
+  border: 1.5px solid var(--separator);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 800;
+}
+.presets button[aria-checked='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.approve {
+  background: var(--success);
+  color: var(--accent-text);
+}
+.reference {
+  margin: 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.reference a {
+  color: var(--link);
+}

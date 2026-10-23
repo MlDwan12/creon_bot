@@ -1,0 +1,25 @@
+.roleSwitch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 12px 16px 0;
+  padding: 3px;
+  border-radius: 14px;
+  background: var(--fill);
+}
+.roleSwitch a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 6px;
+  border-radius: 11px;
+  color: var(--hint);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+.roleSwitch a[aria-current] {
+  background: var(--text);
+  color: var(--bg);
+}

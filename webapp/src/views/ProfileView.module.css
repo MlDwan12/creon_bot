@@ -1,0 +1,416 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 16px calc(96px + var(--safe-bottom));
+}
+.head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.who {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.page h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.hint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--hint);
+}
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.tile strong {
+  font-size: 26px;
+}
+.tile span {
+  font-size: 13px;
+  color: var(--hint);
+}
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.block :global(.section-title) {
+  padding: 0;
+}
+/* Баланс — тёмная плашка с лаймовой суммой, как в макете. */
+.balance {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 18px;
+  border-radius: var(--radius-card);
+  background: var(--ink);
+  color: var(--ink-text);
+  text-decoration: none;
+}
+.balance span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.balance small {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-hint);
+}
+.balance strong {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--lime);
+}
+.balance-action {
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--lime);
+  color: var(--lime-text);
+  font-weight: 800;
+}
+.account-row > span {
+  flex: 1;
+}
+.account-action {
+  flex: none;
+  min-height: 44px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--fill);
+  color: var(--link);
+  font-size: 15px;
+  font-weight: 600;
+}
+.add-account {
+  align-self: flex-start;
+  padding: 4px 2px;
+  border: none;
+  background: none;
+  color: var(--link);
+  font-size: 15px;
+}
+.account-action.quiet {
+  color: var(--hint);
+  font-weight: 400;
+}
+.switch-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.switch-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.switch-row small {
+  font-size: 13px;
+  color: var(--hint);
+}
+/* нативный чекбокс в виде переключателя */
+.switch-row input {
+  flex: none;
+  appearance: none;
+  position: relative;
+  width: 51px;
+  height: 31px;
+  margin: 0;
+  border-radius: 16px;
+  background: var(--fill);
+  transition: background 0.2s;
+}
+.switch-row input::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s;
+}
+.switch-row input:checked {
+  background: var(--accent);
+}
+.switch-row input:checked::after {
+  transform: translateX(20px);
+}
+.wallet {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0 14px 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 18px;
+  background: var(--accent-soft);
+  color: var(--link);
+  font-weight: 600;
+  text-decoration: none;
+}
+.edit {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--link);
+  font-size: 15px;
+}
+.links-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.links-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--hint);
+}
+.link-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.link-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 600;
+}
+.link-remove {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 12px;
+  background: var(--fill);
+  color: var(--hint);
+}
+.link-add {
+  display: flex;
+  gap: 8px;
+}
+.link-add input {
+  flex: 1;
+  min-width: 0;
+}
+.link-add-button {
+  flex: none;
+  min-height: 44px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--link);
+  font-size: 15px;
+  font-weight: 700;
+}
+.link-add-button:disabled {
+  opacity: 0.5;
+}
+.links-form input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--separator);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+.buttons {
+  display: flex;
+  gap: 8px;
+}
+.buttons button {
+  flex: 1;
+  min-height: 44px;
+  border: none;
+  border-radius: 10px;
+  background: var(--fill);
+  color: var(--text);
+  font-size: 15px;
+}
+.buttons .primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+.play {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--ink-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+.play.done {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+.review {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.review-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.stars {
+  color: var(--accent);
+  font-size: 17px;
+  letter-spacing: 1px;
+}
+.review-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.page :global(.quiet-link).start {
+  align-self: flex-start;
+  padding: 0;
+}
+/* группы своего профиля: «Выплаты», «Публичный профиль», «Настройки» */
+.group {
+  margin: 12px 0 -4px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+}
+.group-hint {
+  margin-top: -8px;
+}
+.wallet-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: var(--orange-soft);
+  color: var(--orange-text);
+  font-size: 15px;
+}
+.wallet-cta :global(.main-button) {
+  height: 48px;
+  background: var(--orange);
+  color: var(--lime-text);
+}
+.ban {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+}
+.ban p {
+  margin: 0;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.ban textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--separator);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+.buttons .danger {
+  background: var(--danger);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.remove {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--danger);
+  font-size: 14px;
+}
+.error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--danger);
+}

@@ -97,11 +97,11 @@
   },
   "settings": {
     "themeTitle": "Оформление",
-    "themeAuto": "Как в Telegram",
+    "themeAuto": "Telegram",
     "themeLight": "Светлая",
     "themeDark": "Тёмная",
     "languageTitle": "Язык",
-    "languageAuto": "Как в Telegram",
+    "languageAuto": "Telegram",
     "languageError": "Не удалось сменить язык"
   },
   "common": {

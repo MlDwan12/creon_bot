@@ -1,0 +1,118 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 16px calc(96px + var(--safe-bottom));
+}
+.page h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+.hint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--hint);
+}
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.row strong {
+  font-size: 20px;
+}
+.wait {
+  font-size: 13px;
+  color: var(--hint);
+}
+.wait.long {
+  color: var(--orange-text);
+  font-weight: 600;
+}
+.creator {
+  color: var(--link);
+  text-decoration: none;
+}
+.wallet {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--fill);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+.wallet span {
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.wallet small {
+  flex: none;
+  color: var(--link);
+  font-size: 13px;
+  font-weight: 600;
+}
+.page textarea {
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--separator);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  resize: vertical;
+}
+.two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.two button {
+  height: 44px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.secondary {
+  background: var(--fill);
+  color: var(--text);
+}
+.approve {
+  background: var(--success);
+  color: var(--accent-text);
+}
+.reject {
+  background: var(--danger);
+  color: var(--accent-text);
+}
+.error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--danger);
+}
+.banned {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}

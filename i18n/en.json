@@ -95,11 +95,11 @@
   },
   "settings": {
     "themeTitle": "Appearance",
-    "themeAuto": "Same as Telegram",
+    "themeAuto": "Telegram",
     "themeLight": "Light",
     "themeDark": "Dark",
     "languageTitle": "Language",
-    "languageAuto": "Same as Telegram",
+    "languageAuto": "Telegram",
     "languageError": "Couldn't change the language"
   },
   "common": {

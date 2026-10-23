@@ -1,5 +1,4 @@
-import * as Sentry from '@sentry/vue';
-import type { App } from 'vue';
+import * as Sentry from '@sentry/react';
 
 /**
  * Ошибки мини-аппа у пользователей — в Sentry: упавший экран в Telegram мы иначе не увидим, пока
@@ -9,15 +8,14 @@ import type { App } from 'vue';
  * Authorization — подписанные данные Telegram), ни тел, ни параметров адреса, ни записи экрана —
  * только ошибка, стектрейс и экран.
  */
-/** Адрес без #…: там бывает подписанный initData (#tgWebAppData=…), если ошибка случилась до main.ts. */
+/** Адрес без #…: там бывает подписанный initData (#tgWebAppData=…), если ошибка случилась до main.tsx. */
 const withoutHash = (url: unknown) =>
   typeof url === 'string' ? url.replace(/#.*$/, '') : url;
 
-export function initMonitoring(app: App) {
+export function initMonitoring() {
   const dsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
   if (!dsn) return;
   Sentry.init({
-    app,
     dsn,
     // стенд — по домену: fixumapp.com или dev.creon.couchreboot.site (сборка у них одна)
     environment: location.hostname,
@@ -37,7 +35,8 @@ export function initMonitoring(app: App) {
         delete event.request.cookies;
         delete event.request.query_string;
         delete event.request.data;
-        event.request.url = withoutHash(event.request.url) as string | undefined;
+        event.request.url = withoutHash(event.request.url) as
+          string | undefined;
       }
       return event;
     },
