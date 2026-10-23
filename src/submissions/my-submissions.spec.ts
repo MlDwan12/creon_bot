@@ -61,6 +61,7 @@ const submission = (
   submittedAt: null,
   decidedAt: null,
   slotReminderSentAt: null,
+  terms: null,
   order: order(orderId),
   ...extra,
 });

@@ -40,7 +40,7 @@ void i18n.init({
     ]),
   ),
   lng: 'ru',
-  fallbackLng: 'ru',
+  fallbackLng: 'en',
   // экранирование — там, где текст уходит в HTML (бот), а не здесь
   interpolation: { escapeValue: false },
   initAsync: false,

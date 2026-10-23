@@ -21,7 +21,8 @@ import { fromMinor } from '../common/money';
 import { NotificationsService } from '../telegram/notifications.service';
 import { creatorLabel } from '../common/format';
 import { budgetRaised, payoutPool, HOLD_DAYS } from '../orders/budget';
-import { OrdersService, termsOf } from '../orders/orders.service';
+import { OrdersService } from '../orders/orders.service';
+import { submittedTerms } from '../orders/order-status';
 import { DAY_MS } from '../orders/deadline';
 import { authorInLinks, authorUrl, platformOf } from '../common/platforms';
 import { SubmissionsService } from '../submissions/submissions.service';
@@ -339,12 +340,10 @@ export class ModerationController {
         : new Map<string, CountedVideo>(),
     ]);
     const stats = counted.get(s.videoUrl ?? '');
-    // Сдан до правки заказа — проверять по условиям, которые креатор видел при сдаче.
-    const prev =
-      s.order.editedAt && s.submittedAt && s.submittedAt < s.order.editedAt
-        ? (s.order.prevTerms as ReturnType<typeof termsOf> | null)
-        : null;
-    const terms = { ...s.order, ...prev };
+    // Проверять по условиям, которые креатор видел при сдаче (те же, по которым начислят).
+    const terms = { ...s.order, ...submittedTerms(s.order, s) };
+    const changedSince =
+      !!s.order.editedAt && !!s.submittedAt && s.submittedAt < s.order.editedAt;
     return {
       id: s.id,
       status: s.status,
@@ -374,7 +373,7 @@ export class ModerationController {
         cpm: fromMinor(terms.cpmMinor),
         minViews: terms.minViews,
         free: fromMinor(budget.free),
-        termsBeforeEdit: prev !== null,
+        termsBeforeEdit: changedSince,
       },
     };
   }

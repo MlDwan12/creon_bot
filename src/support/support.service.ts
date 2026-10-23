@@ -1,5 +1,5 @@
 import { translator, userLang } from '../i18n/i18n';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { User } from '@prisma/client';
 import { InjectBot } from 'nestjs-telegraf';
@@ -46,7 +46,7 @@ class FloodWindow {
  * Контакты сторон и поддержки друг другу не видны. Без SUPPORT_CHAT_ID поддержка выключена.
  */
 @Injectable()
-export class SupportService {
+export class SupportService implements OnModuleInit {
   private readonly logger = new Logger(SupportService.name);
   readonly chatId: string | null;
   private botUsername?: Promise<string>;
@@ -63,6 +63,18 @@ export class SupportService {
     config: ConfigService,
   ) {
     this.chatId = config.get<string>('SUPPORT_CHAT_ID') || null;
+  }
+
+  /**
+   * Темы, созданные до появления User.supportChatId, — в текущей группе: привязываем их к ней один
+   * раз. Дальше тема из другой группы (SUPPORT_CHAT_ID сменили) считается отсутствующей.
+   */
+  async onModuleInit() {
+    if (!this.chatId) return;
+    await this.prisma.user.updateMany({
+      where: { supportChatId: null, supportTopicId: { not: null } },
+      data: { supportChatId: this.chatId },
+    });
   }
 
   /** Ссылка на чат с ботом (для заблокированных: API им закрыт); null — поддержка выключена. */
@@ -159,7 +171,7 @@ export class SupportService {
       return;
     if (msg.from?.is_bot) return;
     const user = await this.prisma.user.findFirst({
-      where: { supportTopicId: thread },
+      where: { supportChatId: this.chatId, supportTopicId: thread },
     });
     if (!user) return;
 
@@ -224,7 +236,9 @@ export class SupportService {
     user: User,
     send: (thread: number) => Promise<unknown>,
   ) {
-    let thread = user.supportTopicId ?? (await this.createTopic(user));
+    // тема из прежней группы поддержки здесь — чужая: заводим новую
+    const own = user.supportChatId === this.chatId ? user.supportTopicId : null;
+    let thread = own ?? (await this.createTopic(user));
     try {
       await this.bot.telegram
         .reopenForumTopic(this.chatId!, thread)
@@ -261,7 +275,7 @@ export class SupportService {
     const thread = topic.message_thread_id;
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { supportTopicId: thread },
+      data: { supportTopicId: thread, supportChatId: this.chatId },
     });
 
     const [orders, submissions] = await Promise.all([

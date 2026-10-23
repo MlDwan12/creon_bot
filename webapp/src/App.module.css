@@ -1,0 +1,48 @@
+.banned {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 64px 24px;
+  text-align: center;
+}
+.bannedIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--link);
+}
+.banned h1 {
+  margin: 0;
+  font-size: 24px;
+}
+.banned p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.banned .bannedReason {
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.banned .hint {
+  color: var(--hint);
+}
+.banned :global(.main-button) {
+  max-width: 320px;
+  margin-top: 12px;
+}
+.browserBack {
+  min-height: 44px;
+  padding: 0 16px;
+  border: none;
+  background: none;
+  color: var(--link);
+  font-size: 17px;
+}

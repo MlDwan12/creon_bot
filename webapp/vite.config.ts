@@ -1,8 +1,14 @@
-import vue from '@vitejs/plugin-vue';
+import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [react()],
+  // классы в *.module.css пишем через дефис, в коде — s.roleHead
+  css: { modules: { localsConvention: 'camelCaseOnly' } },
+  // По умолчанию Vite собирает под Safari 16.4+, а мини-апп на iPhone открывает системный WebView —
+  // на старой iOS свежий синтаксис падал до запуска, и висел серый экран Telegram.
+  // ponytail: понижается только синтаксис, не новые API — нужны они на старых iOS, добавить @vitejs/plugin-legacy
+  build: { target: ['es2020', 'safari14'] },
   // В dev фронт живёт на :5173, а API — в Nest на :3000. Прокси делает их одним адресом,
   // как будет в проде, где Nest раздаёт и API, и собранный фронт.
   server: {

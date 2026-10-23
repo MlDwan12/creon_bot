@@ -97,11 +97,11 @@
   },
   "settings": {
     "themeTitle": "Оформление",
-    "themeAuto": "Как в Telegram",
+    "themeAuto": "Telegram",
     "themeLight": "Светлая",
     "themeDark": "Тёмная",
     "languageTitle": "Язык",
-    "languageAuto": "Как в Telegram",
+    "languageAuto": "Telegram",
     "languageError": "Не удалось сменить язык"
   },
   "common": {
@@ -761,6 +761,7 @@
     "anonCreator": "Креатор",
     "oauthConfirmTitle": "Подключить {{platform}}?",
     "oauthConfirmText": "Аккаунт {{platform}} «{{account}}» будет подключён к профилю Fixum {{profile}}. Если это не ваш профиль — нажмите «Это не я»: кто-то прислал вам свою ссылку",
+    "oauthProfileNoUsername": "«{{name}}» (имя в Telegram, без @username)",
     "oauthConfirmYes": "Подключить",
     "oauthConfirmNo": "Это не я",
     "oauthDeclinedTitle": "Подключение отменено",

@@ -1,0 +1,19 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 16px calc(96px + var(--safe-bottom));
+}
+.page h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+}
+.place {
+  text-decoration: none;
+}
+.hint {
+  margin: 0;
+  line-height: 1.4;
+  color: var(--hint);
+}

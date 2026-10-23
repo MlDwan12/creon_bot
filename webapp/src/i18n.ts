@@ -1,4 +1,5 @@
 import i18next from 'i18next';
+import { initReactI18next } from 'react-i18next';
 // Словари — общие с бэкендом (бот, уведомления, ошибки): i18n/<язык>.json в корне репозитория.
 // Вшиваются в сборку — тексты есть сразу, без запроса при запуске.
 import en from '../../i18n/en.json';
@@ -7,7 +8,10 @@ import { webApp } from './telegram';
 
 export const LANGS = ['ru', 'en'] as const;
 export type Lang = (typeof LANGS)[number];
-export const LANG_NAMES: Record<Lang, string> = { ru: 'Русский', en: 'English' };
+export const LANG_NAMES: Record<Lang, string> = {
+  ru: 'Русский',
+  en: 'English',
+};
 
 const KEY = 'lang';
 
@@ -22,15 +26,16 @@ function initialLang(): Lang {
   } catch {
     // нет хранилища — по Telegram
   }
-  const code = webApp?.initDataUnsafe?.user?.language_code ?? navigator.language;
+  const code =
+    webApp?.initDataUnsafe?.user?.language_code ?? navigator.language;
   return code?.toLowerCase().startsWith('ru') ? 'ru' : 'en';
 }
 
-void i18next.init({
+void i18next.use(initReactI18next).init({
   lng: initialLang(),
-  fallbackLng: 'ru',
+  fallbackLng: 'en',
   resources: { ru: { translation: ru }, en: { translation: en } },
-  // Vue сам экранирует {{ }} в шаблонах
+  // React сам экранирует текст в разметке
   interpolation: { escapeValue: false },
   initAsync: false,
 });

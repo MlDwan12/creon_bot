@@ -554,6 +554,41 @@ describe('каталог', () => {
     expect(next.items.map((o) => o.id)).toEqual([ids[1], ids[0]]);
   });
 
+  it('фильтры каталога — только категории и площадки, где есть открытые заказы', async () => {
+    const adv = await user();
+    const beauty = await openOrder(adv.id);
+    const gaming = await openOrder(adv.id);
+    const any = await openOrder(adv.id);
+    await prisma.order.update({
+      where: { id: beauty.id },
+      data: { category: 'BEAUTY', platforms: ['TIKTOK'] },
+    });
+    await prisma.order.update({
+      where: { id: gaming.id },
+      data: { category: 'GAMING', platforms: ['YOUTUBE'] },
+    });
+    await prisma.order.update({
+      where: { id: any.id },
+      data: { category: 'FITNESS', platforms: [] },
+    });
+    await pendingOrder(adv.id); // на модерации — не в каталоге, его категории OTHER в фильтрах нет
+
+    const all = await orders.openFacets(undefined, undefined);
+    expect(all.categories.sort()).toEqual(['BEAUTY', 'FITNESS', 'GAMING']);
+    // заказ без площадок подходит для любой — значит, есть все
+    expect(all.platforms).toHaveLength(5);
+    // перекрёстно: категории — для выбранной площадки, площадки — для выбранной категории
+    expect(
+      (await orders.openFacets(undefined, 'TIKTOK')).categories.sort(),
+    ).toEqual(['BEAUTY', 'FITNESS']);
+    expect((await orders.openFacets(undefined, 'VK')).categories).toEqual([
+      'FITNESS',
+    ]);
+    expect((await orders.openFacets('GAMING', undefined)).platforms).toEqual([
+      'YOUTUBE',
+    ]);
+  });
+
   it('фильтр по площадке: заказы для неё и без ограничений; ролик с другой площадки не сдать', async () => {
     const [adv, creator] = [await user(), await user()];
     const any = await openOrder(adv.id);
@@ -908,6 +943,26 @@ describe('заморозка при правке', () => {
     });
   });
 
+  it('вторая правка не меняет условия ролика, сданного до первой', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS);
+    await orders.update(order.id, adv.id, { ...edit, minViews: 100_000 });
+    await approveOrder(order.id, 1n);
+    await orders.update(order.id, adv.id, {
+      ...edit,
+      minViews: 100_000,
+      title: 'Ещё',
+    });
+    // сдан при пороге 250 — по нему и проверяется, хотя снимок до правки уже второй
+    await expect(
+      submissions.moderatorApprove(s.id, 1n, VIEWS),
+    ).resolves.toMatchObject({
+      submission: { status: 'MODERATOR_APPROVED' },
+    });
+  });
+
   it('закрыли замороженный — слоты сгорели, правка отменена, сданное доводится до конца', async () => {
     const [adv, waiting, done] = [await user(), await user(), await user()];
     const order = await openOrder(adv.id);
@@ -1119,6 +1174,28 @@ describe('бюджет и просмотры', () => {
       _sum: { payoutMinor: true },
     });
     expect(total._sum.payoutMinor).toBe(5_000);
+  });
+
+  it('автоматический итог холда не проходит, если креатора забанили во время запроса к API', async () => {
+    const [adv, a] = [await user(), await user()];
+    const order = await orderWith(adv.id, 10_000);
+    const s = await sent(order.id, a.id, 1000);
+    await submissions.moderatorApprove(s.id, 1n, 1000);
+    await prisma.submission.update({
+      where: { id: s.id },
+      data: { decidedAt: new Date(Date.now() - HOLD_DAYS * DAY - 1000) },
+    });
+    // listHoldDue прочитан до бана, бан — пока ждали API
+    await prisma.user.update({
+      where: { id: a.id },
+      data: { bannedAt: new Date() },
+    });
+    await expect(
+      submissions.finalizeViews(s.id, 3000, null, true),
+    ).rejects.toThrow();
+    expect((await submissions.findById(s.id))?.finalizedAt).toBeNull();
+    // модератор по-прежнему может зафиксировать итог сам
+    await expect(submissions.finalizeViews(s.id, 3000)).resolves.toBeDefined();
   });
 
   it('итог холда — через HOLD_DAYS, один раз, без доплаты: просмотры только для отчёта', async () => {
@@ -1847,6 +1924,48 @@ describe('жалобы', () => {
       1n,
     );
     expect(closedOrder).toBeNull(); // уже был закрыт — уведомлять о закрытии некого
+    expect(await submissions.click(trackCode!)).toBeNull();
+  });
+
+  it('мера по истёкшему заказу закрывает его — продлением не вернуть', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const order = await openOrder(advertiser.id);
+    await reports.create(creator, report('ORDER', order.id));
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { status: 'EXPIRED' },
+    });
+
+    const { closedOrder } = await reports.resolve(
+      { target: 'ORDER', targetId: order.id },
+      true,
+      1n,
+    );
+    expect(closedOrder?.status).toBe('CLOSED');
+    await expect(orders.extend(order.id, advertiser.id, 7)).rejects.toThrow();
+    expect(await statusOf(order.id)).toBe('CLOSED');
+  });
+
+  it('мера по замороженному заказу: закрытие рекламодателем не возвращает снятую ссылку', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const order = await openOrder(advertiser.id);
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { targetUrl: 'https://phish.example' },
+    });
+    const { trackCode } = await submissions.claim(order.id, creator.id);
+    await reports.create(creator, report('ORDER', order.id));
+    await orders.update(order.id, advertiser.id, {
+      title: 'Новое',
+      description: 'Новое описание',
+      budgetMinor: BUDGET,
+      minViews: 250,
+      category: 'OTHER',
+    });
+
+    await reports.resolve({ target: 'ORDER', targetId: order.id }, true, 1n);
+    await orders.close(order.id, advertiser.id);
+    expect(await statusOf(order.id)).toBe('CLOSED');
     expect(await submissions.click(trackCode!)).toBeNull();
   });
 

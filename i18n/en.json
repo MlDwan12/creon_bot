@@ -95,11 +95,11 @@
   },
   "settings": {
     "themeTitle": "Appearance",
-    "themeAuto": "Same as Telegram",
+    "themeAuto": "Telegram",
     "themeLight": "Light",
     "themeDark": "Dark",
     "languageTitle": "Language",
-    "languageAuto": "Same as Telegram",
+    "languageAuto": "Telegram",
     "languageError": "Couldn't change the language"
   },
   "common": {
@@ -755,6 +755,7 @@
     "anonCreator": "Creator",
     "oauthConfirmTitle": "Connect {{platform}}?",
     "oauthConfirmText": "The {{platform}} account “{{account}}” will be connected to the Fixum profile {{profile}}. If this isn't your profile, tap “Not me”: someone sent you their link",
+    "oauthProfileNoUsername": "“{{name}}” (Telegram name, no @username)",
     "oauthConfirmYes": "Connect",
     "oauthConfirmNo": "Not me",
     "oauthDeclinedTitle": "Connection cancelled",

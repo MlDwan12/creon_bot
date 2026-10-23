@@ -31,10 +31,11 @@ import { DAY_MS, extendedDeadline } from './deadline';
 import { type OrderFunnel, orderInsights } from './order-insights';
 import { buildOrderReport } from './order-report';
 import {
-  closeOpenOrders,
   FROZEN,
   isFrozen,
   lockOrder,
+  type OrderTerms,
+  termsOf,
   transitionOrder,
   tryTransitionOrder,
 } from './order-status';
@@ -69,8 +70,29 @@ export const MAX_ACTIVE_ORDERS = 10;
 const CHANGED_WHILE_VIEWED =
   'Заказ уже обработан или изменён, пока вы его смотрели — откройте его заново';
 
-/** Сколько живёт число «N открытых заказов» в заголовке каталога. */
+/** Сколько живёт число «N открытых заказов» в заголовке каталога (и список фильтров с заказами). */
 const OPEN_COUNT_TTL_MS = 30_000;
+
+/** Открытые заказы каталога с фильтрами. Заказ без площадок подходит для любой. */
+function openWhere(
+  category: OrderCategory | undefined,
+  platform: VideoPlatform | undefined,
+): Prisma.OrderWhereInput {
+  return {
+    status: OrderStatus.OPEN,
+    ...(category ? { category } : {}),
+    ...(platform
+      ? {
+          AND: {
+            OR: [
+              { platforms: { isEmpty: true } },
+              { platforms: { has: platform } },
+            ],
+          },
+        }
+      : {}),
+  };
+}
 
 @Injectable()
 export class OrdersService {
@@ -80,6 +102,13 @@ export class OrdersService {
   private readonly openCounts = new Map<
     string,
     { value: number; at: number }
+  >();
+  private readonly facets = new Map<
+    string,
+    {
+      value: { categories: OrderCategory[]; platforms: VideoPlatform[] };
+      at: number;
+    }
   >();
 
   // ponytail: count и create не атомарны — два одновременных запроса могут дать 11-й заказ.
@@ -147,21 +176,7 @@ export class OrdersService {
     after: { createdAt: Date; id: number } | undefined,
     take: number,
   ) {
-    const where: Prisma.OrderWhereInput = {
-      status: OrderStatus.OPEN,
-      ...(category ? { category } : {}),
-      // Заказ без площадок подходит для любой.
-      ...(platform
-        ? {
-            AND: {
-              OR: [
-                { platforms: { isEmpty: true } },
-                { platforms: { has: platform } },
-              ],
-            },
-          }
-        : {}),
-    };
+    const where = openWhere(category, platform);
     const [rows, total] = await Promise.all([
       this.prisma.order.findMany({
         where: after
@@ -198,6 +213,42 @@ export class OrdersService {
       ...o,
       freeMinor: budgetState(o, spent.get(o.id) ?? 0).free,
     }));
+  }
+
+  /**
+   * Какие категории и площадки есть среди открытых заказов — фильтры каталога показывают только их,
+   * чтобы креатор не перебирал пустые. Перекрёстно: категории — с учётом выбранной площадки,
+   * площадки — с учётом выбранной категории. Заказ без площадок подходит для любой.
+   */
+  async openFacets(
+    category: OrderCategory | undefined,
+    platform: VideoPlatform | undefined,
+  ) {
+    const key = `${category ?? 'ALL'}:${platform ?? 'ALL'}`;
+    const cached = this.facets.get(key);
+    if (cached && Date.now() - cached.at < OPEN_COUNT_TTL_MS)
+      return cached.value;
+    const [byCategory, byPlatforms] = await Promise.all([
+      this.prisma.order.groupBy({
+        by: ['category'],
+        where: openWhere(undefined, platform),
+      }),
+      // наборов площадок немного (их пять), поэтому distinct по массиву, а не по каждому заказу
+      this.prisma.order.findMany({
+        where: openWhere(category, undefined),
+        distinct: ['platforms'],
+        select: { platforms: true },
+      }),
+    ]);
+    const platforms = byPlatforms.some((o) => o.platforms.length === 0)
+      ? Object.values(VideoPlatform)
+      : [...new Set(byPlatforms.flatMap((o) => o.platforms))];
+    const value = {
+      categories: byCategory.map((c) => c.category),
+      platforms,
+    };
+    this.facets.set(key, { value, at: Date.now() });
+    return value;
   }
 
   private async countOpen(key: string, where: Prisma.OrderWhereInput) {
@@ -341,6 +392,12 @@ export class OrdersService {
         })
       : [];
     await this.prisma.$transaction(async (tx) => {
+      // бюджет и условия — под блокировкой и из свежей строки: снятие модератором (moderatorClose)
+      // могло убрать ссылку из снимка, пока мы читали заказ выше
+      await lockOrder(tx, orderId);
+      const current = await tx.order.findUniqueOrThrow({
+        where: { id: orderId },
+      });
       await transitionOrder(
         tx,
         orderId,
@@ -349,8 +406,8 @@ export class OrdersService {
           status: OrderStatus.CLOSED,
           closedAt: new Date(),
           ...(frozen && {
-            ...(order.prevTerms as ReturnType<typeof termsOf> | null),
-            budgetMinor: order.approvedBudgetMinor!,
+            ...(current.prevTerms as OrderTerms | null),
+            budgetMinor: current.approvedBudgetMinor!,
           }),
         },
         tr('errors.onlyOpenClose'),
@@ -368,16 +425,34 @@ export class OrdersService {
    * Модератор снимает заказ по жалобе — в транзакции решения по жалобам (ReportsService.resolve).
    * Ссылка на товар убирается при любом статусе: /r/ в уже опубликованных роликах не должен вести
    * туда (фишинг) и у закрытого или истёкшего заказа; вернуть её можно только правкой через модератора.
-   * Открытый заказ закрывается, и, в отличие от закрытия рекламодателем, начатые ролики по нему не
-   * принимаются: слоты сгорают. Возвращает закрытый заказ с рекламодателем и откликами — для
-   * уведомлений; `null` — заказ не был открыт.
+   * Убирается и из снимка до правки: иначе закрытие замороженного заказа (close) вернуло бы её.
+   * Открытый или истёкший заказ закрывается (истёкший иначе снова открыли бы продлением), и, в
+   * отличие от закрытия рекламодателем, начатые ролики по нему не принимаются: слоты сгорают.
+   * Возвращает закрытый заказ с рекламодателем и откликами — для уведомлений; `null` — не закрыт.
    */
   async moderatorClose(tx: Prisma.TransactionClient, orderId: number) {
-    await tx.order.updateMany({
+    await lockOrder(tx, orderId);
+    const order = await tx.order.findUnique({ where: { id: orderId } });
+    if (!order) return null;
+    await tx.order.update({
       where: { id: orderId },
-      data: { targetUrl: null },
+      data: {
+        targetUrl: null,
+        ...(order.prevTerms && {
+          prevTerms: {
+            ...(order.prevTerms as Prisma.JsonObject),
+            targetUrl: null,
+          },
+        }),
+      },
     });
-    if ((await closeOpenOrders(tx, [orderId])) === 0) return null;
+    const closed = await tryTransitionOrder(
+      tx,
+      orderId,
+      [OrderStatus.OPEN, OrderStatus.EXPIRED],
+      { status: OrderStatus.CLOSED, closedAt: new Date() },
+    );
+    if (closed === 0) return null;
     await expireSlots(tx, [orderId]);
     return tx.order.findUniqueOrThrow({
       where: { id: orderId },
@@ -842,22 +917,4 @@ function changesNothing(
       v === undefined ||
       norm(k, v) === norm(k, order[k as keyof Order]),
   );
-}
-
-/** Условия заказа, по которым проверяют ролики, — снимок до правки (Order.prevTerms). */
-export function termsOf(order: Order) {
-  return {
-    title: order.title,
-    description: order.description,
-    referenceUrl: order.referenceUrl,
-    targetUrl: order.targetUrl,
-    category: order.category,
-    minViews: order.minViews,
-    // ролики, сданные до правки, оплачиваются по ставке, при которой их сдали (videoTerms)
-    cpmMinor: order.cpmMinor,
-    minDurationSec: order.minDurationSec,
-    maxDurationSec: order.maxDurationSec,
-    orientation: order.orientation,
-    platforms: order.platforms,
-  };
 }

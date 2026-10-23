@@ -1,0 +1,75 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 16px calc(96px + var(--safe-bottom));
+}
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.page h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+.hint {
+  margin: 0;
+  font-size: 15px;
+  color: var(--hint);
+  overflow-wrap: anywhere;
+}
+.hint.small {
+  margin-top: -8px;
+  font-size: 13px;
+}
+.reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.reasons legend {
+  float: left;
+  width: 100%;
+  padding: 0 0 4px;
+}
+.reason {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1.5px solid var(--separator);
+  border-radius: 14px;
+  background: var(--surface);
+  font-size: 16px;
+}
+.reason:has(input:checked) {
+  border-color: var(--accent);
+}
+.reason input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.page textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--separator);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  resize: vertical;
+}
+.error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--danger);
+}

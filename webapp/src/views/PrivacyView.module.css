@@ -1,0 +1,27 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 16px calc(96px + var(--safe-bottom));
+  line-height: 1.45;
+}
+.page h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.page h2 {
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+.page p,
+.page ul {
+  margin: 0 0 6px;
+}
+.page ul {
+  padding-left: 20px;
+}
+.hint {
+  color: var(--hint);
+}

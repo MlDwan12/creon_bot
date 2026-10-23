@@ -24,6 +24,7 @@ interface TelegramWebApp {
     show(): void;
     hide(): void;
     onClick(cb: () => void): void;
+    offClick(cb: () => void): void;
   };
 }
 

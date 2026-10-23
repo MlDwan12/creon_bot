@@ -1,0 +1,168 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 16px calc(96px + var(--safe-bottom));
+}
+.page h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+}
+.hint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--hint);
+}
+.tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 22px;
+  background: var(--surface);
+}
+.tile strong {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  overflow-wrap: anywhere;
+}
+.total {
+  background: var(--ink);
+  color: var(--ink-text);
+}
+.total .hint {
+  color: var(--ink-hint);
+}
+.total strong {
+  color: var(--lime);
+}
+.notice {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--success-soft);
+  font-size: 15px;
+}
+.notice.ask {
+  background: var(--accent-soft);
+}
+.notice a {
+  color: var(--link);
+  font-weight: 600;
+}
+.withdraw .hint {
+  overflow-wrap: anywhere;
+}
+.withdraw {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.amount-row {
+  display: flex;
+  gap: 8px;
+}
+.amount-row input {
+  flex: 1;
+  min-width: 0;
+}
+.all {
+  flex: none;
+  min-height: 50px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--link);
+  font-weight: 800;
+}
+.wallet-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.wallet-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wallet-row small {
+  color: var(--hint);
+  font-size: 12px;
+}
+.wallet-row a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--link);
+  font-weight: 700;
+  text-decoration: none;
+}
+.withdraw input {
+  min-height: 50px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 17px;
+}
+.withdraw input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--danger);
+}
+.flush {
+  padding: 0;
+}
+.payout {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.badge {
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.badge.warn {
+  background: var(--orange-soft);
+  color: var(--orange-text);
+}
+.badge.success {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+.badge.danger {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}

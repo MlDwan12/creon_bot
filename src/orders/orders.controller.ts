@@ -97,13 +97,12 @@ export class OrdersController {
         throw new BadRequestException(tr('errors.badPage'));
       after = { createdAt, id: afterId };
     }
-    const { items, hasMore, total } = await this.ordersService.listOpen(
-      category,
-      platform,
-      after,
-      PAGE_SIZE,
-    );
-    return { items: items.map(toPublic), hasMore, total };
+    const [{ items, hasMore, total }, facets] = await Promise.all([
+      this.ordersService.listOpen(category, platform, after, PAGE_SIZE),
+      // фильтры с заказами — только к первой странице, дальше они те же
+      after ? undefined : this.ordersService.openFacets(category, platform),
+    ]);
+    return { items: items.map(toPublic), hasMore, total, facets };
   }
 
   /** Карточка открытого заказа; `claimed` — есть ли у текущего пользователя отклик «в работе», `own` — заказ его. */
