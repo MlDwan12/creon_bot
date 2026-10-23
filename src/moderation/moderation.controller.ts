@@ -14,8 +14,9 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ParseIdPipe } from '../common/parse-id.pipe';
-import { OrderStatus } from '@prisma/client';
+import { ModeratorActionType, OrderStatus } from '@prisma/client';
 import { findContacts } from '../common/contacts';
 import { fromMinor } from '../common/money';
 import { NotificationsService } from '../telegram/notifications.service';
@@ -31,6 +32,7 @@ import {
   ViewCounterService,
 } from '../submissions/view-counter.service';
 import { AnalyticsService } from './analytics.service';
+import { ModeratorActionsService } from './moderator-actions.service';
 import { parseStatusFilter } from './status-filter';
 import {
   BansService,
@@ -142,6 +144,7 @@ export class ModerationController {
     private readonly bans: BansService,
     private readonly payouts: PayoutsService,
     private readonly viewCounter: ViewCounterService,
+    private readonly actions: ModeratorActionsService,
   ) {}
 
   /** Обе очереди сразу: заказы и видео на проверке, старые первыми. */
@@ -218,6 +221,59 @@ export class ModerationController {
     return this.analytics.whatWorks(periodStart(days));
   }
 
+  /**
+   * Кабинет модератора за последние `days` дней (без параметра — всё время): его цифры, команда
+   * (видна всем модераторам — ролей среди них нет) и его последние действия.
+   */
+  @Get('me')
+  async me(
+    @Query('days', new ParseIntPipe({ optional: true }))
+    days: number | undefined,
+    @Req() req: ApiRequest,
+  ) {
+    const [team, recent] = await Promise.all([
+      this.actions.stats(periodStart(days)),
+      this.actions.recent(req.user.telegramId),
+    ]);
+    return {
+      moderatorId: req.user.telegramId.toString(),
+      team,
+      recent: recent.map((a) => ({
+        id: a.id,
+        type: a.type,
+        objectId: a.objectId,
+        reportTarget: a.reportTarget,
+        amount: a.amountMinor === null ? null : fromMinor(a.amountMinor),
+        createdAt: a.createdAt,
+      })),
+    };
+  }
+
+  /** Действия за период файлом CSV в чат с ботом: `scope` — свои (me) или всей команды (team). */
+  @Post('me/csv')
+  @Throttle({ default: { limit: 10, ttl: 60 * 60_000 } })
+  async meCsv(@Body() body: unknown, @Req() req: ApiRequest) {
+    const { days, scope } = (body ?? {}) as { days?: unknown; scope?: unknown };
+    if (days !== undefined && !Number.isInteger(days))
+      throw new BadRequestException('Неверный период');
+    if (scope !== 'me' && scope !== 'team')
+      throw new BadRequestException('Неверная выгрузка');
+    const csv = await this.actions.csv(
+      periodStart(days as number | undefined),
+      scope === 'me' ? req.user.telegramId : undefined,
+    );
+    const sent = await this.notifications.sendFile(
+      req.user.telegramId,
+      csv,
+      `fixum-moderators-${scope}-${new Date().toISOString().slice(0, 10)}.csv`,
+    );
+    if (!sent)
+      throw new BadRequestException(
+        'Файл не отправился — откройте чат с ботом и нажмите «Старт»',
+      );
+    return { ok: true };
+  }
+
   /** Все заказы любого статуса — страница, новые первыми. */
   @Get('orders')
   async allOrders(
@@ -289,13 +345,21 @@ export class ModerationController {
     @Body() body: unknown,
     @Req() req: ApiRequest,
   ) {
+    const version = parseVersion(body);
     const order = await this.ordersService.moderatorApprove(
       id,
       req.user.telegramId,
-      parseVersion(body),
+      version,
       parseCpm(body),
       parseBudgetConfirmed(body),
     );
+    await this.actions.log({
+      moderatorId: req.user.telegramId,
+      type: ModeratorActionType.ORDER_APPROVE,
+      objectId: id,
+      amountMinor: order.budgetMinor,
+      waitingSince: version,
+    });
     if (order.status === OrderStatus.CLOSED)
       this.notifications.orderBudgetExhausted(order);
     else {
@@ -315,12 +379,19 @@ export class ModerationController {
     @Req() req: ApiRequest,
   ) {
     const comment = parseRejectComment(body);
+    const version = parseVersion(body);
     const order = await this.ordersService.moderatorReject(
       id,
       req.user.telegramId,
       comment,
-      parseVersion(body),
+      version,
     );
+    await this.actions.log({
+      moderatorId: req.user.telegramId,
+      type: ModeratorActionType.ORDER_REJECT,
+      objectId: id,
+      waitingSince: version,
+    });
     this.notifications.orderRejected(order, comment);
     return { ok: true };
   }
@@ -388,8 +459,22 @@ export class ModerationController {
   @Post('reports/resolve')
   async resolveReports(@Body() body: unknown, @Req() req: ApiRequest) {
     const decision = parseReportDecision(body);
+    const { target, targetId } = decision.group;
+    const waitingSince = await this.actions.reportsWaitingSince(
+      target,
+      targetId,
+    );
     const { reporters, closedOrder, bannedOrders } =
       await this.bans.resolveReports(decision, req.user.telegramId);
+    await this.actions.log({
+      moderatorId: req.user.telegramId,
+      type: decision.actioned
+        ? ModeratorActionType.REPORT_ACTION
+        : ModeratorActionType.REPORT_DISMISS,
+      objectId: targetId,
+      reportTarget: target,
+      waitingSince,
+    });
     if (closedOrder) this.notifications.orderClosedByModerator(closedOrder);
     for (const order of bannedOrders)
       this.notifications.orderClosedByModerator(order);
@@ -399,18 +484,32 @@ export class ModerationController {
   }
 
   @Post('users/:id/ban')
-  async ban(@Param('id', ParseIdPipe) id: number, @Body() body: unknown) {
+  async ban(
+    @Param('id', ParseIdPipe) id: number,
+    @Body() body: unknown,
+    @Req() req: ApiRequest,
+  ) {
     const reason = parseBanReason(
       (body as { reason?: unknown } | null)?.reason,
     );
     for (const order of await this.bans.banUser(id, reason))
       this.notifications.orderClosedByModerator(order);
+    await this.actions.log({
+      moderatorId: req.user.telegramId,
+      type: ModeratorActionType.USER_BAN,
+      objectId: id,
+    });
     return { ok: true };
   }
 
   @Post('users/:id/unban')
-  async unban(@Param('id', ParseIdPipe) id: number) {
+  async unban(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
     await this.bans.unban(id);
+    await this.actions.log({
+      moderatorId: req.user.telegramId,
+      type: ModeratorActionType.USER_UNBAN,
+      objectId: id,
+    });
     return { ok: true };
   }
 
@@ -418,17 +517,31 @@ export class ModerationController {
   @Post('reviews/:submissionId/approve')
   async approveReview(
     @Param('submissionId', ParseIdPipe) submissionId: number,
+    @Req() req: ApiRequest,
   ) {
     this.notifications.videoRated(
       await this.submissionsService.approveReview(submissionId),
     );
+    await this.actions.log({
+      moderatorId: req.user.telegramId,
+      type: ModeratorActionType.REVIEW_APPROVE,
+      objectId: submissionId,
+    });
     return { ok: true };
   }
 
   /** Удалить отзыв креатору (оскорбления и т.п.) или отклонить с проверки; приёмка видео остаётся. */
   @Delete('reviews/:submissionId')
-  async removeReview(@Param('submissionId', ParseIdPipe) submissionId: number) {
+  async removeReview(
+    @Param('submissionId', ParseIdPipe) submissionId: number,
+    @Req() req: ApiRequest,
+  ) {
     await this.submissionsService.removeReview(submissionId);
+    await this.actions.log({
+      moderatorId: req.user.telegramId,
+      type: ModeratorActionType.REVIEW_REMOVE,
+      objectId: submissionId,
+    });
     return { ok: true };
   }
 
@@ -447,6 +560,13 @@ export class ModerationController {
         parseViews(views),
         parseLikes(likes),
       );
+    await this.actions.log({
+      moderatorId: req.user.telegramId,
+      type: ModeratorActionType.VIDEO_APPROVE,
+      objectId: id,
+      amountMinor: submission.payoutMinor,
+      waitingSince: submission.submittedAt,
+    });
     this.notifications.videoApprovedByModerator(submission);
     if (closed) this.notifications.orderBudgetExhausted(closed);
     return { ok: true };
@@ -458,12 +578,23 @@ export class ModerationController {
     @Param('id', ParseIdPipe) id: number,
     @Body('views') views: unknown,
     @Body('likes') likes: unknown,
+    @Req() req: ApiRequest,
   ) {
     const submission = await this.submissionsService.finalizeViews(
       id,
       parseViews(views),
       parseLikes(likes),
     );
+    await this.actions.log({
+      moderatorId: req.user.telegramId,
+      type: ModeratorActionType.HOLD_FINALIZE,
+      objectId: id,
+      amountMinor: submission.payoutMinor,
+      // ждал — с конца холда, а не с одобрения
+      waitingSince: submission.decidedAt
+        ? new Date(submission.decidedAt.getTime() + HOLD_DAYS * DAY_MS)
+        : null,
+    });
     this.notifications.viewsFinalized(submission);
     return { ok: true };
   }
@@ -478,6 +609,11 @@ export class ModerationController {
       id,
       req.user.telegramId,
     );
+    await this.actions.log({
+      moderatorId: req.user.telegramId,
+      type: ModeratorActionType.PUBLICATION_DELETED,
+      objectId: id,
+    });
     this.notifications.publicationDeleted(submission);
     return { ok: true };
   }
@@ -511,6 +647,13 @@ export class ModerationController {
     @Req() req: ApiRequest,
   ) {
     const payout = await this.payouts.markPaid(id, req.user.telegramId);
+    await this.actions.log({
+      moderatorId: req.user.telegramId,
+      type: ModeratorActionType.PAYOUT_PAID,
+      objectId: id,
+      amountMinor: payout.amountMinor,
+      waitingSince: payout.createdAt,
+    });
     this.notifications.payoutDecided(payout);
     return { ok: true };
   }
@@ -527,6 +670,13 @@ export class ModerationController {
       req.user.telegramId,
       parseRejectComment(body),
     );
+    await this.actions.log({
+      moderatorId: req.user.telegramId,
+      type: ModeratorActionType.PAYOUT_REJECT,
+      objectId: id,
+      amountMinor: payout.amountMinor,
+      waitingSince: payout.createdAt,
+    });
     this.notifications.payoutDecided(payout);
     return { ok: true };
   }
@@ -543,6 +693,12 @@ export class ModerationController {
       req.user.telegramId,
       comment,
     );
+    await this.actions.log({
+      moderatorId: req.user.telegramId,
+      type: ModeratorActionType.VIDEO_REJECT,
+      objectId: id,
+      waitingSince: submission.submittedAt,
+    });
     this.notifications.videoRejectedByModerator(submission, comment);
     return { ok: true };
   }

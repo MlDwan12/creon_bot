@@ -12,7 +12,7 @@
 .bar {
   pointer-events: auto;
   display: grid;
-  /* 3 вкладки у заказчика, 4 у креатора и модератора. */
+  /* 3 вкладки у заказчика, 4 у креатора, 5 у модератора. */
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   padding: 6px;
@@ -34,8 +34,10 @@
   line-height: 1.15;
   text-align: center;
   text-decoration: none;
-  /* длинная подпись (английский, узкий экран) — в две строки, а не за край вкладки */
-  overflow-wrap: anywhere;
+  /* длинная подпись (английский, узкий экран, 5 вкладок модератора) — в две строки по слогам,
+     а не за край вкладки */
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 .tab {
   position: relative;
