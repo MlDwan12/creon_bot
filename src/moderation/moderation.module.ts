@@ -9,6 +9,7 @@ import { AnalyticsService } from './analytics.service';
 import { BansService } from './bans.service';
 import { ModerationController } from './moderation.controller';
 import { ModeratorActionsService } from './moderator-actions.service';
+import { ModUsersService } from './mod-users.service';
 
 @Module({
   imports: [
@@ -20,6 +21,11 @@ import { ModeratorActionsService } from './moderator-actions.service';
     ReportsModule,
   ],
   controllers: [ModerationController],
-  providers: [AnalyticsService, BansService, ModeratorActionsService],
+  providers: [
+    AnalyticsService,
+    BansService,
+    ModeratorActionsService,
+    ModUsersService,
+  ],
 })
 export class ModerationModule {}

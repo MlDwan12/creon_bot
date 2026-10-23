@@ -1,0 +1,52 @@
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.block :global(.section-title) {
+  padding: 0;
+}
+.by {
+  margin: 0;
+  font-size: 14px;
+  color: var(--hint);
+}
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.list li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.list li + li {
+  border-top: 1px solid var(--separator);
+}
+.list small {
+  color: var(--hint);
+  font-size: 12px;
+}
+.list a {
+  color: var(--link);
+  text-decoration: none;
+}
+/* бан — красным, разбан — зелёным: главное в истории видно сразу */
+.ban strong {
+  color: var(--danger);
+}
+.unban strong {
+  color: var(--success-text);
+}
+.hint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--hint);
+}

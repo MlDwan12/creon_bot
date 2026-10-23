@@ -827,6 +827,63 @@ export function fetchWhatWorks(days?: number) {
   );
 }
 
+/** Строка вкладки «Люди» — см. src/moderation/mod-users.service.ts. */
+export interface ModUserRow {
+  id: number;
+  label: string;
+  telegramId: string;
+  createdAt: string;
+  banned: { at: string; reason: string | null } | null;
+  /** Брал заказы: одобрено роликов и доступно к выводу, USDT. */
+  creator: { approved: number; available: number } | null;
+  /** Размещал заказы: всего и открыто. */
+  advertiser: { orders: number; open: number } | null;
+}
+export type ModUsersFilter = 'all' | 'creators' | 'advertisers' | 'banned';
+
+export function fetchModUsers(
+  search: string,
+  filter: ModUsersFilter,
+  page: number,
+) {
+  const query = new URLSearchParams({ search, filter, page: String(page) });
+  return request<{ items: ModUserRow[]; total: number }>(
+    'GET',
+    `/api/mod/users?${query}`,
+  );
+}
+
+/** История модерации пользователя: жалобы на него, решения по ним, блокировки. */
+export interface ModUserHistory {
+  ban: { at: string; reason: string | null; by: string | null } | null;
+  events: (
+    | {
+        kind: 'report';
+        at: string;
+        target: ReportTarget;
+        targetId: number;
+        reason: string;
+        comment: string | null;
+        reporter: string;
+        reporterId: number;
+        status: 'OPEN' | 'ACTIONED' | 'DISMISSED';
+      }
+    | {
+        kind: 'action';
+        at: string;
+        type: ModeratorActionType;
+        target: ReportTarget | null;
+        targetId: number;
+        comment: string | null;
+        moderator: string;
+      }
+  )[];
+}
+
+export function fetchUserHistory(userId: number) {
+  return request<ModUserHistory>('GET', `/api/mod/users/${userId}/history`);
+}
+
 /** Действие модератора — журнал ModeratorAction (src/moderation/moderator-actions.service.ts). */
 export type ModeratorActionType =
   | 'ORDER_APPROVE'

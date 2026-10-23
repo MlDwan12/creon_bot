@@ -8,6 +8,7 @@ import HelpView from './views/HelpView';
 import LearnView from './views/LearnView';
 import ModAllOrdersView from './views/mod/ModAllOrdersView';
 import ModMeView from './views/mod/ModMeView';
+import ModUsersView from './views/mod/ModUsersView';
 import ModOrderView from './views/mod/ModOrderView';
 import ModPayoutsView from './views/mod/ModPayoutsView';
 import ModQueueView from './views/mod/ModQueueView';
@@ -76,7 +77,10 @@ export const router = createBrowserRouter([
       // Отдельное окно модератора.
       { path: '/mod', element: <ModQueueView /> },
       { path: '/mod/orders', element: <ModAllOrdersView /> },
-      { path: '/mod/stats', element: <ModStatsView /> },
+      // Статистика площадки — из «Я», поэтому с «Назад».
+      { path: '/mod/stats', element: <ModStatsView />, handle: back },
+      // Все пользователи — для банов и истории модерации.
+      { path: '/mod/users', element: <ModUsersView /> },
       { path: '/mod/payouts', element: <ModPayoutsView /> },
       // Кабинет модератора: его решения, команда, выгрузка CSV.
       { path: '/mod/me', element: <ModMeView /> },

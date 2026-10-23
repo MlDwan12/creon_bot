@@ -8,6 +8,7 @@ import {
   sendModActionsCsv,
 } from '../../api';
 import { formatMoney, timeAgo } from '../../format';
+import { ACTION_LABELS } from './labels';
 import s from './ModMeView.module.css';
 
 const PERIODS: { days: number | undefined; label: string }[] = [
@@ -15,23 +16,6 @@ const PERIODS: { days: number | undefined; label: string }[] = [
   { days: 30, label: '30 дней' },
   { days: undefined, label: 'Всё время' },
 ];
-
-const LABELS: Record<ModeratorActionType, string> = {
-  ORDER_APPROVE: 'Заказ опубликован',
-  ORDER_REJECT: 'Заказ отклонён',
-  VIDEO_APPROVE: 'Ролик одобрен',
-  VIDEO_REJECT: 'Ролик отклонён',
-  HOLD_FINALIZE: 'Итог холда',
-  PUBLICATION_DELETED: 'Публикация удалена',
-  REVIEW_APPROVE: 'Отзыв опубликован',
-  REVIEW_REMOVE: 'Отзыв удалён',
-  REPORT_ACTION: 'Жалоба: мера',
-  REPORT_DISMISS: 'Жалоба: нарушений нет',
-  PAYOUT_PAID: 'Выплата проведена',
-  PAYOUT_REJECT: 'Выплата отклонена',
-  USER_BAN: 'Блокировка',
-  USER_UNBAN: 'Разблокировка',
-};
 
 const WAITS: {
   key: keyof ModMe['team'][number]['medianWaitSec'];
@@ -274,7 +258,7 @@ export default function ModMeView() {
             <ol className={`${s.rows} ${s.recent}`}>
               {data.recent.map((a) => {
                 const to = linkOf(a);
-                const what = `${LABELS[a.type]} #${a.objectId}${a.amount !== null ? ` · ${formatMoney(a.amount)}` : ''}`;
+                const what = `${ACTION_LABELS[a.type]} #${a.objectId}${a.amount !== null ? ` · ${formatMoney(a.amount)}` : ''}`;
                 return (
                   <li key={a.id}>
                     {to ? <Link to={to}>{what}</Link> : <span>{what}</span>}
@@ -286,6 +270,16 @@ export default function ModMeView() {
           )}
         </>
       )}
+      <nav className={s.links} aria-label="Статистика площадки">
+        <Link to="/mod/stats" className={s.linkRow}>
+          <span>Статистика площадки</span>
+          <small>заказы, ролики, воронка, оборот</small>
+        </Link>
+        <Link to="/mod/what-works" className={s.linkRow}>
+          <span>Что работает</span>
+          <small>какие заказы берут, смотрят и одобряют · аудитория</small>
+        </Link>
+      </nav>
     </main>
   );
 }

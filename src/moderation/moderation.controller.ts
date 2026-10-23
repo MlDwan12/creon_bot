@@ -33,6 +33,7 @@ import {
 } from '../submissions/view-counter.service';
 import { AnalyticsService } from './analytics.service';
 import { ModeratorActionsService } from './moderator-actions.service';
+import { ModUsersService, type UsersFilter } from './mod-users.service';
 import { parseStatusFilter } from './status-filter';
 import {
   BansService,
@@ -145,6 +146,7 @@ export class ModerationController {
     private readonly payouts: PayoutsService,
     private readonly viewCounter: ViewCounterService,
     private readonly actions: ModeratorActionsService,
+    private readonly users: ModUsersService,
   ) {}
 
   /** Обе очереди сразу: заказы и видео на проверке, старые первыми. */
@@ -247,6 +249,32 @@ export class ModerationController {
         createdAt: a.createdAt,
       })),
     };
+  }
+
+  /** Вкладка «Люди»: все кроме модераторов, новые первыми; поиск и фильтр по роли или бану. */
+  @Get('users')
+  usersList(
+    @Query('search', new DefaultValuePipe('')) search: string,
+    @Query('filter', new DefaultValuePipe('all')) filter: string,
+    @Query('page', new DefaultValuePipe(0), ParseIntPipe) page: number,
+  ) {
+    if (!['all', 'creators', 'advertisers', 'banned'].includes(filter))
+      throw new BadRequestException('Неверный фильтр');
+    if (page < 0 || page > 10_000)
+      throw new BadRequestException('Неверная страница');
+    return this.users.list(
+      String(search).slice(0, 100),
+      filter as UsersFilter,
+      page,
+    );
+  }
+
+  /** История модерации пользователя: жалобы на него, решения, блокировки — кто и за что. */
+  @Get('users/:id/history')
+  async userHistory(@Param('id', ParseIdPipe) id: number) {
+    const history = await this.users.history(id);
+    if (!history) throw new NotFoundException('Пользователь не найден');
+    return history;
   }
 
   /** Действия за период файлом CSV в чат с ботом: `scope` — свои (me) или всей команды (team). */
@@ -390,6 +418,7 @@ export class ModerationController {
       moderatorId: req.user.telegramId,
       type: ModeratorActionType.ORDER_REJECT,
       objectId: id,
+      comment,
       waitingSince: version,
     });
     this.notifications.orderRejected(order, comment);
@@ -464,7 +493,7 @@ export class ModerationController {
       target,
       targetId,
     );
-    const { reporters, closedOrder, bannedOrders } =
+    const { reporters, closedOrder, bannedOrders, bannedUserId } =
       await this.bans.resolveReports(decision, req.user.telegramId);
     await this.actions.log({
       moderatorId: req.user.telegramId,
@@ -475,6 +504,14 @@ export class ModerationController {
       reportTarget: target,
       waitingSince,
     });
+    // «мера и заблокировать автора» — бан отдельной строкой: он виден в истории пользователя
+    if (bannedUserId)
+      await this.actions.log({
+        moderatorId: req.user.telegramId,
+        type: ModeratorActionType.USER_BAN,
+        objectId: bannedUserId,
+        comment: decision.banReason,
+      });
     if (closedOrder) this.notifications.orderClosedByModerator(closedOrder);
     for (const order of bannedOrders)
       this.notifications.orderClosedByModerator(order);
@@ -498,6 +535,7 @@ export class ModerationController {
       moderatorId: req.user.telegramId,
       type: ModeratorActionType.USER_BAN,
       objectId: id,
+      comment: reason,
     });
     return { ok: true };
   }
@@ -674,6 +712,7 @@ export class ModerationController {
       moderatorId: req.user.telegramId,
       type: ModeratorActionType.PAYOUT_REJECT,
       objectId: id,
+      comment: payout.comment,
       amountMinor: payout.amountMinor,
       waitingSince: payout.createdAt,
     });
@@ -697,6 +736,7 @@ export class ModerationController {
       moderatorId: req.user.telegramId,
       type: ModeratorActionType.VIDEO_REJECT,
       objectId: id,
+      comment,
       waitingSince: submission.submittedAt,
     });
     this.notifications.videoRejectedByModerator(submission, comment);
