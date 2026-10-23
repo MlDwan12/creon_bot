@@ -1,0 +1,191 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 16px calc(96px + var(--safe-bottom));
+}
+.page h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.flush {
+  padding: 0;
+}
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.tiles.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.tile strong {
+  font-size: 26px;
+}
+.tile span {
+  font-size: 13px;
+  color: var(--hint);
+}
+.link-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.link-row small {
+  color: var(--hint);
+  font-size: 13px;
+  font-weight: 400;
+}
+.hint {
+  margin: 0;
+  color: var(--hint);
+}
+.hint.small {
+  font-size: 14px;
+}
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 8px;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--fill);
+}
+.segmented button {
+  min-height: 44px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  font-size: 14px;
+}
+.segmented button[aria-selected='true'] {
+  background: var(--surface);
+  font-weight: 600;
+}
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.rows li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  align-items: center;
+  padding: 0 14px;
+  font-size: 15px;
+}
+.rows li + li {
+  border-top: 1px solid var(--separator);
+}
+.rows small {
+  color: var(--hint);
+  font-size: 14px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--surface);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.table th,
+.table td {
+  padding: 10px 6px;
+  text-align: right;
+}
+.table th:first-child {
+  padding-left: 14px;
+  text-align: left;
+  font-weight: 600;
+}
+.table :is(th, td):last-child {
+  padding-right: 14px;
+}
+.table thead th {
+  color: var(--hint);
+  font-size: 12px;
+  font-weight: 400;
+}
+.table tbody tr {
+  border-top: 1px solid var(--separator);
+}
+.table th small {
+  display: block;
+  color: var(--hint);
+  font-size: 12px;
+  font-weight: 400;
+}
+/* моя строка в таблице команды */
+.mine th,
+.mine td {
+  font-weight: 800;
+}
+.actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.actions button {
+  min-height: 44px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 12px;
+  background: var(--fill);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.notice {
+  margin: 0;
+  font-size: 14px;
+  color: var(--success-text);
+}
+.error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--danger);
+}
+.recent li small {
+  flex: none;
+  white-space: nowrap;
+}
+.recent li a {
+  color: var(--link);
+  text-decoration: none;
+}
+/* Узкий экран (320 px): пять колонок помещаются только плотнее */
+@media (max-width: 359px) {
+  .table {
+    font-size: 12px;
+  }
+  .table th,
+  .table td {
+    padding: 8px 2px;
+  }
+}
