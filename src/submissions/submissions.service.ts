@@ -2,6 +2,7 @@ import { tr, trNum } from '../i18n/request-lang';
 import { randomBytes } from 'node:crypto';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -23,6 +24,7 @@ import {
 } from '../orders/budget';
 import { DAY_MS } from '../orders/deadline';
 import { titleVisibleToCreators } from '../common/format';
+import { fromMinor } from '../common/money';
 import {
   PLATFORMS,
   expandTiktokShortLink,
@@ -32,9 +34,11 @@ import {
 } from '../common/platforms';
 import {
   closeOpenOrders,
+  freedOrder,
   fundOf,
   isFrozen,
   lockOrder,
+  syncFundBusy,
   termsOf,
   videoTerms,
 } from '../orders/order-status';
@@ -74,8 +78,27 @@ const ACCEPTS_VIDEOS: Prisma.OrderWhereInput = {
   },
 };
 
+/**
+ * Слот «в работе» тикает (сгорает, напоминание), пока заказ принимает видео и фонд не «занят»
+ * роликами на проверке (Order.fundBusyAt): тогда сдать нельзя не по вине креатора.
+ */
+const SLOT_TICKS: Prisma.OrderWhereInput = {
+  ...ACCEPTS_VIDEOS,
+  fundBusyAt: null,
+};
+
 // Свободного остатка может не хватать и из-за резерва роликов на проверке — тогда он ещё вернётся.
 const EXHAUSTED_MESSAGE = () => tr('errors.budgetShort');
+
+/**
+ * Модератор зафиксировал меньше этой доли просмотров, которые указал креатор, — одобрить нельзя:
+ * завышение. Такой ролик отклоняют с INFLATED_VIEWS, и сдать его снова нельзя.
+ */
+const INFLATED_SHARE = 0.5;
+
+/** Причина отклонения за завышенные просмотры — креатор увидит её; по ней же не дают сдать ролик снова. */
+export const INFLATED_VIEWS =
+  'Просмотры завышены: модератор насчитал меньше половины указанных — этот ролик больше не принимается';
 
 /**
  * Роликов одного креатора на проверке по заказу: каждый резервирует оплату за порог, и без
@@ -249,7 +272,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
   async submitVideo(
     submissionId: number,
     creatorId: number,
-    video: { url: string; views: number },
+    video: { url: string; views: number; acceptMinor: number | null },
   ) {
     await this.assertCanSubmit(submissionId, creatorId, video.url);
     // после проверки прав: запрос к TikTok — только по своему отклику
@@ -263,6 +286,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
       creatorId,
       url,
       counted ?? video.views,
+      video.acceptMinor,
     );
   }
 
@@ -291,12 +315,18 @@ export class SubmissionsService implements OnApplicationBootstrap {
    * не за заявленные просмотры: их пишет сам креатор, и завышенное число заняло бы весь фонд до
    * решения модератора. Модератор начисляет за реальные просмотры из резерва и свободного остатка.
    * Остатка не хватает даже на порог — сдать нельзя. Один ролик сдаётся один раз (Submission_video_once).
+   *
+   * Просмотры не влезают в свободный остаток — сдать можно только с согласием на остаток
+   * (`acceptMinor` — сумма, которую креатор видел): иначе 409 OVER_BUDGET с суммой и оплачиваемыми
+   * просмотрами. Согласился — за роликом закрепляется весь остаток (не меньше `acceptMinor`),
+   * просмотры сверх него не оплачиваются. Остаток успел уменьшиться — снова 409 с новой суммой.
    */
   async attachVideo(
     submissionId: number,
     creatorId: number,
     videoUrl: string,
     views: number,
+    acceptMinor: number | null = null,
   ) {
     const submission = await this.assertCanSubmit(
       submissionId,
@@ -309,10 +339,28 @@ export class SubmissionsService implements OnApplicationBootstrap {
           views: trNum(submission.order.minViews),
         }),
       );
+    const inflated = await this.prisma.submission.count({
+      where: {
+        videoKey: videoKey(videoUrl),
+        status: SubmissionStatus.MODERATOR_REJECTED,
+        moderatorComment: INFLATED_VIEWS,
+      },
+    });
+    if (inflated) throw new ForbiddenException(tr('errors.inflatedVideo'));
     try {
       return await this.prisma.$transaction(async (tx) => {
         const { order, budget } = await this.lockBudget(tx, submission.orderId);
         if (budget.exhausted) throw new ForbiddenException(EXHAUSTED_MESSAGE());
+        const reserve = payoutFor(order.minViews, order.cpmMinor!);
+        // резерв за порог уже не больше остатка (иначе exhausted), так что остаток — весь free
+        const overBudget = payoutFor(views, order.cpmMinor!) > budget.free;
+        if (overBudget && (acceptMinor === null || acceptMinor > budget.free))
+          throw new ConflictException({
+            code: 'OVER_BUDGET',
+            message: tr('errors.overBudget'),
+            payout: fromMinor(budget.free),
+            paidViews: Math.floor((budget.free * 1000) / order.cpmMinor!),
+          });
         // под блокировкой заказа: параллельные сдачи лимит не обойдут
         const inReview = await tx.submission.count({
           where: {
@@ -333,7 +381,8 @@ export class SubmissionsService implements OnApplicationBootstrap {
             videoUrl,
             videoKey: videoKey(videoUrl),
             views,
-            payoutMinor: payoutFor(order.minViews, order.cpmMinor!),
+            payoutMinor: overBudget ? budget.free : reserve,
+            agreedPayoutMinor: overBudget ? budget.free : null,
             status: SubmissionStatus.SUBMITTED,
             submittedAt: new Date(),
             // условия при сдаче: по ним проверят и оплатят ролик, как бы заказ потом ни правили
@@ -341,6 +390,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
           },
           ACCEPTS_VIDEOS,
         );
+        await syncFundBusy(tx, submission.orderId);
         return this.mustFind(submissionId, tx);
       });
     } catch (err) {
@@ -357,10 +407,17 @@ export class SubmissionsService implements OnApplicationBootstrap {
     });
   }
 
+  /**
+   * Очередь видео: сначала ролики заказов, чей фонд «занят» (Order.fundBusyAt), — пока их не
+   * проверят, по заказу никто не может сдать ролик; дальше — старые первыми.
+   */
   listPendingModeration() {
     return this.prisma.submission.findMany({
       where: { status: SubmissionStatus.SUBMITTED },
-      orderBy: { submittedAt: 'asc' },
+      orderBy: [
+        { order: { fundBusyAt: { sort: 'asc', nulls: 'last' } } },
+        { submittedAt: 'asc' },
+      ],
       include: { order: true, creator: true },
     });
   }
@@ -424,7 +481,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
       where: {
         status: SubmissionStatus.IN_PROGRESS,
         createdAt: { lt: new Date(Date.now() - SLOT_DAYS * DAY_MS) },
-        order: ACCEPTS_VIDEOS,
+        order: SLOT_TICKS,
       },
       select: { id: true },
     });
@@ -437,7 +494,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
       submissionId,
       [SubmissionStatus.IN_PROGRESS],
       { status: SubmissionStatus.SLOT_EXPIRED, decidedAt: new Date() },
-      ACCEPTS_VIDEOS,
+      SLOT_TICKS,
     );
     return count === 0 ? null : this.mustFind(submissionId);
   }
@@ -449,7 +506,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
         status: SubmissionStatus.IN_PROGRESS,
         slotReminderSentAt: null,
         createdAt: { lt: new Date(Date.now() - (SLOT_DAYS - 1) * DAY_MS) },
-        order: ACCEPTS_VIDEOS,
+        order: SLOT_TICKS,
       },
       select: { id: true },
     });
@@ -471,6 +528,8 @@ export class SubmissionsService implements OnApplicationBootstrap {
   /**
    * Модератор проверил ролик по правилам оффера и фиксирует просмотры — выплата начисляется
    * окончательно: резерв заменяется суммой за `views` (не больше резерва + свободного остатка).
+   * Меньше половины указанных креатором — не одобряем: это завышение (rejectInflated).
+   * `freed` — фонд заказа больше не «занят»: креаторам «в работе» можно сдавать.
    */
   async moderatorApprove(
     submissionId: number,
@@ -483,6 +542,10 @@ export class SubmissionsService implements OnApplicationBootstrap {
     if (views < minViews)
       throw new ForbiddenException(
         `Меньше порога (${minViews.toLocaleString('ru-RU')} просмотров) — такой ролик отклоните`,
+      );
+    if (found.views !== null && views < found.views * INFLATED_SHARE)
+      throw new ForbiddenException(
+        `Меньше половины указанных креатором (${found.views.toLocaleString('ru-RU')}) — отклоните ролик за завышенные просмотры`,
       );
     return this.prisma.$transaction(async (tx) => {
       const { order, budget } = await this.lockBudget(tx, found.orderId);
@@ -512,29 +575,60 @@ export class SubmissionsService implements OnApplicationBootstrap {
           include: { order: { include: { advertiser: true } }, creator: true },
         }),
         closed: await this.closeIfExhausted(tx, order),
+        freed: await freedOrder(tx, order.id),
       };
     });
   }
 
-  /** Отклонение: резерв возвращается в фонд. */
+  /**
+   * Отклонение: резерв возвращается в фонд — под блокировкой заказа, чтобы пересчитать «занятость»
+   * фонда (`freed` — как у moderatorApprove).
+   */
   async moderatorReject(
     submissionId: number,
     moderatorTelegramId: bigint,
     comment: string,
   ) {
-    await transitionSubmission(
-      this.prisma,
+    const found = await this.mustFind(submissionId);
+    return this.prisma.$transaction(async (tx) => {
+      await lockOrder(tx, found.orderId);
+      await transitionSubmission(
+        tx,
+        submissionId,
+        [SubmissionStatus.SUBMITTED],
+        {
+          status: SubmissionStatus.MODERATOR_REJECTED,
+          moderatorId: moderatorTelegramId,
+          moderatorComment: comment,
+          payoutMinor: 0,
+          decidedAt: new Date(),
+        },
+      );
+      return {
+        submission: await this.mustFind(submissionId, tx),
+        freed: await freedOrder(tx, found.orderId),
+      };
+    });
+  }
+
+  /** Отклонение за завышенные просмотры: тот же ролик больше не сдать (attachVideo), причина — INFLATED_VIEWS. */
+  rejectInflated(submissionId: number, moderatorTelegramId: bigint) {
+    return this.moderatorReject(
       submissionId,
-      [SubmissionStatus.SUBMITTED],
-      {
-        status: SubmissionStatus.MODERATOR_REJECTED,
-        moderatorId: moderatorTelegramId,
-        moderatorComment: comment,
-        payoutMinor: 0,
-        decidedAt: new Date(),
-      },
+      moderatorTelegramId,
+      INFLATED_VIEWS,
     );
-    return this.mustFind(submissionId);
+  }
+
+  /** Сколько роликов креатора отклонено за завышенные просмотры — модератору: повтор — повод для бана. */
+  inflatedCount(creatorId: number) {
+    return this.prisma.submission.count({
+      where: {
+        creatorId,
+        status: SubmissionStatus.MODERATOR_REJECTED,
+        moderatorComment: INFLATED_VIEWS,
+      },
+    });
   }
 
   /**
@@ -562,7 +656,10 @@ export class SubmissionsService implements OnApplicationBootstrap {
           decidedAt: new Date(),
         },
       );
-      return this.mustFind(submissionId, tx);
+      return {
+        submission: await this.mustFind(submissionId, tx),
+        freed: await freedOrder(tx, found.orderId),
+      };
     });
   }
 

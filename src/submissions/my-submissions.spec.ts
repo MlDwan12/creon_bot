@@ -31,6 +31,7 @@ const order = (id: number): Order => ({
   editedAt: null,
   prevTerms: null,
   insightsSentAt: null,
+  fundBusyAt: null,
 });
 
 const submission = (
@@ -52,6 +53,7 @@ const submission = (
   views: null,
   likes: null,
   payoutMinor: 0,
+  agreedPayoutMinor: null,
   finalizedAt: null,
   rating: null,
   review: null,

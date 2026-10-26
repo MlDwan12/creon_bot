@@ -5,7 +5,6 @@ import {
   ApiError,
   categoryLabel,
   createOrder,
-  fetchMe,
   fetchMyOrders,
   fetchRate,
   type MyOrder,
@@ -83,13 +82,8 @@ export default function CreateOrderView() {
 
   // курс — только подсказка «≈ … ₽», не загрузился — не показываем
   const [rubPerUsdt, setRubPerUsdt] = useState<number | null>(null);
-  const [feePercent, setFeePercent] = useState<number>();
   useEffect(() => {
     void fetchRate().then(setRubPerUsdt);
-    fetchMe().then(
-      (me) => setFeePercent(me.feePercent ?? undefined),
-      () => {},
-    );
   }, []);
 
   const [form, setForm] = useState<Form>({
@@ -190,13 +184,9 @@ export default function CreateOrderView() {
     return !invalid.length && !catError;
   }
 
-  // Проверка перед отправкой нового заказа: карточка, как её увидят креаторы, и деньги с комиссией.
+  // Проверка перед отправкой нового заказа: карточка, как её увидят креаторы, и бюджет.
+  // Комиссию площадки пока не показываем — её размер не решён.
   const [previewing, setPreviewing] = useState(false);
-  /** Креаторам — бюджет без комиссии, как payoutPool на бэкенде (вниз до центов). */
-  const pool =
-    feePercent === undefined
-      ? undefined
-      : Math.floor(Number(form.budget) * (100 - feePercent)) / 100;
   const previewOrder: OrderSummary = {
     id: 0,
     title: form.title,
@@ -204,9 +194,11 @@ export default function CreateOrderView() {
     referenceUrl: form.referenceUrl || null,
     cpm: null,
     minViews: Number(form.minViews),
-    free: pool ?? Number(form.budget),
+    // остаток в предпросмотре не показываем (OrderCard preview): по нему видна комиссия
+    free: Number(form.budget),
     freeUnder: null,
     budgetLow: false,
+    fundBusy: false,
     category: form.category!,
     deadline: null,
     createdAt: new Date().toISOString(),
@@ -577,23 +569,6 @@ export default function CreateOrderView() {
               <span>{t('createOrder.preview.budget')}</span>
               <strong>{formatMoney(Number(form.budget))}</strong>
             </div>
-            {pool !== undefined && feePercent !== undefined && (
-              <>
-                <div className={`${s.row} ${s.bordered}`}>
-                  <span>{t('createOrder.preview.pool')}</span>
-                  <strong>{formatMoney(pool)}</strong>
-                </div>
-                <div className={`${s.row} ${s.bordered}`}>
-                  <span>{t('createOrder.preview.fee')}</span>
-                  <strong>
-                    {t('createOrder.preview.feeValue', {
-                      percent: feePercent,
-                      amount: formatMoney(Number(form.budget) - pool),
-                    })}
-                  </strong>
-                </div>
-              </>
-            )}
           </div>
           <p className={s.lead}>{t('createOrder.preview.moneyNote')}</p>
 

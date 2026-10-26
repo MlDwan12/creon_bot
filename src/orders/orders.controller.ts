@@ -46,6 +46,8 @@ function toPublic(
     cpm: fromMinor(order.cpmMinor),
     ...freeForCreators(order.freeMinor),
     budgetLow: isBudgetLow(order.freeMinor, payoutPool(order)),
+    // весь фонд зарезервирован под ролики на проверке: взять нельзя, пока место не освободится
+    fundBusy: order.fundBusy,
     category: order.category,
     deadline: order.deadline,
     createdAt: order.createdAt,

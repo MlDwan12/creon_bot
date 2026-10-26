@@ -37,6 +37,8 @@ export default function SubmitVideoView() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
   const [sent, setSent] = useState(false);
+  /** Просмотры вышли за рамки бюджета (409 OVER_BUDGET): сколько оплатим, если креатор согласится. */
+  const [over, setOver] = useState<{ payout: number; paidViews: number }>();
   const urlInput = useRef<HTMLInputElement>(null);
   /** «Изменить» сбросил ссылку — после перерисовки ставим курсор в поле. */
   const [focusUrl, setFocusUrl] = useState(false);
@@ -102,16 +104,25 @@ export default function SubmitVideoView() {
     }
   }
 
-  async function send(e: React.FormEvent) {
-    e.preventDefault();
+  /** `accept` — креатор согласился на остаток фонда из окна «за рамками бюджета». */
+  async function send(accept?: number) {
     // Enter в поле отправляет форму в обход кнопки — та же проверка и здесь
     if (!allChecked) return;
     setSending(true);
     setSendError('');
     try {
-      await submitVideo(id, url, viewsNum);
+      await submitVideo(id, url, viewsNum, accept);
       setSent(true);
     } catch (err) {
+      // Не влезли в остаток (или он успел уменьшиться) — спрашиваем согласие на новую сумму.
+      if (err instanceof ApiError && err.data?.code === 'OVER_BUDGET') {
+        setOver({
+          payout: Number(err.data.payout),
+          paidViews: Number(err.data.paidViews),
+        });
+        return;
+      }
+      setOver(undefined);
       // Проверку ссылки делает бэкенд — те же правила и тексты ошибок, что в боте.
       setSendError(
         err instanceof ApiError ? err.userMessage : t('submit.sendError'),
@@ -154,8 +165,21 @@ export default function SubmitVideoView() {
             </div>
           </div>
 
+          {submission.fundPaused && (
+            <p className={s.busy} role="status">
+              {t('submit.fundBusy')}
+            </p>
+          )}
+
           {/* onSubmit — отправка формы без перезагрузки страницы (Enter на клавиатуре тоже работает). */}
-          <form id="video-form" className={s.field} onSubmit={send}>
+          <form
+            id="video-form"
+            className={s.field}
+            onSubmit={(e) => {
+              e.preventDefault();
+              void send();
+            }}
+          >
             <label htmlFor="video-url" className="section-title">
               {t('submit.urlLabel')}
             </label>
@@ -246,6 +270,46 @@ export default function SubmitVideoView() {
             )}
           </form>
 
+          {over && (
+            <section
+              className={s.over}
+              role="alertdialog"
+              aria-labelledby="over-title"
+            >
+              <h2 id="over-title">
+                {t('submit.overTitle', { views: formatViews(viewsNum) })}
+              </h2>
+              <p>
+                {t('submit.overText', {
+                  amount: formatMoney(over.payout),
+                  paidViews: formatViews(over.paidViews),
+                })}
+              </p>
+              <div className={s.overActions}>
+                <button
+                  type="button"
+                  className="main-button"
+                  disabled={sending}
+                  onClick={() => void send(over.payout)}
+                >
+                  {sending
+                    ? t('common.sending')
+                    : t('submit.overAgree', {
+                        amount: formatMoney(over.payout),
+                      })}
+                </button>
+                <button
+                  type="button"
+                  className={s.overCancel}
+                  disabled={sending}
+                  onClick={() => setOver(undefined)}
+                >
+                  {t('submit.overCancel')}
+                </button>
+              </div>
+            </section>
+          )}
+
           <fieldset className={s.checks}>
             <legend className={s.checksHead}>
               <span>{t('submit.checkTitle')}</span>
@@ -276,7 +340,14 @@ export default function SubmitVideoView() {
               type="submit"
               form="video-form"
               className="main-button"
-              disabled={sending || !url.trim() || !viewsNum || !allChecked}
+              disabled={
+                sending ||
+                !url.trim() ||
+                !viewsNum ||
+                !allChecked ||
+                submission.fundPaused ||
+                !!over
+              }
             >
               {sending ? t('common.sending') : t('submit.submit')}
             </button>

@@ -158,6 +158,9 @@ export default function MyOrderCard({
         </p>
       )}
       {order.frozen && <p className={s.hint}>{t('myOrderCard.frozen')}</p>}
+      {order.fundBusy && (
+        <p className={s.hint}>{t('myOrderCard.fundBusy')}</p>
+      )}
 
       {order.status === 'EXPIRED' && (
         <p className={s.hint}>{t('myOrderCard.expired')}</p>

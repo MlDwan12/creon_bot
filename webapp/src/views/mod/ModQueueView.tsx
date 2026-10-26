@@ -443,7 +443,13 @@ export default function ModQueueView() {
                 <Link key={v.id} to={`/mod/videos/${v.id}`} className={s.row}>
                   <span className={s.main}>
                     <span className={s.title}>{v.orderTitle}</span>
-                    <span className={s.sub}>{v.creator}</span>
+                    <span className={s.sub}>
+                      {v.creator}
+                      {/* сверху очереди: пока не проверят, по заказу никто не сдаёт */}
+                      {v.holdsFund && (
+                        <span className={s.flag}> · держит фонд заказа</span>
+                      )}
+                    </span>
                   </span>
                   {v.submittedAt && (
                     <span className={waitClass(v.submittedAt)}>

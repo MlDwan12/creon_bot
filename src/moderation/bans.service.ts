@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderStatus, ReportTarget } from '@prisma/client';
+import { OrderStatus, ReportTarget, SubmissionStatus } from '@prisma/client';
 import { ModeratorGuard } from '../auth/moderator.guard';
 import {
   isDbId,
@@ -14,7 +14,9 @@ import {
 import { ReportsService } from '../reports/reports.service';
 import {
   closeOpenOrders,
+  freedOrder,
   FROZEN,
+  lockOrder,
   rejectPendingOrders,
 } from '../orders/order-status';
 import { PrismaService } from '../prisma/prisma.service';
@@ -73,7 +75,7 @@ export class BansService {
     private readonly moderatorGuard: ModeratorGuard,
   ) {}
 
-  /** Бан модератором вручную. Возвращает снятые заказы с креаторами — им уведомление. */
+  /** Бан модератором вручную. Возвращает снятые заказы и заказы, где освободился фонд, — с креаторами для уведомлений. */
   async banUser(userId: number, reason: string) {
     await this.mustNotBeModerator(userId);
     return this.ban(userId, reason);
@@ -101,7 +103,10 @@ export class BansService {
       actioned,
       moderatorTelegramId,
     );
-    let bannedOrders: Awaited<ReturnType<BansService['ban']>> = [];
+    let bannedOrders: Awaited<ReturnType<BansService['ban']>> = {
+      closed: [],
+      freed: [],
+    };
     /** Кого заблокировали этим решением; null — бана не было (или другой модератор успел раньше). */
     let bannedUserId: number | null = null;
     if (toBan)
@@ -123,7 +128,10 @@ export class BansService {
     return user;
   }
 
-  /** Возвращает закрытые и отклонённые заказы с креаторами — им уведомление. */
+  /**
+   * Возвращает `closed` — закрытые и отклонённые заказы автора и `freed` — чужие заказы, где
+   * отклонённые ролики заблокированного освободили «занятый» фонд; у обоих — креаторы для уведомлений.
+   */
   async ban(userId: number, reason: string) {
     return this.prisma.$transaction(async (tx) => {
       const { count } = await tx.user.updateMany({
@@ -158,16 +166,31 @@ export class BansService {
         { orderId: { in: pendingIds } },
         'Заказ снят модератором',
       );
-      // работа самого заблокированного: без видео — удаляем, на проверке — отклоняем
+      // работа самого заблокированного: без видео — удаляем, на проверке — отклоняем. Резерв
+      // возвращается в фонды чужих заказов — под их блокировкой (по возрастанию id, без взаимных
+      // ожиданий), и «весь фонд зарезервирован» пересчитывается сразу.
       await deleteInProgress(tx, userId);
+      const reserved = await tx.submission.findMany({
+        where: { creatorId: userId, status: SubmissionStatus.SUBMITTED },
+        select: { orderId: true },
+        distinct: ['orderId'],
+        orderBy: { orderId: 'asc' },
+      });
+      for (const { orderId } of reserved) await lockOrder(tx, orderId);
       await rejectSubmitted(tx, { creatorId: userId }, BANNED_COMMENT);
-      return tx.order.findMany({
+      const freed: NonNullable<Awaited<ReturnType<typeof freedOrder>>>[] = [];
+      for (const { orderId } of reserved) {
+        const order = await freedOrder(tx, orderId);
+        if (order) freed.push(order);
+      }
+      const closed = await tx.order.findMany({
         where: { id: { in: [...open, ...pending].map((o) => o.id) } },
         include: {
           advertiser: true,
           submissions: { include: { creator: true } },
         },
       });
+      return { closed, freed };
     });
   }
 

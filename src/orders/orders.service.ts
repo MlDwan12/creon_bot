@@ -31,10 +31,12 @@ import { DAY_MS, extendedDeadline } from './deadline';
 import { type OrderFunnel, orderInsights } from './order-insights';
 import { buildOrderReport } from './order-report';
 import {
+  endFundPause,
   FROZEN,
   isFrozen,
   lockOrder,
   type OrderTerms,
+  syncFundBusy,
   termsOf,
   transitionOrder,
   tryTransitionOrder,
@@ -201,7 +203,11 @@ export class OrdersService {
     };
   }
 
-  /** Свободный остаток фонда выплат к каждому заказу — креаторы видят его в каталоге. */
+  /**
+   * Свободный остаток фонда выплат к каждому заказу — креаторы видят его в каталоге. `fundBusy` —
+   * остатка не хватает на ролик с порогом: у открытого заказа это значит, что фонд зарезервирован
+   * под ролики на проверке (исчерпанный начислениями закрывается сам).
+   */
   private async withFree<
     T extends { id: number } & Parameters<typeof budgetState>[0],
   >(orders: T[]) {
@@ -209,10 +215,10 @@ export class OrdersService {
       this.prisma,
       orders.map((o) => o.id),
     );
-    return orders.map((o) => ({
-      ...o,
-      freeMinor: budgetState(o, spent.get(o.id) ?? 0).free,
-    }));
+    return orders.map((o) => {
+      const budget = budgetState(o, spent.get(o.id) ?? 0);
+      return { ...o, freeMinor: budget.free, fundBusy: budget.exhausted };
+    });
   }
 
   /**
@@ -650,6 +656,10 @@ export class OrdersService {
         );
       // заморозка начинается с первой правки открытого заказа; повторная правка её не сдвигает
       const startsFreeze = order.status === OrderStatus.OPEN;
+      // слоты на паузе из-за «занятого» фонда: дальше их держит заморозка — паузу «занятости»
+      // закрываем сейчас, иначе после одобрения правки слоты продлили бы дважды за одно время
+      if (startsFreeze && order.fundBusyAt)
+        await endFundPause(tx, orderId, order.fundBusyAt, now);
       await transitionOrder(
         tx,
         orderId,
@@ -764,6 +774,8 @@ export class OrdersService {
           UPDATE "Submission"
           SET "createdAt" = "createdAt" + (${now}::timestamp - ${order.editedAt}::timestamp)
           WHERE "orderId" = ${orderId} AND "status" = 'IN_PROGRESS'`;
+      // новая ставка или бюджет могли занять фонд роликами на проверке или освободить его
+      await syncFundBusy(tx, orderId, now);
     });
     const approved = await this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },

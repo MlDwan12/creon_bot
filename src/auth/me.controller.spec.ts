@@ -5,15 +5,16 @@ import type { ModeratorGuard } from './moderator.guard';
 import type { SupportService } from '../support/support.service';
 
 describe('GET /api/me: комиссия', () => {
-  it('в кабинете креатора не отдаётся — по ней и остатку вычисляется бюджет', async () => {
+  it('не отдаётся ни в одном кабинете — пока размер не решён', async () => {
     const me = new MeController(
       { isModerator: () => false } as unknown as ModeratorGuard,
       { url: () => Promise.resolve(null) } as unknown as SupportService,
     );
-    const feeFor = async (cabinet: User['cabinet']) =>
-      (await me.me({ user: { cabinet, language: null } as User } as ApiRequest))
-        .feePercent;
-    expect(await feeFor('CREATOR')).toBeNull();
-    expect(await feeFor('ADVERTISER')).toBe(20);
+    for (const cabinet of ['CREATOR', 'ADVERTISER', null] as User['cabinet'][])
+      expect(
+        await me.me({
+          user: { cabinet, language: null } as User,
+        } as ApiRequest),
+      ).not.toHaveProperty('feePercent');
   });
 });
