@@ -61,6 +61,8 @@ export interface OrderSummary extends VideoFormat {
   freeUnder: number | null;
   /** Осталось меньше 30% фонда — подсвечиваем «успейте». */
   budgetLow: boolean;
+  /** Весь фонд зарезервирован под ролики на проверке: взять нельзя, пока место не освободится. */
+  fundBusy: boolean;
   category: OrderCategory;
   deadline: string | null;
   createdAt: string;
@@ -108,10 +110,14 @@ export interface MySubmission {
   holdEndsAt: string | null;
   /** До когда прислать видео (только «в работе»): конец слота или срок заказа, что раньше. */
   dueAt: string | null;
+  /** «В работе», а фонд заказа занят роликами на проверке: сдать нельзя, время на паузе. */
+  fundPaused: boolean;
   /** На проверке — заявлено креатором, после одобрения — зафиксировано модератором. */
   views: number | null;
   /** USDT: на проверке — зарезервировано, после одобрения — начислено. */
   payout: number;
+  /** Сдан с согласием на остаток фонда, USDT: просмотры сверх него не оплачиваются; null — влез в фонд. */
+  agreedPayout: number | null;
   /** Холд закончился: итог зафиксирован, деньги можно вывести. */
   finalized: boolean;
   /** Ссылка на товар для описания ролика — путь `/r/<код>` от адреса мини-аппа; null — у заказа нет товара. */
@@ -143,6 +149,8 @@ export interface MyOrder extends VideoFormat {
   rejectReason: string | null;
   /** Опубликованный заказ изменён, правку ещё не одобрили: ролики не сдают, можно исправить или закрыть. */
   frozen: boolean;
+  /** Весь фонд зарезервирован под ролики на проверке — новые не принимаются, пока их не проверят. */
+  fundBusy: boolean;
   /** Сколько бюджета израсходовано и зарезервировано, %. */
   usedPercent: number;
   /** Одобренных роликов и сумма их просмотров. */
@@ -260,6 +268,8 @@ export interface ModQueue {
     orderTitle: string;
     creator: string;
     submittedAt: string | null;
+    /** Фонд заказа занят — по нему никто не сдаёт, пока не проверят; такие — первыми. */
+    holdsFund: boolean;
   }[];
   /** Холд закончился — проверить публикацию и зафиксировать итог. */
   holds: {
@@ -432,6 +442,10 @@ export interface ModVideo {
   platform: Platform;
   /** USDT: резерв или начислено. */
   payout: number;
+  /** Креатор согласился при сдаче на остаток фонда, USDT; null — ролик влез в фонд. */
+  agreedPayout: number | null;
+  /** Сколько роликов креатора уже отклонено за завышенные просмотры. */
+  inflatedBefore: number;
   decidedAt: string | null;
   finalizedAt: string | null;
   /** Через сколько дней после одобрения фиксируется итог просмотров. */
@@ -541,6 +555,8 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     readonly userMessage: string,
+    /** Тело ответа с ошибкой — для ответов с данными (409 OVER_BUDGET). */
+    readonly data: Record<string, unknown> | null = null,
   ) {
     super(`HTTP ${status}`);
   }
@@ -561,13 +577,15 @@ async function request<T>(
   });
   if (!res.ok) {
     let userMessage = i18next.t('common.genericError');
-    if ([400, 403, 404, 429].includes(res.status)) {
-      const data = (await res.json().catch(() => null)) as {
-        message?: unknown;
-        banned?: boolean;
-        reason?: string | null;
-        supportUrl?: string | null;
-      } | null;
+    const data = [400, 403, 404, 409, 429].includes(res.status)
+      ? ((await res.json().catch(() => null)) as {
+          message?: unknown;
+          banned?: boolean;
+          reason?: string | null;
+          supportUrl?: string | null;
+        } | null)
+      : null;
+    if (data) {
       if (typeof data?.message === 'string') userMessage = data.message;
       if (data?.banned)
         banned.set({
@@ -575,7 +593,7 @@ async function request<T>(
           supportUrl: data.supportUrl ?? null,
         });
     }
-    throw new ApiError(res.status, userMessage);
+    throw new ApiError(res.status, userMessage, data);
   }
   return (await res.json()) as T;
 }
@@ -617,10 +635,15 @@ export function fetchMySubmissions() {
   return request<MySubmission[]>('GET', '/api/submissions');
 }
 
+/**
+ * Сдать ролик. `acceptPayout` — креатор согласился на остаток фонда, который показал ответ
+ * 409 OVER_BUDGET (overBudgetOf): просмотры вышли за рамки бюджета.
+ */
 export function submitVideo(
   submissionId: number,
   videoUrl: string,
   views: number,
+  acceptPayout?: number,
 ) {
   return request<{ ok: true }>(
     'POST',
@@ -628,6 +651,7 @@ export function submitVideo(
     {
       videoUrl,
       views,
+      acceptPayout,
     },
   );
 }
@@ -771,8 +795,6 @@ type Me = {
   languageChosen: boolean;
   /** Кабинет, открытый последним (role.ts); null — ещё не выбирал. */
   cabinet: 'creator' | 'advertiser' | null;
-  /** Комиссия площадки для новых заказов, %: бюджет креаторам — без неё; в кабинете креатора — null. */
-  feePercent: number | null;
 };
 let me: Promise<Me> | undefined;
 
@@ -974,10 +996,13 @@ export function fetchModVideo(id: number) {
   return request<ModVideo>('GET', `/api/mod/videos/${id}`);
 }
 
-/** Одобрить с просмотрами (`views`) или отклонить с причиной (`comment`). */
+/**
+ * Одобрить с просмотрами (`views`), отклонить с причиной (`comment`) или за завышенные просмотры
+ * (`inflated` — тот же ролик больше не сдать).
+ */
 export function moderateVideo(
   id: number,
-  decision: 'approve' | 'reject',
+  decision: 'approve' | 'reject' | 'inflated',
   body: { views?: number; likes?: number | null; comment?: string },
 ) {
   return request<{ ok: true }>(

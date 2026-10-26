@@ -122,7 +122,16 @@ export default function ModVideoView() {
     }
   }
 
-  const decide = (decision: 'approve' | 'reject') =>
+  /**
+   * Насчитали меньше половины указанных креатором — одобрить нельзя (бэкенд не пропустит):
+   * это завышение, вместо «Одобрить» — отказ за завышенные просмотры, ролик больше не сдать.
+   */
+  const inflated =
+    video?.status === 'SUBMITTED' &&
+    video.views !== null &&
+    !!Number(views) &&
+    Number(views) < video.views * 0.5;
+  const decide = (decision: 'approve' | 'reject' | 'inflated') =>
     run(
       () =>
         moderateVideo(
@@ -130,7 +139,9 @@ export default function ModVideoView() {
           decision,
           decision === 'reject'
             ? { comment }
-            : { views: Number(views), likes: likesOrNull() },
+            : decision === 'inflated'
+              ? {}
+              : { views: Number(views), likes: likesOrNull() },
         ),
       'videos',
     );
@@ -305,6 +316,12 @@ export default function ModVideoView() {
           <span>Свободно в бюджете</span>
           <span>{formatMoney(video.order.free)}</span>
         </div>
+        {video.agreedPayout !== null && (
+          <div className={s.row}>
+            <span>Не влез в бюджет — креатор согласился на остаток</span>
+            <span>{formatMoney(video.agreedPayout)}</span>
+          </div>
+        )}
         {video.autoViews !== null && (
           <div className={s.row}>
             <span>Сейчас по данным {PLATFORM_NAMES[video.platform]}</span>
@@ -365,6 +382,19 @@ export default function ModVideoView() {
         </>
       )}
 
+      {video.status === 'SUBMITTED' && video.inflatedBefore > 0 && (
+        <p className={s.error} role="status">
+          Уже отклоняли за завышенные просмотры: {video.inflatedBefore}. Повтор —
+          повод для бана.
+        </p>
+      )}
+      {inflated && (
+        <p className={s.error} role="status">
+          Меньше половины указанных креатором ({formatViews(video.views!)}) —
+          это завышение. Ролик отклоняется, и сдать его снова будет нельзя.
+        </p>
+      )}
+
       {video.status === 'SUBMITTED' ? (
         <>
           {/* причины — только когда решили отклонить: так «Отклонить» не нажать по ошибке */}
@@ -411,14 +441,25 @@ export default function ModVideoView() {
               >
                 Отклонить
               </button>
-              <button
-                type="button"
-                className={s.approve}
-                disabled={busy || !Number(views)}
-                onClick={() => decide('approve')}
-              >
-                Одобрить{estimate && ` · ${estimate}`}
-              </button>
+              {inflated ? (
+                <button
+                  type="button"
+                  className={s.rejectConfirm}
+                  disabled={busy}
+                  onClick={() => decide('inflated')}
+                >
+                  Завышены просмотры
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={s.approve}
+                  disabled={busy || !Number(views)}
+                  onClick={() => decide('approve')}
+                >
+                  Одобрить{estimate && ` · ${estimate}`}
+                </button>
+              )}
             </div>
           )}
         </>

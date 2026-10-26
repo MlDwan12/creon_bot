@@ -8,8 +8,13 @@ import {
 } from '../common/platforms';
 import { MAX_URL_LENGTH, VIDEO_URL_RE } from '../common/validation';
 import { parseViews } from '../orders/order-input';
+import { toMinor } from '../common/money';
 
-/** Тело `POST /api/submissions/:id/video` → ссылка на публикацию и просмотры, которые указал креатор. */
+/**
+ * Тело `POST /api/submissions/:id/video` → ссылка на публикацию и просмотры, которые указал креатор.
+ * `acceptPayout` — креатор согласился на остаток фонда (USDT), когда просмотры за него вышли
+ * (SubmissionsService.attachVideo, 409 OVER_BUDGET); нет — ещё не спрашивали.
+ */
 export function parseVideoSubmission(body: unknown) {
   const b = (body ?? {}) as Record<string, unknown>;
   const url = typeof b.videoUrl === 'string' ? b.videoUrl.trim() : '';
@@ -32,5 +37,16 @@ export function parseVideoSubmission(body: unknown) {
   // Короткую ссылку TikTok раскрывает SubmissionsService.submitVideo.
   if (!videoIdKey(url) && !isTiktokShortLink(url))
     throw new BadRequestException(tr('errors.videoNotPost'));
-  return { url, views: parseViews(b.views) };
+  const accept = b.acceptPayout;
+  if (
+    accept !== undefined &&
+    accept !== null &&
+    (typeof accept !== 'number' || !Number.isFinite(accept) || accept < 0)
+  )
+    throw new BadRequestException(tr('errors.badAcceptPayout'));
+  return {
+    url,
+    views: parseViews(b.views),
+    acceptMinor: typeof accept === 'number' ? toMinor(accept) : null,
+  };
 }

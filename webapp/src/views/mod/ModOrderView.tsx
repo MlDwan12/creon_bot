@@ -124,6 +124,7 @@ export default function ModOrderView() {
     free: Math.floor(order.pool / 100) * 100,
     freeUnder: order.pool < 100 ? 100 : null,
     budgetLow: false,
+    fundBusy: false,
   };
 
   /** После решения — сразу следующий заказ из очереди; очередь пуста — назад к ней. */

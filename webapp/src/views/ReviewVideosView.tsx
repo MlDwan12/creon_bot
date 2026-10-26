@@ -187,7 +187,6 @@ export default function ReviewVideosView() {
       </section>
       <p className={s.hint}>
         {t('review.left', { amount: formatMoney(data.summary.left) })}
-        {t('review.withFee')}
       </p>
 
       <h2 className={`section-title ${s.flush}`}>{t('review.funnel')}</h2>
