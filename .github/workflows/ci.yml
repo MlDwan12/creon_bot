@@ -1,11 +1,12 @@
 name: CI
 
 # develop — рабочая ветка без деплоя, main — релизы (после зелёного CI уезжают в прод).
+# epic/* — большие задачи из нескольких PR: копятся там и одним мержем уходят в develop.
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, 'epic/**']
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, 'epic/**']
 
 # Новый пуш в ту же ветку отменяет прошлый запуск — зависший не копит минуты рядом с новым.
 concurrency:
