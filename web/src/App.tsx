@@ -2,7 +2,7 @@ import { ApiError, type Me } from '@fixum/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RouterProvider } from 'react-router/dom';
-import { fetchMe, logout } from './api';
+import { fetchMe, logout, RELOGIN_EVENT } from './api';
 import { Login } from './Login';
 import { router } from './router';
 import { Session } from './session';
@@ -18,6 +18,22 @@ type State =
 export function App() {
   const { t } = useTranslation();
   const [state, setState] = useState<State>({ kind: 'loading' });
+  /** API попросил свежий вход (кошелёк, вывод) — окно с кнопкой «Войти заново». */
+  const [relogin, setRelogin] = useState(false);
+  useEffect(() => {
+    const show = () => setRelogin(true);
+    window.addEventListener(RELOGIN_EVENT, show);
+    return () => window.removeEventListener(RELOGIN_EVENT, show);
+  }, []);
+  /** Выход и сразу экран входа: подтверждение Telegram даст свежий вход. */
+  const signOut = () =>
+    void logout().then(
+      () => {
+        setRelogin(false);
+        setState({ kind: 'guest' });
+      },
+      () => setState({ kind: 'error' }),
+    );
 
   const load = useCallback(() => {
     setState({ kind: 'loading' });
@@ -50,14 +66,29 @@ export function App() {
           value={{
             me: state.me,
             setMe: (me) => setState({ kind: 'in', me }),
-            logout: () =>
-              void logout().then(
-                () => setState({ kind: 'guest' }),
-                () => setState({ kind: 'error' }),
-              ),
+            logout: signOut,
           }}
         >
           <RouterProvider router={router} />
+          {relogin && (
+            <div className={s.overlay} role="alertdialog" aria-modal="true">
+              <div className={s.dialog}>
+                <p>{t('errors.relogin')}</p>
+                <div className={s.dialogButtons}>
+                  <button type="button" className={s.retry} onClick={signOut}>
+                    {t('web.relogin')}
+                  </button>
+                  <button
+                    type="button"
+                    className={s.cancel}
+                    onClick={() => setRelogin(false)}
+                  >
+                    {t('common.cancel')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </Session>
       );
     case 'banned':
