@@ -72,3 +72,9 @@ jobs:
 
       - name: Webapp — typecheck & build
         run: yarn --cwd webapp build
+
+      - name: Сайт — install
+        run: yarn --cwd web install --frozen-lockfile
+
+      - name: Сайт — typecheck & build
+        run: yarn --cwd web build

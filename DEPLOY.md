@@ -76,6 +76,37 @@ curl -sI "https://$DOMAIN/" | grep -i '^cache-control'          # пусто —
 
 Не так — вернуть vhost: `sudo cp ~/"$SITE.bak" "/etc/nginx/sites-available/$SITE" && sudo systemctl reload nginx`.
 
+## Сайт
+
+Сайт (`web/`) — отдельный домен: прод — `web.fixumapp.com`, дев — `web.dev.creon.couchreboot.site`.
+Страницы отдаёт nginx из `SITE_DIR/current` (прод — `/var/www/fixum-web`, дев — `/var/www/creon-web`),
+`/api/` — тот же бот. Выкатывает `deploy.yml` тем же `remote-static.sh`, если изменились `web/`,
+`packages/` или `i18n/`. Пока папки на стенде нет, сайт при выкатке пропускается (бот и мини-апп выкатываются как обычно).
+Откат — как у мини-аппа, симлинком в `SITE_DIR`.
+
+Настройка — один раз на каждом стенде:
+
+1. DNS: A-запись домена сайта → IP сервера (прод `72.62.46.36`, дев `38.180.145.13`).
+2. BotFather → `/setdomain` → бот стенда (дев — `@creontest_bot`) → домен сайта. Без этого окно входа
+   Telegram отвечает «Bot domain invalid». У бота один домен для входа — другим сайтам его не давать.
+3. На ноутбуке, из корня репозитория: `scp -P <SSH_PORT> deploy/prod/nginx/fixum-web.conf ops@72.62.46.36:`
+   (дев: `root@38.180.145.13`).
+4. На сервере (прод; для дева — `DOMAIN=web.dev.creon.couchreboot.site`, `SITE=/var/www/creon-web`, без `sudo` под root):
+
+```bash
+DOMAIN=web.fixumapp.com SITE=/var/www/fixum-web
+# сертификат — через проверку в default.conf (/var/www/letsencrypt), vhost сайта для этого не нужен.
+# Дев: если там нет такого default.conf — sudo certbot certonly --nginx -d "$DOMAIN"
+sudo certbot certonly --webroot -w /var/www/letsencrypt -d "$DOMAIN"
+sudo install -d -m 755 -o deploy -g deploy "$SITE"
+sed "s#DOMAIN#$DOMAIN#g; s#SITE_DIR#$SITE#g" ~/fixum-web.conf | sudo tee /etc/nginx/sites-available/fixum-web.conf >/dev/null
+sudo ln -sfn /etc/nginx/sites-available/fixum-web.conf /etc/nginx/sites-enabled/fixum-web.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Ближайшая выкатка стенда выложит сайт: версии на сервере ещё нет, поэтому он считается изменившимся.
+Правки `deploy.yml` действуют только после попадания в `main` (см. «Дев-стенд»).
+
 ## Настройка (один раз)
 
 Пользователь `deploy` и его ключ — `deploy/prod/SERVER.md`, слой 2.2. GitHub → Settings → Environments →
