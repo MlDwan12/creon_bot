@@ -127,6 +127,8 @@ export function submitVideo(
   videoUrl: string,
   views: number,
   acceptPayout?: number,
+  /** Ссылка стоит в шапке профиля — если заказ этого требует (order.linkInBio). */
+  bioLinkConfirmed?: boolean,
 ) {
   return request<{ ok: true }>(
     'POST',
@@ -135,12 +137,21 @@ export function submitVideo(
       videoUrl,
       views,
       acceptPayout,
+      bioLinkConfirmed,
     },
   );
 }
 
 export function fetchMyOrders() {
   return request<MyOrder[]>('GET', '/api/my-orders');
+}
+
+/** Сколько обычно стоят 1000 просмотров в категории, USDT; null — мало данных. */
+export function fetchPriceHint(category: OrderCategory) {
+  return request<{ per1000: number | null }>(
+    'GET',
+    `/api/my-orders/price-hint?category=${category}`,
+  );
 }
 
 export function createOrder(input: NewOrderInput) {
@@ -447,8 +458,11 @@ export function finalizeVideo(id: number, views: number, likes: number | null) {
 }
 
 /** При итоге публикации нет — начисление из холда отменяется. */
-export function markPublicationDeleted(id: number) {
-  return request<{ ok: true }>('POST', `/api/mod/videos/${id}/deleted`);
+/** bioLink — публикация на месте, но ссылку из шапки профиля убрали (заказ её требовал). */
+export function markPublicationDeleted(id: number, bioLink = false) {
+  return request<{ ok: true }>('POST', `/api/mod/videos/${id}/deleted`, {
+    bioLink,
+  });
 }
 
 export function reasonLabel(target: ReportTarget, code: string): string {

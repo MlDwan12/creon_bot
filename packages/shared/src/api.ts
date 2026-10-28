@@ -41,8 +41,10 @@ export interface OrderSummary extends VideoFormat {
   id: number;
   title: string;
   description: string;
-  /** Ссылка на референс или материалы к заданию. */
+  /** Ссылка на бриф или материалы к заданию; null — нет. */
   referenceUrl: string | null;
+  /** Свою ссылку на товар креатор держит ещё и в шапке профиля — до итога холда. */
+  linkInBio: boolean;
   /** Выплата креатору за 1000 просмотров, USDT. */
   cpm: number | null;
   /** Ролик можно сдать, когда он наберёт столько просмотров. */
@@ -62,6 +64,8 @@ export interface OrderSummary extends VideoFormat {
 
 /** Ответ `GET /api/orders/:id`. */
 export interface OrderDetail extends OrderSummary {
+  /** Примеры роликов, какие хочет заказчик; url — редирект Fixum, без ника автора в ссылке. */
+  examples: { platform: Platform; url: string }[];
   claimed: boolean;
   /** Заказ текущего пользователя — откликнуться нельзя. */
   own: boolean;
@@ -122,6 +126,8 @@ export interface MySubmission {
     minViews: number;
     deadline: string | null;
     status: OrderStatus;
+    /** При сдаче — подтвердить, что ссылка стоит в шапке профиля. */
+    linkInBio: boolean;
   };
 }
 
@@ -130,8 +136,10 @@ export interface MyOrder extends VideoFormat {
   id: number;
   title: string;
   description: string;
+  exampleUrls: string[];
   referenceUrl: string | null;
   targetUrl: string | null;
+  linkInBio: boolean;
   /** Весь бюджет, USDT. */
   budget: number;
   minViews: number;
@@ -159,10 +167,14 @@ export interface MyOrder extends VideoFormat {
 export interface NewOrderInput extends VideoFormat {
   title: string;
   description: string;
-  /** Ссылка на референс или материалы; null — без ссылки. */
+  /** Примеры роликов: от 3 до 10 ссылок на ролики площадок. */
+  exampleUrls: string[];
+  /** Ссылка на бриф или материалы; null — без ссылки. */
   referenceUrl: string | null;
   /** Страница товара: креаторы ставят в описание ролика свою ссылку на неё, считаем переходы. */
   targetUrl: string | null;
+  /** Креатор ставит свою ссылку ещё и в шапку профиля; только с targetUrl. */
+  linkInBio: boolean;
   /** Весь бюджет, USDT, включая комиссию площадки. */
   budget: number;
   /** Порог просмотров для сдачи; null — по умолчанию (250). */
@@ -379,8 +391,11 @@ export interface ModOrder extends VideoFormat {
   id: number;
   title: string;
   description: string;
+  /** Примеры роликов — модератору сами ссылки. */
+  exampleUrls: string[];
   referenceUrl: string | null;
   targetUrl: string | null;
+  linkInBio: boolean;
   budget: number;
   /** Бюджет, одобренный в прошлый раз; null — заказ ещё не одобряли. */
   approvedBudget: number | null;
@@ -453,6 +468,10 @@ export interface ModVideo {
     free: number;
     /** Ролик сдан до правки заказа — условия выше прежние, проверять по ним. */
     termsBeforeEdit: boolean;
+    exampleUrls: string[];
+    /** Ссылка креатора должна стоять в шапке профиля; bioLink — какая именно (null — у ролика нет кода). */
+    linkInBio: boolean;
+    bioLink: string | null;
   } & VideoFormat;
 }
 

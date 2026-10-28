@@ -37,6 +37,11 @@ export default function OrderCard({
             <span className={s.tag}>{t('orderCard.anyPlatform')}</span>
           )}
           <span className={s.tag}>{categoryLabel(order.category)}</span>
+          {order.linkInBio && (
+            <span className={`${s.tag} ${s.bio}`}>
+              {t('orderCard.linkInBio')}
+            </span>
+          )}
         </div>
         {order.deadline ? (
           <span className={s.deadline}>

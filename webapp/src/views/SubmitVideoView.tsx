@@ -75,8 +75,13 @@ export default function SubmitVideoView() {
    * Самопроверка перед сдачей: требования этого заказа (площадки, ориентация, длительность) и общие
    * пункты. Пока не отмечено всё — отправить нельзя: ролики не по требованиям модератор отклоняет.
    */
+  // ссылка в шапке профиля — тоже пункт самопроверки: без отметки бэкенд ролик не примет
   const checks = order
-    ? [...videoFormatParts(order), ...tList('submit.check')]
+    ? [
+        ...videoFormatParts(order),
+        ...(order.linkInBio ? [t('submit.checkLinkInBio')] : []),
+        ...tList('submit.check'),
+      ]
     : [];
   const allChecked = checks.every((c) => checked.has(c));
   function toggleCheck(item: string) {
@@ -111,7 +116,8 @@ export default function SubmitVideoView() {
     setSending(true);
     setSendError('');
     try {
-      await submitVideo(id, url, viewsNum, accept);
+      // сюда доходим, только когда отмечены все пункты — с ссылкой в шапке тоже
+      await submitVideo(id, url, viewsNum, accept, order?.linkInBio);
       setSent(true);
     } catch (err) {
       // Не влезли в остаток (или он успел уменьшиться) — спрашиваем согласие на новую сумму.
