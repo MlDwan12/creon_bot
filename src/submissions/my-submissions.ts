@@ -69,6 +69,8 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
         minViews: row.order.minViews,
         deadline: row.order.deadline,
         status: row.order.status,
+        // ссылка /r/ ещё и в шапке профиля — при сдаче креатор подтверждает, что поставил её
+        linkInBio: row.order.linkInBio,
         // требования к ролику — для самопроверки перед сдачей
         ...videoFormat(row.order),
       },

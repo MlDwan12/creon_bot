@@ -259,3 +259,63 @@
   font-size: 14px;
   color: var(--danger);
 }
+/* пример ролика: поле и кнопка «убрать» в строку */
+.example-row {
+  display: flex;
+  gap: 8px;
+}
+.example-row input {
+  flex: 1;
+  min-width: 0;
+}
+.example-remove {
+  flex: none;
+  width: 48px;
+  border: none;
+  border-radius: 14px;
+  background: var(--fill);
+  color: var(--hint);
+  font-size: 22px;
+}
+.example-add {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 2px dashed var(--fill);
+  border-radius: 14px;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+}
+.bio-check {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-top: 6px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.page .bio-check input {
+  flex: none;
+  width: 22px;
+  min-height: 22px;
+  margin: 2px 0 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.bio-check span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bio-check .hint {
+  margin: 0;
+}
+.legend-row {
+  box-sizing: border-box;
+  width: 100%;
+  margin-bottom: 6px;
+}

@@ -10,3 +10,5 @@ coverage
 webapp/node_modules
 webapp/dist
 webapp/.env*
+web/node_modules
+web/dist

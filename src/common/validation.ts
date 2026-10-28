@@ -14,6 +14,9 @@ export const MAX_DURATION_SEC = 600;
 export const MAX_COMMENT_LENGTH = 500;
 export const MAX_URL_LENGTH = 500;
 export const MAX_DEADLINE_DAYS = 365;
+/** Примеры роликов в заказе: меньше трёх — потом вопросы, какой ролик нужен. */
+export const MIN_EXAMPLES = 3;
+export const MAX_EXAMPLES = 10;
 
 // Ссылка на готовое видео.
 export const VIDEO_URL_RE = /^https?:\/\/\S+$/i;

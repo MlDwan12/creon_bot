@@ -13,7 +13,8 @@ import { toMinor } from '../common/money';
 /**
  * Тело `POST /api/submissions/:id/video` → ссылка на публикацию и просмотры, которые указал креатор.
  * `acceptPayout` — креатор согласился на остаток фонда (USDT), когда просмотры за него вышли
- * (SubmissionsService.attachVideo, 409 OVER_BUDGET); нет — ещё не спрашивали.
+ * (SubmissionsService.attachVideo, 409 OVER_BUDGET); нет — ещё не спрашивали. `bioLinkConfirmed` —
+ * ссылка стоит в шапке профиля (нужно, если в заказе Order.linkInBio; проверяет submitVideo).
  */
 export function parseVideoSubmission(body: unknown) {
   const b = (body ?? {}) as Record<string, unknown>;
@@ -48,5 +49,6 @@ export function parseVideoSubmission(body: unknown) {
     url,
     views: parseViews(b.views),
     acceptMinor: typeof accept === 'number' ? toMinor(accept) : null,
+    bioLinkConfirmed: b.bioLinkConfirmed === true,
   };
 }

@@ -1,4 +1,10 @@
-import { budgetSpent, budgetState, payoutFor, payoutPool } from './budget';
+import {
+  budgetSpent,
+  budgetState,
+  payoutFor,
+  payoutPool,
+  typicalPriceMinor,
+} from './budget';
 
 describe('бюджет заказа', () => {
   const order = {
@@ -34,5 +40,24 @@ describe('бюджет заказа', () => {
 
   it('без ставки (не одобрен) — брать ролики нельзя', () => {
     expect(budgetState({ ...order, cpmMinor: null }, 0).exhausted).toBe(true);
+  });
+});
+
+describe('подсказка цены 1000 просмотров', () => {
+  const o = (cpmMinor: number | null, feePercent = 20) => ({
+    cpmMinor,
+    feePercent,
+  });
+
+  it('медиана со стороны рекламодателя: ставка креатору плюс комиссия', () => {
+    // 80 центов креатору при комиссии 20% — 1 USDT рекламодателю
+    expect(typicalPriceMinor([o(80), o(160), o(120)])).toBe(150);
+    expect(typicalPriceMinor([o(80), o(160), o(120), o(40)])).toBe(125);
+    expect(typicalPriceMinor([o(100, 0), o(100, 0), o(100, 50)])).toBe(100);
+  });
+
+  it('меньше трёх заказов со ставкой — подсказки нет', () => {
+    expect(typicalPriceMinor([o(80), o(160), o(null)])).toBeNull();
+    expect(typicalPriceMinor([])).toBeNull();
   });
 });

@@ -4,6 +4,8 @@
 /build
 /webapp/dist
 /webapp/node_modules
+/web/dist
+/web/node_modules
 
 # Logs
 logs

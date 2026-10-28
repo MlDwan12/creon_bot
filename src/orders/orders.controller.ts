@@ -24,6 +24,8 @@ import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
 import { videoFormat } from './order-input';
 import { payoutPool } from './budget';
+import { exampleLink } from './order-report';
+import { platformOf } from '../common/platforms';
 
 const PAGE_SIZE = 20;
 
@@ -41,6 +43,8 @@ function toPublic(
     title: order.title,
     description: order.description,
     referenceUrl: order.referenceUrl,
+    // свою ссылку /r/<код> креатор держит ещё и в шапке профиля до итога холда
+    linkInBio: order.linkInBio,
     ...videoFormat(order),
     minViews: order.minViews,
     cpm: fromMinor(order.cpmMinor),
@@ -121,6 +125,11 @@ export class OrdersController {
       await this.ordersService.markViewed(id, req.user.id);
     return {
       ...toPublic(pub),
+      // примеры роликов — только в карточке, не в каталоге; ссылки — через редирект без ника автора
+      examples: pub.exampleUrls.map((url, i) => ({
+        platform: platformOf(url),
+        url: exampleLink(pub.id, i),
+      })),
       claimed,
       own: advertiserId === req.user.id,
     };

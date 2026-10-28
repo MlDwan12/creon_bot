@@ -86,8 +86,10 @@ export function termsOf(order: Order) {
   return {
     title: order.title,
     description: order.description,
+    exampleUrls: order.exampleUrls,
     referenceUrl: order.referenceUrl,
     targetUrl: order.targetUrl,
+    linkInBio: order.linkInBio,
     category: order.category,
     minViews: order.minViews,
     // ролик оплачивается по ставке, при которой его сдали (videoTerms)

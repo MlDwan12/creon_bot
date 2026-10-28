@@ -156,6 +156,15 @@ export default function ModVideoView() {
       return;
     await run(() => markPublicationDeleted(id), 'holds');
   }
+  async function bioLinkRemoved() {
+    if (
+      !(await confirmAction(
+        'Ссылки креатора нет в шапке профиля? Начисление за ролик отменится, деньги вернутся в бюджет заказа.',
+      ))
+    )
+      return;
+    await run(() => markPublicationDeleted(id, true), 'holds');
+  }
 
   if (loadError)
     return (
@@ -186,7 +195,13 @@ export default function ModVideoView() {
           new Date(video.decidedAt).getTime() +
             video.holdDays * 24 * 60 * 60 * 1000,
         );
-  const parts = videoFormatParts(video.order);
+  // ссылка креатора в шапке профиля — такой же пункт сверки, как требования к ролику
+  const parts = [
+    ...videoFormatParts(video.order),
+    ...(video.order.linkInBio
+      ? [`Ссылка в шапке профиля: ${video.order.bioLink ?? 'ссылка креатора'}`]
+      : []),
+  ];
   const author = video.author;
   const authorLink = safeUrl(author.url) && (
     <a href={safeUrl(author.url)} target="_blank" rel="noopener noreferrer">
@@ -301,6 +316,30 @@ export default function ModVideoView() {
           <summary>Текст задания</summary>
           <div className={s.text}>{video.order.description}</div>
         </details>
+        {video.order.exampleUrls.length > 0 && (
+          <details className={s.task}>
+            <summary>
+              Примеры роликов · {video.order.exampleUrls.length}
+            </summary>
+            <ol className={s.examples}>
+              {video.order.exampleUrls.map((url) => (
+                <li key={url}>
+                  {safeUrl(url) ? (
+                    <a
+                      href={safeUrl(url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {url}
+                    </a>
+                  ) : (
+                    url
+                  )}
+                </li>
+              ))}
+            </ol>
+          </details>
+        )}
       </section>
 
       <section className={s.rows}>
@@ -470,7 +509,19 @@ export default function ModVideoView() {
             попадут в отчёт рекламодателю (оплата не меняется), а деньги за
             ролик станут доступны к выводу. Публикации нет — отмените
             начисление.
+            {video.order.linkInBio &&
+              ` Заказ требует ссылку в шапке профиля — проверьте и её: ${video.order.bioLink ?? 'ссылка креатора'}.`}
           </p>
+          {video.order.linkInBio && (
+            <button
+              type="button"
+              className={s.reject}
+              disabled={busy}
+              onClick={bioLinkRemoved}
+            >
+              Ссылки в шапке нет
+            </button>
+          )}
           {error && (
             <p className={s.error} role="alert">
               {error}

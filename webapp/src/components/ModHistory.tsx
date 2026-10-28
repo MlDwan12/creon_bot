@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { fetchUserHistory, type ModUserHistory, reasonLabel } from '../api';
 import { formatDate } from '../format';
-import { ACTION_LABELS, reportObject } from '../views/mod/labels';
+import { ACTION_LABELS, reportObject } from '@fixum/shared';
 import s from './ModHistory.module.css';
 
 const REPORT_STATUS: Record<'OPEN' | 'ACTIONED' | 'DISMISSED', string> = {
