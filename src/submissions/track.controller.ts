@@ -1,5 +1,12 @@
 import { tr } from '../i18n/request-lang';
-import { Controller, Get, NotFoundException, Param, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  ParseIntPipe,
+  Res,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { SubmissionsService } from './submissions.service';
 
@@ -30,6 +37,18 @@ export class TrackController {
 @Controller('v')
 export class VideoLinkController {
   constructor(private readonly submissionsService: SubmissionsService) {}
+
+  /** Пример ролика из заказа: /v/e/<заказ>/<номер с 1> (exampleLink). */
+  @Get('e/:orderId/:n')
+  async example(
+    @Param('orderId', ParseIntPipe) orderId: number,
+    @Param('n', ParseIntPipe) n: number,
+    @Res() res: Response,
+  ) {
+    const url = await this.submissionsService.exampleUrl(orderId, n);
+    if (!url) throw new NotFoundException(tr('errors.linkNotFound'));
+    res.redirect(302, url);
+  }
 
   @Get(':code')
   async go(@Param('code') code: string, @Res() res: Response) {

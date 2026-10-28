@@ -223,6 +223,13 @@ export class NotificationsService
     );
   }
 
+  /** Фонд заказа больше не «занят» роликами на проверке — креаторам «в работе»: можно сдавать. */
+  fundFreed(order: OrderWithCreators) {
+    this.toCreators(order, (t, lang) =>
+      t('notify.fundFreed', { order: forCreator(order, lang) }),
+    );
+  }
+
   /**
    * Модератор одобрил ролик: креатору — сколько начислено, рекламодателю — новый ролик по заказу
    * (оценить по желанию).
@@ -234,12 +241,18 @@ export class NotificationsService
     this.send(
       submission.creator,
       (t, lang) =>
-        t('notify.videoApproved', {
-          order: forCreator(submission.order, lang),
-          views: num(lang, views),
-          amount: money(lang, submission.payoutMinor),
-          days: HOLD_DAYS,
-        }),
+        // согласился при сдаче на остаток фонда — объясняем, почему начислено меньше просмотров
+        t(
+          submission.agreedPayoutMinor === null
+            ? 'notify.videoApproved'
+            : 'notify.videoApprovedCapped',
+          {
+            order: forCreator(submission.order, lang),
+            views: num(lang, views),
+            amount: money(lang, submission.payoutMinor),
+            days: HOLD_DAYS,
+          },
+        ),
       '/submissions',
       true,
     );
@@ -270,12 +283,12 @@ export class NotificationsService
     );
   }
 
-  /** Креатору: при итоге публикации не оказалось — начисление отменено. */
-  publicationDeleted(submission: SubmissionWithParties) {
+  /** Креатору: при итоге публикации (или ссылки в шапке профиля) не оказалось — начисление отменено. */
+  publicationDeleted(submission: SubmissionWithParties, bioLink = false) {
     this.send(
       submission.creator,
       (t, lang) =>
-        t('notify.publicationDeleted', {
+        t(bioLink ? 'notify.bioLinkRemoved' : 'notify.publicationDeleted', {
           order: forCreator(submission.order, lang),
         }),
       '/submissions',

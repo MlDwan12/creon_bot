@@ -5,8 +5,8 @@ import {
   ApiError,
   categoryLabel,
   createOrder,
-  fetchMe,
   fetchMyOrders,
+  fetchPriceHint,
   fetchRate,
   type MyOrder,
   type NewOrderInput,
@@ -19,7 +19,7 @@ import {
 } from '../api';
 import OrderCard from '../components/OrderCard';
 import PlatformIcon from '../components/PlatformIcon';
-import { approxRub, formatMoney } from '../format';
+import { approxRub, formatMoney, formatViews } from '../format';
 import { i18next, locale } from '../i18n';
 import s from './CreateOrderView.module.css';
 
@@ -29,6 +29,8 @@ const MAX_DESCRIPTION = 1000;
 const MIN_BUDGET = 10;
 const MAX_BUDGET = 100_000;
 const MAX_DURATION = 600;
+const MIN_EXAMPLES = 3;
+const MAX_EXAMPLES = 10;
 const ORIENTATIONS: { value: NewOrderInput['orientation']; label: string }[] = [
   { value: 'VERTICAL', label: 'createOrder.vertical' },
   { value: 'HORIZONTAL', label: 'createOrder.horizontal' },
@@ -54,7 +56,8 @@ function deadlineLabel(days: number | null | undefined): string {
 }
 
 /**
- * Поля формы. Числа — строками из полей ('' — пусто). Обязательно всё, кроме ссылки на товар.
+ * Поля формы. Числа — строками из полей ('' — пусто). Обязательно всё, кроме брифа и ссылки на товар
+ * (с ней — и «ссылка в шапке»). Примеры роликов — строки полей, пустые при отправке отбрасываются.
  * Требования к ролику и срок заполнены по умолчанию (DEFAULTS) — не трогал, они и уйдут; тексты,
  * категорию и бюджет рекламодатель задаёт сам. «Любое» — null, «Любая площадка» — [], категория
  * undefined — ещё не выбрали. У срока при правке undefined — «как было».
@@ -62,8 +65,10 @@ function deadlineLabel(days: number | null | undefined): string {
 type Form = {
   title: string;
   description: string;
+  exampleUrls: string[];
   referenceUrl: string;
   targetUrl: string;
+  linkInBio: boolean;
   budget: string;
   minViews: string;
   minDurationSec: string;
@@ -83,20 +88,17 @@ export default function CreateOrderView() {
 
   // курс — только подсказка «≈ … ₽», не загрузился — не показываем
   const [rubPerUsdt, setRubPerUsdt] = useState<number | null>(null);
-  const [feePercent, setFeePercent] = useState<number>();
   useEffect(() => {
     void fetchRate().then(setRubPerUsdt);
-    fetchMe().then(
-      (me) => setFeePercent(me.feePercent ?? undefined),
-      () => {},
-    );
   }, []);
 
   const [form, setForm] = useState<Form>({
     title: '',
     description: '',
+    exampleUrls: Array<string>(MIN_EXAMPLES).fill(''),
     referenceUrl: '',
     targetUrl: '',
+    linkInBio: false,
     budget: '',
     ...DEFAULTS,
     // при правке срок по умолчанию — «как было», а не «без срока»
@@ -133,8 +135,16 @@ export default function CreateOrderView() {
         set({
           title: source.title,
           description: source.description,
+          // у старых заказов примеров нет — пустые поля до минимума
+          exampleUrls: [
+            ...source.exampleUrls,
+            ...Array<string>(
+              Math.max(0, MIN_EXAMPLES - source.exampleUrls.length),
+            ).fill(''),
+          ],
           referenceUrl: source.referenceUrl ?? '',
           targetUrl: source.targetUrl ?? '',
+          linkInBio: source.linkInBio,
           budget: String(source.budget),
           minViews: String(source.minViews),
           minDurationSec: String(source.minDurationSec ?? ''),
@@ -145,6 +155,27 @@ export default function CreateOrderView() {
         });
       });
   }, []); // один раз при открытии
+
+  /** Пример ролика: правка поля, ещё одно поле, убрать поле (не меньше минимума). */
+  function setExample(i: number, value: string) {
+    set({ exampleUrls: form.exampleUrls.map((u, j) => (j === i ? value : u)) });
+  }
+  function removeExample(i: number) {
+    set({ exampleUrls: form.exampleUrls.filter((_, j) => j !== i) });
+  }
+  const examplesFilled = form.exampleUrls.filter((u) => u.trim()).length;
+  // без ссылки на товар ставить в шапку нечего — галочка выключена (и не уйдёт на бэкенд)
+  const hasTarget = form.targetUrl.trim() !== '';
+
+  // Подсказка цены по категории — ориентир, на сколько просмотров хватит бюджета; ставку назначит модератор
+  const [pricePer1000, setPricePer1000] = useState<number | null>(null);
+  useEffect(() => {
+    setPricePer1000(null);
+    if (form.category)
+      void fetchPriceHint(form.category)
+        .then((r) => setPricePer1000(r.per1000))
+        .catch(() => {}); // нет подсказки — форма та же
+  }, [form.category]);
 
   /** Отметить площадку или снять отметку; «Любая» — пустой список. */
   function togglePlatform(p: VideoPlatform) {
@@ -190,23 +221,22 @@ export default function CreateOrderView() {
     return !invalid.length && !catError;
   }
 
-  // Проверка перед отправкой нового заказа: карточка, как её увидят креаторы, и деньги с комиссией.
+  // Проверка перед отправкой нового заказа: карточка, как её увидят креаторы, и бюджет.
+  // Комиссию площадки пока не показываем — её размер не решён.
   const [previewing, setPreviewing] = useState(false);
-  /** Креаторам — бюджет без комиссии, как payoutPool на бэкенде (вниз до центов). */
-  const pool =
-    feePercent === undefined
-      ? undefined
-      : Math.floor(Number(form.budget) * (100 - feePercent)) / 100;
   const previewOrder: OrderSummary = {
     id: 0,
     title: form.title,
     description: form.description,
     referenceUrl: form.referenceUrl || null,
+    linkInBio: form.linkInBio && hasTarget,
     cpm: null,
     minViews: Number(form.minViews),
-    free: pool ?? Number(form.budget),
+    // остаток в предпросмотре не показываем (OrderCard preview): по нему видна комиссия
+    free: Number(form.budget),
     freeUnder: null,
     budgetLow: false,
+    fundBusy: false,
     category: form.category!,
     deadline: null,
     createdAt: new Date().toISOString(),
@@ -243,8 +273,10 @@ export default function CreateOrderView() {
       const input = {
         ...form,
         category,
+        exampleUrls: form.exampleUrls.map((u) => u.trim()).filter(Boolean),
         referenceUrl: form.referenceUrl.trim() || null,
         targetUrl: form.targetUrl.trim() || null,
+        linkInBio: form.linkInBio && hasTarget,
         budget: Number(form.budget),
         minViews: Number(form.minViews),
         minDurationSec: Number(form.minDurationSec),
@@ -333,9 +365,66 @@ export default function CreateOrderView() {
           {fieldError(fieldErrors.description)}
         </div>
 
+        <fieldset className={s.field}>
+          {/* legend — прямой потомок fieldset (иначе экранная читалка не свяжет подпись с полями) */}
+          <legend className={`${s.labelRow} ${s.legendRow}`}>
+            <span className="section-title">{t('createOrder.examples')}</span>
+            <span className={s.counter}>
+              {t('createOrder.examplesCount', {
+                count: examplesFilled,
+                min: MIN_EXAMPLES,
+              })}
+            </span>
+          </legend>
+          <span className={s.hint}>
+            {t('createOrder.examplesHint', { min: MIN_EXAMPLES })}
+          </span>
+          {form.exampleUrls.map((url, i) => (
+            <div key={i} className={s.exampleRow}>
+              <input
+                id={`example-${i}`}
+                value={url}
+                onChange={(e) => setExample(i, e.target.value)}
+                type="url"
+                inputMode="url"
+                maxLength={500}
+                // первые MIN_EXAMPLES — обязательны: та же проверка браузера, что у остальных полей
+                required={i < MIN_EXAMPLES}
+                aria-label={t('createOrder.exampleN', { n: i + 1 })}
+                placeholder={t('createOrder.examplePlaceholder', { n: i + 1 })}
+              />
+              {form.exampleUrls.length > MIN_EXAMPLES && (
+                <button
+                  type="button"
+                  className={s.exampleRemove}
+                  aria-label={t('createOrder.removeExample', { n: i + 1 })}
+                  onClick={() => removeExample(i)}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+          {fieldError(
+            form.exampleUrls
+              .map((_, i) => fieldErrors[`example-${i}`])
+              .find(Boolean),
+          )}
+          {form.exampleUrls.length < MAX_EXAMPLES && (
+            <button
+              type="button"
+              className={s.exampleAdd}
+              onClick={() => set({ exampleUrls: [...form.exampleUrls, ''] })}
+            >
+              {t('createOrder.addExample')}
+            </button>
+          )}
+        </fieldset>
+
         <div className={s.field}>
           <label htmlFor="reference" className="section-title">
-            {t('createOrder.reference')}
+            {t('createOrder.reference')}{' '}
+            <small className={s.optional}>{t('createOrder.optional')}</small>
           </label>
           <input
             id="reference"
@@ -344,7 +433,6 @@ export default function CreateOrderView() {
             type="url"
             inputMode="url"
             maxLength={500}
-            required
             placeholder={t('createOrder.referencePlaceholder')}
           />
           {fieldError(fieldErrors.reference)}
@@ -366,6 +454,22 @@ export default function CreateOrderView() {
           />
           {fieldError(fieldErrors.target)}
           <span className={s.hint}>{t('createOrder.targetHint')}</span>
+          <label className={s.bioCheck}>
+            <input
+              type="checkbox"
+              checked={form.linkInBio && hasTarget}
+              disabled={!hasTarget}
+              onChange={(e) => set({ linkInBio: e.target.checked })}
+            />
+            <span>
+              <strong>{t('createOrder.linkInBio')}</strong>
+              <small className={s.hint}>
+                {hasTarget
+                  ? t('createOrder.linkInBioHint')
+                  : t('createOrder.linkInBioNeedsTarget')}
+              </small>
+            </span>
+          </label>
         </div>
 
         <h2 className={s.blockTitle}>{t('createOrder.requirements')}</h2>
@@ -546,6 +650,22 @@ export default function CreateOrderView() {
         </div>
         {fieldError(fieldErrors.budget || fieldErrors.minViews)}
 
+        {pricePer1000 !== null && form.category && (
+          <p className={s.hint}>
+            {Number(form.budget) > 0
+              ? t('createOrder.priceHintViews', {
+                  category: categoryLabel(form.category),
+                  price: formatMoney(pricePer1000),
+                  views: formatViews(
+                    Math.floor((Number(form.budget) / pricePer1000) * 10) * 100,
+                  ),
+                })
+              : t('createOrder.priceHint', {
+                  category: categoryLabel(form.category),
+                  price: formatMoney(pricePer1000),
+                })}
+          </p>
+        )}
         {rubPerUsdt && Number(form.budget) > 0 && (
           <p className={s.hint}>
             {t('createOrder.rate', {
@@ -577,23 +697,6 @@ export default function CreateOrderView() {
               <span>{t('createOrder.preview.budget')}</span>
               <strong>{formatMoney(Number(form.budget))}</strong>
             </div>
-            {pool !== undefined && feePercent !== undefined && (
-              <>
-                <div className={`${s.row} ${s.bordered}`}>
-                  <span>{t('createOrder.preview.pool')}</span>
-                  <strong>{formatMoney(pool)}</strong>
-                </div>
-                <div className={`${s.row} ${s.bordered}`}>
-                  <span>{t('createOrder.preview.fee')}</span>
-                  <strong>
-                    {t('createOrder.preview.feeValue', {
-                      percent: feePercent,
-                      amount: formatMoney(Number(form.budget) - pool),
-                    })}
-                  </strong>
-                </div>
-              </>
-            )}
           </div>
           <p className={s.lead}>{t('createOrder.preview.moneyNote')}</p>
 

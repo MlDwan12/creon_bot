@@ -40,12 +40,19 @@ jobs:
         && 'APP=creon_bot DIR=/opt/fixum SERVICE=fixum_bot PG=postgres DB=fixum DB_USER=fixum'
         || 'APP=creon_bot DIR=/opt/creon SERVICE=creon_bot PG=postgres DB=creon_bot DB_USER=creon' }}
       STAND: ${{ github.event.workflow_run.head_branch == 'main' && 'прод' || 'дев' }}
+      # каталог бота (метка выкаченного коммита) и мини-аппа (статика для nginx) — DEPLOY.md
+      DIR: ${{ github.event.workflow_run.head_branch == 'main' && '/opt/fixum' || '/opt/creon' }}
+      WEB_DIR: ${{ github.event.workflow_run.head_branch == 'main' && '/var/www/fixum-miniapp' || '/var/www/creon-miniapp' }}
+      # сайт (web/) — тоже статика для nginx, своя папка и свой vhost (DEPLOY.md, «Сайт»)
+      SITE_DIR: ${{ github.event.workflow_run.head_branch == 'main' && '/var/www/fixum-web' || '/var/www/creon-web' }}
     steps:
       # именно тот коммит, который прошёл CI, а не то, что успело прийти в main после
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ env.SHA }}
           persist-credentials: false
+          # вся история — чтобы сравнить с тем, что уже выкачено (шаг What changed)
+          fetch-depth: 0
 
       # CI коммита B может закончиться раньше CI коммита A — тогда A, выкатившись последним, вернул бы
       # стенд назад. Выкатываем только вершину ветки; устаревший пропускаем — вершину выкатит её CI.
@@ -64,12 +71,8 @@ jobs:
             echo "deploy=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build image
-        if: steps.latest.outputs.deploy == 'true'
-        # адрес Sentry мини-аппа — не секрет (виден в браузере): переменная окружения GitHub, пусто — выключен
-        run: docker build --build-arg VITE_SENTRY_DSN="${{ vars.VITE_SENTRY_DSN }}" -t "$APP:$TAG" .
-
-      # ключ появляется на раннере только после сборки — код сборки его не застанет
+      # Ключ — до сборок: сначала по SSH узнаём, что уже выкачено, и собираем только изменившееся.
+      # Код репозитория выполняется только внутри docker build — файлов раннера, в том числе ключа, он не видит.
       - name: SSH key
         if: steps.latest.outputs.deploy == 'true'
         run: |
@@ -88,16 +91,98 @@ jobs:
             StrictHostKeyChecking yes
           EOF
 
-      - name: Upload image and script
+      # Бот, мини-апп и сайт выкатываются независимо: каждый — только если его файлы изменились с той
+      # версии, что уже на сервере (метка бота — remote-deploy.sh, мини-аппа и сайта — симлинк current).
+      # Метки нет или коммит неизвестен (первая выкатка, force-push) — выкатываем. Мини-апп статикой или
+      # сайт ещё не настроены на стенде (нет папки) — пропускаем: выкладывать некуда.
+      - name: What changed
+        id: changes
         if: steps.latest.outputs.deploy == 'true'
+        run: |
+          changed() {
+            local prev="$1"; shift
+            [[ "$prev" =~ ^[0-9a-f]{40}$ ]] && git cat-file -e "$prev^{commit}" 2>/dev/null || return 0
+            ! git diff --quiet "$prev" "$SHA" -- "$@"
+          }
+          prev_api="$(ssh -n prod "cat '$DIR/deployed-api.sha'" 2>/dev/null || true)"
+          prev_web="$(ssh -n prod "readlink '$WEB_DIR/current'" 2>/dev/null || true)"
+          prev_web="${prev_web##*/}"
+          prev_site="$(ssh -n prod "readlink '$SITE_DIR/current'" 2>/dev/null || true)"
+          prev_site="${prev_site##*/}"
+          api=false web=false site=false
+          # бот — всё, кроме фронтов, документов и файлов только для статики
+          changed "$prev_api" . ':!webapp' ':!web' ':!packages' ':!*.md' \
+            ':!deploy/remote-static.sh' ':!deploy/prod/nginx' && api=true
+          # пока папки нет, мини-апп отдаёт бот из своего образа — выкладывать статику некуда
+          if ssh -n prod "test -d '$WEB_DIR'"; then
+            changed "$prev_web" webapp packages i18n && web=true
+          else
+            echo "::notice::мини-апп статикой на стенде не настроен (нет $WEB_DIR) — его отдаёт бот, DEPLOY.md «Мини-апп — статикой через nginx»"
+          fi
+          if ssh -n prod "test -d '$SITE_DIR'"; then
+            changed "$prev_site" web packages i18n && site=true
+          else
+            echo "::notice::сайт на стенде не настроен (нет $SITE_DIR) — пропускаем, DEPLOY.md «Сайт»"
+          fi
+          parts=""
+          $api && parts="бот"
+          $web && parts="${parts:+$parts+}мини-апп"
+          $site && parts="${parts:+$parts+}сайт"
+          echo "api=$api" >> "$GITHUB_OUTPUT"
+          echo "web=$web" >> "$GITHUB_OUTPUT"
+          echo "site=$site" >> "$GITHUB_OUTPUT"
+          echo "parts=${parts:-ничего — изменения не затронули ни бот, ни мини-апп, ни сайт}" >> "$GITHUB_OUTPUT"
+          echo "::notice::выкатываем: ${parts:-ничего} (бот был ${prev_api:-—}, мини-апп ${prev_web:-—}, сайт ${prev_site:-—})"
+
+      - name: Build image
+        if: steps.changes.outputs.api == 'true'
+        # адрес Sentry мини-аппа — не секрет (виден в браузере): переменная окружения GitHub, пусто — выключен
+        run: docker build --build-arg VITE_SENTRY_DSN="${{ vars.VITE_SENTRY_DSN }}" -t "$APP:$TAG" .
+
+      # Мини-апп — статикой для nginx: этап webapp того же Dockerfile
+      - name: Build mini-app
+        if: steps.changes.outputs.web == 'true'
+        run: |
+          docker build --target webapp --build-arg VITE_SENTRY_DSN="${{ vars.VITE_SENTRY_DSN }}" -t "$APP-webapp:$TAG" .
+          id="$(docker create "$APP-webapp:$TAG")"
+          docker cp "$id:/webapp/dist" static
+          docker rm "$id" >/dev/null
+          tar -czf "static-$SHA.tar.gz" -C static .
+
+      - name: Build site
+        if: steps.changes.outputs.site == 'true'
+        run: |
+          docker build --target web -t "$APP-web:$TAG" .
+          id="$(docker create "$APP-web:$TAG")"
+          docker cp "$id:/web/dist" site
+          docker rm "$id" >/dev/null
+          tar -czf "site-$SHA.tar.gz" -C site .
+
+      - name: Upload image and script
+        if: steps.changes.outputs.api == 'true'
         run: |
           docker save "$APP:$TAG" | gzip | ssh prod docker load
           scp -q deploy/remote-deploy.sh prod:remote-deploy.sh
 
-      # итог — код возврата скрипта: 0, только если новая версия на своём образе и healthy
+      # итог — код возврата скрипта: 0, только если новая версия на своём образе и healthy.
+      # Бот — раньше мини-аппа: новому фронту может понадобиться новый API (обратное — expand → contract).
       - name: Deploy
-        if: steps.latest.outputs.deploy == 'true'
+        if: steps.changes.outputs.api == 'true'
         run: ssh -n prod "$REMOTE_ENV bash remote-deploy.sh $TAG"
+
+      - name: Deploy mini-app
+        if: steps.changes.outputs.web == 'true'
+        run: |
+          scp -q "static-$SHA.tar.gz" deploy/remote-static.sh prod:
+          ssh -n prod "WEB_DIR=$WEB_DIR bash remote-static.sh $SHA"
+
+      # тот же скрипт, другая папка; архив — под именем, которое ждёт скрипт (мини-апп свой уже удалил)
+      - name: Deploy site
+        if: steps.changes.outputs.site == 'true'
+        run: |
+          scp -q "site-$SHA.tar.gz" "prod:static-$SHA.tar.gz"
+          scp -q deploy/remote-static.sh prod:
+          ssh -n prod "WEB_DIR=$SITE_DIR bash remote-static.sh $SHA"
 
       - name: Remove key
         if: always()
@@ -113,6 +198,7 @@ jobs:
           # тема проекта в группе алертов (группа с темами); пусто — в общий чат
           ALERT_THREAD_ID: ${{ secrets.ALERT_THREAD_ID }}
           STATUS: ${{ job.status }}
+          PARTS: ${{ steps.changes.outputs.parts }}
           # сообщение коммита — только через env: в run его текст стал бы кодом
           COMMIT_MSG: ${{ github.event.workflow_run.head_commit.message }}
           COMMIT_AUTHOR: ${{ github.event.workflow_run.head_commit.author.name }}
@@ -125,7 +211,7 @@ jobs:
           case "$title" in
             'Merge pull request #'*) pr=${title#Merge pull request }; title="${pr%% *} $(printf '%s\n' "$COMMIT_MSG" | sed -n '3p')" ;;
           esac
-          about="${SHA:0:7} · $COMMIT_AUTHOR
+          about="${SHA:0:7} · $COMMIT_AUTHOR · $PARTS
           $title
           $COMMIT_URL"
           if [ "$STATUS" = success ]; then

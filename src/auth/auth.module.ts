@@ -5,14 +5,15 @@ import { InitDataGuard } from './init-data.guard';
 import { MeController } from './me.controller';
 import { ModeratorGuard } from './moderator.guard';
 import { UserThrottlerGuard } from './user-throttler.guard';
+import { WebAuthController } from './web-auth.controller';
 
 /**
- * Проверка initData и роли модератора. Nest собирает @UseGuards(InitDataGuard) в модуле контроллера,
+ * Вход (initData мини-аппа, сессия сайта) и роль модератора. Nest собирает @UseGuards(InitDataGuard) в модуле контроллера,
  * поэтому UsersModule и SupportModule реэкспортируются: импортировать AuthModule — достаточно.
  */
 @Module({
   imports: [UsersModule, SupportModule],
-  controllers: [MeController],
+  controllers: [MeController, WebAuthController],
   providers: [InitDataGuard, ModeratorGuard, UserThrottlerGuard],
   exports: [
     UsersModule,

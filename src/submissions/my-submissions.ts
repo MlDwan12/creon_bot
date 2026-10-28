@@ -35,6 +35,8 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
       views: row.views,
       // на проверке — резерв, после одобрения — начислено, отклонён — 0
       payout: fromMinor(row.payoutMinor),
+      // согласился при сдаче на остаток фонда: просмотры сверх него не оплачиваются
+      agreedPayout: fromMinor(row.agreedPayoutMinor),
       finalized: row.finalizedAt !== null,
       createdAt: row.createdAt,
       // Для шкалы статусов: сдан, проверен модератором и до когда холд (одобрен, итога ещё нет).
@@ -49,11 +51,15 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
       // Ссылка на товар для описания ролика; адрес сайта добавляет мини-апп. null — у заказа нет товара.
       trackPath:
         row.order.targetUrl && row.trackCode ? `/r/${row.trackCode}` : null,
-      // Сдать видео до конца слота, но не позже срока заказа.
+      // Сдать видео до конца слота, но не позже срока заказа. Пока фонд «занят», слот на паузе
+      // (fundPaused): срок сдвинется, когда место освободится.
       dueAt:
-        row.status === SubmissionStatus.IN_PROGRESS
+        row.status === SubmissionStatus.IN_PROGRESS && !row.order.fundBusyAt
           ? earliest(slotDueAt(row.createdAt), row.order.deadline)
           : null,
+      fundPaused:
+        row.status === SubmissionStatus.IN_PROGRESS &&
+        row.order.fundBusyAt !== null,
       order: {
         id: row.order.id,
         title: titleVisibleToCreators(row.order)
@@ -63,6 +69,8 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
         minViews: row.order.minViews,
         deadline: row.order.deadline,
         status: row.order.status,
+        // ссылка /r/ ещё и в шапке профиля — при сдаче креатор подтверждает, что поставил её
+        linkInBio: row.order.linkInBio,
         // требования к ролику — для самопроверки перед сдачей
         ...videoFormat(row.order),
       },

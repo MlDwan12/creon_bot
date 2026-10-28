@@ -26,15 +26,18 @@ import {
   payoutPool,
   platformFeePercent,
   spentByOrder,
+  typicalPriceMinor,
 } from './budget';
 import { DAY_MS, extendedDeadline } from './deadline';
 import { type OrderFunnel, orderInsights } from './order-insights';
 import { buildOrderReport } from './order-report';
 import {
+  endFundPause,
   FROZEN,
   isFrozen,
   lockOrder,
   type OrderTerms,
+  syncFundBusy,
   termsOf,
   transitionOrder,
   tryTransitionOrder,
@@ -47,6 +50,9 @@ const PUBLIC_ORDER_FIELDS = {
   title: true,
   description: true,
   referenceUrl: true,
+  // наружу — не сами ссылки, а редирект /v/e/… (toPublic в orders.controller)
+  exampleUrls: true,
+  linkInBio: true,
   budgetMinor: true,
   feePercent: true,
   cpmMinor: true,
@@ -118,8 +124,10 @@ export class OrdersService {
     data: {
       title: string;
       description: string;
+      exampleUrls?: string[];
       referenceUrl?: string;
       targetUrl?: string;
+      linkInBio?: boolean;
       budgetMinor: number;
       minViews: number;
       minDurationSec?: number | null;
@@ -146,8 +154,10 @@ export class OrdersService {
         advertiserId,
         title: data.title,
         description: data.description,
+        exampleUrls: data.exampleUrls,
         referenceUrl: data.referenceUrl,
         targetUrl: data.targetUrl,
+        linkInBio: data.linkInBio,
         currency: ORDER_CURRENCY,
         budgetMinor: data.budgetMinor,
         feePercent: platformFeePercent(),
@@ -201,7 +211,11 @@ export class OrdersService {
     };
   }
 
-  /** Свободный остаток фонда выплат к каждому заказу — креаторы видят его в каталоге. */
+  /**
+   * Свободный остаток фонда выплат к каждому заказу — креаторы видят его в каталоге. `fundBusy` —
+   * остатка не хватает на ролик с порогом: у открытого заказа это значит, что фонд зарезервирован
+   * под ролики на проверке (исчерпанный начислениями закрывается сам).
+   */
   private async withFree<
     T extends { id: number } & Parameters<typeof budgetState>[0],
   >(orders: T[]) {
@@ -209,10 +223,10 @@ export class OrdersService {
       this.prisma,
       orders.map((o) => o.id),
     );
-    return orders.map((o) => ({
-      ...o,
-      freeMinor: budgetState(o, spent.get(o.id) ?? 0).free,
-    }));
+    return orders.map((o) => {
+      const budget = budgetState(o, spent.get(o.id) ?? 0);
+      return { ...o, freeMinor: budget.free, fundBusy: budget.exhausted };
+    });
   }
 
   /**
@@ -258,6 +272,15 @@ export class OrdersService {
     const value = await this.prisma.order.count({ where });
     this.openCounts.set(key, { value, at: Date.now() });
     return value;
+  }
+
+  /** Подсказка цены в форме заказа: обычная цена 1000 просмотров в категории, центы (typicalPriceMinor). */
+  async typicalPrice(category: OrderCategory) {
+    const orders = await this.prisma.order.findMany({
+      where: { category, cpmMinor: { not: null } },
+      select: { cpmMinor: true, feePercent: true },
+    });
+    return typicalPriceMinor(orders);
   }
 
   /** Открытый заказ для карточки в Mini App; `advertiserId` — только чтобы узнать «свой ли», наружу не отдавать. */
@@ -438,10 +461,12 @@ export class OrdersService {
       where: { id: orderId },
       data: {
         targetUrl: null,
+        linkInBio: false,
         ...(order.prevTerms && {
           prevTerms: {
             ...(order.prevTerms as Prisma.JsonObject),
             targetUrl: null,
+            linkInBio: false,
           },
         }),
       },
@@ -599,8 +624,10 @@ export class OrdersService {
     data: {
       title: string;
       description: string;
+      exampleUrls?: string[];
       referenceUrl?: string | null;
       targetUrl?: string | null;
+      linkInBio?: boolean;
       budgetMinor: number;
       minViews: number;
       minDurationSec?: number | null;
@@ -650,6 +677,10 @@ export class OrdersService {
         );
       // заморозка начинается с первой правки открытого заказа; повторная правка её не сдвигает
       const startsFreeze = order.status === OrderStatus.OPEN;
+      // слоты на паузе из-за «занятого» фонда: дальше их держит заморозка — паузу «занятости»
+      // закрываем сейчас, иначе после одобрения правки слоты продлили бы дважды за одно время
+      if (startsFreeze && order.fundBusyAt)
+        await endFundPause(tx, orderId, order.fundBusyAt, now);
       await transitionOrder(
         tx,
         orderId,
@@ -764,6 +795,8 @@ export class OrdersService {
           UPDATE "Submission"
           SET "createdAt" = "createdAt" + (${now}::timestamp - ${order.editedAt}::timestamp)
           WHERE "orderId" = ${orderId} AND "status" = 'IN_PROGRESS'`;
+      // новая ставка или бюджет могли занять фонд роликами на проверке или освободить его
+      await syncFundBusy(tx, orderId, now);
     });
     const approved = await this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },

@@ -124,15 +124,19 @@ export default function OrderDetailView() {
         ) : (
           <span>{t('order.cpmPending')}</span>
         )}
-        <span className={order.budgetLow ? `${s.free} ${s.low}` : s.free}>
-          {order.freeUnder
-            ? t('order.leftUnder', { amount: formatMoney(order.freeUnder) })
-            : t('order.left', { amount: formatMoney(order.free) }) +
-              (order.cpm
-                ? ` · ${t('order.leftViews', { views: formatViews(budgetViews(order.free, order.cpm)) })}`
-                : '')}
-          {order.budgetLow && t('orderCard.hurry')}
-        </span>
+        {order.fundBusy ? (
+          <span className={s.free}>{t('order.fundBusy')}</span>
+        ) : (
+          <span className={order.budgetLow ? `${s.free} ${s.low}` : s.free}>
+            {order.freeUnder
+              ? t('order.leftUnder', { amount: formatMoney(order.freeUnder) })
+              : t('order.left', { amount: formatMoney(order.free) }) +
+                (order.cpm
+                  ? ` · ${t('order.leftViews', { views: formatViews(budgetViews(order.free, order.cpm)) })}`
+                  : '')}
+            {order.budgetLow && t('orderCard.hurry')}
+          </span>
+        )}
       </header>
 
       {!!order.cpm && (
@@ -207,6 +211,38 @@ export default function OrderDetailView() {
         )}
       </section>
 
+      {order.examples.length > 0 && (
+        <section className={s.block}>
+          <h2 className="section-title">{t('order.examples')}</h2>
+          <p className={s.blockHint}>{t('order.examplesHint')}</p>
+          <ul className={s.examples}>
+            {order.examples.map((e, i) => (
+              <li key={e.url}>
+                {/* редирект Fixum: в ссылке площадки был бы ник автора */}
+                <a
+                  href={safeUrl(e.url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={s.example}
+                >
+                  {e.platform !== 'OTHER' && (
+                    <PlatformIcon platform={e.platform} size={26} round />
+                  )}
+                  {t('order.exampleN', { n: i + 1 })}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {order.linkInBio && (
+        <section className={s.block}>
+          <h2 className="section-title">{t('order.linkInBio')}</h2>
+          <div className={s.text}>{t('order.linkInBioText')}</div>
+        </section>
+      )}
+
       <section className={s.block}>
         <h2 className="section-title">{t('order.howItWorks')}</h2>
         <ol className={s.steps}>
@@ -239,6 +275,11 @@ export default function OrderDetailView() {
           {claimError}
         </p>
       )}
+      {order.fundBusy && !order.claimed && !order.own && (
+        <p className={`${s.notice} ${s.busy}`} role="status">
+          {t('order.fundBusyNote')}
+        </p>
+      )}
 
       {order.own ? (
         <p className={s.notice} role="status">
@@ -254,7 +295,7 @@ export default function OrderDetailView() {
             <button
               type="button"
               className="main-button"
-              disabled={claiming}
+              disabled={claiming || order.fundBusy}
               onClick={claim}
             >
               {claiming ? t('common.sending') : t('order.claim')}

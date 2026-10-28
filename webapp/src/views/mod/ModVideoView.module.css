@@ -205,3 +205,10 @@
   background: var(--success);
   color: var(--accent-text);
 }
+.examples {
+  margin: 8px 0 0;
+  padding-left: 22px;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}

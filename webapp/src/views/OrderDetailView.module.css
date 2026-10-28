@@ -216,3 +216,34 @@
   margin: 0;
   color: var(--hint);
 }
+/* весь фонд зарезервирован под ролики на проверке — взять нельзя, пока место не освободится */
+.notice.busy {
+  background: var(--accent-soft);
+}
+.block-hint {
+  margin: 0;
+  padding: 0 16px;
+  font-size: 14px;
+  color: var(--hint);
+}
+.examples {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.example {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--link);
+  font-size: 16px;
+  font-weight: 700;
+  text-decoration: none;
+}

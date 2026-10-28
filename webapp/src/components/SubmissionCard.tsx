@@ -81,11 +81,14 @@ function timeline(sub: MySubmission): Step[] {
       { label: st('taken'), detail: on(sub.createdAt), state: 'done' },
       {
         label: st('submitted'),
-        detail: sub.dueAt
-          ? i18next.t('submissionCard.dueAt', {
-              date: formatDeadline(sub.dueAt),
-            })
-          : undefined,
+        // фонд занят роликами на проверке — срока нет, время на паузе
+        detail: sub.fundPaused
+          ? i18next.t('submissionCard.fundPaused')
+          : sub.dueAt
+            ? i18next.t('submissionCard.dueAt', {
+                date: formatDeadline(sub.dueAt),
+              })
+            : undefined,
         state: 'now',
       },
       { label: st('review'), state: 'next' },
@@ -289,6 +292,13 @@ export default function SubmissionCard({
       )}
       {open && submission.dueAt && frozen && (
         <span className={s.hint}>{t('errors.orderFrozen')}</span>
+      )}
+      {open && submission.agreedPayout !== null && !rejected && (
+        <span className={s.hint}>
+          {t('submissionCard.agreed', {
+            amount: formatMoney(submission.agreedPayout),
+          })}
+        </span>
       )}
       {open && trackUrl && (
         <div className={s.track}>

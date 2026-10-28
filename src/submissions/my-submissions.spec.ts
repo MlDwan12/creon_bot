@@ -17,6 +17,8 @@ const order = (id: number): Order => ({
   orientation: null,
   platforms: [],
   referenceUrl: null,
+  exampleUrls: [],
+  linkInBio: false,
   targetUrl: null,
   category: 'OTHER',
   deadline: null,
@@ -31,6 +33,7 @@ const order = (id: number): Order => ({
   editedAt: null,
   prevTerms: null,
   insightsSentAt: null,
+  fundBusyAt: null,
 });
 
 const submission = (
@@ -52,6 +55,7 @@ const submission = (
   views: null,
   likes: null,
   payoutMinor: 0,
+  agreedPayoutMinor: null,
   finalizedAt: null,
   rating: null,
   review: null,

@@ -122,7 +122,16 @@ export default function ModVideoView() {
     }
   }
 
-  const decide = (decision: 'approve' | 'reject') =>
+  /**
+   * Насчитали меньше половины указанных креатором — одобрить нельзя (бэкенд не пропустит):
+   * это завышение, вместо «Одобрить» — отказ за завышенные просмотры, ролик больше не сдать.
+   */
+  const inflated =
+    video?.status === 'SUBMITTED' &&
+    video.views !== null &&
+    !!Number(views) &&
+    Number(views) < video.views * 0.5;
+  const decide = (decision: 'approve' | 'reject' | 'inflated') =>
     run(
       () =>
         moderateVideo(
@@ -130,7 +139,9 @@ export default function ModVideoView() {
           decision,
           decision === 'reject'
             ? { comment }
-            : { views: Number(views), likes: likesOrNull() },
+            : decision === 'inflated'
+              ? {}
+              : { views: Number(views), likes: likesOrNull() },
         ),
       'videos',
     );
@@ -144,6 +155,15 @@ export default function ModVideoView() {
     )
       return;
     await run(() => markPublicationDeleted(id), 'holds');
+  }
+  async function bioLinkRemoved() {
+    if (
+      !(await confirmAction(
+        'Ссылки креатора нет в шапке профиля? Начисление за ролик отменится, деньги вернутся в бюджет заказа.',
+      ))
+    )
+      return;
+    await run(() => markPublicationDeleted(id, true), 'holds');
   }
 
   if (loadError)
@@ -175,7 +195,13 @@ export default function ModVideoView() {
           new Date(video.decidedAt).getTime() +
             video.holdDays * 24 * 60 * 60 * 1000,
         );
-  const parts = videoFormatParts(video.order);
+  // ссылка креатора в шапке профиля — такой же пункт сверки, как требования к ролику
+  const parts = [
+    ...videoFormatParts(video.order),
+    ...(video.order.linkInBio
+      ? [`Ссылка в шапке профиля: ${video.order.bioLink ?? 'ссылка креатора'}`]
+      : []),
+  ];
   const author = video.author;
   const authorLink = safeUrl(author.url) && (
     <a href={safeUrl(author.url)} target="_blank" rel="noopener noreferrer">
@@ -290,6 +316,30 @@ export default function ModVideoView() {
           <summary>Текст задания</summary>
           <div className={s.text}>{video.order.description}</div>
         </details>
+        {video.order.exampleUrls.length > 0 && (
+          <details className={s.task}>
+            <summary>
+              Примеры роликов · {video.order.exampleUrls.length}
+            </summary>
+            <ol className={s.examples}>
+              {video.order.exampleUrls.map((url) => (
+                <li key={url}>
+                  {safeUrl(url) ? (
+                    <a
+                      href={safeUrl(url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {url}
+                    </a>
+                  ) : (
+                    url
+                  )}
+                </li>
+              ))}
+            </ol>
+          </details>
+        )}
       </section>
 
       <section className={s.rows}>
@@ -305,6 +355,12 @@ export default function ModVideoView() {
           <span>Свободно в бюджете</span>
           <span>{formatMoney(video.order.free)}</span>
         </div>
+        {video.agreedPayout !== null && (
+          <div className={s.row}>
+            <span>Не влез в бюджет — креатор согласился на остаток</span>
+            <span>{formatMoney(video.agreedPayout)}</span>
+          </div>
+        )}
         {video.autoViews !== null && (
           <div className={s.row}>
             <span>Сейчас по данным {PLATFORM_NAMES[video.platform]}</span>
@@ -365,6 +421,19 @@ export default function ModVideoView() {
         </>
       )}
 
+      {video.status === 'SUBMITTED' && video.inflatedBefore > 0 && (
+        <p className={s.error} role="status">
+          Уже отклоняли за завышенные просмотры: {video.inflatedBefore}. Повтор —
+          повод для бана.
+        </p>
+      )}
+      {inflated && (
+        <p className={s.error} role="status">
+          Меньше половины указанных креатором ({formatViews(video.views!)}) —
+          это завышение. Ролик отклоняется, и сдать его снова будет нельзя.
+        </p>
+      )}
+
       {video.status === 'SUBMITTED' ? (
         <>
           {/* причины — только когда решили отклонить: так «Отклонить» не нажать по ошибке */}
@@ -411,14 +480,25 @@ export default function ModVideoView() {
               >
                 Отклонить
               </button>
-              <button
-                type="button"
-                className={s.approve}
-                disabled={busy || !Number(views)}
-                onClick={() => decide('approve')}
-              >
-                Одобрить{estimate && ` · ${estimate}`}
-              </button>
+              {inflated ? (
+                <button
+                  type="button"
+                  className={s.rejectConfirm}
+                  disabled={busy}
+                  onClick={() => decide('inflated')}
+                >
+                  Завышены просмотры
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={s.approve}
+                  disabled={busy || !Number(views)}
+                  onClick={() => decide('approve')}
+                >
+                  Одобрить{estimate && ` · ${estimate}`}
+                </button>
+              )}
             </div>
           )}
         </>
@@ -429,7 +509,19 @@ export default function ModVideoView() {
             попадут в отчёт рекламодателю (оплата не меняется), а деньги за
             ролик станут доступны к выводу. Публикации нет — отмените
             начисление.
+            {video.order.linkInBio &&
+              ` Заказ требует ссылку в шапке профиля — проверьте и её: ${video.order.bioLink ?? 'ссылка креатора'}.`}
           </p>
+          {video.order.linkInBio && (
+            <button
+              type="button"
+              className={s.reject}
+              disabled={busy}
+              onClick={bioLinkRemoved}
+            >
+              Ссылки в шапке нет
+            </button>
+          )}
           {error && (
             <p className={s.error} role="alert">
               {error}

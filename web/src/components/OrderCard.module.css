@@ -1,0 +1,120 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 22px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  background: var(--fill);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.tag.platform {
+  padding-left: 4px;
+  font-weight: 700;
+}
+.deadline,
+.ago {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--hint);
+  white-space: nowrap;
+}
+.deadline {
+  color: var(--orange-text);
+}
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.title {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+.desc {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--hint);
+  /* Не больше двух строк описания в списке — полное в карточке заказа. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.price {
+  align-self: flex-start;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: var(--lime);
+  color: var(--lime-text);
+}
+.cpm {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  font-size: 20px;
+}
+.price .per {
+  color: var(--lime-text);
+}
+.per {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hint);
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hint);
+}
+.free.low {
+  color: var(--orange-text);
+  font-weight: 800;
+}
+/* весь фонд зарезервирован под ролики на проверке — плашкой, текст --link читается в обеих темах */
+.free.busy {
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--link);
+  font-weight: 700;
+}
+/* условие сверх обычного (ссылка в шапке профиля) — оранжевая плашка, как «срок» */
+.tag.bio {
+  background: var(--orange-soft);
+  color: var(--orange-text);
+}

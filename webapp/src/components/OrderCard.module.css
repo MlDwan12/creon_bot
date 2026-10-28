@@ -102,3 +102,16 @@
   color: var(--orange-text);
   font-weight: 800;
 }
+/* весь фонд зарезервирован под ролики на проверке — плашкой, текст --link читается в обеих темах */
+.free.busy {
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--link);
+  font-weight: 700;
+}
+/* условие сверх обычного (ссылка в шапке профиля) — оранжевая плашка, как «срок» */
+.tag.bio {
+  background: var(--orange-soft);
+  color: var(--orange-text);
+}

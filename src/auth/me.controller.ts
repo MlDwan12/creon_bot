@@ -1,7 +1,5 @@
 import { Controller, Get, Req, UseGuards } from '@nestjs/common';
-import { Cabinet } from '@prisma/client';
 import { userLang } from '../i18n/i18n';
-import { platformFeePercent } from '../orders/budget';
 import { SupportService } from '../support/support.service';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
 import { UserThrottlerGuard } from './user-throttler.guard';
@@ -29,10 +27,10 @@ export class MeController {
       language: userLang(req.user),
       languageChosen: req.user.language !== null,
       cabinet: req.user.cabinet?.toLowerCase() ?? null,
-      // комиссия площадки для новых заказов — заказчику в проверке перед отправкой; креатору — нет:
-      // с ней по остатку фонда в каталоге вычисляется бюджет рекламодателя
-      feePercent:
-        req.user.cabinet === Cabinet.CREATOR ? null : platformFeePercent(),
+      // имя из Telegram — для шапки сайта (своё же, не другой стороне сделки)
+      firstName: req.user.firstName,
+      // Комиссию площадки (src/orders/budget.ts) пока не отдаём ни креаторам, ни рекламодателям:
+      // её размер ещё не решён.
     };
   }
 }

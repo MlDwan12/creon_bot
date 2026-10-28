@@ -37,6 +37,11 @@ export default function OrderCard({
             <span className={s.tag}>{t('orderCard.anyPlatform')}</span>
           )}
           <span className={s.tag}>{categoryLabel(order.category)}</span>
+          {order.linkInBio && (
+            <span className={`${s.tag} ${s.bio}`}>
+              {t('orderCard.linkInBio')}
+            </span>
+          )}
         </div>
         {order.deadline ? (
           <span className={s.deadline}>
@@ -76,15 +81,26 @@ export default function OrderCard({
       )}
 
       <div className={s.meta}>
-        <span className={order.budgetLow ? `${s.free} ${s.low}` : s.free}>
-          {order.freeUnder
-            ? t('orderCard.leftUnder', { amount: formatMoney(order.freeUnder) })
-            : t('orderCard.left', { amount: formatMoney(order.free) }) +
-              (order.cpm
-                ? ` · ${t('orderCard.approxViews', { views: formatViews(budgetViews(order.free, order.cpm)) })}`
-                : '')}
-          {order.budgetLow && t('orderCard.hurry')}
-        </span>
+        {/* Предпросмотр рекламодателю (ставки ещё нет) — без остатка: по нему видна комиссия. */}
+        {order.fundBusy ? (
+          <span className={`${s.free} ${s.busy}`}>
+            {t('orderCard.fundBusy')}
+          </span>
+        ) : (
+          (!preview || order.cpm !== null) && (
+            <span className={order.budgetLow ? `${s.free} ${s.low}` : s.free}>
+              {order.freeUnder
+                ? t('orderCard.leftUnder', {
+                    amount: formatMoney(order.freeUnder),
+                  })
+                : t('orderCard.left', { amount: formatMoney(order.free) }) +
+                  (order.cpm
+                    ? ` · ${t('orderCard.approxViews', { views: formatViews(budgetViews(order.free, order.cpm)) })}`
+                    : '')}
+              {order.budgetLow && t('orderCard.hurry')}
+            </span>
+          )
+        )}
         <span>
           {t('orderCard.minViews', { views: formatViews(order.minViews) })}
         </span>

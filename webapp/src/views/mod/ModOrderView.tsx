@@ -124,6 +124,7 @@ export default function ModOrderView() {
     free: Math.floor(order.pool / 100) * 100,
     freeUnder: order.pool < 100 ? 100 : null,
     budgetLow: false,
+    fundBusy: false,
   };
 
   /** После решения — сразу следующий заказ из очереди; очередь пуста — назад к ней. */
@@ -222,11 +223,25 @@ export default function ModOrderView() {
 
       <div className={s.text}>{order.description}</div>
       {videoFormat && <p className={s.reference}>Ролик: {videoFormat}</p>}
+      {order.exampleUrls.length > 0 && (
+        <div className={s.reference}>
+          Примеры роликов — креаторы видят их без ника автора; проверьте, что
+          это ролики по теме, а не аккаунт заказчика:
+          <ol className={s.examples}>
+            {order.exampleUrls.map((url) => (
+              <li key={url}>{userLink(url)}</li>
+            ))}
+          </ol>
+        </div>
+      )}
       {order.referenceUrl && (
-        <p className={s.reference}>Референс: {userLink(order.referenceUrl)}</p>
+        <p className={s.reference}>Бриф: {userLink(order.referenceUrl)}</p>
       )}
       {order.targetUrl && (
-        <p className={s.reference}>Товар: {userLink(order.targetUrl)}</p>
+        <p className={s.reference}>
+          Товар: {userLink(order.targetUrl)}
+          {order.linkInBio && ' · креатор держит ссылку и в шапке профиля'}
+        </p>
       )}
 
       {budgetRaised && pending && (

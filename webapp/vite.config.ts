@@ -3,6 +3,15 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [react()],
+  // общий код мини-аппа и сайта; путь тот же, что в tsconfig.json (paths)
+  resolve: {
+    alias: {
+      // без node:url — в Docker у webapp нет @types/node; decode — на случай пробелов и кириллицы в пути
+      '@fixum/shared': decodeURIComponent(
+        new URL('../packages/shared/src/index.ts', import.meta.url).pathname,
+      ),
+    },
+  },
   // классы в *.module.css пишем через дефис, в коде — s.roleHead
   css: { modules: { localsConvention: 'camelCaseOnly' } },
   // По умолчанию Vite собирает под Safari 16.4+, а мини-апп на iPhone открывает системный WebView —
@@ -16,7 +25,7 @@ export default defineConfig({
     // Telegram открывает мини-апп только по HTTPS — в dev это туннель ngrok на :5173.
     // Vite по умолчанию отвечает только на localhost, домены туннеля разрешаем явно.
     allowedHosts: ['.ngrok-free.app', '.ngrok-free.dev'],
-    // словари i18n/*.json лежат в корне репозитория, на уровень выше webapp
+    // словари i18n/*.json и packages/shared лежат в корне репозитория, на уровень выше webapp
     fs: { allow: ['..'] },
   },
 });

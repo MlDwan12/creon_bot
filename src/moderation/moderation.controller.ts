@@ -21,12 +21,16 @@ import { findContacts } from '../common/contacts';
 import { fromMinor } from '../common/money';
 import { NotificationsService } from '../telegram/notifications.service';
 import { creatorLabel } from '../common/format';
+import { trackLink } from '../orders/order-report';
 import { budgetRaised, payoutPool, HOLD_DAYS } from '../orders/budget';
 import { OrdersService } from '../orders/orders.service';
 import { submittedTerms } from '../orders/order-status';
 import { DAY_MS } from '../orders/deadline';
 import { authorInLinks, authorUrl, platformOf } from '../common/platforms';
-import { SubmissionsService } from '../submissions/submissions.service';
+import {
+  BIO_LINK_REMOVED,
+  SubmissionsService,
+} from '../submissions/submissions.service';
 import {
   type CountedVideo,
   ViewCounterService,
@@ -178,6 +182,8 @@ export class ModerationController {
         orderTitle: s.order.title,
         creator: creatorLabel(s.creator),
         submittedAt: s.submittedAt,
+        // фонд заказа «занят» — по нему никто не сдаёт, пока не проверят: такие ролики первыми
+        holdsFund: s.order.fundBusyAt !== null,
       })),
       // холд закончился — проверить публикацию и зафиксировать итог
       holds: holds.map((s) => ({
@@ -339,8 +345,11 @@ export class ModerationController {
       id: o.id,
       title: o.title,
       description: o.description,
+      // модератору — сами ссылки: проверить, что это ролики по теме, а не аккаунт рекламодателя
+      exampleUrls: o.exampleUrls,
       referenceUrl: o.referenceUrl,
       targetUrl: o.targetUrl,
+      linkInBio: o.linkInBio,
       ...videoFormat(o),
       budget: fromMinor(o.budgetMinor),
       // одобренный в прошлый раз; выше него — повышение, одобрение только с budgetConfirmed
@@ -429,9 +438,10 @@ export class ModerationController {
   async video(@Param('id', ParseIdPipe) id: number) {
     const s = await this.submissionsService.findById(id);
     if (!s) throw new NotFoundException('Отклик не найден');
-    const [attempt, budget, counted] = await Promise.all([
+    const [attempt, budget, inflatedBefore, counted] = await Promise.all([
       this.submissionsService.attemptNumber(s),
       this.submissionsService.orderBudget(s.order),
+      this.submissionsService.inflatedCount(s.creatorId),
       s.videoUrl
         ? this.viewCounter.fetchViews(
             [{ url: s.videoUrl, creatorId: s.creatorId }],
@@ -461,6 +471,10 @@ export class ModerationController {
       author: videoAuthor(stats, s.creator.socialLinks),
       platform: platformOf(s.videoUrl),
       payout: fromMinor(s.payoutMinor),
+      // креатор согласился на остаток фонда при сдаче: больше этого (и свободного) не начислят
+      agreedPayout: fromMinor(s.agreedPayoutMinor),
+      // сколько его роликов уже отклонено за завышенные просмотры — повтор повод для бана
+      inflatedBefore,
       decidedAt: s.decidedAt,
       finalizedAt: s.finalizedAt,
       holdDays: HOLD_DAYS,
@@ -468,6 +482,10 @@ export class ModerationController {
         id: s.order.id,
         title: terms.title,
         description: terms.description,
+        exampleUrls: terms.exampleUrls,
+        // ссылка креатора /r/ должна стоять в шапке профиля — при проверке и в конце холда
+        linkInBio: terms.linkInBio,
+        bioLink: terms.linkInBio ? trackLink(s.trackCode) : null,
         ...videoFormat(terms),
         // по ней начислят (videoTerms): сдан до правки — ставка до неё
         cpm: fromMinor(terms.cpmMinor),
@@ -513,8 +531,7 @@ export class ModerationController {
         comment: decision.banReason,
       });
     if (closedOrder) this.notifications.orderClosedByModerator(closedOrder);
-    for (const order of bannedOrders)
-      this.notifications.orderClosedByModerator(order);
+    this.notifyBanned(bannedOrders);
     // не ждём: решение уже принято, уведомления — в фоне
     void this.notifications.reportResolved(reporters, decision.actioned);
     return { ok: true };
@@ -529,8 +546,7 @@ export class ModerationController {
     const reason = parseBanReason(
       (body as { reason?: unknown } | null)?.reason,
     );
-    for (const order of await this.bans.banUser(id, reason))
-      this.notifications.orderClosedByModerator(order);
+    this.notifyBanned(await this.bans.banUser(id, reason));
     await this.actions.log({
       moderatorId: req.user.telegramId,
       type: ModeratorActionType.USER_BAN,
@@ -591,7 +607,7 @@ export class ModerationController {
     @Body('likes') likes: unknown,
     @Req() req: ApiRequest,
   ) {
-    const { submission, closed } =
+    const { submission, closed, freed } =
       await this.submissionsService.moderatorApprove(
         id,
         req.user.telegramId,
@@ -607,6 +623,7 @@ export class ModerationController {
     });
     this.notifications.videoApprovedByModerator(submission);
     if (closed) this.notifications.orderBudgetExhausted(closed);
+    if (freed) this.notifications.fundFreed(freed);
     return { ok: true };
   }
 
@@ -637,22 +654,31 @@ export class ModerationController {
     return { ok: true };
   }
 
-  /** При итоге публикации нет — начисление из холда отменяется, креатору — уведомление. */
+  /**
+   * При итоге публикации нет — начисление из холда отменяется, креатору — уведомление.
+   * `{ bioLink: true }` — публикация на месте, но заказ требовал ссылку в шапке профиля, а её убрали.
+   */
   @Post('videos/:id/deleted')
   async publicationDeleted(
     @Param('id', ParseIdPipe) id: number,
+    @Body() body: unknown,
     @Req() req: ApiRequest,
   ) {
-    const submission = await this.submissionsService.publicationDeleted(
-      id,
-      req.user.telegramId,
-    );
+    const bioLink = (body as { bioLink?: unknown } | null)?.bioLink === true;
+    const { submission, freed } =
+      await this.submissionsService.publicationDeleted(
+        id,
+        req.user.telegramId,
+        bioLink,
+      );
     await this.actions.log({
       moderatorId: req.user.telegramId,
       type: ModeratorActionType.PUBLICATION_DELETED,
       objectId: id,
+      comment: bioLink ? BIO_LINK_REMOVED : null,
     });
-    this.notifications.publicationDeleted(submission);
+    this.notifications.publicationDeleted(submission, bioLink);
+    if (freed) this.notifications.fundFreed(freed);
     return { ok: true };
   }
 
@@ -727,19 +753,56 @@ export class ModerationController {
     @Req() req: ApiRequest,
   ) {
     const comment = parseRejectComment(body);
-    const submission = await this.submissionsService.moderatorReject(
-      id,
+    await this.notifyRejected(
+      await this.submissionsService.moderatorReject(
+        id,
+        req.user.telegramId,
+        comment,
+      ),
       req.user.telegramId,
-      comment,
     );
+    return { ok: true };
+  }
+
+  /** Отклонить за завышенные просмотры: причина — INFLATED_VIEWS, тот же ролик больше не сдать. */
+  @Post('videos/:id/inflated')
+  async rejectInflated(
+    @Param('id', ParseIdPipe) id: number,
+    @Req() req: ApiRequest,
+  ) {
+    await this.notifyRejected(
+      await this.submissionsService.rejectInflated(id, req.user.telegramId),
+      req.user.telegramId,
+    );
+    return { ok: true };
+  }
+
+  /** После бана: креаторам снятых заказов — «заказ закрыт», заказов с освободившимся фондом — «можно сдавать». */
+  private notifyBanned({
+    closed,
+    freed,
+  }: Awaited<ReturnType<BansService['ban']>>) {
+    for (const order of closed)
+      this.notifications.orderClosedByModerator(order);
+    for (const order of freed) this.notifications.fundFreed(order);
+  }
+
+  private async notifyRejected(
+    {
+      submission,
+      freed,
+    }: Awaited<ReturnType<SubmissionsService['moderatorReject']>>,
+    moderatorId: bigint,
+  ) {
+    const comment = submission.moderatorComment ?? '';
     await this.actions.log({
-      moderatorId: req.user.telegramId,
+      moderatorId,
       type: ModeratorActionType.VIDEO_REJECT,
-      objectId: id,
+      objectId: submission.id,
       comment,
       waitingSince: submission.submittedAt,
     });
     this.notifications.videoRejectedByModerator(submission, comment);
-    return { ok: true };
+    if (freed) this.notifications.fundFreed(freed);
   }
 }
