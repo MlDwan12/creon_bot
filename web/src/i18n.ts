@@ -40,4 +40,9 @@ export function setLang(lang: Lang) {
   }
 }
 
+/** Локаль для чисел и дат: «1 234,5» по-русски, «1,234.5» по-английски. */
+export function locale(): string {
+  return i18next.language === 'en' ? 'en-US' : 'ru-RU';
+}
+
 export { i18next };

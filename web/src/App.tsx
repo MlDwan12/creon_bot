@@ -1,9 +1,11 @@
 import { ApiError, type Me } from '@fixum/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { RouterProvider } from 'react-router/dom';
 import { fetchMe, logout } from './api';
 import { Login } from './Login';
-import { Shell } from './Shell';
+import { router } from './router';
+import { Session } from './session';
 import s from './App.module.css';
 
 type State =
@@ -44,15 +46,18 @@ export function App() {
       return <Login onLogin={load} />;
     case 'in':
       return (
-        <Shell
-          me={state.me}
-          onLogout={() =>
-            void logout().then(
-              () => setState({ kind: 'guest' }),
-              () => setState({ kind: 'error' }),
-            )
-          }
-        />
+        <Session
+          value={{
+            me: state.me,
+            logout: () =>
+              void logout().then(
+                () => setState({ kind: 'guest' }),
+                () => setState({ kind: 'error' }),
+              ),
+          }}
+        >
+          <RouterProvider router={router} />
+        </Session>
       );
     case 'banned':
       return (

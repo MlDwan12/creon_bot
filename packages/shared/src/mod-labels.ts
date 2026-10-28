@@ -1,6 +1,6 @@
-import type { ModeratorActionType, ReportTarget } from '../../api';
+import type { ModeratorActionType, ReportTarget } from './api';
 
-/** Подписи действий модератора — кабинет и история пользователя (окно модератора только на русском). */
+/** Подписи действий модератора — кабинет и история пользователя (окно модератора только на русском; общие с сайтом). */
 export const ACTION_LABELS: Record<ModeratorActionType, string> = {
   ORDER_APPROVE: 'Заказ опубликован',
   ORDER_REJECT: 'Заказ отклонён',

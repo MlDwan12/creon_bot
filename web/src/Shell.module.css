@@ -4,6 +4,9 @@
 }
 
 .nav {
+  position: sticky;
+  top: 0;
+  height: 100vh;
   flex: none;
   width: 248px;
   display: flex;
@@ -20,16 +23,6 @@
   justify-content: space-between;
   gap: 8px;
   padding: 0 8px;
-}
-
-.badge {
-  padding: 3px 8px;
-  border-radius: 8px;
-  background: var(--ink-raised);
-  color: var(--ink-hint);
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
 }
 
 .switch {
@@ -56,6 +49,34 @@
 .switch button[aria-pressed='true'] {
   background: var(--surface);
   color: var(--text);
+  font-weight: 800;
+}
+
+.links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.links a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  color: var(--ink-soft);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.links a:hover {
+  background: var(--ink-raised);
+}
+
+.links a[aria-current='page'] {
+  background: var(--lime);
+  color: var(--lime-text);
   font-weight: 800;
 }
 
@@ -122,16 +143,16 @@
 .main {
   flex: 1;
   min-width: 0;
-  padding: 40px;
+  padding: 32px 40px 48px;
 }
 
-.main h1 {
+.soon h1 {
   margin: 0 0 12px;
   font-family: var(--font-display);
   font-size: 28px;
 }
 
-.main p {
+.soon p {
   max-width: 560px;
   margin: 0;
   font-size: 16px;
@@ -145,11 +166,17 @@
     flex-direction: column;
   }
   .nav {
+    position: static;
+    height: auto;
     width: auto;
     padding: 16px;
     gap: 16px;
   }
   .main {
     padding: 24px 16px;
+  }
+  .links {
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 }
