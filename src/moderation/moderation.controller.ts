@@ -21,12 +21,16 @@ import { findContacts } from '../common/contacts';
 import { fromMinor } from '../common/money';
 import { NotificationsService } from '../telegram/notifications.service';
 import { creatorLabel } from '../common/format';
+import { trackLink } from '../orders/order-report';
 import { budgetRaised, payoutPool, HOLD_DAYS } from '../orders/budget';
 import { OrdersService } from '../orders/orders.service';
 import { submittedTerms } from '../orders/order-status';
 import { DAY_MS } from '../orders/deadline';
 import { authorInLinks, authorUrl, platformOf } from '../common/platforms';
-import { SubmissionsService } from '../submissions/submissions.service';
+import {
+  BIO_LINK_REMOVED,
+  SubmissionsService,
+} from '../submissions/submissions.service';
 import {
   type CountedVideo,
   ViewCounterService,
@@ -341,8 +345,11 @@ export class ModerationController {
       id: o.id,
       title: o.title,
       description: o.description,
+      // модератору — сами ссылки: проверить, что это ролики по теме, а не аккаунт рекламодателя
+      exampleUrls: o.exampleUrls,
       referenceUrl: o.referenceUrl,
       targetUrl: o.targetUrl,
+      linkInBio: o.linkInBio,
       ...videoFormat(o),
       budget: fromMinor(o.budgetMinor),
       // одобренный в прошлый раз; выше него — повышение, одобрение только с budgetConfirmed
@@ -475,6 +482,10 @@ export class ModerationController {
         id: s.order.id,
         title: terms.title,
         description: terms.description,
+        exampleUrls: terms.exampleUrls,
+        // ссылка креатора /r/ должна стоять в шапке профиля — при проверке и в конце холда
+        linkInBio: terms.linkInBio,
+        bioLink: terms.linkInBio ? trackLink(s.trackCode) : null,
         ...videoFormat(terms),
         // по ней начислят (videoTerms): сдан до правки — ставка до неё
         cpm: fromMinor(terms.cpmMinor),
@@ -643,20 +654,30 @@ export class ModerationController {
     return { ok: true };
   }
 
-  /** При итоге публикации нет — начисление из холда отменяется, креатору — уведомление. */
+  /**
+   * При итоге публикации нет — начисление из холда отменяется, креатору — уведомление.
+   * `{ bioLink: true }` — публикация на месте, но заказ требовал ссылку в шапке профиля, а её убрали.
+   */
   @Post('videos/:id/deleted')
   async publicationDeleted(
     @Param('id', ParseIdPipe) id: number,
+    @Body() body: unknown,
     @Req() req: ApiRequest,
   ) {
+    const bioLink = (body as { bioLink?: unknown } | null)?.bioLink === true;
     const { submission, freed } =
-      await this.submissionsService.publicationDeleted(id, req.user.telegramId);
+      await this.submissionsService.publicationDeleted(
+        id,
+        req.user.telegramId,
+        bioLink,
+      );
     await this.actions.log({
       moderatorId: req.user.telegramId,
       type: ModeratorActionType.PUBLICATION_DELETED,
       objectId: id,
+      comment: bioLink ? BIO_LINK_REMOVED : null,
     });
-    this.notifications.publicationDeleted(submission);
+    this.notifications.publicationDeleted(submission, bioLink);
     if (freed) this.notifications.fundFreed(freed);
     return { ok: true };
   }

@@ -17,8 +17,24 @@ import { budgetSpent } from './budget';
  * null — у старого отклика нет кода.
  */
 export function videoLinkForAdvertiser(trackCode: string | null) {
-  const base = (process.env.WEBAPP_URL ?? '').replace(/\/$/, '');
-  return trackCode ? `${base}/v/${trackCode}` : null;
+  return trackCode ? `${appBase()}/v/${trackCode}` : null;
+}
+
+/**
+ * Пример ролика из заказа для креатора — тоже через редирект: /v/e/<заказ>/<номер с 1>
+ * (VideoLinkController). В ссылке площадки ник автора, а им может оказаться сам рекламодатель.
+ */
+export function exampleLink(orderId: number, index: number) {
+  return `${appBase()}/v/e/${orderId}/${index + 1}`;
+}
+
+/** Ссылка креатора на товар /r/<код> целиком — модератору проверить её в шапке профиля. */
+export function trackLink(trackCode: string | null) {
+  return trackCode ? `${appBase()}/r/${trackCode}` : null;
+}
+
+function appBase() {
+  return (process.env.WEBAPP_URL ?? '').replace(/\/$/, '');
 }
 
 /**

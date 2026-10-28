@@ -8,12 +8,14 @@ import {
   NotFoundException,
   Param,
   Post,
+  ParseEnumPipe,
   Put,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import { ParseIdPipe } from '../common/parse-id.pipe';
-import { OrderStatus } from '@prisma/client';
+import { OrderCategory, OrderStatus } from '@prisma/client';
 import { isFrozen } from './order-status';
 import { fromMinor } from '../common/money';
 import { payoutPool } from './budget';
@@ -47,8 +49,10 @@ export class MyOrdersController {
       id: o.id,
       title: o.title,
       description: o.description,
+      exampleUrls: o.exampleUrls,
       referenceUrl: o.referenceUrl,
       targetUrl: o.targetUrl,
+      linkInBio: o.linkInBio,
       ...videoFormat(o),
       budget: fromMinor(o.budgetMinor),
       minViews: o.minViews,
@@ -76,6 +80,20 @@ export class MyOrdersController {
       deletable: o.stats.deletable,
       createdAt: o.createdAt,
     }));
+  }
+
+  /**
+   * Подсказка в форме заказа: сколько обычно стоят 1000 просмотров в категории, USDT; null — мало
+   * данных. Ставку по-прежнему назначает модератор — это ориентир, сколько просмотров даст бюджет.
+   */
+  @Get('price-hint')
+  async priceHint(
+    @Query('category', new ParseEnumPipe(OrderCategory))
+    category: OrderCategory,
+  ) {
+    return {
+      per1000: fromMinor(await this.ordersService.typicalPrice(category)),
+    };
   }
 
   /** Новый заказ → на модерацию, модераторам уведомление. */

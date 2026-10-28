@@ -25,6 +25,7 @@ import {
 import { DAY_MS } from '../orders/deadline';
 import { titleVisibleToCreators } from '../common/format';
 import { fromMinor } from '../common/money';
+import { isDbId } from '../common/validation';
 import {
   PLATFORMS,
   expandTiktokShortLink,
@@ -114,6 +115,10 @@ const ALREADY_CLAIMED_MESSAGE = () => tr('errors.alreadyClaimed');
 /** Причина отклонения, когда публикацию удалили до конца холда — креатор увидит её. */
 export const PUBLICATION_DELETED =
   'Публикация удалена до итога просмотров — начисление отменено';
+
+/** То же, когда заказ требовал ссылку в шапке профиля (Order.linkInBio), а её сняли до итога. */
+export const BIO_LINK_REMOVED =
+  'Ссылку из шапки профиля убрали до итога просмотров — начисление отменено';
 
 const DUPLICATE_VIDEO_MESSAGE = () => tr('errors.duplicateVideo');
 
@@ -272,9 +277,21 @@ export class SubmissionsService implements OnApplicationBootstrap {
   async submitVideo(
     submissionId: number,
     creatorId: number,
-    video: { url: string; views: number; acceptMinor: number | null },
+    video: {
+      url: string;
+      views: number;
+      acceptMinor: number | null;
+      bioLinkConfirmed?: boolean;
+    },
   ) {
-    await this.assertCanSubmit(submissionId, creatorId, video.url);
+    const { order } = await this.assertCanSubmit(
+      submissionId,
+      creatorId,
+      video.url,
+    );
+    // ссылку в шапке модератор проверит при одобрении и в конце холда — здесь креатор её подтверждает
+    if (order.linkInBio && !video.bioLinkConfirmed)
+      throw new BadRequestException(tr('errors.confirmLinkInBio'));
     // после проверки прав: запрос к TikTok — только по своему отклику
     const url = isTiktokShortLink(video.url)
       ? await expandTiktokShortLink(video.url)
@@ -447,6 +464,20 @@ export class SubmissionsService implements OnApplicationBootstrap {
       select: { videoUrl: true },
     });
     return submission?.videoUrl ?? null;
+  }
+
+  /**
+   * Пример ролика из заказа по номеру с 1 (VideoLinkController). Только у заказов, которые модератор
+   * хоть раз одобрил: примеры заказа на первой проверке никому, кроме модератора, не видны.
+   * null — нет такого заказа или примера.
+   */
+  async exampleUrl(orderId: number, n: number) {
+    if (!isDbId(orderId)) return null;
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, approvedBudgetMinor: { not: null } },
+      select: { exampleUrls: true },
+    });
+    return order?.exampleUrls[n - 1] ?? null;
   }
 
   async click(trackCode: string) {
@@ -632,10 +663,15 @@ export class SubmissionsService implements OnApplicationBootstrap {
   }
 
   /**
-   * При итоге модератор не нашёл публикацию: креатор удалил ролик до конца холда. Начисление
-   * отменяется и возвращается в фонд заказа — деньги ещё не выводились, они были в холде.
+   * При итоге модератор не нашёл публикацию: креатор удалил ролик до конца холда — или, если заказ
+   * требовал ссылку в шапке профиля (`bioLink`), убрал её. Начисление отменяется и возвращается в
+   * фонд заказа — деньги ещё не выводились, они были в холде.
    */
-  async publicationDeleted(submissionId: number, moderatorTelegramId: bigint) {
+  async publicationDeleted(
+    submissionId: number,
+    moderatorTelegramId: bigint,
+    bioLink = false,
+  ) {
     const found = await this.mustFind(submissionId);
     return this.prisma.$transaction(async (tx) => {
       // итог фиксируют под той же блокировкой заказа — проверка ниже не устареет
@@ -651,7 +687,7 @@ export class SubmissionsService implements OnApplicationBootstrap {
         {
           status: SubmissionStatus.MODERATOR_REJECTED,
           moderatorId: moderatorTelegramId,
-          moderatorComment: PUBLICATION_DELETED,
+          moderatorComment: bioLink ? BIO_LINK_REMOVED : PUBLICATION_DELETED,
           payoutMinor: 0,
           decidedAt: new Date(),
         },

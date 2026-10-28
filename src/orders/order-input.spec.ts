@@ -11,6 +11,11 @@ const valid = {
   title: '  Распаковка наушников  ',
   description: 'Снять 30 секунд',
   referenceUrl: 'https://disk.yandex.ru/x',
+  exampleUrls: [
+    'https://www.tiktok.com/@anya/video/7412345678901234567',
+    'https://www.instagram.com/reel/C9xAbCdEfGh/',
+    'https://youtube.com/shorts/dQw4w9WgXcQ',
+  ],
   budget: 500,
   minViews: 250,
   minDurationSec: 15,
@@ -95,7 +100,7 @@ describe('parseOrderInput', () => {
   });
 
   it.each([
-    ['референса', { referenceUrl: '' }],
+    ['примеров роликов', { exampleUrls: undefined }],
     ['порога просмотров', { minViews: '' }],
     ['длительности от', { minDurationSec: '' }],
     ['длительности до', { maxDurationSec: undefined }],
@@ -103,10 +108,102 @@ describe('parseOrderInput', () => {
     ['выбора площадок', { platforms: undefined }],
     ['категории', { category: undefined }],
     ['выбора срока', { deadlineDays: undefined }],
-  ])('всё, кроме ссылки на товар, обязательно — нет %s', (_name, patch) => {
+  ])(
+    'всё, кроме брифа и ссылки на товар, обязательно — нет %s',
+    (_name, patch) => {
+      expect(() => parseOrderInput({ ...valid, ...patch })).toThrow(
+        BadRequestException,
+      );
+    },
+  );
+
+  it('бриф — по желанию: пусто — undefined, в правке — null', () => {
+    expect(
+      parseOrderInput({ ...valid, referenceUrl: '' }).referenceUrl,
+    ).toBeUndefined();
+    expect(parseOrderEdit({ ...valid, referenceUrl: '' }).referenceUrl).toBe(
+      null,
+    );
+  });
+
+  it('примеры: от 3 до 10 ссылок на ролики, пустые строки и пробелы отбрасываются', () => {
+    const r = parseOrderInput({
+      ...valid,
+      exampleUrls: ['  ', ...valid.exampleUrls.map((u) => ` ${u} `), ''],
+    });
+    expect(r.exampleUrls).toEqual(valid.exampleUrls);
+    expect(parseOrderEdit(valid).exampleUrls).toEqual(valid.exampleUrls);
+    // короткая ссылка TikTok из «Поделиться» — тоже ролик
+    expect(
+      parseOrderInput({
+        ...valid,
+        exampleUrls: [...valid.exampleUrls, 'https://vm.tiktok.com/ZMabc123/'],
+      }).exampleUrls,
+    ).toHaveLength(4);
+  });
+
+  it.each([
+    ['два примера', { exampleUrls: valid.exampleUrls.slice(0, 2) }],
+    [
+      'одиннадцать примеров',
+      {
+        exampleUrls: Array.from(
+          { length: 11 },
+          (_, i) =>
+            `https://www.tiktok.com/@a/video/74123456789012345${10 + i}`,
+        ),
+      },
+    ],
+    ['не список', { exampleUrls: valid.exampleUrls[0] }],
+    [
+      'не площадка',
+      {
+        exampleUrls: [
+          ...valid.exampleUrls.slice(0, 2),
+          'https://shop.example/v',
+        ],
+      },
+    ],
+    [
+      'профиль, а не ролик',
+      {
+        exampleUrls: [
+          ...valid.exampleUrls.slice(0, 2),
+          'https://www.tiktok.com/@anya',
+        ],
+      },
+    ],
+    [
+      'тот же ролик другой ссылкой',
+      {
+        exampleUrls: [...valid.exampleUrls, 'https://youtu.be/dQw4w9WgXcQ'],
+      },
+    ],
+  ])('примеры — отклоняет: %s', (_name, patch) => {
     expect(() => parseOrderInput({ ...valid, ...patch })).toThrow(
       BadRequestException,
     );
+  });
+
+  it('ссылка в шапке — только со ссылкой на товар; не передана — нет', () => {
+    expect(parseOrderInput(valid).linkInBio).toBe(false);
+    expect(
+      parseOrderInput({
+        ...valid,
+        targetUrl: 'https://shop.example/item',
+        linkInBio: true,
+      }).linkInBio,
+    ).toBe(true);
+    expect(() => parseOrderInput({ ...valid, linkInBio: true })).toThrow(
+      BadRequestException,
+    );
+    expect(() =>
+      parseOrderInput({
+        ...valid,
+        targetUrl: 'https://shop.example/item',
+        linkInBio: 'да',
+      }),
+    ).toThrow(BadRequestException);
   });
 
   it('референс — без пробелов по краям', () => {

@@ -109,3 +109,25 @@ export function budgetState(
       : payoutFor(order.minViews, order.cpmMinor);
   return { free, spent, exhausted: free < minPayout };
 }
+
+/** Меньше заказов со ставкой в категории — подсказку цены не показываем: выйдет случайное число. */
+export const PRICE_HINT_MIN_ORDERS = 3;
+
+/**
+ * Сколько обычно стоят рекламодателю 1000 просмотров: медиана по заказам со ставкой, с комиссией —
+ * как «цена 1000 просмотров» в отчёте (budgetSpent). Центы; null — заказов меньше PRICE_HINT_MIN_ORDERS.
+ */
+export function typicalPriceMinor(
+  orders: { cpmMinor: number | null; feePercent: number }[],
+): number | null {
+  const prices = orders
+    .filter((o) => o.cpmMinor !== null)
+    // без потолка бюджета: тут не расход заказа, а цена за 1000 просмотров
+    .map((o) => budgetSpent({ ...o, budgetMinor: Infinity }, o.cpmMinor!))
+    .sort((a, b) => a - b);
+  if (prices.length < PRICE_HINT_MIN_ORDERS) return null;
+  const mid = prices.length >> 1;
+  return prices.length % 2
+    ? prices[mid]
+    : Math.round((prices[mid - 1] + prices[mid]) / 2);
+}
