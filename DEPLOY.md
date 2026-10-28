@@ -20,8 +20,10 @@
 `.github/workflows/deploy.yml` (права токена — только `contents: read`):
 1. запускается только после зелёного CI на пуше в `main` этого репозитория (не форка);
 2. если коммит уже не вершина `main` (CI нового коммита закончился раньше), выкатку пропускает — иначе стенд откатился бы на старую версию;
-3. собирает образ `creon_bot:sha-<коммит>` из того коммита, что прошёл CI; SSH-ключ появляется на раннере только после сборки;
-4. по SSH: `docker load` образа и копия `deploy/remote-deploy.sh` в домашний каталог `deploy`, затем `ssh -n prod … bash remote-deploy.sh <тег>`. Итог — только код возврата скрипта.
+3. собирает образ `creon_bot:sha-<коммит>` и статику мини-аппа (этап `webapp` того же `Dockerfile`) из того коммита, что прошёл CI; SSH-ключ появляется на раннере только после сборки;
+4. по SSH узнаёт, что уже выкачено (метка бота `<каталог>/deployed-api.sha`, мини-аппа — симлинк `current`), и выкатывает только то, чьи файлы изменились: бот — всё, кроме `webapp/`, `web/`, `packages/`, `*.md`, `deploy/prod/nginx/`, `deploy/remote-static.sh`; мини-апп — `webapp/`, `packages/`, `i18n/`. Что выкатилось — в уведомлении («бот+мини-апп»);
+5. бот: `docker load` образа и копия `deploy/remote-deploy.sh` в домашний каталог `deploy`, затем `ssh -n prod … bash remote-deploy.sh <тег>`. Итог — только код возврата скрипта;
+6. мини-апп (после бота: новому фронту может понадобиться новый API): архив и `deploy/remote-static.sh` — туда же, скрипт раскладывает его в `<WEB_DIR>/releases/<коммит>` и атомарно переключает симлинк `current`. Бот и база не затрагиваются.
 
 `deploy/remote-deploy.sh` на сервере:
 1. бэкап базы `pg_dump -Fc` в `/opt/fixum/_backups/fixum_*.dump` (последние 5) и проверка, что архив читается (`pg_restore --list`);
@@ -43,6 +45,36 @@ sudo cat /opt/fixum/_backups/<файл>.dump | $C exec -T postgres \
   pg_restore -U fixum -d fixum --clean --if-exists --no-owner --single-transaction --exit-on-error
 $C up -d --no-deps fixum_bot
 ```
+
+## Мини-апп — статикой через nginx
+
+Мини-апп отдаёт nginx из `WEB_DIR/current` (прод — `/var/www/fixum-miniapp`, дев — `/var/www/creon-miniapp`),
+API и ссылки `/r/`, `/v/`, `/oauth/` — бот. Папки нет или она пустая — nginx отдаёт всё ботом, как раньше
+(в образе мини-апп пока тоже есть), поэтому порядок настройки любой и без простоя.
+
+Откат мини-аппа (на сервере): `ls -t /var/www/fixum-miniapp/releases` — версии по времени, затем
+`sudo -u deploy ln -sfn releases/<коммит> /var/www/fixum-miniapp/current`.
+
+Настройка — один раз на каждом стенде, **до** того, как правки `deploy.yml` попадут в `main`
+(с этого момента дев тоже выкатывается новой схемой). На ноутбуке, из корня репозитория:
+
+```bash
+scp -P <SSH_PORT> deploy/prod/nginx/fixum.conf ops@72.62.46.36:   # дев: root@38.180.145.13
+```
+
+На сервере (прод; для дева — `DOMAIN=dev.creon.couchreboot.site`, `WEB=/var/www/creon-miniapp`,
+`SITE=dev.creon.couchreboot.site`, без `sudo` под root):
+
+```bash
+DOMAIN=fixumapp.com WEB=/var/www/fixum-miniapp SITE=fixum.conf
+sudo install -d -m 755 -o deploy -g deploy "$WEB"
+sudo cp "/etc/nginx/sites-available/$SITE" ~/"$SITE.bak"        # прежний vhost — на случай отката
+sed "s#DOMAIN#$DOMAIN#g; s#MINIAPP_DIR#$WEB#g" ~/fixum.conf | sudo tee "/etc/nginx/sites-available/$SITE" >/dev/null
+sudo nginx -t && sudo systemctl reload nginx
+curl -sI "https://$DOMAIN/" | grep -i '^cache-control'          # пусто — отдаёт бот (папка пуста), так и должно быть
+```
+
+Не так — вернуть vhost: `sudo cp ~/"$SITE.bak" "/etc/nginx/sites-available/$SITE" && sudo systemctl reload nginx`.
 
 ## Настройка (один раз)
 
