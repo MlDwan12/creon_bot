@@ -16,7 +16,7 @@ import {
   formatViews,
   waitingFor,
 } from '../format';
-import s from './mod.module.css';
+import s from '../ui.module.css';
 import { ReasonPicker } from './ReasonPicker';
 
 const PRESETS = [

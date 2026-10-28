@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Link } from 'react-router';
 import { fetchModUsers, type ModUserRow, type ModUsersFilter } from '../api';
 import { formatDate, formatMoney } from '../format';
-import s from './mod.module.css';
+import s from '../ui.module.css';
 import { usePaged } from './usePaged';
 
 const FILTERS: { id: ModUsersFilter; label: string }[] = [

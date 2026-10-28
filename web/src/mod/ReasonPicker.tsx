@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import s from './mod.module.css';
+import s from '../ui.module.css';
 
 /** Причина отказа: готовые варианты и свой текст. value/onChange — текст причины у родителя. */
 export function ReasonPicker({

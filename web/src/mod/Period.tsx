@@ -1,4 +1,4 @@
-import s from './mod.module.css';
+import s from '../ui.module.css';
 
 export const PERIODS: { days: number | undefined; label: string }[] = [
   { days: 7, label: '7 дней' },

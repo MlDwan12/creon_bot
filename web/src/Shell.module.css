@@ -80,8 +80,32 @@
   font-weight: 800;
 }
 
-.user {
+.bottom {
   margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.support {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  color: var(--ink-hint);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.support:hover,
+.support[aria-current='page'] {
+  background: var(--ink-raised);
+  color: var(--ink-text);
+}
+
+.user {
   display: flex;
   align-items: center;
   gap: 10px;

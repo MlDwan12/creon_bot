@@ -1,19 +1,21 @@
 import { i18next, setLang, type Lang } from './i18n';
 import { createStore } from './store';
 import { getInitData } from './telegram';
-import { ApiError, REPORT_REASONS, createModApi } from '@fixum/shared';
+import {
+  ApiError,
+  REPORT_REASONS,
+  createAccountApi,
+  createAdvertiserApi,
+  createModApi,
+} from '@fixum/shared';
 import type {
   OrderCategory,
   OrderSummary,
   OrderDetail,
   MySubmission,
-  MyOrder,
-  NewOrderInput,
   VideoPlatform,
-  OrderReport,
   Balance,
   CreatorProfile,
-  Feedback,
   SocialAccount,
   ReportTarget,
   Me,
@@ -125,61 +127,6 @@ export function submitVideo(
       acceptPayout,
       bioLinkConfirmed,
     },
-  );
-}
-
-export function fetchMyOrders() {
-  return request<MyOrder[]>('GET', '/api/my-orders');
-}
-
-/** Сколько обычно стоят 1000 просмотров в категории, USDT; null — мало данных. */
-export function fetchPriceHint(category: OrderCategory) {
-  return request<{ per1000: number | null }>(
-    'GET',
-    `/api/my-orders/price-hint?category=${category}`,
-  );
-}
-
-export function createOrder(input: NewOrderInput) {
-  return request<{ id: number }>('POST', '/api/my-orders', input);
-}
-
-/** Правка заказа. `deadlineDays` не передан — срок не меняется, null — без срока. */
-export function updateOrder(
-  id: number,
-  input: Omit<NewOrderInput, 'deadlineDays'> & { deadlineDays?: number | null },
-) {
-  return request<{ ok: true }>('PUT', `/api/my-orders/${id}`, input);
-}
-
-export function closeOrder(id: number) {
-  return request<{ ok: true }>('POST', `/api/my-orders/${id}/close`);
-}
-
-/** Продлить срок на `days` дней; истёкший заказ снова откроется. */
-export function extendOrder(id: number, days: number) {
-  return request<{ ok: true }>('POST', `/api/my-orders/${id}/extend`, { days });
-}
-
-export function deleteOrder(id: number) {
-  return request<{ ok: true }>('DELETE', `/api/my-orders/${id}`);
-}
-
-export function fetchOrderReport(orderId: number) {
-  return request<OrderReport>('GET', `/api/my-orders/${orderId}/report`);
-}
-
-/** Отчёт файлом CSV — придёт в чат с ботом. */
-export function sendReportCsv(orderId: number) {
-  return request<{ ok: true }>('POST', `/api/my-orders/${orderId}/report/csv`);
-}
-
-/** `onModeration` — отзыв с текстом ушёл на проверку и появится в профиле креатора после неё. */
-export function rateVideo(submissionId: number, feedback: Feedback) {
-  return request<{ ok: true; onModeration: boolean }>(
-    'POST',
-    `/api/submissions/${submissionId}/rate`,
-    feedback,
   );
 }
 
@@ -301,20 +248,6 @@ export function reasonLabel(target: ReportTarget, code: string): string {
     : code;
 }
 
-/** Сообщение менеджеру из мини-аппа; ответ придёт в чат с ботом. */
-export function sendSupportMessage(text: string) {
-  return request<{ ok: true }>('POST', '/api/support', { text });
-}
-
-export function createReport(report: {
-  target: ReportTarget;
-  targetId: number;
-  reason: string;
-  comment: string;
-}) {
-  return request<{ ok: true }>('POST', '/api/reports', report);
-}
-
 // Запросы окна модератора — общие с сайтом (packages/shared/src/mod-api.ts), здесь — со входом мини-аппа.
 export const {
   fetchModQueue,
@@ -341,3 +274,18 @@ export const {
   banUser,
   unbanUser,
 } = createModApi(request);
+
+// Запросы кабинета заказчика, поддержки и жалоб — общие с сайтом (packages/shared/src/advertiser-api.ts).
+export const {
+  fetchMyOrders,
+  fetchPriceHint,
+  createOrder,
+  updateOrder,
+  closeOrder,
+  extendOrder,
+  deleteOrder,
+  fetchOrderReport,
+  sendReportCsv,
+  rateVideo,
+} = createAdvertiserApi(request);
+export const { sendSupportMessage, createReport } = createAccountApi(request);

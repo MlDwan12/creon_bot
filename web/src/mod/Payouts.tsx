@@ -7,7 +7,7 @@ import {
   type ModPayout,
 } from '../api';
 import { formatMoney, isWaitingLong, waitingFor } from '../format';
-import s from './mod.module.css';
+import s from '../ui.module.css';
 
 /** Заявки на вывод — как в мини-аппе (webapp/src/views/mod/ModPayoutsView.tsx), карточками в сетку. */
 export function Payouts() {
