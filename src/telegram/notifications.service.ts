@@ -283,12 +283,12 @@ export class NotificationsService
     );
   }
 
-  /** Креатору: при итоге публикации не оказалось — начисление отменено. */
-  publicationDeleted(submission: SubmissionWithParties) {
+  /** Креатору: при итоге публикации (или ссылки в шапке профиля) не оказалось — начисление отменено. */
+  publicationDeleted(submission: SubmissionWithParties, bioLink = false) {
     this.send(
       submission.creator,
       (t, lang) =>
-        t('notify.publicationDeleted', {
+        t(bioLink ? 'notify.bioLinkRemoved' : 'notify.publicationDeleted', {
           order: forCreator(submission.order, lang),
         }),
       '/submissions',

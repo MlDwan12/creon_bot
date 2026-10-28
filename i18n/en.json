@@ -60,7 +60,8 @@
     "minViews": "from {{views}} views",
     "approxViews": "≈ {{views}} views",
     "leftUnder": "less than {{amount}} left",
-    "fundBusy": "The whole fund is reserved for videos under review — once room frees up, you can take it again"
+    "fundBusy": "The whole fund is reserved for videos under review — once room frees up, you can take it again",
+    "linkInBio": "Link in bio"
   },
   "onboarding": {
     "aria": "Welcome to Fixum",
@@ -217,11 +218,11 @@
       },
       "shoot": {
         "title": "How to shoot a video that fits the requirements",
-        "text": "Check the orientation and duration in the order card, and the reference if there is one. A moderator will reject a video that doesn't meet the requirements.",
+        "text": "Check the orientation, duration and example videos in the order card — shoot in the same spirit. A moderator will reject a video that doesn't meet the requirements.",
         "keys": [
           "orientation",
           "length",
-          "reference"
+          "examples"
         ]
       },
       "submit": {
@@ -361,7 +362,7 @@
     "payout": "Payout",
     "payoutValue": "via Fixum, after moderator review",
     "task": "Task",
-    "reference": "Reference and materials ›",
+    "reference": "Brief and materials ›",
     "howItWorks": "How it works",
     "steps": [
       "You apply — the order appears in “My videos”",
@@ -387,7 +388,12 @@
     "requirements": "Video requirements",
     "leftUnder": "Less than {{amount}} left",
     "fundBusy": "The whole fund is reserved for videos under review",
-    "fundBusyNote": "You can't take this order right now. If the moderator rejects some videos, room will free up and the order will be available again."
+    "fundBusyNote": "You can't take this order right now. If the moderator rejects some videos, room will free up and the order will be available again.",
+    "examples": "What we want",
+    "examplesHint": "Videos the client likes — shoot in the same spirit.",
+    "exampleN": "Example {{n}}",
+    "linkInBio": "Link in profile bio",
+    "linkInBioText": "Put your product link (you'll get it after you take the order) not only in the video description but also in your profile bio — and keep it until the final count, 5 days after approval. Remove it earlier and the payment is cancelled."
   },
   "submit": {
     "alreadySent": "This application has already been submitted or wasn't found.",
@@ -421,7 +427,8 @@
     "overTitle": "Your {{views}} views go beyond the budget",
     "overText": "There's {{amount}} left in the order fund — that pays for about {{paidViews}} views, the rest aren't paid. If you agree, we'll reserve it for you and send the video for review. If the moderator counts fewer views, the amount will be lower.",
     "overAgree": "Agree, submit for {{amount}}",
-    "overCancel": "Don't submit"
+    "overCancel": "Don't submit",
+    "checkLinkInBio": "My link is in my profile bio — I won't remove it until the final count"
   },
   "profile": {
     "loadError": "Couldn't load the profile",
@@ -538,8 +545,8 @@
     "name": "Title",
     "namePlaceholder": "For example: headphones unboxing",
     "briefPlaceholder": "What must be shown or said, the style, what to avoid",
-    "reference": "Reference or materials",
-    "referencePlaceholder": "Link to an example video or files",
+    "reference": "Brief or materials",
+    "referencePlaceholder": "Link to files: Google Drive, Dropbox",
     "target": "Product link",
     "targetPlaceholder": "Website or store page — optional",
     "targetHint": "Each creator gets their own link for the video description — you'll see clicks in the report.",
@@ -579,7 +586,19 @@
       "edit": "Edit",
       "anyOrientation": "Any orientation",
       "noDeadline": "No deadline"
-    }
+    },
+    "examples": "Example videos",
+    "examplesCount": "{{count}} of {{min}}+",
+    "examplesHint": "At least {{min}} links to videos like the ones you want — so creators get the brief without questions. They'll open them without the author's handle.",
+    "exampleN": "Example {{n}}",
+    "examplePlaceholder": "Link to video {{n}}: TikTok, Instagram, YouTube…",
+    "removeExample": "Remove example {{n}}",
+    "addExample": "+ Add example",
+    "linkInBio": "Link in profile bio",
+    "linkInBioHint": "The creator also puts their product link in the profile bio and keeps it until the final count — 5 days after the video is approved. It is an extra step: such orders get fewer takers, and the moderator will factor it into the rate.",
+    "linkInBioNeedsTarget": "Add a product link first — that is what the creator puts in the bio.",
+    "priceHint": "1,000 views in “{{category}}” usually cost about {{price}}.",
+    "priceHintViews": "1,000 views in “{{category}}” usually cost about {{price}} — your budget buys roughly {{views}} views. A moderator sets the exact rate."
   },
   "review": {
     "csvError": "Couldn't send the file",
@@ -673,7 +692,8 @@
     "orderEditRejected": "❌ The changes to your order “{{title}}” were rejected by a moderator.\nReason: {{reason}}\n\nThe order is frozen: creators can't submit videos for it. Fix the changes or close the order in “My orders”.",
     "orderClosedFrozen": "🔒 Order {{order}} was closed by the advertiser. Your slot for it is closed — no need to submit a video.",
     "fundFreed": "🔓 Room freed up in the fund of order {{order}} — you can submit your video. Your slot was extended for the pause.",
-    "videoApprovedCapped": "✅ Your video for order {{order}} was approved: {{views}} views. {{amount}} credited — the rest of the fund you agreed to when submitting; views beyond it aren't paid.\n\nIn {{days}} days we'll check the post is still there — then you can withdraw the money: “Profile” → “Balance”. Don't delete the post: if it's gone, the payment will be cancelled."
+    "videoApprovedCapped": "✅ Your video for order {{order}} was approved: {{views}} views. {{amount}} credited — the rest of the fund you agreed to when submitting; views beyond it aren't paid.\n\nIn {{days}} days we'll check the post is still there — then you can withdraw the money: “Profile” → “Balance”. Don't delete the post: if it's gone, the payment will be cancelled.",
+    "bioLinkRemoved": "❌ At the end of the hold, your link wasn't in your profile bio for order {{order}} — the order required keeping it until then. The payment for the video is cancelled.\n\nIf this is a mistake, contact support."
   },
   "errors": {
     "tooManyRequests": "Too many requests — wait a minute and try again",
@@ -786,7 +806,6 @@
     "linksList": "Links must be a list",
     "socialLink": "The link “{{link}}” must start with https:// and lead to {{platforms}}",
     "tooManyLinks": "No more than {{max}} links",
-    "referenceRequired": "Add a link to a reference or materials",
     "durationRequired": "Enter the video duration — from and to, in seconds",
     "chooseOrientation": "Choose an orientation — or “Any”",
     "choosePlatforms": "Choose platforms — or “Any”",
@@ -797,7 +816,14 @@
     "reopenApp": "For security, close and reopen the mini app — then you can continue",
     "overBudget": "Your views go beyond the order budget — we can pay only what's left in the fund. Confirm that you agree",
     "inflatedVideo": "This video was rejected for inflated views — it can't be submitted again",
-    "badAcceptPayout": "Couldn't read the amount — refresh the screen and try again"
+    "badAcceptPayout": "Couldn't read the amount — refresh the screen and try again",
+    "examplesCount": "Add {{min}} to {{max}} examples — links to videos like the ones you want",
+    "exampleNotVideo": "Example {{n}}: needs a link to a video on {{platforms}}",
+    "exampleNotPost": "Example {{n}}: this isn't a link to the video itself — it looks like a profile link. Open the video and copy its link",
+    "exampleDuplicate": "Example {{n}}: this video is already in the list",
+    "badLinkInBio": "“Link in profile bio” must be yes or no",
+    "linkInBioNeedsTarget": "A link in the profile bio needs a product link — that is what the creator puts in the bio",
+    "confirmLinkInBio": "This order requires your link in the profile bio — add it and tick it in the list"
   },
   "insights": {
     "notTaken": "{{viewers}} creators opened the order, but {{taken}} took it. The terms don't attract them: lower the view threshold, relax the duration and format requirements, attach an example video.",

@@ -9,7 +9,9 @@ import {
   MAX_DURATION_SEC,
   MAX_BUDGET,
   MAX_CPM,
+  MAX_EXAMPLES,
   MIN_BUDGET,
+  MIN_EXAMPLES,
   MAX_VIEWS,
   MAX_TITLE_LENGTH,
   MAX_URL_LENGTH,
@@ -18,6 +20,12 @@ import {
 import { findExactContacts } from '../common/contacts';
 import { toMinor } from '../common/money';
 import { deadlineIn } from './deadline';
+import {
+  isTiktokShortLink,
+  PLATFORMS,
+  platformOf,
+  videoIdKey,
+} from '../common/platforms';
 
 /**
  * Строка из формы: без невидимых символов форматирования — разворот текста (U+202E) подделал бы
@@ -31,8 +39,9 @@ function text(value: unknown): string {
 
 /**
  * Тело `POST /api/my-orders` → данные для OrdersService.create. Нарушение — 400 с текстом,
- * который Mini App показывает пользователю. Обязательно всё, кроме ссылки на товар; «любая
- * ориентация», «любая площадка» и «без срока» — явный выбор (null / [] / null), не пропуск поля.
+ * который Mini App показывает пользователю. Обязательно всё, кроме брифа и ссылки на товар (с ней —
+ * и «ссылка в шапке профиля»); «любая ориентация», «любая площадка» и «без срока» — явный выбор
+ * (null / [] / null), не пропуск поля.
  */
 export function parseOrderInput(body: unknown) {
   const b = (body ?? {}) as Record<string, unknown>;
@@ -55,18 +64,23 @@ export function parseOrderInput(body: unknown) {
     );
   }
 
+  const exampleUrls = parseExamples(b.exampleUrls);
   const referenceUrl = optionalUrl(
     b.referenceUrl,
     tr('errors.referenceWhat'),
     tr('errors.referenceInstead'),
   );
-  if (referenceUrl === undefined)
-    throw new BadRequestException(tr('errors.referenceRequired'));
   const targetUrl = optionalUrl(
     b.targetUrl,
     tr('errors.targetWhat'),
     tr('errors.targetInstead'),
   );
+  // в шапку креатор ставит свою ссылку /r/<код> на страницу товара — без товара ставить нечего
+  if (b.linkInBio !== undefined && typeof b.linkInBio !== 'boolean')
+    throw new BadRequestException(tr('errors.badLinkInBio'));
+  const linkInBio = b.linkInBio === true;
+  if (linkInBio && !targetUrl)
+    throw new BadRequestException(tr('errors.linkInBioNeedsTarget'));
 
   // Бюджет — всё, что платит рекламодатель, целыми USDT; в базу — центами.
   const budget = b.budget;
@@ -127,8 +141,10 @@ export function parseOrderInput(body: unknown) {
   return {
     title,
     description,
+    exampleUrls,
     referenceUrl,
     targetUrl,
+    linkInBio,
     budgetMinor: toMinor(budget as number),
     minViews,
     minDurationSec,
@@ -138,6 +154,45 @@ export function parseOrderInput(body: unknown) {
     category,
     deadline,
   };
+}
+
+/**
+ * Примеры роликов: от MIN_EXAMPLES до MAX_EXAMPLES ссылок на конкретные ролики площадок, без
+ * повторов (один ролик под разными ссылками — тоже повтор). Контакты не ищем: в ссылке ролика ник
+ * автора есть всегда, а креатор её не видит — открывает через редирект (VideoLinkController).
+ */
+function parseExamples(value: unknown): string[] {
+  const list = Array.isArray(value)
+    ? value.map((v) => text(v)).filter(Boolean)
+    : [];
+  if (list.length < MIN_EXAMPLES || list.length > MAX_EXAMPLES)
+    throw new BadRequestException(
+      tr('errors.examplesCount', { min: MIN_EXAMPLES, max: MAX_EXAMPLES }),
+    );
+  const keys = new Set<string>();
+  for (const [i, url] of list.entries()) {
+    const n = i + 1;
+    if (
+      !VIDEO_URL_RE.test(url) ||
+      url.length > MAX_URL_LENGTH ||
+      platformOf(url) === 'OTHER'
+    )
+      throw new BadRequestException(
+        tr('errors.exampleNotVideo', {
+          n,
+          platforms: Object.values(PLATFORMS)
+            .map((p) => p.name)
+            .join(', '),
+        }),
+      );
+    // короткую ссылку TikTok не раскрываем: по редиректу она откроется и так
+    const key = videoIdKey(url) ?? (isTiktokShortLink(url) ? url : null);
+    if (!key) throw new BadRequestException(tr('errors.exampleNotPost', { n }));
+    if (keys.has(key))
+      throw new BadRequestException(tr('errors.exampleDuplicate', { n }));
+    keys.add(key);
+  }
+  return list;
 }
 
 /**
@@ -251,8 +306,10 @@ export function parseOrderEdit(body: unknown) {
   return {
     title: input.title,
     description: input.description,
+    exampleUrls: input.exampleUrls,
     referenceUrl: input.referenceUrl ?? null,
     targetUrl: input.targetUrl ?? null,
+    linkInBio: input.linkInBio,
     budgetMinor: input.budgetMinor,
     minViews: input.minViews,
     minDurationSec: input.minDurationSec,

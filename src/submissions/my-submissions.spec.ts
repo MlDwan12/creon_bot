@@ -17,6 +17,8 @@ const order = (id: number): Order => ({
   orientation: null,
   platforms: [],
   referenceUrl: null,
+  exampleUrls: [],
+  linkInBio: false,
   targetUrl: null,
   category: 'OTHER',
   deadline: null,

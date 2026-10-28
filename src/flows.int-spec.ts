@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { OrderStatus } from '@prisma/client';
 import { ModeratorGuard } from './auth/moderator.guard';
@@ -9,6 +10,7 @@ import { ProfilesService } from './profiles/profiles.service';
 import { PayoutsService } from './payouts/payouts.service';
 import { HOLD_DAYS } from './orders/budget';
 import {
+  BIO_LINK_REMOVED,
   INFLATED_VIEWS,
   PUBLICATION_DELETED,
 } from './submissions/submissions.service';
@@ -544,6 +546,60 @@ describe('ссылка на товар', () => {
       (await prisma.submission.findUniqueOrThrow({ where: { id: s.id } }))
         .clicks,
     ).toBe(0);
+  });
+
+  it('пример ролика (/v/e/) — только у заказа, который модератор одобрял; номер с 1', async () => {
+    const adv = await user();
+    const examples = [1, 2, 3].map(
+      (n) => `https://www.tiktok.com/@a/video/${n}`,
+    );
+    const order = await orders.create(adv.id, {
+      title: 'Заказ',
+      description: 'Описание',
+      category: 'OTHER',
+      budgetMinor: BUDGET,
+      minViews: 250,
+      exampleUrls: examples,
+    });
+    // на первой проверке примеры видит только модератор
+    expect(await submissions.exampleUrl(order.id, 1)).toBeNull();
+
+    await approveOrder(order.id, 1n);
+    expect(await submissions.exampleUrl(order.id, 1)).toBe(examples[0]);
+    expect(await submissions.exampleUrl(order.id, 3)).toBe(examples[2]);
+    expect(await submissions.exampleUrl(order.id, 0)).toBeNull();
+    expect(await submissions.exampleUrl(order.id, 4)).toBeNull();
+    // id больше Int в базе — не 500 от Prisma, а «нет такого»
+    expect(await submissions.exampleUrl(2_147_483_648, 1)).toBeNull();
+  });
+
+  it('ссылка в шапке: без подтверждения ролик не сдать; убрали к итогу — начисление отменено', async () => {
+    const [adv, creator] = [await user(), await user()];
+    const order = await openOrder(adv.id);
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { targetUrl: 'https://shop.example/item', linkInBio: true },
+    });
+    const s = await submissions.claim(order.id, creator.id);
+    const video = { url: videoUrl(), views: VIEWS, acceptMinor: null };
+
+    await expect(
+      submissions.submitVideo(s.id, creator.id, video),
+    ).rejects.toThrow(BadRequestException);
+    const sent = await submissions.submitVideo(s.id, creator.id, {
+      ...video,
+      bioLinkConfirmed: true,
+    });
+    // условие — в снимке при сдаче: правка заказа его у этого ролика не отменит
+    expect(sent.terms).toMatchObject({ linkInBio: true });
+
+    await submissions.moderatorApprove(s.id, 1n, VIEWS);
+    const { submission } = await submissions.publicationDeleted(s.id, 1n, true);
+    expect(submission).toMatchObject({
+      status: 'MODERATOR_REJECTED',
+      payoutMinor: 0,
+      moderatorComment: BIO_LINK_REMOVED,
+    });
   });
 });
 

@@ -26,6 +26,7 @@ import {
   payoutPool,
   platformFeePercent,
   spentByOrder,
+  typicalPriceMinor,
 } from './budget';
 import { DAY_MS, extendedDeadline } from './deadline';
 import { type OrderFunnel, orderInsights } from './order-insights';
@@ -49,6 +50,9 @@ const PUBLIC_ORDER_FIELDS = {
   title: true,
   description: true,
   referenceUrl: true,
+  // наружу — не сами ссылки, а редирект /v/e/… (toPublic в orders.controller)
+  exampleUrls: true,
+  linkInBio: true,
   budgetMinor: true,
   feePercent: true,
   cpmMinor: true,
@@ -120,8 +124,10 @@ export class OrdersService {
     data: {
       title: string;
       description: string;
+      exampleUrls?: string[];
       referenceUrl?: string;
       targetUrl?: string;
+      linkInBio?: boolean;
       budgetMinor: number;
       minViews: number;
       minDurationSec?: number | null;
@@ -148,8 +154,10 @@ export class OrdersService {
         advertiserId,
         title: data.title,
         description: data.description,
+        exampleUrls: data.exampleUrls,
         referenceUrl: data.referenceUrl,
         targetUrl: data.targetUrl,
+        linkInBio: data.linkInBio,
         currency: ORDER_CURRENCY,
         budgetMinor: data.budgetMinor,
         feePercent: platformFeePercent(),
@@ -264,6 +272,15 @@ export class OrdersService {
     const value = await this.prisma.order.count({ where });
     this.openCounts.set(key, { value, at: Date.now() });
     return value;
+  }
+
+  /** Подсказка цены в форме заказа: обычная цена 1000 просмотров в категории, центы (typicalPriceMinor). */
+  async typicalPrice(category: OrderCategory) {
+    const orders = await this.prisma.order.findMany({
+      where: { category, cpmMinor: { not: null } },
+      select: { cpmMinor: true, feePercent: true },
+    });
+    return typicalPriceMinor(orders);
   }
 
   /** Открытый заказ для карточки в Mini App; `advertiserId` — только чтобы узнать «свой ли», наружу не отдавать. */
@@ -444,10 +461,12 @@ export class OrdersService {
       where: { id: orderId },
       data: {
         targetUrl: null,
+        linkInBio: false,
         ...(order.prevTerms && {
           prevTerms: {
             ...(order.prevTerms as Prisma.JsonObject),
             targetUrl: null,
+            linkInBio: false,
           },
         }),
       },
@@ -605,8 +624,10 @@ export class OrdersService {
     data: {
       title: string;
       description: string;
+      exampleUrls?: string[];
       referenceUrl?: string | null;
       targetUrl?: string | null;
+      linkInBio?: boolean;
       budgetMinor: number;
       minViews: number;
       minDurationSec?: number | null;
