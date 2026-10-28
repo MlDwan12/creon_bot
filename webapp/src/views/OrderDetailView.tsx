@@ -211,6 +211,38 @@ export default function OrderDetailView() {
         )}
       </section>
 
+      {order.examples.length > 0 && (
+        <section className={s.block}>
+          <h2 className="section-title">{t('order.examples')}</h2>
+          <p className={s.blockHint}>{t('order.examplesHint')}</p>
+          <ul className={s.examples}>
+            {order.examples.map((e, i) => (
+              <li key={e.url}>
+                {/* редирект Fixum: в ссылке площадки был бы ник автора */}
+                <a
+                  href={safeUrl(e.url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={s.example}
+                >
+                  {e.platform !== 'OTHER' && (
+                    <PlatformIcon platform={e.platform} size={26} round />
+                  )}
+                  {t('order.exampleN', { n: i + 1 })}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {order.linkInBio && (
+        <section className={s.block}>
+          <h2 className="section-title">{t('order.linkInBio')}</h2>
+          <div className={s.text}>{t('order.linkInBioText')}</div>
+        </section>
+      )}
+
       <section className={s.block}>
         <h2 className="section-title">{t('order.howItWorks')}</h2>
         <ol className={s.steps}>

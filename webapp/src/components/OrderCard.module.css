@@ -110,3 +110,8 @@
   color: var(--link);
   font-weight: 700;
 }
+/* условие сверх обычного (ссылка в шапке профиля) — оранжевая плашка, как «срок» */
+.tag.bio {
+  background: var(--orange-soft);
+  color: var(--orange-text);
+}
