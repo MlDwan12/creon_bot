@@ -13,6 +13,7 @@ import type { Request } from 'express';
 import { SupportService } from '../support/support.service';
 import { UsersService } from '../users/users.service';
 import { validateInitData } from './init-data.util';
+import { readCookie, SESSION_COOKIE, verifySession } from './web-login.util';
 
 // ponytail: initData не обновляется, пока Mini App открыт, поэтому срок щедрый.
 // Если понадобится короче — выдавать свою сессию/JWT при входе.
@@ -21,7 +22,7 @@ const INIT_DATA_MAX_AGE_SECONDS = 24 * 60 * 60;
 /** `authDate` — когда Telegram выдал initData (Unix-секунды, из проверенной подписи). */
 export type ApiRequest = Request & { user: User; authDate: number };
 
-/** Вход для смены кошелька и вывода — не старше часа: украденный initData живёт сутки. */
+/** Вход для смены кошелька и вывода — не старше часа: украденный initData живёт сутки, сессия сайта — месяц. */
 const FRESH_LOGIN_SECONDS = 60 * 60;
 
 /**
@@ -35,8 +36,9 @@ export function assertFreshLogin(req: ApiRequest) {
 }
 
 /**
- * Авторизация Mini App: заголовок `Authorization: tma <initData>`.
- * Пользователь берётся только из проверенной подписи — никогда из тела/параметров запроса.
+ * Авторизация API. Mini App — заголовок `Authorization: tma <initData>`; сайт — cookie сессии после
+ * входа через Telegram Login Widget (WebAuthController). Пользователь берётся только из проверенной
+ * подписи — никогда из тела/параметров запроса.
  */
 @Injectable()
 export class InitDataGuard implements CanActivate {
@@ -48,24 +50,9 @@ export class InitDataGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<ApiRequest>();
-    const [scheme, raw] = (req.headers.authorization ?? '').split(' ');
-    const tgUser =
-      scheme === 'tma' && raw
-        ? validateInitData(
-            raw,
-            this.config.get<string>('BOT_TOKEN')!,
-            INIT_DATA_MAX_AGE_SECONDS,
-          )
-        : null;
-    if (!tgUser) throw new UnauthorizedException();
-    req.authDate = Number(new URLSearchParams(raw).get('auth_date'));
-
-    req.user = await this.usersService.findOrCreate({
-      telegramId: BigInt(tgUser.id),
-      username: tgUser.username,
-      firstName: tgUser.first_name,
-      telegramLanguage: tgUser.language_code,
-    });
+    const user = (await this.miniAppUser(req)) ?? (await this.webUser(req));
+    if (!user) throw new UnauthorizedException();
+    req.user = user;
     setRequestLang(userLang(req.user));
     // `banned` — мини-апп по нему показывает экран блокировки вместо любого экрана.
     if (req.user.bannedAt)
@@ -77,5 +64,36 @@ export class InitDataGuard implements CanActivate {
         supportUrl: await this.support.url(),
       });
     return true;
+  }
+
+  private async miniAppUser(req: ApiRequest): Promise<User | null> {
+    const [scheme, raw] = (req.headers.authorization ?? '').split(' ');
+    if (scheme !== 'tma' || !raw) return null;
+    const tgUser = validateInitData(
+      raw,
+      this.config.get<string>('BOT_TOKEN')!,
+      INIT_DATA_MAX_AGE_SECONDS,
+    );
+    if (!tgUser) return null;
+    req.authDate = Number(new URLSearchParams(raw).get('auth_date'));
+    return this.usersService.findOrCreate({
+      telegramId: BigInt(tgUser.id),
+      username: tgUser.username,
+      firstName: tgUser.first_name,
+      telegramLanguage: tgUser.language_code,
+    });
+  }
+
+  private async webUser(req: ApiRequest): Promise<User | null> {
+    // Свой заголовок — защита от CSRF: чужая страница может послать его только после разрешения
+    // CORS, а API его не даёт. Без заголовка cookie не считается (её браузер шлёт сам).
+    if (req.headers['x-fixum-web'] !== '1') return null;
+    const session = verifySession(
+      readCookie(req.headers.cookie, SESSION_COOKIE),
+      this.config.get<string>('BOT_TOKEN')!,
+    );
+    if (!session) return null;
+    req.authDate = session.authDate;
+    return this.usersService.findById(session.userId);
   }
 }
