@@ -13,8 +13,43 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Бот, мини-апп и сайт проверяются отдельно и только при правках в своих файлах: правка сайта не гоняет
+# тесты бэкенда на Postgres. Правка этого файла — проверяется всё.
 jobs:
-  verify:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      api: ${{ steps.diff.outputs.api }}
+      miniapp: ${{ steps.diff.outputs.miniapp }}
+      site: ${{ steps.diff.outputs.site }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # PR — его правки (checkout делает merge-коммит: HEAD^1 — вершина целевой ветки); пуш — правки
+      # пуша. Сравнивать не с чем (новая ветка, force-push) — проверяем всё.
+      - id: diff
+        env:
+          BEFORE: ${{ github.event_name == 'pull_request' && 'HEAD^1' || github.event.before }}
+        run: |
+          changed() {
+            git rev-parse -q --verify "$BEFORE^{commit}" >/dev/null || return 0
+            ! git diff --quiet "$BEFORE" HEAD -- "$@"
+          }
+          api=false miniapp=false site=false
+          # бот — всё, кроме фронтов и документов (словари i18n и сам CI — тоже его)
+          changed . ':!webapp' ':!web' ':!packages' ':!*.md' && api=true
+          changed webapp packages i18n .github/workflows/ci.yml && miniapp=true
+          changed web packages i18n .github/workflows/ci.yml && site=true
+          echo "api=$api" >> "$GITHUB_OUTPUT"
+          echo "miniapp=$miniapp" >> "$GITHUB_OUTPUT"
+          echo "site=$site" >> "$GITHUB_OUTPUT"
+          echo "::notice::проверяем: бот $api, мини-апп $miniapp, сайт $site"
+
+  api:
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
     # Обычный прогон — несколько минут; завис (как на скачивании кэша) — GitHub снимет сам через 20,
     # а не через 6 часов по умолчанию.
@@ -67,14 +102,48 @@ jobs:
       - name: Build
         run: yarn build
 
-      - name: Webapp — install
+  miniapp:
+    needs: changes
+    if: needs.changes.outputs.miniapp == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
         run: yarn --cwd webapp install --frozen-lockfile
-
-      - name: Webapp — typecheck & build
+      - name: Typecheck & build
         run: yarn --cwd webapp build
 
-      - name: Сайт — install
+  site:
+    needs: changes
+    if: needs.changes.outputs.site == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
         run: yarn --cwd web install --frozen-lockfile
-
-      - name: Сайт — typecheck & build
+      - name: Typecheck & build
         run: yarn --cwd web build
+
+  # Итог для защиты веток и для deploy.yml (ждёт зелёный CI): пропущенная проверка — не ошибка,
+  # упавшая или отменённая — ошибка. Имя прежнее — обязательная проверка в настройках веток не меняется.
+  verify:
+    needs: [changes, api, miniapp, site]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "итоги: $RESULTS"
+          case " $RESULTS " in
+            *' failure '*|*' cancelled '*) exit 1 ;;
+          esac
