@@ -40,12 +40,17 @@ jobs:
         && 'APP=creon_bot DIR=/opt/fixum SERVICE=fixum_bot PG=postgres DB=fixum DB_USER=fixum'
         || 'APP=creon_bot DIR=/opt/creon SERVICE=creon_bot PG=postgres DB=creon_bot DB_USER=creon' }}
       STAND: ${{ github.event.workflow_run.head_branch == 'main' && 'прод' || 'дев' }}
+      # каталог бота (метка выкаченного коммита) и мини-аппа (статика для nginx) — DEPLOY.md
+      DIR: ${{ github.event.workflow_run.head_branch == 'main' && '/opt/fixum' || '/opt/creon' }}
+      WEB_DIR: ${{ github.event.workflow_run.head_branch == 'main' && '/var/www/fixum-miniapp' || '/var/www/creon-miniapp' }}
     steps:
       # именно тот коммит, который прошёл CI, а не то, что успело прийти в main после
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ env.SHA }}
           persist-credentials: false
+          # вся история — чтобы сравнить с тем, что уже выкачено (шаг What changed)
+          fetch-depth: 0
 
       # CI коммита B может закончиться раньше CI коммита A — тогда A, выкатившись последним, вернул бы
       # стенд назад. Выкатываем только вершину ветки; устаревший пропускаем — вершину выкатит её CI.
@@ -69,6 +74,18 @@ jobs:
         # адрес Sentry мини-аппа — не секрет (виден в браузере): переменная окружения GitHub, пусто — выключен
         run: docker build --build-arg VITE_SENTRY_DSN="${{ vars.VITE_SENTRY_DSN }}" -t "$APP:$TAG" .
 
+      # Мини-апп — статикой для nginx: этап webapp того же Dockerfile (сборка в контейнере — ключа SSH не видит).
+      # ponytail: образ и статика собираются всегда, даже если выкатится одно из двух, — ключ появляется
+      # только после сборки, а что выкачено, знает лишь сервер; лишние минуты CI — цена этого порядка.
+      - name: Build mini-app
+        if: steps.latest.outputs.deploy == 'true'
+        run: |
+          docker build --target webapp --build-arg VITE_SENTRY_DSN="${{ vars.VITE_SENTRY_DSN }}" -t "$APP-webapp:$TAG" .
+          id="$(docker create "$APP-webapp:$TAG")"
+          docker cp "$id:/webapp/dist" static
+          docker rm "$id" >/dev/null
+          tar -czf "static-$SHA.tar.gz" -C static .
+
       # ключ появляется на раннере только после сборки — код сборки его не застанет
       - name: SSH key
         if: steps.latest.outputs.deploy == 'true'
@@ -88,16 +105,51 @@ jobs:
             StrictHostKeyChecking yes
           EOF
 
-      - name: Upload image and script
+      # Бот и мини-апп выкатываются независимо: каждый — только если его файлы изменились с той версии,
+      # что уже на сервере (метка бота — remote-deploy.sh, мини-аппа — симлинк current). Метки нет или
+      # коммит неизвестен (первая выкатка, force-push) — выкатываем.
+      - name: What changed
+        id: changes
         if: steps.latest.outputs.deploy == 'true'
+        run: |
+          changed() {
+            local prev="$1"; shift
+            [[ "$prev" =~ ^[0-9a-f]{40}$ ]] && git cat-file -e "$prev^{commit}" 2>/dev/null || return 0
+            ! git diff --quiet "$prev" "$SHA" -- "$@"
+          }
+          prev_api="$(ssh -n prod "cat '$DIR/deployed-api.sha'" 2>/dev/null || true)"
+          prev_web="$(ssh -n prod "readlink '$WEB_DIR/current'" 2>/dev/null || true)"
+          prev_web="${prev_web##*/}"
+          api=false web=false
+          # бот — всё, кроме фронтов, документов и файлов только для статики
+          changed "$prev_api" . ':!webapp' ':!web' ':!packages' ':!*.md' \
+            ':!deploy/remote-static.sh' ':!deploy/prod/nginx' && api=true
+          changed "$prev_web" webapp packages i18n && web=true
+          parts=""
+          $api && parts="бот"
+          $web && parts="${parts:+$parts+}мини-апп"
+          echo "api=$api" >> "$GITHUB_OUTPUT"
+          echo "web=$web" >> "$GITHUB_OUTPUT"
+          echo "parts=${parts:-ничего — изменения не затронули ни бот, ни мини-апп}" >> "$GITHUB_OUTPUT"
+          echo "::notice::выкатываем: ${parts:-ничего} (бот был ${prev_api:-—}, мини-апп ${prev_web:-—})"
+
+      - name: Upload image and script
+        if: steps.changes.outputs.api == 'true'
         run: |
           docker save "$APP:$TAG" | gzip | ssh prod docker load
           scp -q deploy/remote-deploy.sh prod:remote-deploy.sh
 
-      # итог — код возврата скрипта: 0, только если новая версия на своём образе и healthy
+      # итог — код возврата скрипта: 0, только если новая версия на своём образе и healthy.
+      # Бот — раньше мини-аппа: новому фронту может понадобиться новый API (обратное — expand → contract).
       - name: Deploy
-        if: steps.latest.outputs.deploy == 'true'
+        if: steps.changes.outputs.api == 'true'
         run: ssh -n prod "$REMOTE_ENV bash remote-deploy.sh $TAG"
+
+      - name: Deploy mini-app
+        if: steps.changes.outputs.web == 'true'
+        run: |
+          scp -q "static-$SHA.tar.gz" deploy/remote-static.sh prod:
+          ssh -n prod "WEB_DIR=$WEB_DIR bash remote-static.sh $SHA"
 
       - name: Remove key
         if: always()
@@ -113,6 +165,7 @@ jobs:
           # тема проекта в группе алертов (группа с темами); пусто — в общий чат
           ALERT_THREAD_ID: ${{ secrets.ALERT_THREAD_ID }}
           STATUS: ${{ job.status }}
+          PARTS: ${{ steps.changes.outputs.parts }}
           # сообщение коммита — только через env: в run его текст стал бы кодом
           COMMIT_MSG: ${{ github.event.workflow_run.head_commit.message }}
           COMMIT_AUTHOR: ${{ github.event.workflow_run.head_commit.author.name }}
@@ -125,7 +178,7 @@ jobs:
           case "$title" in
             'Merge pull request #'*) pr=${title#Merge pull request }; title="${pr%% *} $(printf '%s\n' "$COMMIT_MSG" | sed -n '3p')" ;;
           esac
-          about="${SHA:0:7} · $COMMIT_AUTHOR
+          about="${SHA:0:7} · $COMMIT_AUTHOR · $PARTS
           $title
           $COMMIT_URL"
           if [ "$STATUS" = success ]; then

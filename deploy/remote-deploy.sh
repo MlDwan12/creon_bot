@@ -83,4 +83,7 @@ docker image prune -f --filter "label=app=$APP" >/dev/null
 # только свои бэкапы (по имени базы): /var/www/site общий, чужие дампы в _backups не трогаем
 ls -1t "_backups/${DB}_"*.dump | tail -n +$((KEEP_BACKUPS + 1)) | xargs -r rm -f
 
+# какой коммит бота на стенде — по ней deploy.yml решает, выкатывать ли бота в следующий раз
+echo "${TAG#sha-}" >deployed-api.sha
+
 echo "✓ выкачено $TAG"
