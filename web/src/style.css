@@ -53,7 +53,18 @@
   --ink-raised: #2c2836;
   --ink-text: #ffffff;
   --ink-hint: #bdb8c8;
+  --ink-soft: #e4e0ea;
   --danger: #c4291f;
+  --danger-soft: #fde2e0;
+  --orange: #ff7a1a;
+  --orange-soft: #ffebd9;
+  --orange-text: #9a3f00;
+  --success: #1c7c45;
+  --success-soft: #ddf5e5;
+  --success-text: #145c33;
+  --accent-soft: #ece6ff;
+  --separator: #e6e2da;
+  --fill: color-mix(in srgb, var(--text) 6%, transparent);
   --font-text:
     'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui,
     sans-serif;
@@ -83,4 +94,35 @@ a {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Поля и кнопки — шрифт страницы, а не системный */
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+input,
+textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--separator);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+textarea {
+  resize: vertical;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
