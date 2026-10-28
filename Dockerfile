@@ -23,6 +23,8 @@ RUN yarn install --frozen-lockfile
 COPY webapp ./
 # словари общие с бэкендом и лежат в корне репозитория; webapp/src импортирует ../../i18n
 COPY i18n /i18n
+# общий код мини-аппа и сайта: webapp импортирует ../packages/shared (алиас @fixum/shared)
+COPY packages /packages
 # Sentry для мини-аппа (src/monitoring.ts) — адрес вшивается при сборке; пусто — выключен
 ARG VITE_SENTRY_DSN=""
 ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN

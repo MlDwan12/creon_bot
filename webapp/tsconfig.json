@@ -13,7 +13,9 @@
     "resolveJsonModule": true,
     "verbatimModuleSyntax": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedParameters": true,
+    // общий код мини-аппа и сайта — packages/shared, без установки (алиас и в vite.config.ts)
+    "paths": { "@fixum/shared": ["../packages/shared/src/index.ts"] }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]
 }
