@@ -4,6 +4,8 @@ import { i18next, locale } from './i18n';
 // Форматирование — общее с мини-аппом (packages/shared/src/format.ts), здесь — на переводе сайта.
 export const {
   formatDate,
+  approxRub,
+  budgetViews,
   timeAgo,
   formatMoney,
   formatCpm,

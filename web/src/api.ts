@@ -1,5 +1,7 @@
 import {
   ApiError,
+  createAccountApi,
+  createAdvertiserApi,
   createModApi,
   REPORT_REASONS,
   type CreatorProfile,
@@ -67,6 +69,34 @@ export function logout() {
   return request<void>('POST', '/api/web/logout');
 }
 
+/** Свой профиль (имя, рейтинг) — для кабинета заказчика. */
+export function fetchMyProfile() {
+  return request<CreatorProfile>('GET', '/api/profile');
+}
+
+/** Запомнить кабинет на сервере — тот же откроется в мини-аппе и на другом устройстве. */
+export function updateCabinet(cabinet: 'creator' | 'advertiser') {
+  return request<{ ok: true }>('PUT', '/api/profile/cabinet', { cabinet });
+}
+
+/** Язык интерфейса и бота; null — снова по языку Telegram. */
+export function updateLanguage(language: 'ru' | 'en' | null) {
+  return request<{ ok: true }>('PUT', '/api/profile/language', { language });
+}
+
+let rate: Promise<number | null> | undefined;
+
+/** Курс USDT в рублях, один запрос на визит; null — неизвестен (подсказку «≈ … ₽» не показываем). */
+export function fetchRate() {
+  return (rate ??= request<{ rub: number | null }>('GET', '/api/rate').then(
+    (r) => r.rub,
+    () => {
+      rate = undefined;
+      return null;
+    },
+  ));
+}
+
 /** Профиль пользователя; модератору — с блокировкой, кошельком и ссылками. */
 export function fetchCreator(id: number) {
   return request<CreatorProfile>('GET', `/api/creators/${id}`);
@@ -121,3 +151,18 @@ export function errorText(
 export function safeUrl(url: string | null): string | undefined {
   return url && /^https?:\/\//i.test(url) ? url : undefined;
 }
+
+// Кабинет заказчика, поддержка и жалобы — общие с мини-аппом (packages/shared/src/advertiser-api.ts)
+export const {
+  fetchMyOrders,
+  fetchPriceHint,
+  createOrder,
+  updateOrder,
+  closeOrder,
+  extendOrder,
+  deleteOrder,
+  fetchOrderReport,
+  sendReportCsv,
+  rateVideo,
+} = createAdvertiserApi(request);
+export const { sendSupportMessage, createReport } = createAccountApi(request);

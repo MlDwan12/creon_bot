@@ -1,4 +1,4 @@
-/* Общие стили окна модератора на сайте: страницы, плитки, таблицы, кнопки. */
+/* Общие стили сайта: страницы, плитки, таблицы, кнопки — для всех кабинетов. */
 
 .page {
   display: flex;
@@ -23,6 +23,7 @@
 .hint {
   margin: 0;
   color: var(--hint);
+  font-weight: 500;
   line-height: 1.5;
 }
 
@@ -572,4 +573,102 @@ details > summary {
     position: static;
     max-height: none;
   }
+}
+
+/* Формы и разделы кабинетов */
+.narrow {
+  max-width: 720px;
+}
+
+.fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  font-weight: 700;
+}
+
+.fieldset legend {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 0;
+}
+
+.input-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.input-row > * {
+  flex: 1;
+}
+
+.input-row > button {
+  flex: none;
+}
+
+.block {
+  display: block;
+  font-weight: 500;
+}
+
+.two-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--hint);
+}
+
+.kpis b {
+  margin-right: 4px;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.link-row span {
+  display: flex;
+  flex-direction: column;
+}
+
+.link-row small {
+  color: var(--hint);
+}
+
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 20px 20px 20px 40px;
+  border-radius: 20px;
+  background: var(--surface);
+  line-height: 1.5;
 }

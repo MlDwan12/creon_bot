@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Link } from 'react-router';
 import { fetchAllOrders, type ModOrderRow, type OrderStatus } from '../api';
 import { formatMoney, timeAgo } from '../format';
-import s from './mod.module.css';
+import s from '../ui.module.css';
 import { ORDER_STATUS } from './OrderReview';
 import { usePaged } from './usePaged';
 

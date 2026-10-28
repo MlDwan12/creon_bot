@@ -18,8 +18,8 @@ import {
   timeAgo,
   videoFormatParts,
 } from '../format';
-import s from './mod.module.css';
-import { PlatformIcon } from './PlatformIcon';
+import s from '../ui.module.css';
+import { PlatformIcon } from '../components/PlatformIcon';
 import { ReasonPicker } from './ReasonPicker';
 
 const PRESETS = [

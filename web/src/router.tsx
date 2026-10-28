@@ -1,4 +1,9 @@
 import { createBrowserRouter, Navigate, Outlet } from 'react-router';
+import { Account } from './advertiser/Account';
+import { Help } from './advertiser/Help';
+import { MyOrders } from './advertiser/MyOrders';
+import { OrderForm } from './advertiser/OrderForm';
+import { OrderReport } from './advertiser/OrderReport';
 import { AllOrders } from './mod/AllOrders';
 import { MyCabinet } from './mod/MyCabinet';
 import { OrderPage } from './mod/OrderReview';
@@ -11,6 +16,7 @@ import { VideoPage } from './mod/VideoReview';
 import { WhatWorks } from './mod/WhatWorks';
 import { useSession } from './session';
 import { Home, Shell } from './Shell';
+import { Support } from './Support';
 
 /** Окно модератора — только модераторам (права всё равно проверяет API). */
 function ModOnly() {
@@ -23,6 +29,14 @@ export const router = createBrowserRouter([
     element: <Shell />,
     children: [
       { index: true, element: <Home /> },
+      // кабинет заказчика — адреса как в мини-аппе
+      { path: 'my-orders', element: <MyOrders /> },
+      { path: 'my-orders/new', element: <OrderForm /> },
+      { path: 'my-orders/:id/edit', element: <OrderForm /> },
+      { path: 'my-orders/:id/report', element: <OrderReport /> },
+      { path: 'help', element: <Help /> },
+      { path: 'account', element: <Account /> },
+      { path: 'support', element: <Support /> },
       {
         path: 'mod',
         element: <ModOnly />,

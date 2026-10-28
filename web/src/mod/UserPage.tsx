@@ -14,7 +14,7 @@ import {
   unbanUser,
 } from '../api';
 import { formatDate } from '../format';
-import s from './mod.module.css';
+import s from '../ui.module.css';
 
 const REPORT_STATUS: Record<'OPEN' | 'ACTIONED' | 'DISMISSED', string> = {
   OPEN: 'ждёт решения',

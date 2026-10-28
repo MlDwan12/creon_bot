@@ -45,4 +45,9 @@ export function locale(): string {
   return i18next.language === 'en' ? 'en-US' : 'ru-RU';
 }
 
+/** Список строк из словаря (шаги онбординга и т.п.). */
+export function tList(key: string): string[] {
+  return i18next.t(key, { returnObjects: true }) as unknown as string[];
+}
+
 export { i18next };

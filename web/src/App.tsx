@@ -49,6 +49,7 @@ export function App() {
         <Session
           value={{
             me: state.me,
+            setMe: (me) => setState({ kind: 'in', me }),
             logout: () =>
               void logout().then(
                 () => setState({ kind: 'guest' }),
