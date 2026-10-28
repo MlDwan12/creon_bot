@@ -27,6 +27,8 @@ export class MeController {
       language: userLang(req.user),
       languageChosen: req.user.language !== null,
       cabinet: req.user.cabinet?.toLowerCase() ?? null,
+      // имя из Telegram — для шапки сайта (своё же, не другой стороне сделки)
+      firstName: req.user.firstName,
       // Комиссию площадки (src/orders/budget.ts) пока не отдаём ни креаторам, ни рекламодателям:
       // её размер ещё не решён.
     };

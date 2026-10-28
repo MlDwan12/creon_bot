@@ -30,6 +30,17 @@ ARG VITE_SENTRY_DSN=""
 ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
 RUN yarn build
 
+# --- web: собрать сайт (web/) в статику для nginx; в образ бота не входит, выкатывается отдельно ---
+FROM node:22-alpine AS web
+WORKDIR /web
+COPY web/package.json web/yarn.lock ./
+RUN yarn install --frozen-lockfile
+COPY web ./
+# словари и общий код — из корня репозитория, как у webapp
+COPY i18n /i18n
+COPY packages /packages
+RUN yarn build
+
 # --- runtime: run pending migrations, then start the compiled app ---
 FROM node:22-alpine AS runtime
 # по метке скрипт выкатки чистит только свои старые образы, не трогая другие проекты на сервере

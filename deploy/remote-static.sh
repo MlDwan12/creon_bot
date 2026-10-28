@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Выкладка статики (мини-апп) на сервере. Запускает .github/workflows/deploy.yml: кладёт этот файл и
+# Выкладка статики (мини-апп, сайт) на сервере. Запускает .github/workflows/deploy.yml: кладёт этот файл и
 # архив сборки static-<коммит>.tar.gz в домашний каталог deploy и вызывает
 # `ssh -n server "WEB_DIR=… bash remote-static.sh <коммит>"`.
 #

@@ -864,5 +864,23 @@
     "orders_other": "orders",
     "approved_one": "video approved",
     "approved_other": "videos approved"
+  },
+  "web": {
+    "title": "Ads in short videos. Pay for views.",
+    "lead": "Brands set a budget, creators post videos on their own accounts and earn USDT for the views. A moderator checks every video.",
+    "loginTitle": "Log in",
+    "loginText": "Same account as in the Telegram mini app: orders, responses and balance are shared.",
+    "loginButton": "Log in with Telegram",
+    "loginNote": "Telegram confirms the login — no password.",
+    "loginFailed": "Couldn't log in, please try again",
+    "logout": "Log out",
+    "creator": "Creator",
+    "advertiser": "Advertiser",
+    "moderator": "Moderator",
+    "cabinet": "Workspace",
+    "soonTitle": "Coming soon",
+    "soonText": "This part of the site is still in progress. For now everything is available in the Fixum mini app in Telegram.",
+    "banned": "Account blocked",
+    "writeSupport": "Contact support"
   }
 }

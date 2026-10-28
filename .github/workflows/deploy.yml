@@ -43,6 +43,8 @@ jobs:
       # каталог бота (метка выкаченного коммита) и мини-аппа (статика для nginx) — DEPLOY.md
       DIR: ${{ github.event.workflow_run.head_branch == 'main' && '/opt/fixum' || '/opt/creon' }}
       WEB_DIR: ${{ github.event.workflow_run.head_branch == 'main' && '/var/www/fixum-miniapp' || '/var/www/creon-miniapp' }}
+      # сайт (web/) — тоже статика для nginx, своя папка и свой vhost (DEPLOY.md, «Сайт»)
+      SITE_DIR: ${{ github.event.workflow_run.head_branch == 'main' && '/var/www/fixum-web' || '/var/www/creon-web' }}
     steps:
       # именно тот коммит, который прошёл CI, а не то, что успело прийти в main после
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -86,6 +88,15 @@ jobs:
           docker rm "$id" >/dev/null
           tar -czf "static-$SHA.tar.gz" -C static .
 
+      - name: Build site
+        if: steps.latest.outputs.deploy == 'true'
+        run: |
+          docker build --target web -t "$APP-web:$TAG" .
+          id="$(docker create "$APP-web:$TAG")"
+          docker cp "$id:/web/dist" site
+          docker rm "$id" >/dev/null
+          tar -czf "site-$SHA.tar.gz" -C site .
+
       # ключ появляется на раннере только после сборки — код сборки его не застанет
       - name: SSH key
         if: steps.latest.outputs.deploy == 'true'
@@ -105,9 +116,10 @@ jobs:
             StrictHostKeyChecking yes
           EOF
 
-      # Бот и мини-апп выкатываются независимо: каждый — только если его файлы изменились с той версии,
-      # что уже на сервере (метка бота — remote-deploy.sh, мини-аппа — симлинк current). Метки нет или
-      # коммит неизвестен (первая выкатка, force-push) — выкатываем.
+      # Бот, мини-апп и сайт выкатываются независимо: каждый — только если его файлы изменились с той
+      # версии, что уже на сервере (метка бота — remote-deploy.sh, мини-аппа и сайта — симлинк current).
+      # Метки нет или коммит неизвестен (первая выкатка, force-push) — выкатываем. Сайт ещё не настроен
+      # на стенде (нет папки) — пропускаем: без домена и сертификата выкладывать некуда.
       - name: What changed
         id: changes
         if: steps.latest.outputs.deploy == 'true'
@@ -120,18 +132,27 @@ jobs:
           prev_api="$(ssh -n prod "cat '$DIR/deployed-api.sha'" 2>/dev/null || true)"
           prev_web="$(ssh -n prod "readlink '$WEB_DIR/current'" 2>/dev/null || true)"
           prev_web="${prev_web##*/}"
-          api=false web=false
+          prev_site="$(ssh -n prod "readlink '$SITE_DIR/current'" 2>/dev/null || true)"
+          prev_site="${prev_site##*/}"
+          api=false web=false site=false
           # бот — всё, кроме фронтов, документов и файлов только для статики
           changed "$prev_api" . ':!webapp' ':!web' ':!packages' ':!*.md' \
             ':!deploy/remote-static.sh' ':!deploy/prod/nginx' && api=true
           changed "$prev_web" webapp packages i18n && web=true
+          if ssh -n prod "test -d '$SITE_DIR'"; then
+            changed "$prev_site" web packages i18n && site=true
+          else
+            echo "::notice::сайт на стенде не настроен (нет $SITE_DIR) — пропускаем, DEPLOY.md «Сайт»"
+          fi
           parts=""
           $api && parts="бот"
           $web && parts="${parts:+$parts+}мини-апп"
+          $site && parts="${parts:+$parts+}сайт"
           echo "api=$api" >> "$GITHUB_OUTPUT"
           echo "web=$web" >> "$GITHUB_OUTPUT"
-          echo "parts=${parts:-ничего — изменения не затронули ни бот, ни мини-апп}" >> "$GITHUB_OUTPUT"
-          echo "::notice::выкатываем: ${parts:-ничего} (бот был ${prev_api:-—}, мини-апп ${prev_web:-—})"
+          echo "site=$site" >> "$GITHUB_OUTPUT"
+          echo "parts=${parts:-ничего — изменения не затронули ни бот, ни мини-апп, ни сайт}" >> "$GITHUB_OUTPUT"
+          echo "::notice::выкатываем: ${parts:-ничего} (бот был ${prev_api:-—}, мини-апп ${prev_web:-—}, сайт ${prev_site:-—})"
 
       - name: Upload image and script
         if: steps.changes.outputs.api == 'true'
@@ -150,6 +171,14 @@ jobs:
         run: |
           scp -q "static-$SHA.tar.gz" deploy/remote-static.sh prod:
           ssh -n prod "WEB_DIR=$WEB_DIR bash remote-static.sh $SHA"
+
+      # тот же скрипт, другая папка; архив — под именем, которое ждёт скрипт (мини-апп свой уже удалил)
+      - name: Deploy site
+        if: steps.changes.outputs.site == 'true'
+        run: |
+          scp -q "site-$SHA.tar.gz" "prod:static-$SHA.tar.gz"
+          scp -q deploy/remote-static.sh prod:
+          ssh -n prod "WEB_DIR=$SITE_DIR bash remote-static.sh $SHA"
 
       - name: Remove key
         if: always()

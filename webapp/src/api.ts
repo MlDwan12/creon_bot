@@ -31,6 +31,7 @@ import type {
   ModMe,
   ReportTarget,
   ModReportGroup,
+  Me,
 } from '@fixum/shared';
 // Типы ответов API и константы — общие с сайтом (packages/shared); здесь — запросы мини-аппа с initData.
 export * from '@fixum/shared';
@@ -271,15 +272,6 @@ export function removeReview(submissionId: number) {
   return request<{ ok: true }>('DELETE', `/api/mod/reviews/${submissionId}`);
 }
 
-type Me = {
-  isModerator: boolean;
-  supportUrl: string | null;
-  /** Язык интерфейса: выбранный в профиле или по Telegram; languageChosen — выбран ли вручную. */
-  language: Lang;
-  languageChosen: boolean;
-  /** Кабинет, открытый последним (role.ts); null — ещё не выбирал. */
-  cabinet: 'creator' | 'advertiser' | null;
-};
 let me: Promise<Me> | undefined;
 
 /** Один запрос на запуск: initData, а с ним и ответ, до перезапуска Mini App не меняется. */

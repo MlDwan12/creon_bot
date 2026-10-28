@@ -719,3 +719,16 @@ export interface ModReportGroup {
     createdAt: string;
   }[];
 }
+
+/** GET /api/me — кто вошёл (мини-апп и сайт). */
+export interface Me {
+  isModerator: boolean;
+  supportUrl: string | null;
+  /** Язык интерфейса: выбранный в профиле или по Telegram; languageChosen — выбран ли вручную. */
+  language: 'ru' | 'en';
+  languageChosen: boolean;
+  /** Кабинет, открытый последним; null — ещё не выбирал. */
+  cabinet: 'creator' | 'advertiser' | null;
+  /** Имя из Telegram; null — не указано. */
+  firstName: string | null;
+}
