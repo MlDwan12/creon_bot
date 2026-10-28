@@ -2,9 +2,9 @@ import {
   ApiError,
   createAccountApi,
   createAdvertiserApi,
+  createCreatorApi,
   createModApi,
   REPORT_REASONS,
-  type CreatorProfile,
   type Me,
   type OrderCategory,
   type ReportTarget,
@@ -12,6 +12,9 @@ import {
 import { i18next, setLang } from './i18n';
 
 export * from '@fixum/shared';
+
+/** Действию нужен свежий вход (кошелёк, вывод) — событие на window, его слушает App.tsx. */
+export const RELOGIN_EVENT = 'fixum:relogin';
 
 /**
  * Запрос к API сайта. Вход — cookie сессии (ставит POST /api/web/login), браузер шлёт её сам;
@@ -35,6 +38,8 @@ async function request<T>(
       string,
       unknown
     > | null;
+    // вход старше часа, а действие денежное — App.tsx предложит войти заново
+    if (data?.relogin) window.dispatchEvent(new Event(RELOGIN_EVENT));
     throw new ApiError(
       res.status,
       typeof data?.message === 'string'
@@ -69,11 +74,6 @@ export function logout() {
   return request<void>('POST', '/api/web/logout');
 }
 
-/** Свой профиль (имя, рейтинг) — для кабинета заказчика. */
-export function fetchMyProfile() {
-  return request<CreatorProfile>('GET', '/api/profile');
-}
-
 /** Запомнить кабинет на сервере — тот же откроется в мини-аппе и на другом устройстве. */
 export function updateCabinet(cabinet: 'creator' | 'advertiser') {
   return request<{ ok: true }>('PUT', '/api/profile/cabinet', { cabinet });
@@ -95,11 +95,6 @@ export function fetchRate() {
       return null;
     },
   ));
-}
-
-/** Профиль пользователя; модератору — с блокировкой, кошельком и ссылками. */
-export function fetchCreator(id: number) {
-  return request<CreatorProfile>('GET', `/api/creators/${id}`);
 }
 
 export function categoryLabel(code: OrderCategory): string {
@@ -166,3 +161,42 @@ export const {
   rateVideo,
 } = createAdvertiserApi(request);
 export const { sendSupportMessage, createReport } = createAccountApi(request);
+
+// Кабинет креатора и профили — общие с мини-аппом (packages/shared/src/creator-api.ts)
+export const {
+  fetchOpenOrders,
+  fetchOrder,
+  claimOrder,
+  fetchMySubmissions,
+  submitVideo,
+  fetchBalance,
+  requestPayout,
+  fetchMyProfile,
+  fetchCreator,
+  updateProfileLinks,
+  updateNotifications,
+  updateWallet,
+  fetchSocialAccounts,
+  disconnectSocialAccount,
+} = createCreatorApi(request);
+
+const photos = new Map<number, Promise<string | null>>();
+
+/**
+ * Фото пользователя из Telegram как blob-ссылка для <img>; null — фото нет или оно недоступно.
+ * Через fetch, а не <img src>: без заголовка X-Fixum-Web API не примет cookie. Один запрос на визит.
+ */
+export function fetchCreatorPhoto(id: number): Promise<string | null> {
+  let photo = photos.get(id);
+  if (!photo) {
+    photo = fetch(`/api/creators/${id}/photo`, {
+      headers: { 'X-Fixum-Web': '1' },
+    })
+      .then(async (res) =>
+        res.ok ? URL.createObjectURL(await res.blob()) : null,
+      )
+      .catch(() => null);
+    photos.set(id, photo);
+  }
+  return photo;
+}

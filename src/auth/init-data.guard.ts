@@ -19,8 +19,15 @@ import { readCookie, SESSION_COOKIE, verifySession } from './web-login.util';
 // Если понадобится короче — выдавать свою сессию/JWT при входе.
 const INIT_DATA_MAX_AGE_SECONDS = 24 * 60 * 60;
 
-/** `authDate` — когда Telegram выдал initData (Unix-секунды, из проверенной подписи). */
-export type ApiRequest = Request & { user: User; authDate: number };
+/**
+ * `authDate` — когда Telegram выдал initData или подтвердил вход на сайт (Unix-секунды, из проверенной
+ * подписи); `web` — запрос с сайта (cookie сессии), а не из мини-аппа.
+ */
+export type ApiRequest = Request & {
+  user: User;
+  authDate: number;
+  web?: boolean;
+};
 
 /** Вход для смены кошелька и вывода — не старше часа: украденный initData живёт сутки, сессия сайта — месяц. */
 const FRESH_LOGIN_SECONDS = 60 * 60;
@@ -28,11 +35,16 @@ const FRESH_LOGIN_SECONDS = 60 * 60;
 /**
  * Деньги уходят наружу (кошелёк, вывод) — только со свежего входа: initData живёт сутки, и
  * утёкший заголовок (скриншот, лог, прокси) иначе сутки давал бы сменить кошелёк и вывести всё.
- * Мини-апп, открытый дольше часа, достаточно переоткрыть.
+ * Мини-апп, открытый дольше часа, достаточно переоткрыть, на сайте — войти заново (`relogin` — сайт
+ * по нему предлагает кнопку входа).
  */
 export function assertFreshLogin(req: ApiRequest) {
-  if (Date.now() / 1000 - req.authDate > FRESH_LOGIN_SECONDS)
-    throw new ForbiddenException(tr('errors.reopenApp'));
+  if (Date.now() / 1000 - req.authDate <= FRESH_LOGIN_SECONDS) return;
+  throw new ForbiddenException(
+    req.web
+      ? { message: tr('errors.relogin'), relogin: true }
+      : tr('errors.reopenApp'),
+  );
 }
 
 /**
@@ -94,6 +106,7 @@ export class InitDataGuard implements CanActivate {
     );
     if (!session) return null;
     req.authDate = session.authDate;
+    req.web = true;
     return this.usersService.findById(session.userId);
   }
 }

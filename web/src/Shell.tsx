@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Navigate, NavLink, Outlet, useNavigate } from 'react-router';
 import { updateCabinet } from './api';
+import { Catalog } from './creator/Catalog';
 import { Logo } from './Login';
 import { useSession } from './session';
 import s from './Shell.module.css';
@@ -23,7 +24,14 @@ const ADVERTISER_NAV = [
   { to: '/help', label: 'tabs.help' },
   { to: '/account', label: 'tabs.profile' },
 ];
-/** Куда вести после выбора кабинета; у креатора разделов на сайте пока нет. */
+const CREATOR_NAV = [
+  { to: '/', label: 'tabs.orders' },
+  { to: '/submissions', label: 'tabs.submissions' },
+  { to: '/balance', label: 'balance.title' },
+  { to: '/learn', label: 'tabs.learn' },
+  { to: '/profile', label: 'tabs.profile' },
+];
+/** Куда вести после выбора кабинета. */
 const CABINET_HOME: Record<Cabinet, string> = {
   advertiser: '/my-orders',
   creator: '/',
@@ -76,15 +84,15 @@ export function Shell() {
                 </button>
               ))}
             </div>
-            {cabinet === 'advertiser' && (
-              <nav aria-label={t('tabs.aria')} className={s.links}>
-                {ADVERTISER_NAV.map((item) => (
+            <nav aria-label={t('tabs.aria')} className={s.links}>
+              {(cabinet === 'advertiser' ? ADVERTISER_NAV : CREATOR_NAV).map(
+                (item) => (
                   <NavLink key={item.to} to={item.to} end>
                     {t(item.label)}
                   </NavLink>
-                ))}
-              </nav>
-            )}
+                ),
+              )}
+            </nav>
           </>
         )}
         <div className={s.bottom}>
@@ -114,16 +122,10 @@ export function Shell() {
   );
 }
 
-/** Главная: в кабинет — модератор в очередь, заказчик к заказам; креатору разделы появятся следующим шагом. */
+/** Главная: модератор — в очередь, заказчик — к своим заказам, креатор — каталог. */
 export function Home() {
-  const { t } = useTranslation();
   const { me } = useSession();
   if (me.isModerator) return <Navigate to="/mod" replace />;
   if (me.cabinet === 'advertiser') return <Navigate to="/my-orders" replace />;
-  return (
-    <div className={s.soon}>
-      <h1>{t('web.soonTitle')}</h1>
-      <p>{t('web.soonText')}</p>
-    </div>
-  );
+  return <Catalog />;
 }

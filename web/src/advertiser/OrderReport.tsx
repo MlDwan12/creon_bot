@@ -2,18 +2,17 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
 import {
-  createReport,
   errorText,
   type Feedback,
   fetchOrderReport,
   type OrderReport as Report,
   PLATFORM_NAMES,
   rateVideo,
-  reasonLabel,
-  REPORT_REASONS,
   safeUrl,
   sendReportCsv,
 } from '../api';
+import { Avatar } from '../components/Avatar';
+import { Complaint } from '../components/Complaint';
 import { PlatformIcon } from '../components/PlatformIcon';
 import { formatDate, formatMoney, formatViews } from '../format';
 import s from '../ui.module.css';
@@ -281,7 +280,7 @@ export function OrderReport() {
 
 type Item = Report['items'][number];
 
-/** Ролик в отчёте: ссылка, оценка с отзывом и жалоба. */
+/** Ролик в отчёте: креатор (ссылка на его профиль), ролик, оценка с отзывом и жалоба. */
 function VideoItem({
   item,
   onRated,
@@ -290,21 +289,21 @@ function VideoItem({
   onRated: (rating: number) => void;
 }) {
   const { t } = useTranslation();
-  const [mode, setMode] = useState<'idle' | 'rating' | 'report'>('idle');
+  const [rating, setRating] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(EMPTY_FEEDBACK);
-  const [reason, setReason] = useState('');
-  const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  /** Итог: отзыв ушёл на проверку или жалоба отправлена — текст вместо формы. */
-  const [notice, setNotice] = useState('');
+  /** Отзыв с текстом ушёл на проверку — подсказка под оценкой. */
+  const [onModeration, setOnModeration] = useState(false);
 
-  async function run(action: () => Promise<string>) {
+  async function rate() {
     setBusy(true);
     setError('');
     try {
-      setNotice(await action());
-      setMode('idle');
+      const res = await rateVideo(item.id, feedback);
+      setOnModeration(res.onModeration);
+      onRated(feedback.rating);
+      setRating(false);
     } catch (err) {
       setError(errorText(err, t('review.error')));
     } finally {
@@ -312,27 +311,13 @@ function VideoItem({
     }
   }
 
-  const rate = () =>
-    run(async () => {
-      const { onModeration } = await rateVideo(item.id, feedback);
-      onRated(feedback.rating);
-      return onModeration ? t('review.thanks') : '';
-    });
-  const report = () =>
-    run(async () => {
-      await createReport({
-        target: 'VIDEO',
-        targetId: item.id,
-        reason,
-        comment,
-      });
-      return t('report.sentText');
-    });
-
   return (
     <article className={s.card}>
       <div className={s.cardHead}>
-        <strong>{item.creator}</strong>
+        <Link to={`/creators/${item.creatorId}`} className={s.check}>
+          <Avatar userId={item.creatorId} name={item.creator} size={36} />
+          <strong>{item.creator}</strong>
+        </Link>
         {!!item.rating && (
           <span aria-label={t('review.yourRating', { rating: item.rating })}>
             {'★'.repeat(item.rating)}
@@ -366,9 +351,9 @@ function VideoItem({
         <p className={s.hint}>{t('review.badUrl', { url: item.videoUrl })}</p>
       )}
 
-      {notice && <p className={s.notice}>{notice}</p>}
+      {onModeration && <p className={s.notice}>{t('review.thanks')}</p>}
 
-      {mode === 'rating' ? (
+      {rating ? (
         <fieldset className={s.fieldset}>
           <legend>{t('review.rateTitle')}</legend>
           <div
@@ -424,88 +409,34 @@ function VideoItem({
               type="button"
               className={s.btn}
               disabled={busy}
-              onClick={() => setMode('idle')}
-            >
-              {t('common.cancel')}
-            </button>
-          </div>
-        </fieldset>
-      ) : mode === 'report' ? (
-        <fieldset className={s.fieldset}>
-          <legend>{t('report.whatsWrong')}</legend>
-          {REPORT_REASONS.VIDEO.map((r) => (
-            <label key={r} className={s.check}>
-              <input
-                type="radio"
-                name={`reason-${item.id}`}
-                checked={reason === r}
-                onChange={() => setReason(r)}
-              />
-              {reasonLabel('VIDEO', r)}
-            </label>
-          ))}
-          <textarea
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            rows={2}
-            maxLength={500}
-            aria-label={t('report.commentOptional')}
-            placeholder={
-              reason === 'OTHER'
-                ? t('report.describe')
-                : t('report.commentOptional')
-            }
-          />
-          <div className={s.buttons}>
-            <button
-              type="button"
-              className={`${s.btn} ${s.reject}`}
-              // «Другое» без комментария бэкенд не примет
-              disabled={
-                busy || !reason || (reason === 'OTHER' && !comment.trim())
-              }
-              onClick={report}
-            >
-              {t('report.submit')}
-            </button>
-            <button
-              type="button"
-              className={s.btn}
-              disabled={busy}
-              onClick={() => setMode('idle')}
+              onClick={() => setRating(false)}
             >
               {t('common.cancel')}
             </button>
           </div>
         </fieldset>
       ) : (
-        <div className={s.buttons}>
-          {/* оценку не меняют (бэкенд не даст) — кнопка только у неоценённых */}
-          {!item.rating && (
+        // оценку не меняют (бэкенд не даст) — кнопка только у неоценённых
+        !item.rating && (
+          <div className={s.buttons}>
             <button
               type="button"
               className={`${s.btn} ${s.primary}`}
               onClick={() => {
                 setFeedback(EMPTY_FEEDBACK);
-                setMode('rating');
+                setRating(true);
               }}
             >
               {t('review.rate')}
             </button>
-          )}
-          <button
-            type="button"
-            className={s.linkButton}
-            onClick={() => {
-              setReason('');
-              setComment('');
-              setMode('report');
-            }}
-          >
-            {t('review.reportVideo')}
-          </button>
-        </div>
+          </div>
+        )
       )}
+      <Complaint
+        target="VIDEO"
+        targetId={item.id}
+        label={t('review.reportVideo')}
+      />
       {error && (
         <p className={s.error} role="alert">
           {error}

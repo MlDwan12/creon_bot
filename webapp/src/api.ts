@@ -6,20 +6,10 @@ import {
   REPORT_REASONS,
   createAccountApi,
   createAdvertiserApi,
+  createCreatorApi,
   createModApi,
 } from '@fixum/shared';
-import type {
-  OrderCategory,
-  OrderSummary,
-  OrderDetail,
-  MySubmission,
-  VideoPlatform,
-  Balance,
-  CreatorProfile,
-  SocialAccount,
-  ReportTarget,
-  Me,
-} from '@fixum/shared';
+import type { OrderCategory, ReportTarget, Me } from '@fixum/shared';
 // Типы ответов API и константы — общие с сайтом (packages/shared); здесь — запросы мини-аппа с initData.
 export * from '@fixum/shared';
 
@@ -69,75 +59,6 @@ async function request<T>(
   return (await res.json()) as T;
 }
 
-/**
- * Страница каталога. `after` — последний показанный заказ (без него — первая страница).
- * hasMore — есть ли следующая; total — для заголовка, может отставать на полминуты.
- */
-export function fetchOpenOrders(
-  after?: OrderSummary,
-  category?: OrderCategory,
-  platform?: VideoPlatform,
-) {
-  const query = new URLSearchParams();
-  if (after) {
-    query.set('afterId', String(after.id));
-    query.set('afterCreatedAt', after.createdAt);
-  }
-  if (category) query.set('category', category);
-  if (platform) query.set('platform', platform);
-  return request<{
-    items: OrderSummary[];
-    hasMore: boolean;
-    total: number;
-    /** Только к первой странице: где есть открытые заказы (категории — с учётом площадки, и наоборот). */
-    facets?: { categories: OrderCategory[]; platforms: VideoPlatform[] };
-  }>('GET', `/api/orders?${query}`);
-}
-
-export function fetchOrder(id: number) {
-  return request<OrderDetail>('GET', `/api/orders/${id}`);
-}
-
-export function claimOrder(id: number) {
-  return request<{ submissionId: number }>('POST', `/api/orders/${id}/claim`);
-}
-
-export function fetchMySubmissions() {
-  return request<MySubmission[]>('GET', '/api/submissions');
-}
-
-/**
- * Сдать ролик. `acceptPayout` — креатор согласился на остаток фонда, который показал ответ
- * 409 OVER_BUDGET (overBudgetOf): просмотры вышли за рамки бюджета.
- */
-export function submitVideo(
-  submissionId: number,
-  videoUrl: string,
-  views: number,
-  acceptPayout?: number,
-  /** Ссылка стоит в шапке профиля — если заказ этого требует (order.linkInBio). */
-  bioLinkConfirmed?: boolean,
-) {
-  return request<{ ok: true }>(
-    'POST',
-    `/api/submissions/${submissionId}/video`,
-    {
-      videoUrl,
-      views,
-      acceptPayout,
-      bioLinkConfirmed,
-    },
-  );
-}
-
-export function fetchMyProfile() {
-  return request<CreatorProfile>('GET', '/api/profile');
-}
-
-export function fetchCreator(id: number) {
-  return request<CreatorProfile>('GET', `/api/creators/${id}`);
-}
-
 const photos = new Map<number, Promise<string | null>>();
 
 /**
@@ -157,38 +78,6 @@ export function fetchCreatorPhoto(id: number): Promise<string | null> {
     photos.set(id, photo);
   }
   return photo;
-}
-
-export function updateProfileLinks(links: string[]) {
-  return request<{ ok: true }>('PUT', '/api/profile/links', { links });
-}
-
-export function updateNotifications(newOrders: boolean) {
-  return request<{ ok: true }>('PUT', '/api/profile/notifications', {
-    newOrders,
-  });
-}
-
-/** Пустая строка — убрать кошелёк. */
-export function updateWallet(wallet: string) {
-  return request<{ ok: true }>('PUT', '/api/profile/wallet', { wallet });
-}
-
-/** Пусто — ни одна площадка пока не подключается (нет ключей), раздел в профиле не показываем. */
-export function fetchSocialAccounts() {
-  return request<SocialAccount[]>('GET', '/api/accounts');
-}
-
-/** Ссылка на вход на площадке — открыть во внешнем браузере. */
-export function connectSocialAccount(platform: SocialAccount['platform']) {
-  return request<{ url: string }>(
-    'POST',
-    `/api/accounts/${platform.toLowerCase()}/connect`,
-  );
-}
-
-export function disconnectSocialAccount(accountId: number) {
-  return request<{ ok: true }>('DELETE', `/api/accounts/${accountId}`);
 }
 
 let me: Promise<Me> | undefined;
@@ -232,14 +121,6 @@ export function fetchRate() {
       return null;
     },
   ));
-}
-
-export function fetchBalance() {
-  return request<Balance>('GET', '/api/balance');
-}
-
-export function requestPayout(amount: number) {
-  return request<{ ok: true }>('POST', '/api/balance/withdraw', { amount });
 }
 
 export function reasonLabel(target: ReportTarget, code: string): string {
@@ -289,3 +170,22 @@ export const {
   rateVideo,
 } = createAdvertiserApi(request);
 export const { sendSupportMessage, createReport } = createAccountApi(request);
+
+// Запросы кабинета креатора и профилей — общие с сайтом (packages/shared/src/creator-api.ts).
+export const {
+  fetchOpenOrders,
+  fetchOrder,
+  claimOrder,
+  fetchMySubmissions,
+  submitVideo,
+  fetchBalance,
+  requestPayout,
+  fetchMyProfile,
+  fetchCreator,
+  updateProfileLinks,
+  updateNotifications,
+  updateWallet,
+  fetchSocialAccounts,
+  connectSocialAccount,
+  disconnectSocialAccount,
+} = createCreatorApi(request);

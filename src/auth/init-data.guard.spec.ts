@@ -1,9 +1,13 @@
-import type { ExecutionContext } from '@nestjs/common';
+import { type ExecutionContext, ForbiddenException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import type { User } from '@prisma/client';
 import type { SupportService } from '../support/support.service';
 import type { UsersService } from '../users/users.service';
-import { type ApiRequest, InitDataGuard } from './init-data.guard';
+import {
+  type ApiRequest,
+  assertFreshLogin,
+  InitDataGuard,
+} from './init-data.guard';
 import { SESSION_COOKIE, signSession } from './web-login.util';
 
 const TOKEN = '123456:TEST-token';
@@ -41,5 +45,35 @@ describe('InitDataGuard: сессия сайта', () => {
         'x-fixum-web': '1',
       }),
     ).rejects.toThrow('Unauthorized');
+  });
+});
+
+describe('assertFreshLogin', () => {
+  const old = Math.floor(Date.now() / 1000) - 2 * 60 * 60;
+  const req = (web: boolean, authDate: number) =>
+    ({ web, authDate }) as unknown as ApiRequest;
+
+  it('свежий вход пропускает', () => {
+    expect(() =>
+      assertFreshLogin(req(true, Math.floor(Date.now() / 1000))),
+    ).not.toThrow();
+  });
+
+  it('сайту — «войдите заново» с relogin, мини-аппу — «переоткройте»', () => {
+    expect.assertions(2);
+    try {
+      assertFreshLogin(req(true, old));
+    } catch (err) {
+      expect((err as ForbiddenException).getResponse()).toMatchObject({
+        relogin: true,
+      });
+    }
+    try {
+      assertFreshLogin(req(false, old));
+    } catch (err) {
+      expect((err as ForbiddenException).getResponse()).not.toHaveProperty(
+        'relogin',
+      );
+    }
   });
 });

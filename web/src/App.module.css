@@ -31,3 +31,44 @@
   font-weight: 800;
   cursor: pointer;
 }
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(23, 20, 31, 0.5);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 420px;
+  padding: 24px;
+  border-radius: 22px;
+  background: var(--surface);
+  line-height: 1.5;
+}
+
+.dialog p {
+  margin: 0;
+}
+
+.dialog-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.cancel {
+  min-height: 44px;
+  padding: 0 20px;
+  border: none;
+  border-radius: var(--radius-button);
+  background: var(--fill);
+  font-weight: 800;
+  cursor: pointer;
+}

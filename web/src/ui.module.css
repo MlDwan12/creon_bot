@@ -672,3 +672,84 @@ details > summary {
   background: var(--surface);
   line-height: 1.5;
 }
+
+.avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 800;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.accent-tone {
+  background: var(--accent-soft);
+  color: var(--link);
+}
+
+/* Путь ролика по шагам: сделано — галочкой, сейчас — акцентом, дальше — серым, отказ — красным */
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 26px;
+  font-size: 14px;
+}
+
+.timeline li::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--separator);
+  border-radius: 50%;
+}
+
+.timeline li span {
+  color: var(--hint);
+  font-size: 13px;
+}
+
+.timeline .done::before {
+  border-color: var(--success);
+  background: var(--success);
+}
+
+.timeline .now::before {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.timeline .fail::before {
+  border-color: var(--danger);
+  background: var(--danger);
+}
+
+.timeline .next {
+  color: var(--hint);
+}
+
+.self-end {
+  align-self: flex-end;
+}
