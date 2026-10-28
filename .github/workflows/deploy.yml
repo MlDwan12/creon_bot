@@ -93,8 +93,8 @@ jobs:
 
       # Бот, мини-апп и сайт выкатываются независимо: каждый — только если его файлы изменились с той
       # версии, что уже на сервере (метка бота — remote-deploy.sh, мини-аппа и сайта — симлинк current).
-      # Метки нет или коммит неизвестен (первая выкатка, force-push) — выкатываем. Сайт ещё не настроен
-      # на стенде (нет папки) — пропускаем: без домена и сертификата выкладывать некуда.
+      # Метки нет или коммит неизвестен (первая выкатка, force-push) — выкатываем. Мини-апп статикой или
+      # сайт ещё не настроены на стенде (нет папки) — пропускаем: выкладывать некуда.
       - name: What changed
         id: changes
         if: steps.latest.outputs.deploy == 'true'
@@ -113,7 +113,12 @@ jobs:
           # бот — всё, кроме фронтов, документов и файлов только для статики
           changed "$prev_api" . ':!webapp' ':!web' ':!packages' ':!*.md' \
             ':!deploy/remote-static.sh' ':!deploy/prod/nginx' && api=true
-          changed "$prev_web" webapp packages i18n && web=true
+          # пока папки нет, мини-апп отдаёт бот из своего образа — выкладывать статику некуда
+          if ssh -n prod "test -d '$WEB_DIR'"; then
+            changed "$prev_web" webapp packages i18n && web=true
+          else
+            echo "::notice::мини-апп статикой на стенде не настроен (нет $WEB_DIR) — его отдаёт бот, DEPLOY.md «Мини-апп — статикой через nginx»"
+          fi
           if ssh -n prod "test -d '$SITE_DIR'"; then
             changed "$prev_site" web packages i18n && site=true
           else
