@@ -9,7 +9,7 @@ import {
 } from '../../api';
 import { formatMoney, timeAgo } from '../../format';
 import { openModOnboarding } from '../../components/ModOnboarding';
-import { ACTION_LABELS } from './labels';
+import { ACTION_LABELS } from '@fixum/shared';
 import s from './ModMeView.module.css';
 
 const PERIODS: { days: number | undefined; label: string }[] = [
