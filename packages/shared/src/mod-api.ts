@@ -157,8 +157,12 @@ export function createModApi(request: Requester) {
         banReason,
       }),
 
-    banUser: (userId: number, reason: string) =>
-      request<{ ok: true }>('POST', `/api/mod/users/${userId}/ban`, { reason }),
+    /** final — без права обжалования; у заблокированного обычным баном — ужесточить. */
+    banUser: (userId: number, reason: string, final = false) =>
+      request<{ ok: true }>('POST', `/api/mod/users/${userId}/ban`, {
+        reason,
+        final,
+      }),
 
     unbanUser: (userId: number) =>
       request<{ ok: true }>('POST', `/api/mod/users/${userId}/unban`),

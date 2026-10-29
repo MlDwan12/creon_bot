@@ -12,7 +12,12 @@ type State =
   | { kind: 'loading' }
   | { kind: 'guest' }
   | { kind: 'error' }
-  | { kind: 'banned'; reason: string | null; supportUrl: string | null }
+  | {
+      kind: 'banned';
+      final: boolean;
+      reason: string | null;
+      supportUrl: string | null;
+    }
   | { kind: 'in'; me: Me };
 
 export function App() {
@@ -45,6 +50,7 @@ export function App() {
         if (err instanceof ApiError && err.data?.banned)
           return setState({
             kind: 'banned',
+            final: err.data.final === true,
             reason: (err.data.reason as string | null) ?? null,
             supportUrl: (err.data.supportUrl as string | null) ?? null,
           });
@@ -94,7 +100,7 @@ export function App() {
     case 'banned':
       return (
         <div className={s.center}>
-          <h1>{t('web.banned')}</h1>
+          <h1>{t(state.final ? 'banned.closed' : 'web.banned')}</h1>
           {state.reason && <p>{state.reason}</p>}
           {state.supportUrl && (
             <a href={state.supportUrl} target="_blank" rel="noreferrer">

@@ -110,7 +110,9 @@ export class ModUsersService {
           label: creatorLabel(u),
           telegramId: u.telegramId.toString(),
           createdAt: u.createdAt,
-          banned: u.bannedAt ? { at: u.bannedAt, reason: u.banReason } : null,
+          banned: u.bannedAt
+            ? { at: u.bannedAt, reason: u.banReason, final: u.banFinal }
+            : null,
           creator: subs.some((s) => s.creatorId === u.id)
             ? {
                 approved: ap?._count ?? 0,

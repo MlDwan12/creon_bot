@@ -121,13 +121,13 @@ export default function App() {
             <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
           </svg>
         </div>
-        <h1>{t('banned.title')}</h1>
+        <h1>{t(banned.final ? 'banned.closed' : 'banned.title')}</h1>
         {banned.reason && (
           <p className={s.bannedReason}>
             {t('banned.reason', { reason: banned.reason })}
           </p>
         )}
-        <p className={s.hint}>{t('banned.hint')}</p>
+        {!banned.final && <p className={s.hint}>{t('banned.hint')}</p>}
         {banned.supportUrl && (
           <button
             type="button"

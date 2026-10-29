@@ -213,15 +213,27 @@ export default function ProfileView() {
   // Блокировка — только в окне модератора.
   const [banning, setBanning] = useState(false);
   const [banReason, setBanReason] = useState('');
+  const [banFinal, setBanFinal] = useState(false);
 
-  async function ban() {
-    if (!(await confirmAction(t('profile.banConfirm')))) return;
+  /** `upgrade` — обычный бан сделать без права обжалования, с прежней причиной. */
+  async function ban(upgrade = false) {
+    if (
+      !(await confirmAction(
+        t(upgrade ? 'profile.banFinalConfirm' : 'profile.banConfirm'),
+      ))
+    )
+      return;
     setBusy(true);
     setError('');
     try {
-      await banUser(profile!.id, banReason);
+      await banUser(
+        profile!.id,
+        upgrade ? (profile!.ban!.reason ?? '—') : banReason,
+        upgrade || banFinal,
+      );
       setBanning(false);
       setBanReason('');
+      setBanFinal(false);
       await load();
     } catch (err) {
       setError(
@@ -268,10 +280,26 @@ export default function ProfileView() {
           {profile.ban ? (
             <>
               <p>
-                <strong>{t('profile.banned')}</strong>{' '}
+                <strong>
+                  {t(
+                    profile.ban.final
+                      ? 'profile.bannedFinal'
+                      : 'profile.banned',
+                  )}
+                </strong>{' '}
                 {formatDate(profile.ban.at)}
                 {profile.ban.reason && `: ${profile.ban.reason}`}
               </p>
+              {!profile.ban.final && (
+                <button
+                  type="button"
+                  className={s.remove}
+                  disabled={busy}
+                  onClick={() => void ban(true)}
+                >
+                  {t('profile.banFinal')}
+                </button>
+              )}
               <button type="button" className={s.edit} onClick={unban}>
                 {t('profile.unban')}
               </button>
@@ -288,6 +316,18 @@ export default function ProfileView() {
                   placeholder={t('profile.banReason')}
                 />
               </label>
+              <label className={s.switchRow}>
+                <span>
+                  {t('profile.banFinal')}
+                  <small>{t('profile.banFinalHint')}</small>
+                </span>
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={banFinal}
+                  onChange={(e) => setBanFinal(e.target.checked)}
+                />
+              </label>
               <div className={s.buttons}>
                 <button
                   type="button"
@@ -300,7 +340,7 @@ export default function ProfileView() {
                   type="button"
                   className={s.danger}
                   disabled={busy || !banReason.trim()}
-                  onClick={ban}
+                  onClick={() => void ban()}
                 >
                   {t('profile.ban')}
                 </button>

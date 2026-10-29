@@ -179,6 +179,12 @@ export class SupportService implements OnModuleInit {
       this.bot.telegram.sendMessage(this.chatId!, text, {
         message_thread_id: thread,
       });
+    if (user.bannedAt && user.banFinal) {
+      await reply(
+        'Не доставлено: пользователь заблокирован без права обжалования.',
+      );
+      return;
+    }
     try {
       if ('text' in msg && msg.text.startsWith('/close')) {
         await this.bot.telegram.sendMessage(

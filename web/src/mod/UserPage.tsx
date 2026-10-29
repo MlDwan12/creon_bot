@@ -46,6 +46,7 @@ export function UserPage() {
   const [error, setError] = useState('');
   const [banning, setBanning] = useState(false);
   const [banReason, setBanReason] = useState('');
+  const [banFinal, setBanFinal] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -70,6 +71,7 @@ export function UserPage() {
       await action();
       setBanning(false);
       setBanReason('');
+      setBanFinal(false);
       await load();
     } catch (err) {
       setError(errorText(err));
@@ -194,9 +196,26 @@ export function UserPage() {
           {profile.ban ? (
             <>
               <p className={s.dangerNote}>
-                Заблокирован {formatDate(profile.ban.at)}
+                Заблокирован{profile.ban.final && ' без права обжалования'}{' '}
+                {formatDate(profile.ban.at)}
                 {profile.ban.reason && `: ${profile.ban.reason}`}
               </p>
+              {!profile.ban.final && (
+                <button
+                  type="button"
+                  className={`${s.btn} ${s.reject}`}
+                  disabled={busy}
+                  onClick={() =>
+                    act(
+                      () =>
+                        banUser(profile.id, profile.ban!.reason ?? '—', true),
+                      'Закрыть доступ без права обжалования? Бот перестанет ему отвечать, поддержка — недоступна.',
+                    )
+                  }
+                >
+                  Без права обжалования
+                </button>
+              )}
               <button
                 type="button"
                 className={s.btn}
@@ -223,6 +242,17 @@ export function UserPage() {
                   placeholder="Причина — пользователь её увидит"
                 />
               </label>
+              <label className={s.check}>
+                <input
+                  type="checkbox"
+                  checked={banFinal}
+                  onChange={(e) => setBanFinal(e.target.checked)}
+                />
+                <span>
+                  Без права обжалования: бот молчит, поддержка недоступна,
+                  причину пользователь не увидит
+                </span>
+              </label>
               <div className={s.buttons}>
                 <button
                   type="button"
@@ -238,7 +268,7 @@ export function UserPage() {
                   disabled={busy || !banReason.trim()}
                   onClick={() =>
                     act(
-                      () => banUser(profile.id, banReason),
+                      () => banUser(profile.id, banReason, banFinal),
                       'Заблокировать? Его открытые заказы закроются, отклики без видео удалятся.',
                     )
                   }
