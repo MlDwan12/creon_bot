@@ -75,10 +75,23 @@ export class BansService {
     private readonly moderatorGuard: ModeratorGuard,
   ) {}
 
-  /** Бан модератором вручную. Возвращает снятые заказы и заказы, где освободился фонд, — с креаторами для уведомлений. */
-  async banUser(userId: number, reason: string) {
-    await this.mustNotBeModerator(userId);
-    return this.ban(userId, reason);
+  /**
+   * Бан модератором вручную; `final` — без права обжалования. Возвращает снятые заказы и заказы,
+   * где освободился фонд, — с креаторами для уведомлений.
+   */
+  async banUser(userId: number, reason: string, final: boolean) {
+    const user = await this.mustNotBeModerator(userId);
+    // ужесточение обычного бана: заказы и отклики уже сняты первым баном
+    if (user.bannedAt && final) {
+      const { count } = await this.prisma.user.updateMany({
+        where: { id: userId, bannedAt: { not: null }, banFinal: false },
+        data: { banFinal: true, banReason: reason },
+      });
+      if (count === 0)
+        throw new ForbiddenException('Пользователь уже заблокирован');
+      return { closed: [], freed: [] };
+    }
+    return this.ban(userId, reason, final);
   }
 
   /**
@@ -132,11 +145,11 @@ export class BansService {
    * Возвращает `closed` — закрытые и отклонённые заказы автора и `freed` — чужие заказы, где
    * отклонённые ролики заблокированного освободили «занятый» фонд; у обоих — креаторы для уведомлений.
    */
-  async ban(userId: number, reason: string) {
+  async ban(userId: number, reason: string, final = false) {
     return this.prisma.$transaction(async (tx) => {
       const { count } = await tx.user.updateMany({
         where: { id: userId, bannedAt: null },
-        data: { bannedAt: new Date(), banReason: reason },
+        data: { bannedAt: new Date(), banReason: reason, banFinal: final },
       });
       if (count === 0) {
         const exists = await tx.user.findUnique({ where: { id: userId } });
@@ -197,7 +210,7 @@ export class BansService {
   async unban(userId: number) {
     const { count } = await this.prisma.user.updateMany({
       where: { id: userId, bannedAt: { not: null } },
-      data: { bannedAt: null, banReason: null },
+      data: { bannedAt: null, banReason: null, banFinal: false },
     });
     if (count === 0)
       throw new NotFoundException('Пользователь не заблокирован');

@@ -110,8 +110,19 @@ export class StartUpdate
     );
   }
 
+  /** Бан без права обжалования — бот молчит на всё: /start, команды, кнопки, сообщения. */
+  private async silenced(ctx: Context) {
+    if (!ctx.from) return false;
+    const user = await this.prisma.user.findUnique({
+      where: { telegramId: BigInt(ctx.from.id) },
+      select: { bannedAt: true, banFinal: true },
+    });
+    return !!user?.bannedAt && user.banFinal;
+  }
+
   @Start()
   async onStart(@Ctx() ctx: Context) {
+    if (await this.silenced(ctx)) return;
     const t = await this.t(ctx);
     await ctx.reply(
       t('bot.intro'),
@@ -124,6 +135,7 @@ export class StartUpdate
   /** Telegram ждёт от ботов команду /privacy. Обработчик — до @On('message'), иначе тот перехватит. */
   @Command('privacy')
   async onPrivacy(@Ctx() ctx: Context) {
+    if (await this.silenced(ctx)) return;
     const t = await this.t(ctx);
     await ctx.reply(
       t('bot.privacy'),
@@ -136,12 +148,14 @@ export class StartUpdate
   /** ID чата — чтобы узнать ID группы поддержки для SUPPORT_CHAT_ID. */
   @Command('chatid')
   async onChatId(@Ctx() ctx: Context) {
+    if (await this.silenced(ctx)) return;
     await ctx.reply(`ID этого чата: ${ctx.chat!.id}`);
   }
 
   /** Кнопки в старых сообщениях — их обработчиков больше нет. */
   @Action(/.*/)
   async onOldButton(@Ctx() ctx: Context) {
+    if (await this.silenced(ctx)) return;
     await ctx.answerCbQuery((await this.t(ctx))('bot.moved'), {
       show_alert: true,
     });
@@ -157,7 +171,7 @@ export class StartUpdate
       await this.support.fromSupport(ctx);
       return;
     }
-    if (ctx.chat!.type !== 'private') return;
+    if (ctx.chat!.type !== 'private' || (await this.silenced(ctx))) return;
     const t = await this.t(ctx);
     if (!this.support.chatId) {
       await ctx.reply(t('bot.moved'), Markup.removeKeyboard());

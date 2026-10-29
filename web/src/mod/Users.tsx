@@ -99,7 +99,7 @@ export function Users() {
                   <td>
                     {u.banned && (
                       <span className={`${s.badge} ${s.danger}`}>
-                        Заблокирован
+                        {u.banned.final ? 'Закрыт доступ' : 'Заблокирован'}
                       </span>
                     )}
                     {u.banned?.reason && <small>{u.banned.reason}</small>}

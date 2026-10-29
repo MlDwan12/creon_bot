@@ -136,6 +136,7 @@
   },
   "banned": {
     "title": "Account blocked",
+    "closed": "Access to the service is closed",
     "reason": "Reason: {{reason}}",
     "hint": "If this is a mistake, contact support.",
     "write": "Contact support"
@@ -445,6 +446,10 @@
     "mine": "My profile",
     "creator": "Creator profile",
     "banned": "Blocked",
+    "bannedFinal": "Blocked with no right to appeal",
+    "banFinal": "No right to appeal",
+    "banFinalHint": "The bot stops replying, support becomes unavailable, the user won't see the reason",
+    "banFinalConfirm": "Close access with no right to appeal? The bot will stop replying and support will be unavailable.",
     "unban": "Unblock",
     "banReason": "Reason — the user will see it",
     "ban": "Block",
