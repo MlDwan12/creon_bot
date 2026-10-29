@@ -523,7 +523,8 @@ export interface CreatorProfile {
   reviewsCount: number;
   completed: number;
   /** Блокировка — приходит только модератору. */
-  ban: { at: string; reason: string | null } | null;
+  /** final — без права обжалования. */
+  ban: { at: string; reason: string | null; final: boolean } | null;
   /** Ссылки на соцсети, по порядку; на одной площадке может быть несколько. Чужим — пусто. */
   links: string[];
   /** Кошелёк USDT (TRC20) для выплат — только в своём профиле и модератору. */
@@ -590,7 +591,7 @@ export interface ModUserRow {
   label: string;
   telegramId: string;
   createdAt: string;
-  banned: { at: string; reason: string | null } | null;
+  banned: { at: string; reason: string | null; final: boolean } | null;
   /** Брал заказы: одобрено роликов и доступно к выводу, USDT. */
   creator: { approved: number; available: number } | null;
   /** Размещал заказы: всего и открыто. */

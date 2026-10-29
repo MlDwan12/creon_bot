@@ -67,6 +67,13 @@ export class InitDataGuard implements CanActivate {
     req.user = user;
     setRequestLang(userLang(req.user));
     // `banned` — мини-апп по нему показывает экран блокировки вместо любого экрана.
+    // полный бан — ни причины, ни поддержки
+    if (req.user.bannedAt && req.user.banFinal)
+      throw new ForbiddenException({
+        message: tr('errors.banned'),
+        banned: true,
+        final: true,
+      });
     if (req.user.bannedAt)
       throw new ForbiddenException({
         message: tr('errors.banned'),

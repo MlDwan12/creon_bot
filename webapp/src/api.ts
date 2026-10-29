@@ -15,6 +15,8 @@ export * from '@fixum/shared';
 
 /** Аккаунт заблокирован — App.tsx показывает экран блокировки вместо любого экрана. */
 export const banned = createStore<{
+  /** Без права обжалования: ни причины, ни поддержки. */
+  final: boolean;
   reason: string | null;
   supportUrl: string | null;
 } | null>(null);
@@ -42,6 +44,7 @@ async function request<T>(
       ? ((await res.json().catch(() => null)) as {
           message?: unknown;
           banned?: boolean;
+          final?: boolean;
           reason?: string | null;
           supportUrl?: string | null;
         } | null)
@@ -50,6 +53,7 @@ async function request<T>(
       if (typeof data?.message === 'string') userMessage = data.message;
       if (data?.banned)
         banned.set({
+          final: data.final === true,
           reason: data.reason ?? null,
           supportUrl: data.supportUrl ?? null,
         });

@@ -543,15 +543,15 @@ export class ModerationController {
     @Body() body: unknown,
     @Req() req: ApiRequest,
   ) {
-    const reason = parseBanReason(
-      (body as { reason?: unknown } | null)?.reason,
-    );
-    this.notifyBanned(await this.bans.banUser(id, reason));
+    const b = body as { reason?: unknown; final?: unknown } | null;
+    const reason = parseBanReason(b?.reason);
+    const final = b?.final === true;
+    this.notifyBanned(await this.bans.banUser(id, reason, final));
     await this.actions.log({
       moderatorId: req.user.telegramId,
       type: ModeratorActionType.USER_BAN,
       objectId: id,
-      comment: reason,
+      comment: final ? `Без права обжалования: ${reason}` : reason,
     });
     return { ok: true };
   }

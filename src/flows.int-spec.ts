@@ -2324,7 +2324,7 @@ describe('блокировка', () => {
     );
 
     const moderator = await prisma.user.create({ data: { telegramId: 777n } });
-    await expect(bans.banUser(moderator.id, 'спам')).rejects.toThrow(
+    await expect(bans.banUser(moderator.id, 'спам', false)).rejects.toThrow(
       'Модератора',
     );
   });
@@ -2339,6 +2339,30 @@ describe('блокировка', () => {
       await prisma.user.findUniqueOrThrow({ where: { id: u.id } }),
     ).toMatchObject({ bannedAt: null, banReason: null });
     await expect(bans.unban(u.id)).rejects.toThrow('не заблокирован');
+  });
+
+  it('бан без обжалования: сразу или ужесточением обычного; разблокировка снимает и его', async () => {
+    const u = await user();
+    await bans.banUser(u.id, 'спам', true);
+    expect(
+      await prisma.user.findUniqueOrThrow({ where: { id: u.id } }),
+    ).toMatchObject({ banFinal: true, banReason: 'спам' });
+    await expect(bans.banUser(u.id, 'спам', true)).rejects.toThrow(
+      'уже заблокирован',
+    );
+    await bans.unban(u.id);
+    expect(
+      (await prisma.user.findUniqueOrThrow({ where: { id: u.id } })).banFinal,
+    ).toBe(false);
+
+    await bans.banUser(u.id, 'спам', false);
+    await expect(bans.banUser(u.id, 'спам', false)).rejects.toThrow(
+      'уже заблокирован',
+    );
+    await bans.banUser(u.id, 'обход площадки', true);
+    expect(
+      await prisma.user.findUniqueOrThrow({ where: { id: u.id } }),
+    ).toMatchObject({ banFinal: true, banReason: 'обход площадки' });
   });
 });
 

@@ -82,7 +82,11 @@ export class ProfilesService {
       completed,
       /** Блокировка — показывать только модераторам (см. ProfilesController). */
       ban: creator.bannedAt
-        ? { at: creator.bannedAt, reason: creator.banReason }
+        ? {
+            at: creator.bannedAt,
+            reason: creator.banReason,
+            final: creator.banFinal,
+          }
         : null,
       /** Ссылки на соцсети — контакты: только самому креатору и модератору. */
       links: full ? creator.socialLinks : [],
