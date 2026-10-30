@@ -37,6 +37,8 @@
     "allPlatforms": "All platforms",
     "categoriesAria": "Categories",
     "allCategories": "All",
+    "platformLabel": "Platform",
+    "categoryLabel": "Category",
     "loadError": "Couldn't load orders",
     "openCount_one": "{{count}} open order",
     "openCount_other": "{{count}} open orders",

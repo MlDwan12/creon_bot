@@ -123,8 +123,52 @@ export function Catalog() {
         <p className={s.hint}>{t('catalog.subtitle')}</p>
       </header>
 
+      {/* Телефон: два списка в одну строку вместо пяти строк чипов (на компьютере — чипы) */}
+      {(shownPlatforms.length > 0 || shownCategories.length > 0) && (
+        <div className={s.filterSelects}>
+          {shownPlatforms.length > 0 && (
+            <label className={s.selectField}>
+              <span>{t('catalog.platformLabel')}</span>
+              <select
+                value={platform ?? ''}
+                onChange={(e) =>
+                  setPlatform((e.target.value || undefined) as VideoPlatform)
+                }
+              >
+                <option value="">{t('catalog.allPlatforms')}</option>
+                {shownPlatforms.map((p) => (
+                  <option key={p} value={p}>
+                    {PLATFORM_NAMES[p]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {shownCategories.length > 0 && (
+            <label className={s.selectField}>
+              <span>{t('catalog.categoryLabel')}</span>
+              <select
+                value={category ?? ''}
+                onChange={(e) =>
+                  setCategory((e.target.value || undefined) as OrderCategory)
+                }
+              >
+                <option value="">{t('catalog.allCategories')}</option>
+                {shownCategories.map((c) => (
+                  <option key={c} value={c}>
+                    {categoryLabel(c)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      )}
       {shownPlatforms.length > 0 && (
-        <nav className={s.chips} aria-label={t('catalog.platformsAria')}>
+        <nav
+          className={`${s.chips} ${s.wideFilters}`}
+          aria-label={t('catalog.platformsAria')}
+        >
           <button
             type="button"
             aria-pressed={!platform}
@@ -151,7 +195,10 @@ export function Catalog() {
         </nav>
       )}
       {shownCategories.length > 0 && (
-        <nav className={s.chips} aria-label={t('catalog.categoriesAria')}>
+        <nav
+          className={`${s.chips} ${s.wideFilters}`}
+          aria-label={t('catalog.categoriesAria')}
+        >
           <button
             type="button"
             aria-pressed={!category}

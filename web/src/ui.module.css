@@ -159,7 +159,7 @@
 /* Плитки с числами */
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
   gap: 10px;
 }
 
@@ -186,7 +186,7 @@
 /* Карточки в сетку (заявки на вывод) */
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
   gap: 12px;
 }
 
@@ -204,6 +204,8 @@
 
 /* Таблицы */
 .table-wrap {
+  /* таблица превращается в карточки по своей ширине, а не экрана: рядом может быть боковая панель */
+  container-type: inline-size;
   overflow-x: auto;
   border-radius: 20px;
   background: var(--surface);
@@ -251,8 +253,9 @@
   margin-top: 4px;
 }
 
-/* Телефон: строка таблицы — карточка «подпись — значение» вместо прокрутки вбок */
-@media (max-width: 720px) {
+/* Узко (телефон или экран с панелью): строка таблицы — карточка «подпись — значение»,
+   а не прокрутка вбок. 760 — ширина самой широкой таблицы («Все заказы»). */
+@container (max-width: 760px) {
   .table thead {
     display: none;
   }
@@ -712,7 +715,7 @@ details > summary {
 
 .two-cols {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   gap: 16px;
 }
 
@@ -851,4 +854,52 @@ details > summary {
 
 .self-end {
   align-self: flex-end;
+}
+
+/* Фильтры каталога списками — только на телефоне (на компьютере — чипы) */
+.filter-selects {
+  display: none;
+}
+
+.select-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--hint);
+}
+
+.select-field select {
+  min-height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+@media (max-width: 720px) {
+  .page h1 {
+    font-size: 24px;
+  }
+  /* заголовок страницы и кнопка рядом не помещаются — кнопка во всю ширину под заголовком */
+  .card-head:has(> h1) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .card-head:has(> h1) > .link-btn {
+    justify-content: center;
+  }
+  .filter-selects {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .wide-filters {
+    display: none;
+  }
 }

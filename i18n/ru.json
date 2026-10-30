@@ -37,6 +37,8 @@
     "allPlatforms": "Все площадки",
     "categoriesAria": "Категории",
     "allCategories": "Все",
+    "platformLabel": "Площадка",
+    "categoryLabel": "Категория",
     "loadError": "Не удалось загрузить заказы",
     "openCount_one": "{{count}} открытый заказ",
     "openCount_few": "{{count}} открытых заказа",
