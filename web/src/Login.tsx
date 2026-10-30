@@ -35,6 +35,8 @@ export function Login({ onLogin }: { onLogin: () => void }) {
   const [botId, setBotId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  // окно Telegram открыто — ждём подтверждения; закрыли окно — снова обычная кнопка
+  const [waiting, setWaiting] = useState(false);
 
   useEffect(() => {
     Promise.all([fetchWebConfig(), loadTelegramLogin()]).then(
@@ -46,9 +48,11 @@ export function Login({ onLogin }: { onLogin: () => void }) {
   function start() {
     if (botId === null || !window.Telegram) return;
     setFailed(false);
+    setWaiting(true);
     window.Telegram.Login.auth(
       { bot_id: botId, lang: i18n.language },
       (data) => {
+        setWaiting(false);
         if (!data) return; // окно закрыли
         setBusy(true);
         login(data).then(onLogin, () => {
@@ -65,16 +69,15 @@ export function Login({ onLogin }: { onLogin: () => void }) {
         <Logo />
         <div className={s.pitch}>
           <h1>{t('web.title')}</h1>
-          <p>{t('web.lead')}</p>
+          <p className={s.wideOnly}>{t('web.lead')}</p>
         </div>
       </section>
       <section className={s.side}>
         <div className={s.card}>
           <h2>{t('web.loginTitle')}</h2>
-          <p>{t('web.loginText')}</p>
           <button
             type="button"
-            className={s.telegram}
+            className={`${s.telegram} ${waiting ? s.waiting : ''}`}
             onClick={start}
             disabled={botId === null || busy}
           >
@@ -91,15 +94,30 @@ export function Login({ onLogin }: { onLogin: () => void }) {
               <path d="M21 4L3 11l6 2 2 6 3-4 5 4z" />
               <path d="M9 13l8-6" />
             </svg>
-            {busy ? t('common.loading') : t('web.loginButton')}
+            {busy
+              ? t('common.loading')
+              : waiting
+                ? t('web.loginWaiting')
+                : t('web.loginButton')}
           </button>
+          {/* что будет в окне Telegram: номер он спрашивает, только если браузер ещё не входил */}
+          <ol className={s.steps}>
+            <li>{t('web.loginStep1')}</li>
+            <li>{t('web.loginStep2')}</li>
+            <li>{t('web.loginStep3')}</li>
+          </ol>
+          {waiting && <p className={s.popupHint}>{t('web.loginPopupHint')}</p>}
           {failed && (
             <p className={s.error} role="alert">
               {t('web.loginFailed')}
             </p>
           )}
-          <span className={s.note}>{t('web.loginNote')}</span>
+          <span className={s.note}>
+            {t('web.loginText')} {t('web.loginNote')}
+          </span>
         </div>
+        {/* на телефоне описание — под входом: кто пришёл войти, видит кнопку сразу */}
+        <p className={`${s.narrowOnly} ${s.lead}`}>{t('web.lead')}</p>
       </section>
     </div>
   );

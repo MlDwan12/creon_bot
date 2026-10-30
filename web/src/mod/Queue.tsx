@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import {
   approveReview,
@@ -95,6 +95,16 @@ export function Queue() {
     [],
   );
   useEffect(() => void load(), [load]);
+
+  // Список листается вместе со страницей (без своей прокрутки): выбрали элемент далеко внизу —
+  // карточка справа ушла за верх экрана, поднимаем к ней.
+  const reviewRef = useRef<HTMLDivElement>(null);
+  const selected = query.get('id');
+  useEffect(() => {
+    const el = reviewRef.current;
+    if (selected && el && el.getBoundingClientRect().top < 0)
+      el.scrollIntoView({ block: 'start' });
+  }, [selected]);
 
   const counts: Record<Tab, number> = {
     videos: queue?.videos.length ?? 0,
@@ -459,7 +469,7 @@ export function Queue() {
               </div>
             )}
           </div>
-          <div>
+          <div ref={reviewRef}>
             {open !== undefined &&
               (tab === 'orders' ? (
                 <OrderReview

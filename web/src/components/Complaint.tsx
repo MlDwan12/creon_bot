@@ -49,7 +49,7 @@ export function Complaint({
     return (
       <button
         type="button"
-        className={s.linkButton}
+        className={s.quietLink}
         onClick={() => setOpen(true)}
       >
         {label}

@@ -74,11 +74,15 @@ export function AllOrders() {
                     <Link to={`/mod/orders/${o.id}`}>{o.title}</Link>
                     <small>#{o.id}</small>
                   </td>
-                  <td>{o.advertiser}</td>
-                  <td className={s.num}>{formatMoney(o.budget)}</td>
-                  <td className={s.num}>{o.submissionsCount}</td>
-                  <td>{timeAgo(o.createdAt)}</td>
-                  <td>
+                  <td data-label="Рекламодатель">{o.advertiser}</td>
+                  <td data-label="Бюджет" className={s.num}>
+                    {formatMoney(o.budget)}
+                  </td>
+                  <td data-label="Откликов" className={s.num}>
+                    {o.submissionsCount}
+                  </td>
+                  <td data-label="Создан">{timeAgo(o.createdAt)}</td>
+                  <td data-label="Статус">
                     <span
                       className={`${s.badge} ${s[ORDER_STATUS[o.status].tone]}`}
                     >

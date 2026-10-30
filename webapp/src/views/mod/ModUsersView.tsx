@@ -120,7 +120,7 @@ export default function ModUsersView() {
               </span>
               {u.banned && (
                 <span className={`${s.badge} ${s.danger}`}>
-                  {u.banned.final ? 'Закрыт доступ' : 'Заблокирован'}
+                  {u.banned.final ? 'Бан без обжалования' : 'Бан'}
                 </span>
               )}
             </Link>
