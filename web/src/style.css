@@ -85,6 +85,8 @@ body {
   color: var(--text);
   font-family: var(--font-text);
   -webkit-font-smoothing: antialiased;
+  /* ссылки, @ники и кошельки без пробелов переносятся, а не растягивают страницу вбок */
+  overflow-wrap: anywhere;
 }
 
 a {
