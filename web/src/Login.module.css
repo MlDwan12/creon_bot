@@ -157,6 +157,22 @@
   text-decoration: none;
 }
 
+.qr {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--bg);
+  font-size: 14px;
+}
+
+.qr img {
+  flex: none;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
 .by-phone {
   padding: 13px 0;
   margin: -13px 0;

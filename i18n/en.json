@@ -904,6 +904,8 @@
     "loginCodeLabel": "Code from Telegram",
     "loginSubmit": "Sign in",
     "loginOpenTelegram": "Open Telegram again",
-    "loginByPhone": "Sign in with a phone number"
+    "loginByPhone": "Sign in with a phone number",
+    "loginQr": "Telegram on your phone? Point the camera at the code — the bot sends the digits there, enter them here.",
+    "loginQrAlt": "QR code: link to the Fixum bot to sign in"
   }
 }

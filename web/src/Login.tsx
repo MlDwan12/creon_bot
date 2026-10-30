@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { renderSVG } from 'uqr';
 import {
   codeLogin,
   errorText,
@@ -158,6 +159,16 @@ export function Login({ onLogin }: { onLogin: () => void }) {
               >
                 {t('web.loginOpenTelegram')}
               </a>
+              {/* Telegram только на телефоне: та же ссылка камерой — бот пришлёт код туда */}
+              <div className={`${s.qr} ${s.wideOnly}`}>
+                <img
+                  src={`data:image/svg+xml;utf8,${encodeURIComponent(renderSVG(pending.link, { border: 1 }))}`}
+                  alt={t('web.loginQrAlt')}
+                  width={132}
+                  height={132}
+                />
+                <span>{t('web.loginQr')}</span>
+              </div>
             </form>
           ) : (
             <button type="button" className={s.telegram} onClick={startCode}>
