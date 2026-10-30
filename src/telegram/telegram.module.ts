@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TelegrafModule } from 'nestjs-telegraf';
+import { AuthModule } from '../auth/auth.module';
 import { SupportModule } from '../support/support.module';
 import { NotificationsService } from './notifications.service';
 import { StartUpdate } from './start.update';
@@ -19,6 +20,8 @@ import { TelegramPhotosService } from './telegram-photos.service';
       }),
     }),
     SupportModule,
+    // вход на сайт кодом: бот выдаёт код по ссылке t.me/<бот>?start=login_<токен>
+    AuthModule,
   ],
   providers: [NotificationsService, TelegramPhotosService, StartUpdate],
   exports: [NotificationsService, TelegramPhotosService],

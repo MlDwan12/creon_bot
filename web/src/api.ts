@@ -66,6 +66,19 @@ export function fetchWebConfig() {
 /** Данные, которые Telegram отдаёт после подтверждения входа, — как есть, подпись проверит бэкенд. */
 export type TelegramAuth = Record<string, string | number>;
 
+/** Вход кодом из бота, шаг 1: одноразовая ссылка на бота. */
+export function startCodeLogin() {
+  return request<{ token: string; link: string }>(
+    'POST',
+    '/api/web/login/start',
+  );
+}
+
+/** Шаг 2: код из Telegram — бэкенд ставит cookie сессии. */
+export function codeLogin(token: string, code: string) {
+  return request<void>('POST', '/api/web/login/code', { token, code });
+}
+
 export function login(data: TelegramAuth) {
   return request<void>('POST', '/api/web/login', data);
 }
