@@ -3,6 +3,7 @@ import type { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import type { UsersService } from '../users/users.service';
 import { WebAuthController } from './web-auth.controller';
+import type { WebLoginService } from './web-login.service';
 
 describe('POST /api/web/login', () => {
   it('без заголовка X-Fixum-Web не входит: форма с чужой страницы не ставит cookie', async () => {
@@ -10,6 +11,7 @@ describe('POST /api/web/login', () => {
     const controller = new WebAuthController(
       { get: () => '123:token' } as unknown as ConfigService,
       {} as UsersService,
+      {} as WebLoginService,
     );
     await expect(
       controller.login({}, undefined, { cookie } as unknown as Response),

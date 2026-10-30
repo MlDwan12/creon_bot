@@ -76,7 +76,8 @@
   min-height: 54px;
   border: none;
   border-radius: var(--radius-button);
-  background: #229ed9;
+  /* темнее фирменного #229ed9: белый текст на нём — 3:1, тут — 4,9:1 (WCAG AA) */
+  background: #1878a6;
   color: #ffffff;
   font: inherit;
   font-size: 17px;
@@ -87,12 +88,6 @@
 .telegram:disabled {
   opacity: 0.6;
   cursor: default;
-}
-
-/* окно Telegram открыто — кнопка спокойнее, но нажать ещё раз можно */
-.waiting {
-  background: #e3f1f9;
-  color: #135d82;
 }
 
 .steps {
@@ -127,9 +122,51 @@
   font-weight: 800;
 }
 
-.popup-hint {
-  margin: 0;
-  font-size: 14px;
+.code-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.code-form label {
+  font-weight: 700;
+}
+
+/* код — крупно и с разрядкой: четыре цифры читаются и сверяются с сообщением бота */
+.code-form input {
+  min-height: 56px;
+  padding: 0 16px;
+  border: 1px solid var(--separator);
+  border-radius: 16px;
+  font: inherit;
+  font-family: var(--font-display);
+  font-size: 28px;
+  letter-spacing: 10px;
+  text-align: center;
+}
+
+.secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border-radius: var(--radius-button);
+  background: var(--fill);
+  color: var(--text);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.by-phone {
+  padding: 13px 0;
+  margin: -13px 0;
+  border: none;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .lead {
@@ -178,6 +215,10 @@
 
 @media (max-width: 600px) {
   /* телефон: тёмный блок — только логотип и заголовок, вход — на первом экране */
+  /* лишняя высота экрана — вниз, а не в тёмный блок (иначе пустота между логотипом и заголовком) */
+  .page {
+    align-content: flex-start;
+  }
   .hero {
     /* во всю ширину и не выше содержимого (flex: none растянул бы блок по заголовку в одну строку) */
     flex: 1 1 100%;

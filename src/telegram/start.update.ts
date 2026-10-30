@@ -18,6 +18,7 @@ import { Context, Markup, Telegraf, TelegramError } from 'telegraf';
 import { translator, userLang } from '../i18n/i18n';
 import { PrismaService } from '../prisma/prisma.service';
 import { SupportService } from '../support/support.service';
+import { LOGIN_START_PREFIX, WebLoginService } from '../auth/web-login.service';
 
 /** Пауза перед повтором, если Telegram недоступен при запуске. */
 const LAUNCH_RETRY_MS = 10_000;
@@ -37,6 +38,7 @@ export class StartUpdate
     @InjectBot() private readonly bot: Telegraf<Context>,
     private readonly support: SupportService,
     private readonly prisma: PrismaService,
+    private readonly webLogin: WebLoginService,
     config: ConfigService,
   ) {
     this.webAppUrl = config.get<string>('WEBAPP_URL')!.replace(/\/$/, '');
@@ -124,6 +126,21 @@ export class StartUpdate
   async onStart(@Ctx() ctx: Context) {
     if (await this.silenced(ctx)) return;
     const t = await this.t(ctx);
+    // ссылка входа на сайт: код — тому, кто её открыл (WebLoginService)
+    const payload = 'payload' in ctx ? String(ctx.payload) : '';
+    if (
+      payload.startsWith(LOGIN_START_PREFIX) &&
+      ctx.chat?.type === 'private'
+    ) {
+      const code = await this.webLogin.issueCode(
+        payload.slice(LOGIN_START_PREFIX.length),
+        ctx.from!,
+      );
+      await ctx.reply(
+        code ? t('bot.loginCode', { code }) : t('bot.loginExpired'),
+      );
+      return;
+    }
     await ctx.reply(
       t('bot.intro'),
       Markup.inlineKeyboard([

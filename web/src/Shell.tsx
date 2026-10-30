@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Link,
@@ -68,6 +68,17 @@ export function Shell() {
   const [menuOpen, setMenuOpen] = useState(false);
   // перешли в другой раздел — меню закрываем
   useEffect(() => setMenuOpen(false), [pathname]);
+  // открыли меню — фокус на первый пункт: с клавиатуры и в читалке экрана сразу внутри меню
+  const menuRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (menuOpen)
+      menuRef.current?.querySelector<HTMLElement>('a, button')?.focus();
+  }, [menuOpen]);
+  function closeMenu() {
+    setMenuOpen(false);
+    menuButtonRef.current?.focus();
+  }
 
   const items = me.isModerator
     ? MOD_NAV
@@ -96,6 +107,7 @@ export function Shell() {
         <span className={s.barTitle}>{section}</span>
         <button
           type="button"
+          ref={menuButtonRef}
           className={s.menuButton}
           aria-expanded={menuOpen}
           aria-controls="site-menu"
@@ -127,8 +139,20 @@ export function Shell() {
       )}
       <aside
         id="site-menu"
+        ref={menuRef}
         className={`${s.nav} ${menuOpen ? s.navOpen : ''}`}
-        onKeyDown={(e) => e.key === 'Escape' && setMenuOpen(false)}
+        onKeyDown={(e) => menuOpen && e.key === 'Escape' && closeMenu()}
+        // Tab увёл фокус из меню на страницу под затемнением — меню закрываем
+        onBlur={(e) => {
+          const to = e.relatedTarget as Node | null;
+          if (
+            menuOpen &&
+            to &&
+            !menuRef.current?.contains(to) &&
+            to !== menuButtonRef.current
+          )
+            setMenuOpen(false);
+        }}
         // нажали раздел, где уже находимся, — адрес тот же, закрываем сами
         onClick={(e) =>
           (e.target as HTMLElement).closest('a') && setMenuOpen(false)

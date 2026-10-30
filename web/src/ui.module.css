@@ -245,6 +245,8 @@
 
 .table small {
   display: block;
+  /* <small> сам уменьшает текст до 11,7 px — мельче, чем читается */
+  font-size: 13px;
   color: var(--hint);
   font-weight: 500;
 }
@@ -421,7 +423,9 @@
 /* Редкое действие (жалоба): мелко и серым, не спорит с главным */
 .quiet-link {
   align-self: flex-start;
-  padding: 0;
+  /* текст мелкий, а нажимать — пальцем: область 44 px, раскладка не меняется */
+  padding: 13px 0;
+  margin: -13px 0;
   border: none;
   background: none;
   color: var(--hint);

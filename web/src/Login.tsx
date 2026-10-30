@@ -1,6 +1,13 @@
-import { useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchWebConfig, login, type TelegramAuth } from './api';
+import {
+  codeLogin,
+  errorText,
+  fetchWebConfig,
+  login,
+  startCodeLogin,
+  type TelegramAuth,
+} from './api';
 import s from './Login.module.css';
 
 declare global {
@@ -29,35 +36,83 @@ function loadTelegramLogin(): Promise<void> {
   });
 }
 
-/** Вход: Telegram подтверждает его в своём окне, бэкенд проверяет подпись и ставит cookie сессии. */
+const TG_ICON = (
+  <svg
+    width="22"
+    height="22"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M21 4L3 11l6 2 2 6 3-4 5 4z" />
+    <path d="M9 13l8-6" />
+  </svg>
+);
+
+/**
+ * Вход. Основной — кодом из бота: кнопка открывает бота по одноразовой ссылке, бот присылает код,
+ * его вводят здесь (WebLoginService на бэкенде) — без окна Telegram, где он просит номер телефона.
+ * Запасной — то самое окно (Telegram Login Widget): «Войти по номеру телефона».
+ */
 export function Login({ onLogin }: { onLogin: () => void }) {
   const { t, i18n } = useTranslation();
   const [botId, setBotId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
-  // окно Telegram открыто — ждём подтверждения; закрыли окно — снова обычная кнопка
-  const [waiting, setWaiting] = useState(false);
+  const [error, setError] = useState('');
+  // ссылка на бота получена — ждём код из Telegram
+  const [pending, setPending] = useState<{ token: string; link: string }>();
+  const [code, setCode] = useState('');
 
   useEffect(() => {
     Promise.all([fetchWebConfig(), loadTelegramLogin()]).then(
       ([config]) => setBotId(config.botId),
-      () => setFailed(true),
+      () => {}, // без виджета останется вход кодом
     );
   }, []);
 
-  function start() {
+  async function startCode() {
+    setError('');
+    // окно — прямо из нажатия (иначе браузер его заблокирует), адрес — когда придёт ссылка
+    const tab = window.open('', '_blank');
+    try {
+      const res = await startCodeLogin();
+      setPending(res);
+      setCode('');
+      if (tab) tab.location.href = res.link;
+    } catch (err) {
+      tab?.close();
+      setError(errorText(err, t('web.loginFailed')));
+    }
+  }
+
+  async function sendCode(e: FormEvent) {
+    e.preventDefault();
+    if (!pending) return;
+    setBusy(true);
+    setError('');
+    try {
+      await codeLogin(pending.token, code);
+      onLogin();
+    } catch (err) {
+      setError(errorText(err, t('web.loginFailed')));
+      setBusy(false);
+    }
+  }
+
+  function byPhone() {
     if (botId === null || !window.Telegram) return;
-    setFailed(false);
-    setWaiting(true);
+    setError('');
     window.Telegram.Login.auth(
       { bot_id: botId, lang: i18n.language },
       (data) => {
-        setWaiting(false);
         if (!data) return; // окно закрыли
         setBusy(true);
         login(data).then(onLogin, () => {
           setBusy(false);
-          setFailed(true);
+          setError(t('web.loginFailed'));
         });
       },
     );
@@ -75,45 +130,58 @@ export function Login({ onLogin }: { onLogin: () => void }) {
       <section className={s.side}>
         <div className={s.card}>
           <h2>{t('web.loginTitle')}</h2>
-          <button
-            type="button"
-            className={`${s.telegram} ${waiting ? s.waiting : ''}`}
-            onClick={start}
-            disabled={botId === null || busy}
-          >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M21 4L3 11l6 2 2 6 3-4 5 4z" />
-              <path d="M9 13l8-6" />
-            </svg>
-            {busy
-              ? t('common.loading')
-              : waiting
-                ? t('web.loginWaiting')
-                : t('web.loginButton')}
-          </button>
-          {/* что будет в окне Telegram: номер он спрашивает, только если браузер ещё не входил */}
+          {pending ? (
+            <form className={s.codeForm} onSubmit={sendCode}>
+              <label htmlFor="login-code">{t('web.loginCodeLabel')}</label>
+              <input
+                id="login-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={4}
+                placeholder="••••"
+                autoFocus
+              />
+              <button
+                type="submit"
+                className={s.telegram}
+                disabled={busy || code.length !== 4}
+              >
+                {busy ? t('common.loading') : t('web.loginSubmit')}
+              </button>
+              <a
+                href={pending.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={s.secondary}
+              >
+                {t('web.loginOpenTelegram')}
+              </a>
+            </form>
+          ) : (
+            <button type="button" className={s.telegram} onClick={startCode}>
+              {TG_ICON}
+              {t('web.loginButton')}
+            </button>
+          )}
           <ol className={s.steps}>
             <li>{t('web.loginStep1')}</li>
             <li>{t('web.loginStep2')}</li>
             <li>{t('web.loginStep3')}</li>
           </ol>
-          {waiting && <p className={s.popupHint}>{t('web.loginPopupHint')}</p>}
-          {failed && (
+          {error && (
             <p className={s.error} role="alert">
-              {t('web.loginFailed')}
+              {error}
             </p>
           )}
           <span className={s.note}>
-            {t('web.loginText')} {t('web.loginNote')}
+            {t('web.loginText')}{' '}
+            {botId !== null && (
+              <button type="button" className={s.byPhone} onClick={byPhone}>
+                {t('web.loginByPhone')}
+              </button>
+            )}
           </span>
         </div>
         {/* на телефоне описание — под входом: кто пришёл войти, видит кнопку сразу */}
