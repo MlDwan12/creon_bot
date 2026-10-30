@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
+import { parseSupportAbout } from '@fixum/shared';
 import { ApiError, sendSupportMessage } from '../api';
 import EmptyState from '../components/EmptyState';
 import s from './SupportView.module.css';
@@ -8,8 +9,8 @@ import s from './SupportView.module.css';
 export default function SupportView() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  // /support?about=… — «Вопрос по заказу #12»: тема уходит менеджеру вместе с текстом.
-  const about = useSearchParams()[0].get('about') ?? '';
+  // /support?order=12 или ?topic=payout — тема; менеджеру её подпишет сервер
+  const about = parseSupportAbout(useSearchParams()[0]);
 
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -20,7 +21,7 @@ export default function SupportView() {
     setBusy(true);
     setError('');
     try {
-      await sendSupportMessage(about ? `${about}\n\n${text}` : text);
+      await sendSupportMessage(text, about);
       setSent(true);
     } catch (err) {
       setError(
@@ -67,7 +68,13 @@ export default function SupportView() {
             <h1>{t('support.title')}</h1>
             <span className={s.hint}>{t('support.hint')}</span>
           </header>
-          {about && <p className={s.topic}>{about}</p>}
+          {about && (
+            <p className={s.topic}>
+              {'orderId' in about
+                ? t('order.supportAbout', { id: about.orderId })
+                : t('balance.supportAbout')}
+            </p>
+          )}
           <label className="field-label">
             <span>{t('support.label')}</span>
             <textarea
