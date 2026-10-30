@@ -33,6 +33,9 @@ describe('videoKey', () => {
     ['https://vk.com/clip-1_2', 'vk:-1_2'],
     ['https://x.com/anya/status/1789?s=20', 'x:1789'],
     ['https://twitter.com/Other/status/1789/video/1', 'x:1789'],
+    // тот же id и в адресе, и в параметре — можно
+    ['https://youtu.be/dQw4w9WgXcQ?v=dQw4w9WgXcQ', 'youtube:dQw4w9WgXcQ'],
+    ['https://vk.com/video-1_2?z=video-1_2%2Fall', 'vk:-1_2'],
     // ?v= в ссылке другой площадки не занимает чужой ролик YouTube
     ['https://www.tiktok.com/@x/video/12345?v=dQw4w9WgXcQ', 'tiktok:12345'],
     // старые ссылки без id — по домену и пути
@@ -49,6 +52,19 @@ describe('videoIdKey', () => {
     'https://evilyoutu.be/dQw4w9WgXcQ',
     'https://example.com/watch?v=dQw4w9WgXcQ',
     'https://x.com/anya',
+    // в адресе один ролик, в параметре другой — площадка покажет не тот, что посчитали бы
+    'https://www.youtube.com/shorts/jNQXAC9IVRw?v=dQw4w9WgXcQ',
+    'https://www.youtube.com/embed/jNQXAC9IVRw?v=dQw4w9WgXcQ',
+    'https://youtu.be/jNQXAC9IVRw?v=dQw4w9WgXcQ',
+    'https://vk.com/video1_2?z=video3_4',
+    // переходы на чужой сайт через площадку
+    'https://www.youtube.com/redirect?q=https://example.org&v=dQw4w9WgXcQ',
+    'https://vk.com/away.php?to=https://example.org&z=video1_2',
+    // нули впереди: тот же пост под другим ключом
+    'https://x.com/jack/status/020',
+    'https://www.tiktok.com/@anya/video/07312345678901234567',
+    'https://vk.com/video1_02',
+    'https://vk.com/video-01_2',
   ])('%s — не ролик', (url) => {
     expect(videoIdKey(url)).toBeNull();
   });
