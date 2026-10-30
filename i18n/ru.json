@@ -914,6 +914,8 @@
     "loginCodeLabel": "Код из Telegram",
     "loginSubmit": "Войти",
     "loginOpenTelegram": "Открыть Telegram ещё раз",
-    "loginByPhone": "Войти по номеру телефона"
+    "loginByPhone": "Войти по номеру телефона",
+    "loginQr": "Telegram на телефоне? Наведите камеру на код — бот пришлёт цифры туда, введите их здесь.",
+    "loginQrAlt": "QR-код: ссылка на бота Fixum для входа"
   }
 }
