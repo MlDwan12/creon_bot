@@ -469,10 +469,7 @@ export default function ReviewVideosView() {
 
       <SupportLink
         label={t('order.supportLabel', { id: data.order.id })}
-        about={t('order.supportAbout', {
-          id: data.order.id,
-          title: data.order.title,
-        })}
+        about={{ orderId: data.order.id }}
       />
     </main>
   );

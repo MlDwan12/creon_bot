@@ -375,7 +375,7 @@
     ],
     "report": "Report this order",
     "supportLabel": "Question about order #{{id}} — message a manager",
-    "supportAbout": "Question about order #{{id}} “{{title}}”",
+    "supportAbout": "Question about order #{{id}}",
     "claimed": "You've taken the order. When the video is ready, submit it in “My videos”.",
     "own": "This is your order — only others can apply to it.",
     "mySubmissions": "My videos",

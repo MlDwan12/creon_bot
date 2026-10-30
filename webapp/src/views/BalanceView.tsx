@@ -210,7 +210,7 @@ export default function BalanceView() {
           <p className={s.hint}>{t('balance.perVideo')}</p>
           <SupportLink
             label={t('balance.supportLabel')}
-            about={t('balance.supportAbout')}
+            about={{ topic: 'payout' }}
           />
         </>
       )}

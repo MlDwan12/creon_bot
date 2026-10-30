@@ -151,12 +151,31 @@ export class SupportService implements OnModuleInit {
     return 'sent';
   }
 
-  /** Сообщение из формы в мини-аппе → в тему пользователя, с пометкой. */
-  async fromApp(user: User, text: string) {
+  /**
+   * Сообщение из формы в мини-аппе или на сайте → в тему пользователя, с пометкой. Тему обращения
+   * (заказ или выплата) подписываем сами — выше текста пользователя, чтобы их не путали.
+   */
+  async fromApp(
+    user: User,
+    text: string,
+    about: { orderId: number | null; payout: boolean } = {
+      orderId: null,
+      payout: false,
+    },
+  ) {
+    let subject = about.payout ? 'Вопрос по выплате' : '';
+    if (about.orderId) {
+      const order = await this.prisma.order.findUnique({
+        where: { id: about.orderId },
+        select: { title: true },
+      });
+      if (order)
+        subject = `Вопрос по заказу #${about.orderId} «${escapeHtml(order.title)}»`;
+    }
     await this.toTopic(user, (thread) =>
       this.bot.telegram.sendMessage(
         this.chatId!,
-        `📱 <i>из приложения</i>\n\n${escapeHtml(text)}`,
+        `📱 <i>из приложения</i>${subject ? ` · <b>${subject}</b>` : ''}\n\n${escapeHtml(text)}`,
         { ...html(), message_thread_id: thread },
       ),
     );
