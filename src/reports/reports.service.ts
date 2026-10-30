@@ -319,7 +319,12 @@ export class ReportsService {
         case ReportTarget.REVIEW:
           await tx.submission.updateMany({
             where: { id: group.targetId },
-            data: { rating: null, review: null, reviewQueuedAt: null },
+            data: {
+              rating: null,
+              review: null,
+              reviewQueuedAt: null,
+              reviewRemovedAt: new Date(),
+            },
           });
           break;
         case ReportTarget.PROFILE:

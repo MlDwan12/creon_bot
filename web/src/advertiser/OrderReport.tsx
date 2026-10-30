@@ -416,8 +416,8 @@ function VideoItem({
           </div>
         </fieldset>
       ) : (
-        // оценку не меняют (бэкенд не даст) — кнопка только у неоценённых
-        !item.rating && (
+        // оценку не меняют и снятую не ставят заново (бэкенд не даст)
+        item.rateable && (
           <div className={s.buttons}>
             <button
               type="button"

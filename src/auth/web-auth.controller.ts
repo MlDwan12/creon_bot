@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
+  Headers,
   HttpCode,
   Post,
   Res,
@@ -55,8 +57,12 @@ export class WebAuthController {
   @HttpCode(204)
   async login(
     @Body() body: unknown,
+    @Headers('x-fixum-web') web: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ) {
+    // тот же заголовок, что для cookie (InitDataGuard): без него чужая страница отправила бы форму
+    // входа с чужими данными виджета, и жертва работала бы под аккаунтом того, кто её подсунул
+    if (web !== '1') throw new ForbiddenException();
     const token = this.config.get<string>('BOT_TOKEN')!;
     const login = validateLoginWidget(body, token, LOGIN_MAX_AGE_SECONDS);
     if (!login) throw new UnauthorizedException();

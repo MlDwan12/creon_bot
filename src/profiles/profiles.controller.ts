@@ -116,6 +116,7 @@ export class ProfilesController {
       id,
       moderator || id === req.user.id,
       req.user.id,
+      moderator,
     );
     // причина блокировки — внутреннее дело модерации
     return moderator ? profile : { ...profile, ban: null };

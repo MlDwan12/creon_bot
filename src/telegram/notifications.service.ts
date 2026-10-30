@@ -60,6 +60,8 @@ const SEND_TIMEOUT_MS = 10_000;
 const MAX_ATTEMPTS = 5;
 /** Рассылки (новый заказ всем) — после обычных уведомлений. */
 const PRIORITY_BROADCAST = 1;
+/** Экран заказа в рассылке о новом заказе — по нему воркер узнаёт заказ. */
+const ORDER_PATH = '/orders/';
 
 /**
  * Все уведомления в чат бота о событиях из Mini App. К каждому — кнопка, открывающая нужный экран.
@@ -157,7 +159,7 @@ export class NotificationsService
       });
       this.prisma.$executeRaw`
         INSERT INTO "Notification" ("chatId", "text", "path", "priority", "lang")
-        SELECT "telegramId", ${text}, ${`/orders/${order.id}`}, ${PRIORITY_BROADCAST}, ${lang}
+        SELECT "telegramId", ${text}, ${`${ORDER_PATH}${order.id}`}, ${PRIORITY_BROADCAST}, ${lang}
         FROM "User"
         WHERE id <> ${order.advertiserId} AND "bannedAt" IS NULL AND "notifyNewOrders"
           AND ${lang === 'en' ? isEn : Prisma.sql`NOT ${isEn}`} ${notModerator}`.catch(
@@ -656,10 +658,26 @@ export class NotificationsService
         })
       ).map((u) => u.telegramId),
     );
+    // Рассылка о новом заказе ждёт в очереди: заказ могли снять, закрыть или отправить на правку —
+    // о таком не пишем (и по старому названию тоже), проверяем тоже в момент отправки.
+    const announced = batch
+      .filter((n) => n.priority === PRIORITY_BROADCAST)
+      .map((n) => Number(n.path.slice(ORDER_PATH.length)));
+    const open = new Set(
+      announced.length
+        ? (
+            await this.prisma.order.findMany({
+              where: { id: { in: announced }, status: OrderStatus.OPEN },
+              select: { id: true },
+            })
+          ).map((o) => `${ORDER_PATH}${o.id}`)
+        : [],
+    );
     for (const n of batch) {
       // остановка: недосланное из пачки уйдёт после рестарта, когда истечёт «аренда»
       if (this.stopping) break;
-      if (!banned.has(n.chatId)) await this.deliver(n);
+      const stale = n.priority === PRIORITY_BROADCAST && !open.has(n.path);
+      if (!banned.has(n.chatId) && !stale) await this.deliver(n);
       else await this.prisma.notification.delete({ where: { id: n.id } });
       await sleep(SEND_GAP_MS);
     }

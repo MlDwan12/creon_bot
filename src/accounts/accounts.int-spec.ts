@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'node:crypto';
 import * as metrics from '../monitoring/metrics';
@@ -100,6 +101,24 @@ afterEach(() => jest.restoreAllMocks());
 afterAll(() => prisma.$disconnect());
 
 describe('подключение аккаунта', () => {
+  it('вход на площадке начат до бана — подключение после бана не сохраняется', async () => {
+    const creator = await user();
+    const start = new URL(await accounts.start(creator.id, 'TIKTOK'));
+    replies(tiktokTokens(1), tiktokName('Аня'));
+    const { code } = await accounts.complete('TIKTOK', {
+      code: 'c',
+      state: start.searchParams.get('state')!,
+    });
+    await prisma.user.update({
+      where: { id: creator.id },
+      data: { bannedAt: new Date() },
+    });
+    await expect(accounts.confirm('TIKTOK', code)).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(await prisma.socialAccount.count()).toBe(0);
+  });
+
   it('пересланная ссылка входа: без «Подключить» на странице возврата аккаунт не привязывается', async () => {
     const attacker = await user();
     const start = new URL(await accounts.start(attacker.id, 'TIKTOK'));

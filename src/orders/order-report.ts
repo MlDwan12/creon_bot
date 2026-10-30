@@ -83,6 +83,8 @@ export function buildOrderReport(
       likes: s.likes,
       clicks: order.targetUrl ? s.clicks : null,
       rating: s.rating,
+      // оценку ставят один раз; снятую модератором — не ставят заново
+      rateable: s.rating === null && !s.reviewRemovedAt,
       approvedAt: s.decidedAt,
     };
   });

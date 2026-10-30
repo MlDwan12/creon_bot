@@ -157,6 +157,10 @@ export class BansService {
         throw new ForbiddenException('Пользователь уже заблокирован');
       }
 
+      // Заказы автора — под блокировку до выборки списков: одобрение или правка, которые идут
+      // сейчас под lockOrder, закончатся раньше, и списки увидят их итог (иначе заказ, одобренный
+      // во время бана, остался бы открытым). По возрастанию id — как везде, без взаимных ожиданий.
+      await tx.$queryRaw`SELECT 1 FROM "Order" WHERE "advertiserId" = ${userId} ORDER BY id FOR UPDATE`;
       const open = await tx.order.findMany({
         where: { advertiserId: userId, status: OrderStatus.OPEN },
         select: { id: true },
