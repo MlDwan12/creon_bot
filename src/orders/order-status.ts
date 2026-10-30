@@ -119,6 +119,15 @@ export function submittedTerms(
     : null;
 }
 
+/** Заказ требовал ссылку в шапке профиля — по условиям, на которых сдан ролик. */
+export function needsBioLink(
+  s: Pick<Submission, 'submittedAt' | 'terms'> & {
+    order: Pick<Order, 'editedAt' | 'prevTerms' | 'linkInBio'>;
+  },
+) {
+  return submittedTerms(s.order, s)?.linkInBio ?? s.order.linkInBio;
+}
+
 /**
  * Порог и ставка, по которым проверяют и оплачивают ролик — те, что были при сдаче (submittedTerms).
  * В старых снимках ставки нет — тогда текущая.

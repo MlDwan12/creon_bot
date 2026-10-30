@@ -39,6 +39,7 @@ import {
   fundOf,
   isFrozen,
   lockOrder,
+  needsBioLink,
   syncFundBusy,
   termsOf,
   videoTerms,
@@ -469,15 +470,17 @@ export class SubmissionsService implements OnApplicationBootstrap {
   /**
    * Пример ролика из заказа по номеру с 1 (VideoLinkController). Только у заказов, которые модератор
    * хоть раз одобрил: примеры заказа на первой проверке никому, кроме модератора, не видны.
+   * Правка пишет новые примеры сразу — пока её не одобрили (и после снятия), не ведём по ним, как в click.
    * null — нет такого заказа или примера.
    */
   async exampleUrl(orderId: number, n: number) {
     if (!isDbId(orderId)) return null;
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, approvedBudgetMinor: { not: null } },
-      select: { exampleUrls: true },
+      select: { exampleUrls: true, status: true },
     });
-    return order?.exampleUrls[n - 1] ?? null;
+    if (!order || !titleVisibleToCreators(order)) return null;
+    return order.exampleUrls[n - 1] ?? null;
   }
 
   async click(trackCode: string) {
@@ -773,6 +776,11 @@ export class SubmissionsService implements OnApplicationBootstrap {
         throw new ForbiddenException(
           `Итог фиксируется через ${HOLD_DAYS} дн. после одобрения`,
         );
+      // ссылку в шапке профиля проверяет только модератор: без неё деньги к выводу не выпускаем
+      if (automatic && needsBioLink(current))
+        throw new ForbiddenException(
+          'Ссылку в шапке профиля проверяет модератор',
+        );
       const { count } = await tx.submission.updateMany({
         where: {
           id: submissionId,
@@ -815,6 +823,8 @@ export class SubmissionsService implements OnApplicationBootstrap {
         id: submissionId,
         status: SubmissionStatus.MODERATOR_APPROVED,
         rating: null,
+        // снятую модератором оценку не ставят заново: иначе его решение обходилось бы повтором
+        reviewRemovedAt: null,
       },
       data: {
         ...feedback,
@@ -851,7 +861,12 @@ export class SubmissionsService implements OnApplicationBootstrap {
   async removeReview(submissionId: number) {
     const { count } = await this.prisma.submission.updateMany({
       where: { id: submissionId, rating: { not: null } },
-      data: { rating: null, review: null, reviewQueuedAt: null },
+      data: {
+        rating: null,
+        review: null,
+        reviewQueuedAt: null,
+        reviewRemovedAt: new Date(),
+      },
     });
     if (count === 0) throw new NotFoundException('Отзыв не найден');
   }

@@ -362,6 +362,7 @@ export class OrdersService {
           orderId,
           status: SubmissionStatus.MODERATOR_APPROVED,
           rating: null,
+          reviewRemovedAt: null,
         },
         _count: true,
       }),
@@ -762,6 +763,15 @@ export class OrdersService {
     await this.prisma.$transaction(async (tx) => {
       // та же блокировка, что у начислений в SubmissionsService — начисленное не вырастет до записи
       await lockOrder(tx, orderId);
+      // бан закрывает заказы автора под той же блокировкой; заказ, созданный в момент бана, — сюда
+      const author = await tx.user.findUnique({
+        where: { id: order.advertiserId },
+        select: { bannedAt: true },
+      });
+      if (author?.bannedAt)
+        throw new ForbiddenException(
+          'Автор заказа заблокирован — отклоните заказ',
+        );
       const accrued =
         (await spentByOrder(tx, [orderId], ACCRUED)).get(orderId) ?? 0;
       const exhausted = budgetState({ ...order, cpmMinor }, accrued).exhausted;

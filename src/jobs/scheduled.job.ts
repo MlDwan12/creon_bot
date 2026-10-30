@@ -12,6 +12,7 @@ import { acquireLease } from './job-lease';
 import { NotificationsService } from '../telegram/notifications.service';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
+import { needsBioLink } from '../orders/order-status';
 import { ViewCounterService } from '../submissions/view-counter.service';
 import { PayoutsService } from '../payouts/payouts.service';
 
@@ -125,10 +126,14 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
    * креатор подключил аккаунт), — без модератора.
    * API не ответило — ролик остаётся в очереди «Итоги», итог введёт модератор. Ролики заблокированного
    * креатора — тоже модератору: бан бывает за накрутку, деньги к выводу выпускать решает человек.
+   * И ролики по заказам со ссылкой в шапке профиля: есть ли она там, API не скажет.
    */
   private async finalizeAutomatic() {
     const due = (await this.submissionsService.listHoldDue()).filter(
-      (s) => !s.creator.bannedAt && this.viewCounter.isAutomatic(s.videoUrl),
+      (s) =>
+        !s.creator.bannedAt &&
+        !needsBioLink(s) &&
+        this.viewCounter.isAutomatic(s.videoUrl),
     );
     if (!due.length) return;
     const counted = await this.viewCounter.fetchViews(

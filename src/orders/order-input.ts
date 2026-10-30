@@ -204,9 +204,18 @@ function optionalUrl(value: unknown, what: string, instead: string) {
   if (url === undefined) return undefined;
   if (!VIDEO_URL_RE.test(url) || url.length > MAX_URL_LENGTH)
     throw new BadRequestException(tr('errors.urlScheme', { what }));
-  if (findExactContacts(url).length)
+  // и по домену, как его поймёт браузер: «t。me» в адресе — это t.me
+  if (findExactContacts(url).length || findExactContacts(hostOf(url)).length)
     throw new BadRequestException(tr('errors.urlIsContact', { instead }));
   return url;
+}
+
+function hostOf(url: string) {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
 }
 
 /** Требования к ролику из заказа — для ответов API, где поля перечислены явно. */
