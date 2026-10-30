@@ -196,7 +196,7 @@ export function UserPage() {
           {profile.ban ? (
             <>
               <p className={s.dangerNote}>
-                Заблокирован{profile.ban.final && ' без права обжалования'}{' '}
+                {profile.ban.final ? 'Бан без обжалования' : 'Бан'} с{' '}
                 {formatDate(profile.ban.at)}
                 {profile.ban.reason && `: ${profile.ban.reason}`}
               </p>

@@ -171,19 +171,19 @@ export function MyCabinet() {
                       className={m === me ? s.mine : undefined}
                     >
                       <th scope="row">{m.label}</th>
-                      <td className={s.num}>
+                      <td className={s.num} data-label="Заказы">
                         {c.ORDER_APPROVE + c.ORDER_REJECT}
                       </td>
-                      <td className={s.num}>
+                      <td className={s.num} data-label="Ролики">
                         {c.VIDEO_APPROVE +
                           c.VIDEO_REJECT +
                           c.HOLD_FINALIZE +
                           c.PUBLICATION_DELETED}
                       </td>
-                      <td className={s.num}>
+                      <td className={s.num} data-label="Жалобы">
                         {c.REPORT_ACTION + c.REPORT_DISMISS}
                       </td>
-                      <td className={s.num}>
+                      <td className={s.num} data-label="Выплаты">
                         {c.PAYOUT_PAID + c.PAYOUT_REJECT}
                       </td>
                     </tr>

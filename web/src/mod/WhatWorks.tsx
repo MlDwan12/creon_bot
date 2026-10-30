@@ -65,6 +65,8 @@ const ACTIVITIES: {
   { key: 'none', label: 'Только смотрели' },
 ];
 const CABINETS = ['CREATOR', 'ADVERTISER', null] as const;
+/** Заголовки колонок аудитории — в том же порядке, что CABINETS; на телефоне — подписи в карточках. */
+const AUDIENCE_HEADS = ['Креатор', 'Заказчик', 'Не выбрал'];
 
 /** «Что работает» — как в мини-аппе (webapp/src/views/mod/ModWhatWorksView.tsx). */
 export function WhatWorks() {
@@ -171,10 +173,18 @@ export function WhatWorks() {
                     {label(slice, r.key)}
                     {!enough(r) && <small>мало данных</small>}
                   </th>
-                  <td className={s.num}>{r.orders}</td>
-                  <td className={s.num}>{percent(r.takeRate)}</td>
-                  <td className={s.num}>{views(r.avgViews)}</td>
-                  <td className={s.num}>{percent(r.approveRate)}</td>
+                  <td className={s.num} data-label="Заказов">
+                    {r.orders}
+                  </td>
+                  <td className={s.num} data-label="Берут">
+                    {percent(r.takeRate)}
+                  </td>
+                  <td className={s.num} data-label="Просмотры">
+                    {views(r.avgViews)}
+                  </td>
+                  <td className={s.num} data-label="Одобряют">
+                    {percent(r.approveRate)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -194,17 +204,23 @@ export function WhatWorks() {
           <thead>
             <tr>
               <th></th>
-              <th className={s.num}>Креатор</th>
-              <th className={s.num}>Заказчик</th>
-              <th className={s.num}>Не выбрал</th>
+              {AUDIENCE_HEADS.map((h) => (
+                <th key={h} className={s.num}>
+                  {h}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {ACTIVITIES.map((a) => (
               <tr key={a.key}>
                 <th scope="row">{a.label}</th>
-                {CABINETS.map((c) => (
-                  <td key={String(c)} className={s.num}>
+                {CABINETS.map((c, i) => (
+                  <td
+                    key={String(c)}
+                    className={s.num}
+                    data-label={AUDIENCE_HEADS[i]}
+                  >
                     {audienceCount(a.key, c)}
                   </td>
                 ))}

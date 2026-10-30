@@ -1,5 +1,5 @@
 .page {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-wrap: wrap;
 }
@@ -89,6 +89,61 @@
   cursor: default;
 }
 
+/* окно Telegram открыто — кнопка спокойнее, но нажать ещё раз можно */
+.waiting {
+  background: #e3f1f9;
+  color: #135d82;
+}
+
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.steps li {
+  counter-increment: step;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.steps li::before {
+  content: counter(step);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--fill);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.popup-hint {
+  margin: 0;
+  font-size: 14px;
+}
+
+.lead {
+  margin: 0;
+  max-width: 420px;
+  color: var(--hint);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.narrow-only {
+  display: none;
+}
+
 .error {
   color: var(--danger);
 }
@@ -122,10 +177,32 @@
 }
 
 @media (max-width: 600px) {
+  /* телефон: тёмный блок — только логотип и заголовок, вход — на первом экране */
   .hero {
-    padding: 32px 16px;
+    /* во всю ширину и не выше содержимого (flex: none растянул бы блок по заголовку в одну строку) */
+    flex: 1 1 100%;
+    gap: 16px;
+    padding: 20px 16px 24px;
+  }
+  .pitch h1 {
+    font-size: 24px;
+    letter-spacing: -0.8px;
+  }
+  .wide-only {
+    display: none;
+  }
+  .narrow-only {
+    display: block;
+  }
+  .side {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 16px;
+    padding: 16px;
   }
   .card {
-    padding: 24px;
+    padding: 20px;
+    gap: 16px;
   }
 }
