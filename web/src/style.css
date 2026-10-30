@@ -85,10 +85,17 @@ body {
   color: var(--text);
   font-family: var(--font-text);
   -webkit-font-smoothing: antialiased;
+  /* ссылки, @ники и кошельки без пробелов переносятся, а не растягивают страницу вбок */
+  overflow-wrap: anywhere;
 }
 
 a {
   color: var(--link);
+}
+
+/* последняя строка абзаца — не из одного слова */
+p {
+  text-wrap: pretty;
 }
 
 :focus-visible {

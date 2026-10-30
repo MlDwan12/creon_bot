@@ -250,6 +250,8 @@ export interface OrderReport {
     likes: number | null;
     clicks: number | null;
     rating: number | null;
+    /** Можно оценить: ещё не оценён и модератор не снимал оценку. */
+    rateable: boolean;
     approvedAt: string | null;
   }[];
 }

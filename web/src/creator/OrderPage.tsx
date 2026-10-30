@@ -10,6 +10,7 @@ import {
   PLATFORM_NAMES,
   safeUrl,
 } from '../api';
+import { supportSearch } from '@fixum/shared';
 import { Complaint } from '../components/Complaint';
 import { PlatformIcon } from '../components/PlatformIcon';
 import {
@@ -301,7 +302,7 @@ export function OrderPage() {
             </button>
           )}
           <Link
-            to={`/support?${new URLSearchParams({ about: t('order.supportAbout', { id: order.id, title: order.title }) })}`}
+            to={`/support${supportSearch({ orderId: order.id })}`}
             className={s.small}
           >
             {t('order.supportLabel', { id: order.id })}

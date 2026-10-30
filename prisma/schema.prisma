@@ -49,6 +49,7 @@ model User {
   payouts        Payout[]
   socialAccounts SocialAccount[]
   oauthPendings  OAuthPending[]
+  webLogins      WebLogin[]
 
   /// Ответ поддержки в теме → чей это пользователь (SupportService.fromSupport).
   @@index([supportChatId, supportTopicId])
@@ -233,6 +234,8 @@ model Submission {
   /// Отзыв с текстом ждёт модератора с этого момента; пока не null — в профиле креатора его нет.
   /// Оценка без текста публикуется сразу (src/submissions/submissions.service.ts, rate).
   reviewQueuedAt     DateTime?
+  /// Модератор снял оценку или отзыв — заново оценить ролик нельзя (src/submissions/submissions.service.ts, rate).
+  reviewRemovedAt    DateTime?
   /// Рекламодатель разрешил показывать видео в портфолио креатора.
   portfolioAllowed   Boolean          @default(false)
   createdAt          DateTime         @default(now())
@@ -463,4 +466,23 @@ model ModeratorAction {
   @@index([moderatorId, createdAt])
   /// Таблица команды и выгрузка: все действия за период.
   @@index([createdAt])
+}
+
+/// Вход на сайт кодом из бота, без окна Telegram с номером телефона (src/auth/web-login.service.ts):
+/// сайт получает ссылку t.me/<бот>?start=login_<токен>, бот присылает тому, кто её открыл, код из
+/// 4 цифр, его вводят на сайте. Храним только хеши: по базе войти нельзя.
+model WebLogin {
+  /// sha256 токена из ссылки — токен знает только страница, начавшая вход.
+  tokenHash String   @id
+  /// Кто открыл ссылку в Telegram; null — ещё никто, кода нет.
+  userId    Int?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// sha256 кода вместе с токеном.
+  codeHash  String?
+  /// Неверных кодов: после 5 вход по этой ссылке закрыт.
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
 }

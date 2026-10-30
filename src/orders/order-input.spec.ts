@@ -241,6 +241,7 @@ describe('parseOrderInput', () => {
     ['референс — телеграм', { referenceUrl: 'https://t.me/brand' }],
     ['товар не ссылка', { targetUrl: 'наш сайт' }],
     ['товар — телеграм', { targetUrl: 'https://t.me/brand' }],
+    ['референс — телеграм с «。»', { referenceUrl: 'https://t\u3002me/brand' }],
   ])('отклоняет: %s', (_name, patch) => {
     expect(() => parseOrderInput({ ...valid, ...patch })).toThrow(
       BadRequestException,

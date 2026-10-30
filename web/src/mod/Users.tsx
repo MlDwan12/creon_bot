@@ -68,7 +68,7 @@ export function Users() {
                 <th>Креатор</th>
                 <th>Заказчик</th>
                 <th>С нами</th>
-                <th></th>
+                <th>Статус</th>
               </tr>
             </thead>
             <tbody>
@@ -78,7 +78,7 @@ export function Users() {
                     <Link to={`/mod/creators/${u.id}`}>{u.label}</Link>
                     <small>TG {u.telegramId}</small>
                   </td>
-                  <td>
+                  <td data-label="Креатор">
                     {u.creator ? (
                       <>
                         одобрено {u.creator.approved}
@@ -90,16 +90,16 @@ export function Users() {
                       '—'
                     )}
                   </td>
-                  <td>
+                  <td data-label="Заказчик">
                     {u.advertiser
                       ? `заказов ${u.advertiser.orders}, открыто ${u.advertiser.open}`
                       : '—'}
                   </td>
-                  <td>с {formatDate(u.createdAt)}</td>
-                  <td>
+                  <td data-label="С нами">с {formatDate(u.createdAt)}</td>
+                  <td data-label="Статус">
                     {u.banned && (
                       <span className={`${s.badge} ${s.danger}`}>
-                        {u.banned.final ? 'Закрыт доступ' : 'Заблокирован'}
+                        {u.banned.final ? 'Бан без обжалования' : 'Бан'}
                       </span>
                     )}
                     {u.banned?.reason && <small>{u.banned.reason}</small>}

@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router';
+import { type SupportAbout, supportSearch } from '@fixum/shared';
 import { fetchMe } from '../api';
 
 /** Ссылка «написать менеджеру» — форма в мини-аппе; `about` — тема, уйдёт вместе с сообщением. */
 export default function SupportLink({
   label,
-  about,
+  about = null,
 }: {
   label?: string;
-  about?: string;
+  about?: SupportAbout | null;
 }) {
   const { t } = useTranslation();
   // у модератора своё окно — та же форма по адресу /mod/support
@@ -28,7 +29,7 @@ export default function SupportLink({
     <Link
       to={{
         pathname: path,
-        search: about ? `?${new URLSearchParams({ about })}` : '',
+        search: supportSearch(about),
       }}
       className="quiet-link"
     >

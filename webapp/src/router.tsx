@@ -54,7 +54,7 @@ export const router = createBrowserRouter([
       { path: '/creators/:id', element: <ProfileView />, handle: back },
       // ?target=ORDER|VIDEO|REVIEW|PROFILE&id=…&title=… — одна форма на все жалобы.
       { path: '/report', element: <ReportView />, handle: back },
-      // ?about=… — тема, например «Вопрос по заказу #12»
+      // ?order=12 или ?topic=payout — тема (parseSupportAbout в packages/shared)
       { path: '/support', element: <SupportView />, handle: back },
       { path: '/my-orders', element: <MyOrdersView />, handle: tab },
       { path: '/learn', element: <LearnView />, handle: tab },

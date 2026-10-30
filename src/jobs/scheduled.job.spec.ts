@@ -7,7 +7,12 @@ import type { ViewCounterService } from '../submissions/view-counter.service';
 import { ScheduledJob } from './scheduled.job';
 
 describe('итог холда без модератора', () => {
-  it('ролики заблокированного креатора не выпускает — их решает модератор', async () => {
+  it('ролики заблокированного и по заказам со ссылкой в шапке не выпускает — их решает модератор', async () => {
+    const order = (linkInBio: boolean) => ({
+      linkInBio,
+      editedAt: null,
+      prevTerms: null,
+    });
     const due = [
       {
         id: 1,
@@ -15,6 +20,9 @@ describe('итог холда без модератора', () => {
         creatorId: 1,
         views: 1,
         creator: { bannedAt: null },
+        order: order(false),
+        terms: null,
+        submittedAt: null,
       },
       {
         id: 2,
@@ -22,6 +30,30 @@ describe('итог холда без модератора', () => {
         creatorId: 2,
         views: 1,
         creator: { bannedAt: new Date() },
+        order: order(false),
+        terms: null,
+        submittedAt: null,
+      },
+      {
+        id: 3,
+        videoUrl: 'https://youtu.be/ccccccccccc',
+        creatorId: 3,
+        views: 1,
+        creator: { bannedAt: null },
+        order: order(true),
+        terms: null,
+        submittedAt: null,
+      },
+      // ссылку убрали из заказа правкой после сдачи — ролик сдан на условиях со ссылкой
+      {
+        id: 4,
+        videoUrl: 'https://youtu.be/ddddddddddd',
+        creatorId: 4,
+        views: 1,
+        creator: { bannedAt: null },
+        order: order(false),
+        terms: { linkInBio: true },
+        submittedAt: null,
       },
     ];
     const finalizeViews = jest.fn(() => Promise.resolve({}));

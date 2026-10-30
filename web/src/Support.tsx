@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
+import { parseSupportAbout } from '@fixum/shared';
 import { errorText, sendSupportMessage } from './api';
 import s from './ui.module.css';
 
 /** Сообщение менеджеру — как в мини-аппе (webapp/src/views/SupportView.tsx); ответ придёт в чат с ботом. */
 export function Support() {
   const { t } = useTranslation();
-  // /support?about=… — «Вопрос по заказу #12»: тема уходит менеджеру вместе с текстом
-  const about = useSearchParams()[0].get('about') ?? '';
+  // /support?order=12 или ?topic=payout — тема; менеджеру её подпишет сервер
+  const about = parseSupportAbout(useSearchParams()[0]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -18,7 +19,7 @@ export function Support() {
     setBusy(true);
     setError('');
     try {
-      await sendSupportMessage(about ? `${about}\n\n${text}` : text);
+      await sendSupportMessage(text, about);
       setSent(true);
     } catch (err) {
       setError(errorText(err, t('support.sendError')));
@@ -40,7 +41,13 @@ export function Support() {
         <h1>{t('support.title')}</h1>
         <p className={s.hint}>{t('support.hint')}</p>
       </header>
-      {about && <p className={s.alert}>{about}</p>}
+      {about && (
+        <p className={s.alert}>
+          {'orderId' in about
+            ? t('order.supportAbout', { id: about.orderId })
+            : t('balance.supportAbout')}
+        </p>
+      )}
       <label className={s.field}>
         <span className={s.cardHead}>
           {t('support.label')}

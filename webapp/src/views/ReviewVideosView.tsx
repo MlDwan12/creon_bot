@@ -442,8 +442,8 @@ export default function ReviewVideosView() {
               </div>
             </fieldset>
           ) : (
-            // оценку не меняют (бэкенд не даст) — кнопка только у неоценённых
-            !item.rating && (
+            // оценку не меняют и снятую не ставят заново (бэкенд не даст)
+            item.rateable && (
               <button
                 type="button"
                 className={s.secondary}
@@ -469,10 +469,7 @@ export default function ReviewVideosView() {
 
       <SupportLink
         label={t('order.supportLabel', { id: data.order.id })}
-        about={t('order.supportAbout', {
-          id: data.order.id,
-          title: data.order.title,
-        })}
+        about={{ orderId: data.order.id }}
       />
     </main>
   );

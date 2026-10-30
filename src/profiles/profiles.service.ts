@@ -1,7 +1,16 @@
 import { tr } from '../i18n/request-lang';
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { type Cabinet, SubmissionStatus, type User } from '@prisma/client';
-import { creatorLabel, publicName } from '../common/format';
+import {
+  type Cabinet,
+  type Order,
+  SubmissionStatus,
+  type User,
+} from '@prisma/client';
+import {
+  creatorLabel,
+  publicName,
+  titleVisibleToCreators,
+} from '../common/format';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Сколько последних отзывов и видео портфолио показывать в профиле. */
@@ -33,8 +42,14 @@ export class ProfilesService {
    * `full` — для самого креатора и модератора: @username и соцсети. Остальным (рекламодателю) —
    * только имя: контакты сторон друг другу не показываем, всё общение — через площадку. Названия
    * заказов рекламодателю — только его собственных (`viewerId`): чужие — дело других рекламодателей.
+   * Самому креатору — только прошедшие модерацию (правка на проверке может нести контакт).
    */
-  async profile(creatorId: number, full: boolean, viewerId?: number) {
+  async profile(
+    creatorId: number,
+    full: boolean,
+    viewerId?: number,
+    isModerator = false,
+  ) {
     const creator = await this.prisma.user.findUnique({
       where: { id: creatorId },
     });
@@ -61,17 +76,27 @@ export class ProfilesService {
         where: published,
         orderBy: { decidedAt: 'desc' },
         take: PROFILE_LIST_LIMIT,
-        include: { order: { select: { title: true, advertiserId: true } } },
+        include: {
+          order: { select: { title: true, advertiserId: true, status: true } },
+        },
       }),
       this.prisma.submission.findMany({
         where: { ...accepted, portfolioAllowed: true },
         orderBy: { decidedAt: 'desc' },
         take: PROFILE_LIST_LIMIT,
-        include: { order: { select: { title: true, advertiserId: true } } },
+        include: {
+          order: { select: { title: true, advertiserId: true, status: true } },
+        },
       }),
     ]);
-    const titleOf = (order: { title: string; advertiserId: number }) =>
-      full || order.advertiserId === viewerId ? order.title : null;
+    const titleOf = (
+      order: Pick<Order, 'title' | 'advertiserId' | 'status'>,
+    ) =>
+      isModerator ||
+      order.advertiserId === viewerId ||
+      (full && titleVisibleToCreators(order))
+        ? order.title
+        : null;
 
     const avg = ratings._avg.rating;
     return {

@@ -262,7 +262,7 @@ export default function OrderDetailView() {
       )}
       <SupportLink
         label={t('order.supportLabel', { id: order.id })}
-        about={t('order.supportAbout', { id: order.id, title: order.title })}
+        about={{ orderId: order.id }}
       />
 
       {justClaimed && (

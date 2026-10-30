@@ -37,6 +37,8 @@
     "allPlatforms": "All platforms",
     "categoriesAria": "Categories",
     "allCategories": "All",
+    "platformLabel": "Platform",
+    "categoryLabel": "Category",
     "loadError": "Couldn't load orders",
     "openCount_one": "{{count}} open order",
     "openCount_other": "{{count}} open orders",
@@ -375,7 +377,7 @@
     ],
     "report": "Report this order",
     "supportLabel": "Question about order #{{id}} — message a manager",
-    "supportAbout": "Question about order #{{id}} “{{title}}”",
+    "supportAbout": "Question about order #{{id}}",
     "claimed": "You've taken the order. When the video is ready, submit it in “My videos”.",
     "own": "This is your order — only others can apply to it.",
     "mySubmissions": "My videos",
@@ -661,7 +663,9 @@
     "supportFlood": "Too many messages in a row — wait a bit and write again.",
     "supportClosed": "✅ The request is closed. If you have more questions, just write here.",
     "supportReply": "💬 Fixum support:\n\n{{text}}",
-    "supportBusy": "Support is overloaded right now — write again in a minute: this message wasn't delivered."
+    "supportBusy": "Support is overloaded right now — write again in a minute: this message wasn't delivered.",
+    "loginCode": "Your Fixum sign-in code: {{code}}\n\nDon’t share it with anyone, not even Fixum support. If you didn’t start this sign-in, just ignore this message.",
+    "loginExpired": "This sign-in link has expired. Tap “Sign in with Telegram” on the site again."
   },
   "notify": {
     "orderEditedCreators": "✏️ The advertiser changed the terms of order #{{id}}. While a moderator reviews the changes, you can't submit a video — your slot will be extended for that time. Videos you've already submitted will be reviewed under the previous terms.",
@@ -829,7 +833,11 @@
     "badLinkInBio": "“Link in profile bio” must be yes or no",
     "linkInBioNeedsTarget": "A link in the profile bio needs a product link — that is what the creator puts in the bio",
     "confirmLinkInBio": "This order requires your link in the profile bio — add it and tick it in the list",
-    "relogin": "For security, please log in to the site again — then you can continue"
+    "relogin": "For security, please log in to the site again — then you can continue",
+    "loginCodeExpired": "The sign-in link has expired — tap “Sign in with Telegram” again",
+    "loginCodeNotSent": "Open the bot in Telegram first — it will send you a code",
+    "loginCodeLocked": "Too many wrong codes — tap “Sign in with Telegram” again",
+    "loginCodeWrong": "Wrong code — check the bot’s message"
   },
   "insights": {
     "notTaken": "{{viewers}} creators opened the order, but {{taken}} took it. The terms don't attract them: lower the view threshold, relax the duration and format requirements, attach an example video.",
@@ -877,9 +885,14 @@
     "loginTitle": "Log in",
     "loginText": "Same account as in the Telegram mini app: orders, responses and balance are shared.",
     "loginButton": "Log in with Telegram",
-    "loginNote": "Telegram confirms the login — no password.",
     "loginFailed": "Couldn't log in, please try again",
+    "loginStep1": "The Fixum bot opens in Telegram — tap “Start”",
+    "loginStep2": "The bot sends a 4-digit code",
+    "loginStep3": "Enter the code here",
     "logout": "Log out",
+    "menu": "Menu",
+    "menuClose": "Close",
+    "home": "Fixum — home",
     "creator": "Creator",
     "advertiser": "Advertiser",
     "moderator": "Moderator",
@@ -887,6 +900,12 @@
     "banned": "Account blocked",
     "writeSupport": "Contact support",
     "relogin": "Log in again",
-    "connectInMiniApp": "You can connect a TikTok, VK or Instagram account in the Fixum mini app in Telegram — here you can see connected accounts and disconnect them."
+    "connectInMiniApp": "You can connect a TikTok, VK or Instagram account in the Fixum mini app in Telegram — here you can see connected accounts and disconnect them.",
+    "loginCodeLabel": "Code from Telegram",
+    "loginSubmit": "Sign in",
+    "loginOpenTelegram": "Open Telegram again",
+    "loginByPhone": "Sign in with a phone number",
+    "loginQr": "Telegram on your phone? Point the camera at the code — the bot sends the digits there, enter them here.",
+    "loginQrAlt": "QR code: link to the Fixum bot to sign in"
   }
 }
