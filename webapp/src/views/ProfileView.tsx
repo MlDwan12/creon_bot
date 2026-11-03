@@ -5,6 +5,7 @@ import {
   ApiError,
   type Balance,
   banUser,
+  closeAdvertiser,
   connectSocialAccount,
   type CreatorProfile,
   disconnectSocialAccount,
@@ -12,6 +13,7 @@ import {
   fetchCreator,
   fetchMyProfile,
   fetchSocialAccounts,
+  openAdvertiser,
   removeReview,
   type SocialAccount,
   unbanUser,
@@ -25,6 +27,7 @@ import ModHistory from '../components/ModHistory';
 import PlatformIcon from '../components/PlatformIcon';
 import UserAvatar from '../components/UserAvatar';
 import { describeVideoUrl, formatDate, formatMoney } from '../format';
+import { APPLY_PATH } from '../role';
 import { confirmAction, openExternalLink, safeUrl } from '../telegram';
 import s from './ProfileView.module.css';
 
@@ -33,6 +36,14 @@ const MAX_LINKS = 10;
 /** Площадка и короткий вид ссылки — для знака и подписи; не распознали — без знака. */
 const linkView = (url: string) =>
   describeVideoUrl(url) ?? { platform: 'OTHER' as const, short: url };
+/** Кабинет заказчика словами — модератору (окно модератора только на русском). */
+const MOD_ADVERTISER = {
+  open: 'Открыт',
+  closed: 'Закрыт модератором',
+  pending: 'Заявка на рассмотрении — решить можно и в очереди',
+  rejected: 'Заявка отклонена',
+  none: 'Нет',
+} as const;
 const stars = (n: number) => '★'.repeat(n) + '☆'.repeat(5 - n);
 
 export default function ProfileView() {
@@ -256,6 +267,28 @@ export default function ProfileView() {
     }
   }
 
+  /** Кабинет заказчика — открыть (без заявки или вернуть закрытый) или закрыть; только модератор. */
+  async function toggleAdvertiser(open: boolean) {
+    if (
+      !(await confirmAction(
+        open
+          ? 'Открыть кабинет заказчика? Он сможет создавать заказы.'
+          : 'Закрыть кабинет заказчика? Активные заказы останутся, новых и правок не будет. Вернуть — только модератор.',
+      ))
+    )
+      return;
+    setBusy(true);
+    setError('');
+    try {
+      await (open ? openAdvertiser : closeAdvertiser)(profile!.id);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.userMessage : 'Не получилось');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loadError || !profile)
     return (
       <main className={s.page}>
@@ -357,8 +390,33 @@ export default function ProfileView() {
           )}
         </section>
       )}
+      {moderator && profile.advertiser && (
+        <section className={s.block}>
+          <h2 className="section-title">Кабинет заказчика</h2>
+          <p className={s.hint}>
+            {MOD_ADVERTISER[profile.advertiser.state]}
+            {profile.advertiser.retryAt &&
+              `, повтор с ${formatDate(profile.advertiser.retryAt)}`}
+          </p>
+          <button
+            type="button"
+            className={profile.advertiser.state === 'open' ? s.remove : s.edit}
+            disabled={busy}
+            onClick={() =>
+              void toggleAdvertiser(profile.advertiser!.state !== 'open')
+            }
+          >
+            {profile.advertiser.state === 'open'
+              ? 'Закрыть кабинет заказчика'
+              : 'Открыть кабинет заказчика'}
+          </button>
+        </section>
+      )}
       {moderator && (
-        <ModHistory userId={profile.id} version={profile.ban?.at ?? 'active'} />
+        <ModHistory
+          userId={profile.id}
+          version={`${profile.ban?.at ?? 'active'}:${profile.advertiser?.state}`}
+        />
       )}
 
       {/* Свой профиль — тремя группами: деньги, что видят заказчики, настройки. Чужой — только витрина. */}
@@ -731,6 +789,27 @@ export default function ProfileView() {
                 <p className={s.error} role="alert">
                   {accountsError}
                 </p>
+              )}
+            </section>
+          )}
+          {profile.advertiser && profile.advertiser.state !== 'open' && (
+            <section className={s.block}>
+              <h2 className="section-title">{t('apply.cardTitle')}</h2>
+              <p className={s.hint}>
+                {t(`apply.card_${profile.advertiser.state}`, {
+                  date: profile.advertiser.retryAt
+                    ? formatDate(profile.advertiser.retryAt)
+                    : '',
+                })}
+              </p>
+              {profile.advertiser.state === 'none' ? (
+                <Link to={APPLY_PATH} className="main-button">
+                  {t('apply.title')}
+                </Link>
+              ) : (
+                <Link to={APPLY_PATH} className={s.editLink}>
+                  {t('apply.details')}
+                </Link>
               )}
             </section>
           )}

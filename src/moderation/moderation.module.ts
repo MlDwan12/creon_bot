@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AdvertisersModule } from '../advertisers/advertisers.module';
 import { AuthModule } from '../auth/auth.module';
 import { OrdersModule } from '../orders/orders.module';
 import { PayoutsModule } from '../payouts/payouts.module';
@@ -13,6 +14,7 @@ import { ModUsersService } from './mod-users.service';
 
 @Module({
   imports: [
+    AdvertisersModule,
     AuthModule,
     TelegramModule,
     OrdersModule,

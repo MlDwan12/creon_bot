@@ -25,6 +25,7 @@ import { OrdersService } from './orders.service';
 import { reportCsv } from './order-report';
 import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
+import { AdvertiserGuard } from '../auth/advertiser.guard';
 import {
   parseDeadlineDays,
   parseOrderEdit,
@@ -32,7 +33,11 @@ import {
   videoFormat,
 } from './order-input';
 
-/** Заказы текущего пользователя как рекламодателя. Права проверяют сервисы. */
+/**
+ * Заказы текущего пользователя как рекламодателя. Права на заказ проверяют сервисы; создать, править
+ * и продлить — только с открытым кабинетом (AdvertiserGuard). Закрытый кабинет — смотреть свои
+ * заказы, закрыть или удалить их, оценить ролики.
+ */
 @Controller('api/my-orders')
 @UseGuards(InitDataGuard, UserThrottlerGuard)
 export class MyOrdersController {
@@ -98,6 +103,7 @@ export class MyOrdersController {
 
   /** Новый заказ → на модерацию, модераторам уведомление. */
   @Post()
+  @UseGuards(AdvertiserGuard)
   @Throttle({ default: { limit: 10, ttl: 60 * 60_000 } })
   async create(@Body() body: unknown, @Req() req: ApiRequest) {
     const order = await this.ordersService.create(
@@ -110,6 +116,7 @@ export class MyOrdersController {
 
   /** Правка заказа: снова на проверку; креаторам, уже работающим по открытому заказу, — уведомление. */
   @Put(':id')
+  @UseGuards(AdvertiserGuard)
   @Throttle({ default: { limit: 30, ttl: 60 * 60_000 } })
   async update(
     @Param('id', ParseIdPipe) id: number,
@@ -146,6 +153,7 @@ export class MyOrdersController {
 
   /** Продлить срок на `days` дней; заказ с истёкшим сроком снова открывается. */
   @Post(':id/extend')
+  @UseGuards(AdvertiserGuard)
   async extend(
     @Param('id', ParseIdPipe) id: number,
     @Body('days') days: unknown,

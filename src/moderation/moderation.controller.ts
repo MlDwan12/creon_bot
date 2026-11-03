@@ -35,6 +35,8 @@ import {
   type CountedVideo,
   ViewCounterService,
 } from '../submissions/view-counter.service';
+import { AdvertisersService } from '../advertisers/advertisers.service';
+import { advertiserAccess } from '../advertisers/advertiser-access';
 import { AnalyticsService } from './analytics.service';
 import { ModeratorActionsService } from './moderator-actions.service';
 import { ModUsersService, type UsersFilter } from './mod-users.service';
@@ -151,18 +153,29 @@ export class ModerationController {
     private readonly viewCounter: ViewCounterService,
     private readonly actions: ModeratorActionsService,
     private readonly users: ModUsersService,
+    private readonly advertisers: AdvertisersService,
   ) {}
 
   /** Обе очереди сразу: заказы и видео на проверке, старые первыми. */
   @Get('queue')
   async queue() {
-    const [orders, videos, holds, reviews] = await Promise.all([
+    const [orders, videos, holds, reviews, applications] = await Promise.all([
       this.ordersService.listPending(),
       this.submissionsService.listPendingModeration(),
       this.submissionsService.listHoldDue(),
       this.submissionsService.listPendingReviews(),
+      this.advertisers.listPending(),
     ]);
     return {
+      // заявки в заказчики: созвониться по контактам и открыть кабинет или отказать
+      applications: applications.map((a) => ({
+        id: a.id,
+        userId: a.userId,
+        user: creatorLabel(a.user),
+        email: a.email,
+        phone: a.phone,
+        createdAt: a.createdAt,
+      })),
       orders: orders.map((o) => ({
         id: o.id,
         title: o.title,
@@ -565,6 +578,76 @@ export class ModerationController {
       objectId: id,
     });
     return { ok: true };
+  }
+
+  /** Заявка в заказчики одобрена — кабинет открыт. */
+  @Post('advertiser-applications/:id/approve')
+  async approveApplication(
+    @Param('id', ParseIdPipe) id: number,
+    @Req() req: ApiRequest,
+  ) {
+    const user = await this.advertisers.approve(id, req.user.telegramId);
+    await this.logAdvertiser(req, ModeratorActionType.ADVERTISER_OPEN, user.id);
+    this.notifications.advertiserOpened(user);
+    return { ok: true };
+  }
+
+  /** Отказ: `comment` — заметка для команды, пользователь видит только дату повторной заявки. */
+  @Post('advertiser-applications/:id/reject')
+  async rejectApplication(
+    @Param('id', ParseIdPipe) id: number,
+    @Body() body: unknown,
+    @Req() req: ApiRequest,
+  ) {
+    const comment = parseRejectComment(body);
+    const app = await this.advertisers.reject(id, req.user.telegramId, comment);
+    await this.logAdvertiser(
+      req,
+      ModeratorActionType.ADVERTISER_REJECT,
+      app.userId,
+      comment,
+    );
+    const { retryAt } = advertiserAccess(app.user, app, false);
+    if (retryAt) this.notifications.advertiserRejected(app.user, retryAt);
+    return { ok: true };
+  }
+
+  /** Открыть кабинет заказчика из карточки: без заявки или вернуть закрытый. */
+  @Post('users/:id/advertiser/open')
+  async openAdvertiser(
+    @Param('id', ParseIdPipe) id: number,
+    @Req() req: ApiRequest,
+  ) {
+    const user = await this.advertisers.open(id, req.user.telegramId);
+    await this.logAdvertiser(req, ModeratorActionType.ADVERTISER_OPEN, id);
+    this.notifications.advertiserOpened(user);
+    return { ok: true };
+  }
+
+  /** Закрыть кабинет: активные заказы работают дальше, новых и правок нет; вернуть — только модератор. */
+  @Post('users/:id/advertiser/close')
+  async closeAdvertiser(
+    @Param('id', ParseIdPipe) id: number,
+    @Req() req: ApiRequest,
+  ) {
+    const user = await this.advertisers.close(id);
+    await this.logAdvertiser(req, ModeratorActionType.ADVERTISER_CLOSE, id);
+    this.notifications.advertiserClosed(user);
+    return { ok: true };
+  }
+
+  private logAdvertiser(
+    req: ApiRequest,
+    type: ModeratorActionType,
+    userId: number,
+    comment?: string,
+  ) {
+    return this.actions.log({
+      moderatorId: req.user.telegramId,
+      type,
+      objectId: userId,
+      comment,
+    });
   }
 
   /** Опубликовать отзыв с проверки в профиле креатора — креатору приходит уведомление об оценке. */

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { SupportModule } from '../support/support.module';
 import { UsersModule } from '../users/users.module';
+import { AdvertiserGuard } from './advertiser.guard';
 import { InitDataGuard } from './init-data.guard';
 import { MeController } from './me.controller';
 import { ModeratorGuard } from './moderator.guard';
@@ -16,6 +17,7 @@ import { WebLoginService } from './web-login.service';
   imports: [UsersModule, SupportModule],
   controllers: [MeController, WebAuthController],
   providers: [
+    AdvertiserGuard,
     InitDataGuard,
     ModeratorGuard,
     UserThrottlerGuard,
@@ -24,6 +26,7 @@ import { WebLoginService } from './web-login.service';
   exports: [
     UsersModule,
     SupportModule,
+    AdvertiserGuard,
     InitDataGuard,
     ModeratorGuard,
     UserThrottlerGuard,

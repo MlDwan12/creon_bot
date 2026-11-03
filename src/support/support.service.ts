@@ -181,6 +181,25 @@ export class SupportService implements OnModuleInit {
     );
   }
 
+  /**
+   * Заявка «Стать заказчиком» → в тему пользователя: команда договаривается о созвоне прямо там.
+   * Не ждём и не падаем: заявка уже сохранена и видна в очереди модератора.
+   */
+  advertiserApplication(user: User, email: string, phone: string | null) {
+    if (!this.chatId) return;
+    const text = [
+      '💼 <b>Заявка в заказчики</b> — созвониться и решить в окне модератора',
+      `Почта: ${escapeHtml(email)}`,
+      phone ? `Телефон: ${escapeHtml(phone)}` : 'Телефон не указан',
+    ].join('\n');
+    this.toTopic(user, (thread) =>
+      this.bot.telegram.sendMessage(this.chatId!, text, {
+        ...html(),
+        message_thread_id: thread,
+      }),
+    ).catch((err) => this.logger.error(err));
+  }
+
   /** Сообщение сотрудника в теме → пользователю; `/close` — закрыть обращение. */
   async fromSupport(ctx: Context) {
     const msg = ctx.message as Message;

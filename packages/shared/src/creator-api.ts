@@ -73,6 +73,13 @@ export function createCreatorApi(request: Requester) {
 
     fetchMyProfile: () => request<CreatorProfile>('GET', '/api/profile'),
 
+    /** Заявка «Стать заказчиком»: почта обязательна, телефон — по желанию (пусто — без него). */
+    applyAdvertiser: (email: string, phone: string) =>
+      request<{ ok: true }>('POST', '/api/advertiser/application', {
+        email,
+        phone,
+      }),
+
     /** Профиль креатора; модератору — с блокировкой, кошельком и ссылками. */
     fetchCreator: (id: number) =>
       request<CreatorProfile>('GET', `/api/creators/${id}`),

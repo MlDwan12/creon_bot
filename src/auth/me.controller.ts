@@ -1,4 +1,5 @@
 import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { advertiserCabinet } from '../advertisers/advertiser-access';
 import { userLang } from '../i18n/i18n';
 import { SupportService } from '../support/support.service';
 import { type ApiRequest, InitDataGuard } from './init-data.guard';
@@ -7,7 +8,8 @@ import { ModeratorGuard } from './moderator.guard';
 
 /**
  * Кто открыл Mini App: модератору — его отдельное окно; supportUrl — ссылка на чат с ботом (null — поддержка выключена);
- * language — язык интерфейса; cabinet — кабинет, открытый последним (null — ещё не выбирал).
+ * language — язык интерфейса; cabinet — кабинет, открытый последним (null — ещё не выбирал);
+ * advertiser — кабинет заказчика: open, closed (только смотреть свои заказы) или null — нет.
  * Права проверяет каждый эндпоинт.
  */
 @Controller('api/me')
@@ -20,8 +22,10 @@ export class MeController {
 
   @Get()
   async me(@Req() req: ApiRequest) {
+    const isModerator = this.moderatorGuard.isModerator(req.user);
     return {
-      isModerator: this.moderatorGuard.isModerator(req.user),
+      isModerator,
+      advertiser: advertiserCabinet(req.user, isModerator),
       supportUrl: await this.support.url(),
       // язык интерфейса: выбранный в профиле или по Telegram; мини-апп переключается на него
       language: userLang(req.user),
