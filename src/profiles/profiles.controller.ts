@@ -28,6 +28,7 @@ import { ModeratorGuard } from '../auth/moderator.guard';
 import { parseWallet } from '../payouts/trc20';
 import { parseLinks } from './profile-input';
 import { ProfilesService } from './profiles.service';
+import { AdvertisersService } from '../advertisers/advertisers.service';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
 
 @Controller('api')
@@ -38,12 +39,20 @@ export class ProfilesController {
     private readonly moderatorGuard: ModeratorGuard,
     private readonly photos: TelegramPhotosService,
     private readonly notifications: NotificationsService,
+    private readonly advertisers: AdvertisersService,
   ) {}
 
-  /** Свой профиль креатора. */
+  /** Свой профиль креатора; `advertiser` — что показать на месте кнопки «Стать заказчиком». */
   @Get('profile')
   async mine(@Req() req: ApiRequest) {
-    return { ...(await this.profiles.profile(req.user.id, true)), ban: null };
+    const [profile, advertiser] = await Promise.all([
+      this.profiles.profile(req.user.id, true),
+      this.advertisers.access(
+        req.user,
+        this.moderatorGuard.isModerator(req.user),
+      ),
+    ]);
+    return { ...profile, ban: null, advertiser };
   }
 
   /** Ссылки на соцсети в своём профиле. */
@@ -118,8 +127,13 @@ export class ProfilesController {
       req.user.id,
       moderator,
     );
-    // причина блокировки — внутреннее дело модерации
-    return moderator ? profile : { ...profile, ban: null };
+    // причина блокировки и кабинет заказчика — внутреннее дело модерации
+    if (!moderator) return { ...profile, ban: null, advertiser: null };
+    const user = await this.profiles.userOf(id);
+    return {
+      ...profile,
+      advertiser: user && (await this.advertisers.access(user, false)),
+    };
   }
 
   /**

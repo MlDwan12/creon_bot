@@ -9,6 +9,8 @@ import {
   type MyOrder,
 } from '../api';
 import { formatDate, formatMoney, formatViews } from '../format';
+import { advertiserCabinet } from '../role';
+import { useStore } from '../store';
 import { confirmAction } from '../telegram';
 import s from './MyOrderCard.module.css';
 
@@ -38,10 +40,14 @@ export default function MyOrderCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [extending, setExtending] = useState(false);
+  /** Кабинет закрыт модератором — заказ только смотреть, закрыть или удалить (AdvertiserGuard). */
+  const writable = useStore(advertiserCabinet) === 'open';
 
   /** Продлить можно открытый заказ со сроком и заказ, закрытый по сроку. */
   const canExtend =
-    order.status === 'EXPIRED' || (order.status === 'OPEN' && !!order.deadline);
+    writable &&
+    (order.status === 'EXPIRED' ||
+      (order.status === 'OPEN' && !!order.deadline));
 
   async function run(question: string | null, action: () => Promise<unknown>) {
     if (question && !(await confirmAction(question))) return;
@@ -147,9 +153,11 @@ export default function MyOrderCard({
               {t('myOrderCard.moderator', { reason: order.rejectReason })}
             </p>
           )}
-          <Link to={`/my-orders/new?from=${order.id}`} className={s.action}>
-            {t('myOrderCard.fix')}
-          </Link>
+          {writable && (
+            <Link to={`/my-orders/new?from=${order.id}`} className={s.action}>
+              {t('myOrderCard.fix')}
+            </Link>
+          )}
         </>
       )}
       {order.status === 'EDIT_REJECTED' && order.rejectReason && (
@@ -158,9 +166,7 @@ export default function MyOrderCard({
         </p>
       )}
       {order.frozen && <p className={s.hint}>{t('myOrderCard.frozen')}</p>}
-      {order.fundBusy && (
-        <p className={s.hint}>{t('myOrderCard.fundBusy')}</p>
-      )}
+      {order.fundBusy && <p className={s.hint}>{t('myOrderCard.fundBusy')}</p>}
 
       {order.status === 'EXPIRED' && (
         <p className={s.hint}>{t('myOrderCard.expired')}</p>
@@ -181,17 +187,18 @@ export default function MyOrderCard({
         </div>
       )}
       <div className={s.buttons}>
-        {(order.status === 'PENDING_MODERATION' ||
-          order.status === 'OPEN' ||
-          order.status === 'EDIT_REJECTED') && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void navigate(`/my-orders/${order.id}/edit`)}
-          >
-            {t('myOrderCard.edit')}
-          </button>
-        )}
+        {writable &&
+          (order.status === 'PENDING_MODERATION' ||
+            order.status === 'OPEN' ||
+            order.status === 'EDIT_REJECTED') && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void navigate(`/my-orders/${order.id}/edit`)}
+            >
+              {t('myOrderCard.edit')}
+            </button>
+          )}
         {canExtend && (
           <button
             type="button"
@@ -207,7 +214,8 @@ export default function MyOrderCard({
           </button>
         )}
         {/* та же форма, что «Исправить и отправить снова»: поля подставятся из этого заказа */}
-        {order.status !== 'REJECTED' &&
+        {writable &&
+          order.status !== 'REJECTED' &&
           order.status !== 'PENDING_MODERATION' &&
           order.status !== 'EDIT_REJECTED' && (
             <button

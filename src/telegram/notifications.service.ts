@@ -503,6 +503,31 @@ export class NotificationsService
     );
   }
 
+  /** Модераторам: заявка в заказчики — контакты в теме поддержки и в очереди. */
+  advertiserApplied(user: User) {
+    this.toModerators(
+      `💼 <b>Заявка в заказчики</b>\nОт: ${escapeHtml(creatorLabel(user))}`,
+      '/mod',
+    );
+  }
+
+  /** Кабинет заказчика открыт — по заявке или модератором сам. */
+  advertiserOpened(user: User) {
+    this.send(user, (t) => t('notify.advertiserOpened'), '/my-orders');
+  }
+
+  advertiserRejected(user: User, retryAt: Date) {
+    this.send(
+      user,
+      (t) => t('notify.advertiserRejected', { date: formatDeadline(retryAt) }),
+      '/profile',
+    );
+  }
+
+  advertiserClosed(user: User) {
+    this.send(user, (t) => t('notify.advertiserClosed'), '/my-orders');
+  }
+
   /** Креатору: заявку на вывод выполнили или отклонили. */
   payoutDecided(payout: Payout & { creator: User }) {
     this.send(

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import {
+  advertiserCabinet,
+  APPLY_PATH,
   role as roleStore,
   roleLoaded as roleLoadedStore,
   ROLE_HOME,
@@ -20,6 +22,7 @@ export default function OnboardingOverlay() {
   const navigate = useNavigate();
   const role = useStore(roleStore);
   const roleLoaded = useStore(roleLoadedStore);
+  const cabinet = useStore(advertiserCabinet);
   /** Выбрана на первом шаге, но ещё не подтверждена: показываем её шаги. */
   const [picked, setPicked] = useState<Role>();
   const open = roleLoaded && (!role || !!picked);
@@ -35,9 +38,12 @@ export default function OnboardingOverlay() {
 
   if (!open) return null;
 
+  /** Кабинета заказчика ещё нет — вместо него заявка «Стать заказчиком» (кабинет открывает команда). */
+  const applyFirst = picked === 'advertiser' && !cabinet;
+
   /** Запомнить роль и перейти: заказчика с кнопки действия — сразу в форму заказа. */
   function start(to: string) {
-    setRole(picked!);
+    setRole(applyFirst ? 'creator' : picked!);
     setPicked(undefined);
     void navigate(to);
   }
@@ -66,7 +72,7 @@ export default function OnboardingOverlay() {
             <button
               type="button"
               className={s.link}
-              onClick={() => start(ROLE_HOME[picked])}
+              onClick={() => start(applyFirst ? APPLY_PATH : ROLE_HOME[picked])}
             >
               {t('onboarding.skip')}
             </button>
@@ -84,17 +90,27 @@ export default function OnboardingOverlay() {
               </li>
             ))}
           </ol>
-          <p className={s.note}>{t('onboarding.note')}</p>
+          <p className={s.note}>
+            {t(applyFirst ? 'onboarding.applyNote' : 'onboarding.note')}
+          </p>
           <button
             type="button"
             className={`main-button ${s.start}`}
             onClick={() =>
               start(
-                picked === 'advertiser' ? '/my-orders/new' : ROLE_HOME.creator,
+                applyFirst
+                  ? APPLY_PATH
+                  : picked === 'advertiser'
+                    ? '/my-orders/new'
+                    : ROLE_HOME.creator,
               )
             }
           >
-            {t(`onboarding.${picked}.action`)}
+            {t(
+              applyFirst
+                ? 'onboarding.applyAction'
+                : `onboarding.${picked}.action`,
+            )}
           </button>
         </>
       ) : (

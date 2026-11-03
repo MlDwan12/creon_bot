@@ -143,6 +143,10 @@ export class ProfilesService {
     return user?.telegramId ?? null;
   }
 
+  userOf(userId: number) {
+    return this.prisma.user.findUnique({ where: { id: userId } });
+  }
+
   updateLinks(userId: number, links: string[]) {
     return this.prisma.user.update({
       where: { id: userId },

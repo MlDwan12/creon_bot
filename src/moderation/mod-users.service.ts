@@ -178,6 +178,9 @@ export class ModUsersService {
                 in: [
                   ModeratorActionType.USER_BAN,
                   ModeratorActionType.USER_UNBAN,
+                  ModeratorActionType.ADVERTISER_OPEN,
+                  ModeratorActionType.ADVERTISER_REJECT,
+                  ModeratorActionType.ADVERTISER_CLOSE,
                 ],
               },
               objectId: userId,

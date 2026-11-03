@@ -201,6 +201,15 @@
   color: var(--link);
   font-size: 15px;
 }
+.edit-link {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--link);
+  font-size: 15px;
+  text-decoration: none;
+}
 .links-form {
   display: flex;
   flex-direction: column;

@@ -41,6 +41,12 @@ model User {
   /// В какой группе эта тема (SUPPORT_CHAT_ID на момент создания): номер темы уникален только внутри
   /// группы — после смены группы старый номер указал бы на чужую тему.
   supportChatId    String?
+  /// Кабинет заказчика открыт модератором (по заявке или сам): без этого заказы не создать и не
+  /// править (AdvertiserGuard). Модераторам из MODERATOR_IDS не нужен.
+  advertiserAt       DateTime?
+  /// Модератор закрыл кабинет: свои заказы видно, новых нет, повторной заявки нет — только через
+  /// поддержку (src/advertisers/advertiser-access.ts).
+  advertiserClosedAt DateTime?
 
   orders         Order[]
   submissions    Submission[]
@@ -50,6 +56,7 @@ model User {
   socialAccounts SocialAccount[]
   oauthPendings  OAuthPending[]
   webLogins      WebLogin[]
+  advertiserApplications AdvertiserApplication[]
 
   /// Ответ поддержки в теме → чей это пользователь (SupportService.fromSupport).
   @@index([supportChatId, supportTopicId])
@@ -440,6 +447,12 @@ enum ModeratorActionType {
   PAYOUT_REJECT
   USER_BAN
   USER_UNBAN
+  /// Кабинет заказчика открыт (заявка одобрена или модератор сам). objectId — пользователь.
+  ADVERTISER_OPEN
+  /// Заявка в заказчики отклонена. objectId — пользователь.
+  ADVERTISER_REJECT
+  /// Кабинет заказчика закрыт. objectId — пользователь.
+  ADVERTISER_CLOSE
 }
 
 /// Журнал решений модераторов — кабинет модератора, таблица команды и выгрузка CSV
@@ -485,4 +498,35 @@ model WebLogin {
   createdAt DateTime @default(now())
 
   @@index([expiresAt])
+}
+
+enum AdvertiserApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Заявка креатора «Стать заказчиком»: команда созванивается и открывает кабинет или отказывает
+/// (src/advertisers). Контакты видят только модераторы. После отказа — новая через ADVERTISER_RETRY_DAYS.
+model AdvertiserApplication {
+  id          Int                         @id @default(autoincrement())
+  user        User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  email       String
+  /// По желанию: с номером команда свяжется быстрее.
+  phone       String?
+  status      AdvertiserApplicationStatus @default(PENDING)
+  /// Telegram ID модератора, который решил заявку.
+  moderatorId BigInt?
+  /// Заметка модератора при отказе — пользователю не показываем.
+  note        String?
+  decidedAt   DateTime?
+  createdAt   DateTime                    @default(now())
+
+  /// Одна заявка на рассмотрении на человека — двойной тап не создаст вторую.
+  @@unique([userId], map: "AdvertiserApplication_one_pending", where: { status: "PENDING" })
+  /// Последняя заявка пользователя — по ней состояние кнопки.
+  @@index([userId, id])
+  /// Очередь модератора.
+  @@index([status])
 }

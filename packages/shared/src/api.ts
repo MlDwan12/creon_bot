@@ -258,6 +258,15 @@ export interface OrderReport {
 
 /** Ответы `/api/mod/*` — см. src/api/moderation.controller.ts. */
 export interface ModQueue {
+  /** Заявки в заказчики: созвониться и открыть кабинет или отказать. */
+  applications: {
+    id: number;
+    userId: number;
+    user: string;
+    email: string;
+    phone: string | null;
+    createdAt: string;
+  }[];
   orders: {
     id: number;
     title: string;
@@ -516,6 +525,16 @@ export interface ModPayout {
   createdAt: string;
 }
 
+/**
+ * Кабинет заказчика (src/advertisers/advertiser-access.ts): open — открыт; closed — закрыт
+ * модератором (свои заказы только смотреть, повтор — через поддержку); pending — заявка на
+ * рассмотрении; rejected — отказ, новая заявка с retryAt; none — можно подать заявку.
+ */
+export interface AdvertiserAccess {
+  state: 'open' | 'closed' | 'pending' | 'rejected' | 'none';
+  retryAt: string | null;
+}
+
 /** Профиль креатора — см. src/api/profiles.service.ts. */
 export interface CreatorProfile {
   id: number;
@@ -527,6 +546,8 @@ export interface CreatorProfile {
   /** Блокировка — приходит только модератору. */
   /** final — без права обжалования. */
   ban: { at: string; reason: string | null; final: boolean } | null;
+  /** Кабинет заказчика — в своём профиле и модератору; другим null. */
+  advertiser: AdvertiserAccess | null;
   /** Ссылки на соцсети, по порядку; на одной площадке может быть несколько. Чужим — пусто. */
   links: string[];
   /** Кошелёк USDT (TRC20) для выплат — только в своём профиле и модератору. */
@@ -644,7 +665,10 @@ export type ModeratorActionType =
   | 'PAYOUT_PAID'
   | 'PAYOUT_REJECT'
   | 'USER_BAN'
-  | 'USER_UNBAN';
+  | 'USER_UNBAN'
+  | 'ADVERTISER_OPEN'
+  | 'ADVERTISER_REJECT'
+  | 'ADVERTISER_CLOSE';
 
 export interface ModeratorStats {
   moderatorId: string;
@@ -726,6 +750,8 @@ export interface ModReportGroup {
 /** GET /api/me — кто вошёл (мини-апп и сайт). */
 export interface Me {
   isModerator: boolean;
+  /** Кабинет заказчика: open, closed (свои заказы только смотреть) или null — нет. */
+  advertiser: 'open' | 'closed' | null;
   supportUrl: string | null;
   /** Язык интерфейса: выбранный в профиле или по Telegram; languageChosen — выбран ли вручную. */
   language: 'ru' | 'en';
