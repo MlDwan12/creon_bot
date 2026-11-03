@@ -8,7 +8,7 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router';
-import { updateCabinet } from './api';
+import { APPLIED_EVENT, fetchMyProfile, updateCabinet } from './api';
 import { Catalog } from './creator/Catalog';
 import { Logo } from './Login';
 import { useSession } from './session';
@@ -28,6 +28,7 @@ const MOD_NAV = [
 ];
 const ADVERTISER_NAV = [
   { to: '/my-orders', label: 'tabs.myOrders' },
+  // при закрытом кабинете пункта нет (Shell убирает его)
   { to: '/my-orders/new', label: 'createOrder.titleNew' },
   { to: '/help', label: 'tabs.help' },
   { to: '/account', label: 'tabs.profile' },
@@ -39,6 +40,13 @@ const CREATOR_NAV = [
   { to: '/learn', label: 'tabs.learn' },
   { to: '/profile', label: 'tabs.profile' },
 ];
+/** Страница заявки «Стать заказчиком» — как в мини-аппе (webapp/src/role.ts, APPLY_PATH). */
+export const APPLY_PATH = '/profile/advertiser';
+
+/** Экран кабинета заказчика: без кабинета ведём на заявку. */
+const isAdvertiserPath = (path: string) =>
+  /^\/(my-orders|help|account)(\/|$)/.test(path);
+
 /** Куда вести после выбора кабинета. */
 const CABINET_HOME: Record<Cabinet, string> = {
   advertiser: '/my-orders',
@@ -63,7 +71,21 @@ export function Shell() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { me, setMe, logout } = useSession();
-  const cabinet: Cabinet = me.cabinet ?? 'creator';
+  // кабинет заказчика открывает модератор (me.advertiser); без него — только кабинет креатора
+  const cabinet: Cabinet = (me.advertiser && me.cabinet) || 'creator';
+  // заявка на рассмотрении — метка в меню; /api/me про заявки не знает, спрашиваем профиль
+  const [pending, setPending] = useState(false);
+  useEffect(() => {
+    if (me.isModerator || me.advertiser) return;
+    const check = () =>
+      fetchMyProfile().then(
+        (p) => setPending(p.advertiser?.state === 'pending'),
+        () => {},
+      );
+    check();
+    window.addEventListener(APPLIED_EVENT, check);
+    return () => window.removeEventListener(APPLIED_EVENT, check);
+  }, [me.isModerator, me.advertiser]);
   const role = me.isModerator ? t('web.moderator') : t(`web.${cabinet}`);
   const [menuOpen, setMenuOpen] = useState(false);
   // перешли в другой раздел — меню закрываем
@@ -89,7 +111,9 @@ export function Shell() {
   const section =
     pathname === '/support'
       ? t('common.support')
-      : (currentItem(items, pathname)?.label ?? 'Fixum');
+      : pathname === APPLY_PATH
+        ? t('apply.title')
+        : (currentItem(items, pathname)?.label ?? 'Fixum');
 
   function pickCabinet(c: Cabinet) {
     setMe({ ...me, cabinet: c });
@@ -97,6 +121,16 @@ export function Shell() {
     updateCabinet(c).catch(() => {});
     void navigate(CABINET_HOME[c]);
   }
+
+  // Кабинета заказчика нет — его экраны ведут на заявку (создать заказ не даст и API).
+  if (!me.isModerator && !me.advertiser && isAdvertiserPath(pathname))
+    return <Navigate to={APPLY_PATH} replace />;
+  // кабинет закрыт — заказы только смотреть: форму заказа не открываем
+  if (
+    me.advertiser === 'closed' &&
+    /^\/my-orders\/(new|\d+\/edit)$/.test(pathname)
+  )
+    return <Navigate to="/my-orders" replace />;
 
   return (
     <div className={s.layout}>
@@ -173,30 +207,58 @@ export function Shell() {
           </nav>
         ) : (
           <>
-            <div
-              role="group"
-              aria-label={t('web.cabinet')}
-              className={s.switch}
-            >
-              {(['creator', 'advertiser'] as const).map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  aria-pressed={cabinet === c}
-                  onClick={() => pickCabinet(c)}
-                >
-                  {t(`web.${c}`)}
-                </button>
-              ))}
-            </div>
+            {me.advertiser ? (
+              <div
+                role="group"
+                aria-label={t('web.cabinet')}
+                className={s.switch}
+              >
+                {(['creator', 'advertiser'] as const).map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    aria-pressed={cabinet === c}
+                    onClick={() => pickCabinet(c)}
+                  >
+                    {t(`web.${c}`)}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              // вместо переключателя — заявка: кабинет заказчика открывает команда после созвона
+              <NavLink to={APPLY_PATH} className={s.apply}>
+                {pending ? (
+                  <>
+                    <span className={s.applyTitle}>
+                      {t('apply.title')}
+                      <span className={s.applyBadge}>
+                        {t('apply.pendingBadge')}
+                      </span>
+                    </span>
+                    <span className={s.applyHint}>
+                      {t('apply.pendingHint')}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className={s.applyHint}>{t('apply.navHint')}</span>
+                    <span className={s.applyCta}>{t('apply.title')} ›</span>
+                  </>
+                )}
+              </NavLink>
+            )}
             <nav aria-label={t('tabs.aria')} className={s.links}>
-              {(cabinet === 'advertiser' ? ADVERTISER_NAV : CREATOR_NAV).map(
-                (item) => (
-                  <NavLink key={item.to} to={item.to} end>
-                    {t(item.label)}
-                  </NavLink>
-                ),
-              )}
+              {(cabinet === 'advertiser'
+                ? ADVERTISER_NAV.filter(
+                    (i) =>
+                      me.advertiser === 'open' || i.to !== '/my-orders/new',
+                  )
+                : CREATOR_NAV
+              ).map((item) => (
+                <NavLink key={item.to} to={item.to} end>
+                  {t(item.label)}
+                </NavLink>
+              ))}
             </nav>
           </>
         )}
@@ -231,6 +293,7 @@ export function Shell() {
 export function Home() {
   const { me } = useSession();
   if (me.isModerator) return <Navigate to="/mod" replace />;
-  if (me.cabinet === 'advertiser') return <Navigate to="/my-orders" replace />;
+  if (me.advertiser && me.cabinet === 'advertiser')
+    return <Navigate to="/my-orders" replace />;
   return <Catalog />;
 }

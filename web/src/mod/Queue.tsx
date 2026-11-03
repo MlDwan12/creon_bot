@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import {
+  approveApplication,
   approveReview,
   errorText,
   fetchModQueue,
@@ -8,6 +9,7 @@ import {
   type ModQueue,
   type ModReportGroup,
   reasonLabel,
+  rejectApplication,
   removeReview,
   type ReportTarget,
   resolveReports,
@@ -17,8 +19,11 @@ import s from '../ui.module.css';
 import { OrderReview } from './OrderReview';
 import { VideoReview } from './VideoReview';
 
-type Tab = 'videos' | 'orders' | 'holds' | 'reviews' | 'reports';
+type Tab =
+  'applications' | 'videos' | 'orders' | 'holds' | 'reviews' | 'reports';
+// «Заказчики» — первыми, как в мини-аппе: на узком экране вкладка в конце ряда уходит за край
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'applications', label: 'Заказчики' },
   { id: 'videos', label: 'Видео' },
   { id: 'orders', label: 'Заказы' },
   { id: 'holds', label: 'Итоги' },
@@ -81,6 +86,9 @@ export function Queue() {
   /** Карточка жалоб, в которой открыта форма блокировки автора, и причина. */
   const [banningKey, setBanningKey] = useState('');
   const [banReason, setBanReason] = useState('');
+  /** Заявка в заказчики, по которой открыта форма отказа, и заметка для команды. */
+  const [rejectingId, setRejectingId] = useState(0);
+  const [rejectNote, setRejectNote] = useState('');
 
   const load = useCallback(
     () =>
@@ -107,6 +115,7 @@ export function Queue() {
   }, [selected]);
 
   const counts: Record<Tab, number> = {
+    applications: queue?.applications.length ?? 0,
     videos: queue?.videos.length ?? 0,
     orders: queue?.orders.length ?? 0,
     holds: queue?.holds.length ?? 0,
@@ -119,7 +128,8 @@ export function Queue() {
   const queryTab = query.get('tab') as Tab;
   const tab: Tab = TABS.some((t) => t.id === queryTab)
     ? queryTab
-    : (TABS.find((t) => counts[t.id])?.id ?? 'videos');
+    : // заявки в заказчики — после роликов и заказов: у тех идут сроки
+      ([...TABS.slice(1), TABS[0]].find((t) => counts[t.id])?.id ?? 'videos');
   const setTab = (t: Tab) => setQuery({ tab: t });
 
   /** Самое старое ожидание — главный сигнал «пора разбирать». */
@@ -183,6 +193,26 @@ export function Queue() {
       await (publish
         ? approveReview(submissionId)
         : removeReview(submissionId));
+    } catch (err) {
+      setActionError(errorText(err));
+    }
+    void load();
+  }
+
+  /** Заявка в заказчики: открыть кабинет или отказать (`note` — заметка для команды). */
+  async function decideApplication(id: number, note?: string) {
+    if (
+      note === undefined &&
+      !window.confirm('Открыть кабинет заказчика? Он сможет создавать заказы.')
+    )
+      return;
+    setActionError('');
+    try {
+      await (note === undefined
+        ? approveApplication(id)
+        : rejectApplication(id, note));
+      setRejectingId(0);
+      setRejectNote('');
     } catch (err) {
       setActionError(errorText(err));
     }
@@ -286,7 +316,92 @@ export function Queue() {
         </p>
       )}
 
-      {tab === 'reports' ? (
+      {tab === 'applications' ? (
+        queue.applications.length === 0 ? (
+          <p className={s.hint}>Заявок нет.</p>
+        ) : (
+          <div className={s.cards}>
+            {queue.applications.map((a) => (
+              <article key={a.id} className={s.card}>
+                <div className={s.cardHead}>
+                  <Link to={`/mod/creators/${a.userId}`} className={s.person}>
+                    <strong>{a.user} ›</strong>
+                  </Link>
+                  <span className={waitClass(a.createdAt)}>
+                    {waitingFor(a.createdAt)}
+                  </span>
+                </div>
+                <span>
+                  Почта: <a href={`mailto:${a.email}`}>{a.email}</a>
+                </span>
+                <span>
+                  Телефон:{' '}
+                  {a.phone ? (
+                    <a href={`tel:${a.phone}`}>{a.phone}</a>
+                  ) : (
+                    <span className={s.muted}>не указан</span>
+                  )}
+                </span>
+                <p className={`${s.hint} ${s.small}`}>
+                  Заявка и в его теме поддержки — там можно договориться о
+                  созвоне.
+                </p>
+                {rejectingId === a.id ? (
+                  <>
+                    <label className={s.field}>
+                      Почему отказ
+                      <textarea
+                        value={rejectNote}
+                        onChange={(e) => setRejectNote(e.target.value)}
+                        rows={2}
+                        maxLength={500}
+                        placeholder="Заметка для команды — пользователь её не увидит"
+                      />
+                    </label>
+                    <div className={s.buttons}>
+                      <button
+                        type="button"
+                        className={s.btn}
+                        onClick={() => setRejectingId(0)}
+                      >
+                        Отмена
+                      </button>
+                      <button
+                        type="button"
+                        className={`${s.btn} ${s.reject}`}
+                        disabled={!rejectNote.trim()}
+                        onClick={() => decideApplication(a.id, rejectNote)}
+                      >
+                        Отказать
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className={s.buttons}>
+                    <button
+                      type="button"
+                      className={`${s.btn} ${s.primary}`}
+                      onClick={() => decideApplication(a.id)}
+                    >
+                      Открыть кабинет
+                    </button>
+                    <button
+                      type="button"
+                      className={`${s.btn} ${s.reject}`}
+                      onClick={() => {
+                        setRejectingId(a.id);
+                        setRejectNote('');
+                      }}
+                    >
+                      Отказать
+                    </button>
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        )
+      ) : tab === 'reports' ? (
         reports.length === 0 ? (
           <p className={s.hint}>Жалоб нет.</p>
         ) : (

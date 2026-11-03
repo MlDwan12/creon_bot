@@ -14,6 +14,7 @@ import { UserPage } from './mod/UserPage';
 import { Users } from './mod/Users';
 import { VideoPage } from './mod/VideoReview';
 import { WhatWorks } from './mod/WhatWorks';
+import { Apply } from './creator/Apply';
 import { Balance } from './creator/Balance';
 import { Learn } from './creator/Learn';
 import { OrderPage as CreatorOrderPage } from './creator/OrderPage';
@@ -50,6 +51,8 @@ export const router = createBrowserRouter([
       { path: 'balance', element: <Balance /> },
       { path: 'learn', element: <Learn /> },
       { path: 'profile', element: <Profile /> },
+      // «Стать заказчиком» — заявка и что с ней (APPLY_PATH в Shell.tsx)
+      { path: 'profile/advertiser', element: <Apply /> },
       { path: 'creators/:id', element: <Profile /> },
       {
         path: 'mod',

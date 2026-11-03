@@ -16,6 +16,9 @@ export * from '@fixum/shared';
 /** Действию нужен свежий вход (кошелёк, вывод) — событие на window, его слушает App.tsx. */
 export const RELOGIN_EVENT = 'fixum:relogin';
 
+/** Заявку «Стать заказчиком» отправили — меню (Shell.tsx) обновит метку «на рассмотрении». */
+export const APPLIED_EVENT = 'fixum:applied';
+
 /**
  * Запрос к API сайта. Вход — cookie сессии (ставит POST /api/web/login), браузер шлёт её сам;
  * заголовок X-Fixum-Web без неё API не примет cookie — защита от подделки запросов с чужих сайтов.
@@ -145,6 +148,10 @@ export const {
   resolveReports,
   banUser,
   unbanUser,
+  approveApplication,
+  rejectApplication,
+  openAdvertiser,
+  closeAdvertiser,
 } = createModApi(request);
 
 /** Текст ошибки для экрана: наш ответ API — его текст, иначе общий. */
@@ -185,6 +192,7 @@ export const {
   fetchBalance,
   requestPayout,
   fetchMyProfile,
+  applyAdvertiser,
   fetchCreator,
   updateProfileLinks,
   updateNotifications,
