@@ -29,13 +29,14 @@ const TABS: Tab[] = [
   'reports',
   'applications',
 ];
+// «Заказчики» — первыми: заявок мало, и в конце ряда на телефоне вкладка уходит за край
 const TAB_LIST: { id: Tab; label: string }[] = [
+  { id: 'applications', label: 'Заказчики' },
   { id: 'videos', label: 'Видео' },
   { id: 'orders', label: 'Заказы' },
   { id: 'holds', label: 'Итоги' },
   { id: 'reviews', label: 'Отзывы' },
   { id: 'reports', label: 'Жалобы' },
-  { id: 'applications', label: 'Заказчики' },
 ];
 
 /** Мера по жалобам — своя для каждого типа объекта (см. ReportsService.resolve). */
@@ -130,10 +131,12 @@ export default function ModQueueView() {
   const total = TABS.reduce((sum, t) => sum + counts[t], 0);
   // Вкладка — в адресе (?tab=videos), чтобы «Назад» из карточки вернул на ту же вкладку.
   // Без неё — первая, где что-то ждёт: модератор сразу видит работу, а не пустой список.
+  // Заявки в заказчики — после роликов и заказов: у тех идут сроки, заявка подождёт созвона.
   const queryTab = query.get('tab') as Tab;
   const tab: Tab = TABS.includes(queryTab)
     ? queryTab
-    : (TAB_LIST.find((t) => counts[t.id])?.id ?? 'videos');
+    : ([...TAB_LIST.slice(1), TAB_LIST[0]].find((t) => counts[t.id])?.id ??
+      'videos');
   // вкладка по умолчанию зависит от очереди — выбранную пишем в адрес всегда
   const setTab = (t: Tab) => setQuery({ tab: t }, { replace: true });
 

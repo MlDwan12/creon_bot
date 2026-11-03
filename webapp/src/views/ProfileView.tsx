@@ -419,6 +419,29 @@ export default function ProfileView() {
         />
       )}
 
+      {/* заметно, а не в «Настройках»: так креатор узнаёт, что может и заказывать рекламу */}
+      {own && profile.advertiser && profile.advertiser.state !== 'open' && (
+        <section className={s.block}>
+          <h2 className="section-title">{t('apply.cardTitle')}</h2>
+          <p className={s.hint}>
+            {t(`apply.card_${profile.advertiser.state}`, {
+              date: profile.advertiser.retryAt
+                ? formatDate(profile.advertiser.retryAt)
+                : '',
+            })}
+          </p>
+          {profile.advertiser.state === 'none' ? (
+            <Link to={APPLY_PATH} className="main-button">
+              {t('apply.title')}
+            </Link>
+          ) : (
+            <Link to={APPLY_PATH} className={s.editLink}>
+              {t('apply.details')}
+            </Link>
+          )}
+        </section>
+      )}
+
       {/* Свой профиль — тремя группами: деньги, что видят заказчики, настройки. Чужой — только витрина. */}
       {own && (
         <>
@@ -789,27 +812,6 @@ export default function ProfileView() {
                 <p className={s.error} role="alert">
                   {accountsError}
                 </p>
-              )}
-            </section>
-          )}
-          {profile.advertiser && profile.advertiser.state !== 'open' && (
-            <section className={s.block}>
-              <h2 className="section-title">{t('apply.cardTitle')}</h2>
-              <p className={s.hint}>
-                {t(`apply.card_${profile.advertiser.state}`, {
-                  date: profile.advertiser.retryAt
-                    ? formatDate(profile.advertiser.retryAt)
-                    : '',
-                })}
-              </p>
-              {profile.advertiser.state === 'none' ? (
-                <Link to={APPLY_PATH} className="main-button">
-                  {t('apply.title')}
-                </Link>
-              ) : (
-                <Link to={APPLY_PATH} className={s.editLink}>
-                  {t('apply.details')}
-                </Link>
               )}
             </section>
           )}

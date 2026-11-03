@@ -676,6 +676,32 @@ details > summary {
   }
 }
 
+/* Заявка «Стать заказчиком»: слева как это работает, справа форма; уже 720 px — одна колонка */
+.apply-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+  gap: 16px;
+}
+
+.numbered {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.5;
+}
+
+.self-start {
+  align-self: flex-start;
+}
+
+@media (max-width: 720px) {
+  .apply-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Формы и разделы кабинетов */
 .narrow {
   max-width: 720px;

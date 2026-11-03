@@ -947,6 +947,20 @@
     "card_pending": "You sent a request for an advertiser account — we will contact you shortly.",
     "card_rejected": "Your request wasn’t approved for now. You can send a new one from {{date}}.",
     "card_closed": "Your advertiser account is closed. You can get it back through support.",
-    "details": "Details"
+    "details": "Details",
+    "howTitle": "How it works",
+    "givesTitle": "What the advertiser account gives you",
+    "gives": [
+      "A brief and a budget — creators shoot videos on their own channels",
+      "Pay only for the views a moderator has confirmed",
+      "A report on every video: views, clicks, rating"
+    ],
+    "formTitle": "Request",
+    "pendingBadge": "under review",
+    "pendingHint": "We will contact you",
+    "navHint": "Ordering ads?",
+    "rejectedBadge": "Not yet",
+    "openBadge": "Open",
+    "closedBadge": "Closed"
   }
 }
