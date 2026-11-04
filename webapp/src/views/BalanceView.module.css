@@ -142,6 +142,11 @@
   border-radius: 14px;
   background: var(--surface);
 }
+/* ролик в холде — ссылка на «Мои отклики», выглядит как карточка */
+a.payout {
+  color: inherit;
+  text-decoration: none;
+}
 .row {
   display: flex;
   justify-content: space-between;

@@ -38,6 +38,8 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
       // согласился при сдаче на остаток фонда: просмотры сверх него не оплачиваются
       agreedPayout: fromMinor(row.agreedPayoutMinor),
       finalized: row.finalizedAt !== null,
+      // когда подвели итог холда — с этой даты деньги можно вывести
+      finalizedAt: row.finalizedAt,
       createdAt: row.createdAt,
       // Для шкалы статусов: сдан, проверен модератором и до когда холд (одобрен, итога ещё нет).
       submittedAt: row.submittedAt,

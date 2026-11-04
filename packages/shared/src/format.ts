@@ -1,4 +1,24 @@
-import { PLATFORM_NAMES, type Platform, type VideoFormat } from './api';
+import {
+  type MySubmission,
+  PLATFORM_NAMES,
+  type Platform,
+  type VideoFormat,
+} from './api';
+
+/**
+ * Дата холда прошла, а итог ещё не подвели (его фиксирует модератор): вместо прошедшей даты
+ * креатору пишем «проверяем публикацию».
+ */
+export function holdOverdue(holdEndsAt: string | null, now = Date.now()) {
+  return holdEndsAt !== null && new Date(holdEndsAt).getTime() <= now;
+}
+
+/** Ролики в холде (одобрены, итога нет) — для списка в «Балансе», ближайшие к выводу первыми. */
+export function heldVideos(subs: MySubmission[]) {
+  return subs
+    .filter((sub) => sub.holdEndsAt !== null)
+    .sort((a, b) => a.holdEndsAt!.localeCompare(b.holdEndsAt!));
+}
 
 /** Перевод и локаль приложения: у мини-аппа и сайта свой экземпляр i18next, словари общие (i18n/). */
 export interface Translator {

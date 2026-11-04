@@ -116,6 +116,8 @@ export interface MySubmission {
   agreedPayout: number | null;
   /** Холд закончился: итог зафиксирован, деньги можно вывести. */
   finalized: boolean;
+  /** Когда подвели итог холда — с этой даты деньги можно вывести. */
+  finalizedAt: string | null;
   /** Ссылка на товар для описания ролика — путь `/r/<код>` от адреса мини-аппа; null — у заказа нет товара. */
   trackPath: string | null;
   /** VideoFormat — требования к ролику, для самопроверки перед сдачей. */
