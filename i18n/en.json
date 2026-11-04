@@ -422,6 +422,8 @@
     "videoIn": "Video on {{platform}}",
     "edit": "Change",
     "paste": "Paste link",
+    "counting": "Counting views…",
+    "autoViews": "Counted automatically from {{platform}} — this number will be used when you submit.",
     "urlHelp": "A video posted on your TikTok, YouTube, VK, Instagram or X. The post must be public. We count views automatically for YouTube and X, and for TikTok, VK and Instagram if the account is connected in your profile; otherwise a moderator checks them.",
     "viewsLabel": "Current views",
     "viewsPlaceholder": "at least {{views}}",

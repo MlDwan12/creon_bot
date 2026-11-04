@@ -313,6 +313,19 @@ export class SubmissionsService implements OnApplicationBootstrap {
   }
 
   /**
+   * Просмотры ролика до сдачи — креатору на экране сдачи: при сдаче возьмём это же число
+   * (countedAtSubmit, тот же кэш — квоту второй раз не тратит). null — эту площадку API не считает
+   * или не ответило: просмотры вводит креатор. Короткую ссылку TikTok здесь не раскрываем.
+   */
+  async previewViews(submissionId: number, creatorId: number, url: string) {
+    const submission = await this.mustFind(submissionId);
+    if (submission.creatorId !== creatorId)
+      throw new ForbiddenException(tr('errors.notYourSubmission'));
+    if (!this.viewCounter.isAutomatic(url)) return null;
+    return (await this.countedAtSubmit(url, creatorId)) ?? null;
+  }
+
+  /**
    * Просмотры ролика при сдаче по API площадки; undefined — не посчитать. Запоминаем на
    * SUBMIT_COUNT_TTL_MS: повторные сдачи той же ссылки («не хватило — ещё раз») не тратят квоту
    * YouTube и платные чтения X.

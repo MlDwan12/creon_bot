@@ -199,6 +199,7 @@ export const {
   fetchOrder,
   claimOrder,
   fetchMySubmissions,
+  previewViews,
   submitVideo,
   fetchBalance,
   requestPayout,

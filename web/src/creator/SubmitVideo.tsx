@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
 import {
   ApiError,
   errorText,
   fetchMySubmissions,
+  previewViews,
   type MySubmission,
   PLATFORM_NAMES,
   submitVideo,
@@ -54,7 +55,34 @@ export function SubmitVideo() {
   useEffect(() => void load(), [load]);
 
   const order = submission?.order;
-  const viewsNum = Number(views);
+  /**
+   * Просмотры по API для распознанной ссылки — подставляем сами (поле только для чтения): при сдаче
+   * бэкенд возьмёт это же число. null — площадку не считаем или API не ответило: вводит креатор.
+   */
+  const [autoViews, setAutoViews] = useState<number | null>(null);
+  const [counting, setCounting] = useState(false);
+  const recognized = (describeVideoUrl(url)?.platform ?? 'OTHER') !== 'OTHER';
+  useEffect(() => {
+    setAutoViews(null);
+    if (!recognized) return;
+    let alive = true;
+    // пауза — чтобы не считать на каждую букву, пока ссылку правят руками
+    const timer = setTimeout(() => {
+      setCounting(true);
+      previewViews(id, url.trim())
+        .then(
+          (r) => alive && setAutoViews(r.views),
+          () => {}, // не посчитали — креатор введёт сам
+        )
+        .finally(() => alive && setCounting(false));
+    }, 400);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      setCounting(false);
+    };
+  }, [id, url, recognized]);
+  const viewsNum = autoViews ?? Number(views);
   /** Оплата за просмотры по ставке, не больше лимита заказа на ролик. */
   const payFor = (n: number, cpm: number) =>
     Math.min(Math.floor((n * cpm) / 10) / 100, order?.maxPayout ?? Infinity);
@@ -84,6 +112,16 @@ export function SubmitVideo() {
   }
 
   /** Распознанная ссылка — подпись площадки под полем. */
+  const urlInput = useRef<HTMLInputElement>(null);
+  /** «Вставить ссылку»: из буфера, если браузер разрешит; нет — курсор в поле, вставят сами. */
+  async function pasteUrl() {
+    try {
+      setUrl((await navigator.clipboard.readText()).trim());
+    } catch {
+      urlInput.current?.focus();
+    }
+  }
+
   const described = describeVideoUrl(url);
   const video = described && described.platform !== 'OTHER' ? described : null;
 
@@ -179,6 +217,7 @@ export function SubmitVideo() {
             <label className={s.field}>
               {t('submit.urlLabel')}
               <input
+                ref={urlInput}
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 type="url"
@@ -187,6 +226,13 @@ export function SubmitVideo() {
                 required
               />
             </label>
+            {!url && (
+              <div className={s.buttons}>
+                <button type="button" className={s.btn} onClick={pasteUrl}>
+                  {t('submit.paste')}
+                </button>
+              </div>
+            )}
             {video && (
               <p className={s.check}>
                 <PlatformIcon platform={video.platform} size={24} round />
@@ -200,19 +246,30 @@ export function SubmitVideo() {
             <label className={s.field}>
               {t('submit.viewsLabel')}
               <input
-                value={views}
+                value={autoViews ?? views}
                 onChange={(e) => setViews(e.target.value)}
+                readOnly={autoViews !== null}
                 type="number"
                 min={order.minViews}
                 step="1"
-                placeholder={t('submit.viewsPlaceholder', {
-                  views: formatViews(order.minViews),
-                })}
+                placeholder={
+                  counting
+                    ? t('submit.counting')
+                    : t('submit.viewsPlaceholder', {
+                        views: formatViews(order.minViews),
+                      })
+                }
                 required
               />
             </label>
             <p className={`${s.hint} ${s.small}`}>
-              {t('submit.viewsHelp', { views: formatViews(order.minViews) })}
+              {autoViews !== null && video
+                ? t('submit.autoViews', {
+                    platform: PLATFORM_NAMES[video.platform],
+                  })
+                : t('submit.viewsHelp', {
+                    views: formatViews(order.minViews),
+                  })}
             </p>
             {reserve && (
               <p className={s.alert}>
