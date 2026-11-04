@@ -175,6 +175,8 @@ export const {
   deleteOrder,
   fetchOrderReport,
   sendReportCsv,
+  shareReport,
+  unshareReport,
   rateVideo,
 } = createAdvertiserApi(request);
 export const { sendSupportMessage, createReport } = createAccountApi(request);

@@ -7,6 +7,7 @@ import {
   REPORT_REASONS,
   type Me,
   type OrderCategory,
+  type PublicReport,
   type ReportTarget,
 } from '@fixum/shared';
 import { i18next, setLang } from './i18n';
@@ -52,6 +53,14 @@ async function request<T>(
     );
   }
   return (res.status === 204 ? undefined : await res.json()) as T;
+}
+
+/** Отчёт по публичной ссылке — без входа (src/orders/share.controller.ts); 404 — ссылку отозвали. */
+export function fetchSharedReport(token: string) {
+  return request<PublicReport>(
+    'GET',
+    `/api/share/${encodeURIComponent(token)}`,
+  );
 }
 
 /** Кто вошёл; 401 — не вошёл, 403 с banned — заблокирован. */
@@ -178,6 +187,8 @@ export const {
   deleteOrder,
   fetchOrderReport,
   sendReportCsv,
+  shareReport,
+  unshareReport,
   rateVideo,
 } = createAdvertiserApi(request);
 export const { sendSupportMessage, createReport } = createAccountApi(request);

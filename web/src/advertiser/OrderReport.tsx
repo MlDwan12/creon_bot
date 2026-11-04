@@ -16,6 +16,7 @@ import { Complaint } from '../components/Complaint';
 import { PlatformIcon } from '../components/PlatformIcon';
 import { formatDate, formatMoney, formatViews } from '../format';
 import s from '../ui.module.css';
+import { ShareReport } from './ShareReport';
 
 const EMPTY_FEEDBACK: Feedback = {
   rating: 0,
@@ -226,6 +227,7 @@ export function OrderReport() {
           {csvError}
         </p>
       )}
+      <ShareReport orderId={id} share={data.share} />
 
       <div className={s.cardHead}>
         <h2>{t('review.videos')}</h2>

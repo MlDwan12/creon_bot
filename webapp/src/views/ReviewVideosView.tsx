@@ -12,6 +12,7 @@ import {
 } from '../api';
 import LoadState from '../components/LoadState';
 import PlatformIcon from '../components/PlatformIcon';
+import ShareReport from '../components/ShareReport';
 import SupportLink from '../components/SupportLink';
 import UserAvatar from '../components/UserAvatar';
 import { formatDate, formatMoney, formatViews } from '../format';
@@ -272,6 +273,7 @@ export default function ReviewVideosView() {
           {csvError}
         </p>
       )}
+      <ShareReport orderId={id} share={data.share} />
 
       <div className={s.titleRow}>
         <h2 className={`section-title ${s.flush}`}>{t('review.videos')}</h2>

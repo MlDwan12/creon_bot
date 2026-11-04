@@ -4,9 +4,13 @@ import './i18n';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { SharedReport } from './SharedReport';
+
+// Публичный отчёт /share/<токен> открывается без входа — мимо App (экран входа) и меню сайта.
+const share = /^\/share\/([\w-]+)\/?$/.exec(location.pathname);
 
 createRoot(document.getElementById('app')!).render(
   <StrictMode>
-    <App />
+    {share ? <SharedReport token={share[1]} /> : <App />}
   </StrictMode>,
 );

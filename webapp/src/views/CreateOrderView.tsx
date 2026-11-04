@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { orderEstimate } from '@fixum/shared';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import {
@@ -198,6 +199,12 @@ export default function CreateOrderView() {
         .then((r) => setPricePer1000(r.per1000))
         .catch(() => {}); // нет подсказки — форма та же
   }, [form.category]);
+  // калькулятор «примерно получится» — пересчёт при каждом вводе бюджета и порога
+  const estimate = orderEstimate(
+    Number(form.budget),
+    pricePer1000,
+    Number(form.minViews),
+  );
 
   /** Отметить площадку или снять отметку; «Любая» — пустой список. */
   function togglePlatform(p: VideoPlatform) {
@@ -733,22 +740,35 @@ export default function CreateOrderView() {
         )}
         <p className={s.hint}>{t('createOrder.maxPayoutHint')}</p>
 
-        {pricePer1000 !== null && form.category && (
-          <p className={s.hint}>
-            {Number(form.budget) > 0
-              ? t('createOrder.priceHintViews', {
-                  category: categoryLabel(form.category),
-                  price: formatMoney(pricePer1000),
-                  views: formatViews(
-                    Math.floor((Number(form.budget) / pricePer1000) * 10) * 100,
-                  ),
-                })
-              : t('createOrder.priceHint', {
-                  category: categoryLabel(form.category),
-                  price: formatMoney(pricePer1000),
+        {pricePer1000 !== null &&
+          form.category &&
+          (estimate ? (
+            <section className={s.estimate} aria-live="polite">
+              <span className={s.hint}>{t('createOrder.calcTitle')}</span>
+              <strong>
+                {t('createOrder.calcViews', {
+                  views: formatViews(estimate.views),
                 })}
-          </p>
-        )}
+              </strong>
+              <strong>
+                {t('createOrder.calcVideos', { count: estimate.videos })}
+              </strong>
+              <p className={s.hint}>
+                {t('createOrder.calcNote', {
+                  category: categoryLabel(form.category),
+                  price: formatMoney(pricePer1000),
+                  views: formatViews(Number(form.minViews) || 0),
+                })}
+              </p>
+            </section>
+          ) : (
+            <p className={s.hint}>
+              {t('createOrder.priceHint', {
+                category: categoryLabel(form.category),
+                price: formatMoney(pricePer1000),
+              })}
+            </p>
+          ))}
         {rubPerUsdt && Number(form.budget) > 0 && (
           <p className={s.hint}>
             {t('createOrder.rate', {

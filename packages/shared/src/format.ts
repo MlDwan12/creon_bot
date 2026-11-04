@@ -13,6 +13,21 @@ export function holdOverdue(holdEndsAt: string | null, now = Date.now()) {
   return holdEndsAt !== null && new Date(holdEndsAt).getTime() <= now;
 }
 
+/**
+ * Калькулятор в форме заказа: на сколько просмотров хватит бюджета по обычной цене 1000 просмотров
+ * в категории (с комиссией — как видит заказчик) и сколько это роликов, если каждый наберёт ровно
+ * порог. Просмотры округлены вниз до сотен — это ориентир, не обещание; null — считать не из чего.
+ */
+export function orderEstimate(
+  budget: number,
+  per1000: number | null,
+  minViews: number,
+) {
+  if (!per1000 || budget <= 0) return null;
+  const views = Math.floor((budget / per1000) * 10) * 100;
+  return { views, videos: minViews > 0 ? Math.floor(views / minViews) : 0 };
+}
+
 /** Срок проверки ролика модератором: креатор видит «решение до …», в очереди дольше — красным. */
 export const REVIEW_SLA_HOURS = 24;
 

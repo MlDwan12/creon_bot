@@ -552,6 +552,11 @@
     "fundBusy": "New videos aren't accepted: the whole fund is reserved for videos under review. If some are rejected, the order reopens; if approved, it closes."
   },
   "createOrder": {
+    "calcTitle": "Rough estimate",
+    "calcViews": "≈ {{views}} views",
+    "calcVideos_one": "up to {{count}} video",
+    "calcVideos_other": "up to {{count}} videos",
+    "calcNote": "At the usual price in “{{category}}” — {{price}} per 1000 views. Videos — if each one gets exactly the {{views}}-view threshold; videos with more views cost more, so there will be fewer. A moderator sets the exact rate.",
     "vertical": "Vertical",
     "horizontal": "Horizontal",
     "anyOrientation": "Any",
@@ -626,8 +631,7 @@
     "linkInBio": "Link in profile bio",
     "linkInBioHint": "The creator also puts their product link in the profile bio and keeps it until the final count — 5 days after the video is approved. It is an extra step: such orders get fewer takers, and the moderator will factor it into the rate.",
     "linkInBioNeedsTarget": "Add a product link first — that is what the creator puts in the bio.",
-    "priceHint": "1,000 views in “{{category}}” usually cost about {{price}}.",
-    "priceHintViews": "1,000 views in “{{category}}” usually cost about {{price}} — your budget buys roughly {{views}} views. A moderator sets the exact rate."
+    "priceHint": "1,000 views in “{{category}}” usually cost about {{price}}."
   },
   "review": {
     "csvError": "Couldn't send the file",
@@ -801,6 +805,8 @@
     "maxPayoutRange": "The per-video cap must be a whole number of USDT, no more than the budget",
     "requirementsCount": "No more than {{max}} requirements",
     "requirementTooLong": "Each requirement must be at most {{max}} characters",
+    "shareOff": "Sharing reports is not available yet — please contact support",
+    "shareGone": "This link no longer works — ask the brand for a new one",
     "durationOrder": "The minimum duration is greater than the maximum",
     "badOrientation": "Unknown video orientation",
     "badPlatform": "Unknown platform",
@@ -986,5 +992,21 @@
     "rejectedBadge": "Not yet",
     "openBadge": "Open",
     "closedBadge": "Closed"
+  },
+  "share": {
+    "title": "Share report",
+    "hint": "A link to this report that works without signing in — e.g. for your manager. It shows results and spend, but not the budget or creators' contacts.",
+    "link": "Report link",
+    "create": "Create link",
+    "copy": "Copy",
+    "copied": "Copied",
+    "revoke": "Revoke",
+    "revokeHint": "Revoke — the link stops working right away. You can create a new one any time.",
+    "error": "Something went wrong, please try again",
+    "publicTitle": "Order report",
+    "publicNote": "View-only report. Data as of when the page was opened.",
+    "publicGone": "This link no longer works — ask the brand for a new one.",
+    "spent": "spent",
+    "by": "Fixum — creator ads paid per view"
   }
 }
