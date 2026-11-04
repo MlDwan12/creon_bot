@@ -162,6 +162,8 @@ describe('toMySubmissions — холд', () => {
     ]);
     expect(held.holdEndsAt).toEqual(new Date('2026-10-25T10:00:00Z'));
     expect(final.holdEndsAt).toBeNull();
+    expect(final.finalizedAt).toEqual(new Date('2026-10-25T10:00:00Z'));
+    expect(held.finalizedAt).toBeNull();
     expect(onReview.holdEndsAt).toBeNull();
   });
 });

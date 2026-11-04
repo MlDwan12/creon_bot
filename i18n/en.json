@@ -314,6 +314,8 @@
       "hold": "5-day hold",
       "holdUntil": "On hold until {{date}}",
       "holdNote": "Keep the post public — otherwise the payout is cancelled.",
+      "holdChecking": "Hold is over — checking the post",
+      "holdCheckingNote": "A moderator checks the video is still up — then the money becomes available.",
       "withdraw": "Ready to withdraw",
       "rejected": "Rejected",
       "expired": "Slot expired — no video within 7 days"
@@ -338,6 +340,9 @@
     "held": "On hold",
     "heldHint": "Available 5 days after a video is approved",
     "nextRelease": "Next release {{date}}",
+    "heldList": "Videos on hold",
+    "heldUntil": "until {{date}}",
+    "heldChecking": "checking the post",
     "rate": "{{rub}} · rate {{rate}} ₽ per USDT",
     "sent": "Request sent. A manager will send USDT to your wallet — you'll get a notification.",
     "pending": "Your request for {{amount}} is awaiting transfer. You can send a new one after it.",
