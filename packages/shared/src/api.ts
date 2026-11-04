@@ -277,6 +277,15 @@ export interface OrderReport {
 
 /** Ответы `/api/mod/*` — см. src/api/moderation.controller.ts. */
 export interface ModQueue {
+  /** Аккаунты соцсетей: открыть ссылку и найти код в описании. */
+  links: {
+    id: number;
+    userId: number;
+    user: string;
+    url: string;
+    code: string;
+    createdAt: string;
+  }[];
   /** Заявки в заказчики: созвониться и открыть кабинет или отказать. */
   applications: {
     id: number;
@@ -473,12 +482,13 @@ export interface ModVideo {
   /** Сигналы накрутки по истории — см. src/submissions/view-signals.ts. */
   signals: ViewSignals;
   /**
-   * Чей ролик: verified — посчитан по подключённому аккаунту креатора; inProfile — автор есть в
+   * Чей ролик: verified — посчитан по подключённому аккаунту креатора; byCode — автор — аккаунт,
+   * подтверждённый кодом в описании; inProfile — автор есть в
    * соцсетях профиля, но владение не подтверждено; mismatch — автора нет в профиле;
    * unknown — площадка автора не отдала, сверить вручную.
    */
   author: {
-    status: 'verified' | 'inProfile' | 'mismatch' | 'unknown';
+    status: 'verified' | 'byCode' | 'inProfile' | 'mismatch' | 'unknown';
     viaAccount: boolean;
     /** Аккаунт подключили столько дней назад (меньше 7) — повод проверить; null — давно или не по аккаунту. */
     connectedDaysAgo: number | null;
@@ -497,6 +507,8 @@ export interface ModVideo {
   finalizedAt: string | null;
   /** Во время холда площадка не нашла ролик — с этого момента; null — на месте или не проверяли. */
   goneAt: string | null;
+  /** Аккаунты креатора, подтверждённые кодом, — сверить автора там, где его не узнать. */
+  verifiedLinks: string[];
   /** Через сколько дней после одобрения фиксируется итог просмотров. */
   holdDays: number;
   order: {
@@ -584,6 +596,15 @@ export interface CreatorProfile {
   advertiser: AdvertiserAccess | null;
   /** Ссылки на соцсети, по порядку; на одной площадке может быть несколько. Чужим — пусто. */
   links: string[];
+  /**
+   * Подтверждение ссылок кодом в описании аккаунта — только в своём профиле (GET /api/profile).
+   * status null — ещё не отправляли.
+   */
+  linkChecks?: {
+    url: string;
+    code: string;
+    status: 'PENDING' | 'VERIFIED' | 'NO_CODE' | null;
+  }[];
   /** Кошелёк USDT (TRC20) для выплат — только в своём профиле и модератору. */
   wallet: string | null;
   /** Сообщения о новых заказах — только в своём профиле и модератору. */
@@ -702,7 +723,9 @@ export type ModeratorActionType =
   | 'USER_UNBAN'
   | 'ADVERTISER_OPEN'
   | 'ADVERTISER_REJECT'
-  | 'ADVERTISER_CLOSE';
+  | 'ADVERTISER_CLOSE'
+  | 'LINK_VERIFY'
+  | 'LINK_NO_CODE';
 
 export interface ModeratorStats {
   moderatorId: string;

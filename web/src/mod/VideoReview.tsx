@@ -217,14 +217,27 @@ export function VideoReview({
           )}
 
           <p
-            className={author.status === 'verified' ? s.notice : s.alert}
-            role={author.status === 'verified' ? undefined : 'alert'}
+            className={
+              author.status === 'verified' || author.status === 'byCode'
+                ? s.notice
+                : s.alert
+            }
+            role={
+              author.status === 'verified' || author.status === 'byCode'
+                ? undefined
+                : 'alert'
+            }
           >
             {author.status === 'verified' ? (
               <>
                 Автор подтверждён: ролик с подключённого аккаунта креатора
                 {author.connectedDaysAgo !== null &&
                   `. Аккаунт подключён ${author.connectedDaysAgo === 0 ? 'сегодня' : `${author.connectedDaysAgo} дн. назад`} — если ролик чужой и популярный, уточните у креатора через поддержку`}
+              </>
+            ) : author.status === 'byCode' ? (
+              <>
+                Автор — {authorLink}: аккаунт креатора, подтверждён кодом в
+                описании
               </>
             ) : author.status === 'inProfile' ? (
               <>
@@ -243,6 +256,19 @@ export function VideoReview({
               </>
             )}
           </p>
+          {author.status !== 'byCode' && video.verifiedLinks.length > 0 && (
+            <p className={`${s.hint} ${s.small}`}>
+              Подтверждены кодом:{' '}
+              {video.verifiedLinks.map((l, i) => (
+                <span key={l}>
+                  {i > 0 && ', '}
+                  <a href={safeUrl(l)} target="_blank" rel="noreferrer">
+                    {l}
+                  </a>
+                </span>
+              ))}
+            </p>
+          )}
 
           <section className={s.card}>
             <h2>

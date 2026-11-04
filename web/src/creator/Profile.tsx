@@ -22,6 +22,7 @@ import { LanguagePicker } from '../components/LanguagePicker';
 import { PlatformIcon } from '../components/PlatformIcon';
 import { describeVideoUrl, formatDate, formatMoney } from '../format';
 import s from '../ui.module.css';
+import { LinkChecks } from './LinkChecks';
 
 // Ссылки на соцсети — списком: на одной площадке может быть несколько аккаунтов (до 10).
 const MAX_LINKS = 10;
@@ -308,6 +309,9 @@ export function Profile() {
                       ? t('profile.linksChange')
                       : t('profile.linksAdd')}
                   </button>
+                )}
+                {own && profile.linkChecks && (
+                  <LinkChecks checks={profile.linkChecks} onSent={load} />
                 )}
               </>
             )}

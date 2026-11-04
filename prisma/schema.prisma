@@ -57,6 +57,7 @@ model User {
   oauthPendings  OAuthPending[]
   webLogins      WebLogin[]
   advertiserApplications AdvertiserApplication[]
+  linkVerifications      LinkVerification[]
 
   /// Ответ поддержки в теме → чей это пользователь (SupportService.fromSupport).
   @@index([supportChatId, supportTopicId])
@@ -493,6 +494,10 @@ enum ModeratorActionType {
   ADVERTISER_REJECT
   /// Кабинет заказчика закрыт. objectId — пользователь.
   ADVERTISER_CLOSE
+  /// Аккаунт соцсети подтверждён кодом. objectId — пользователь, comment — ссылка.
+  LINK_VERIFY
+  /// Кода в описании аккаунта нет. objectId — пользователь, comment — ссылка.
+  LINK_NO_CODE
 }
 
 /// Журнал решений модераторов — кабинет модератора, таблица команды и выгрузка CSV
@@ -548,6 +553,36 @@ enum AdvertiserApplicationStatus {
 
 /// Заявка креатора «Стать заказчиком»: команда созванивается и открывает кабинет или отказывает
 /// (src/advertisers). Контакты видят только модераторы. После отказа — новая через ADVERTISER_RETRY_DAYS.
+enum LinkVerificationStatus {
+  /// Креатор добавил код в описание — ждёт модератора.
+  PENDING
+  VERIFIED
+  /// Модератор кода не нашёл — можно отправить снова.
+  NO_CODE
+}
+
+/// Подтверждение, что аккаунт соцсети из профиля (User.socialLinks) — креатора: код в описании
+/// аккаунта, сверяет модератор (src/profiles/link-verifications.service.ts). Ссылку убрали из профиля —
+/// её подтверждение не действует. Действует последняя запись по ссылке.
+model LinkVerification {
+  id          Int                    @id @default(autoincrement())
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  url         String
+  code        String
+  status      LinkVerificationStatus @default(PENDING)
+  /// Telegram ID модератора, который решил.
+  moderatorId BigInt?
+  decidedAt   DateTime?
+  createdAt   DateTime               @default(now())
+
+  /// Одна проверка на ссылку за раз — двойной тап не создаст вторую.
+  @@unique([userId, url], map: "LinkVerification_one_pending", where: { status: "PENDING" })
+  @@index([userId])
+  /// Очередь модератора.
+  @@index([status])
+}
+
 model AdvertiserApplication {
   id          Int                         @id @default(autoincrement())
   user        User                        @relation(fields: [userId], references: [id], onDelete: Cascade)

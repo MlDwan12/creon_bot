@@ -1,0 +1,95 @@
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.hint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--hint);
+}
+.check {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+}
+.link {
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--link);
+  font-size: 15px;
+  font-weight: 600;
+}
+.verified,
+.pending {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.verified {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+.pending {
+  background: var(--orange-soft);
+  color: var(--orange-text);
+}
+.how {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.code {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px dashed var(--separator);
+  border-radius: 10px;
+  background: none;
+  color: var(--text);
+  font-family: ui-monospace, monospace;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.code small {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--link);
+}
+.primary {
+  height: 44px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 16px;
+  font-weight: 600;
+}
+.error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--danger);
+}

@@ -226,15 +226,28 @@ export function videoKey(url: string): string {
 
 /** Автор публикации по данным API площадки — сверить с соцсетями в профиле креатора. */
 export interface VideoAuthor {
-  platform: 'YOUTUBE' | 'X';
-  /** id канала YouTube или пользователя X. */
+  platform: 'YOUTUBE' | 'X' | 'TIKTOK';
+  /** id канала YouTube или пользователя X; у TikTok — ник из ссылки на ролик. */
   id: string;
   /** @handle канала YouTube или username в X, без «@»; null — площадка не отдала. */
   handle: string | null;
   name: string | null;
 }
 
-/** Автор есть среди ссылок профиля: youtube.com/@handle, youtube.com/channel/<id>, x.com/<username>. */
+/**
+ * Автор ролика TikTok по самой ссылке, без API: tiktok.com/@anya/video/… → anya. Ник в ссылке
+ * ставит сам TikTok, когда делятся роликом; null — не TikTok или ссылка без ника.
+ */
+export function tiktokAuthor(url: string | null): VideoAuthor | null {
+  if (!url || !tiktokVideoId(url)) return null;
+  const handle = new URL(url).pathname.match(/^\/@([\w.]+)\//)?.[1];
+  return handle ? { platform: 'TIKTOK', id: handle, handle, name: null } : null;
+}
+
+/**
+ * Автор есть среди ссылок профиля: youtube.com/@handle, youtube.com/channel/<id>, x.com/<username>,
+ * tiktok.com/@ник.
+ */
 export function authorInLinks(author: VideoAuthor, links: string[]): boolean {
   const handle = author.handle?.toLowerCase();
   return links.some((link) => {
@@ -251,6 +264,11 @@ export function authorInLinks(author: VideoAuthor, links: string[]): boolean {
         !!handle &&
         first?.toLowerCase() === handle
       );
+    if (author.platform === 'TIKTOK')
+      return (
+        isOnHosts(u.hostname, PLATFORMS.TIKTOK.hosts) &&
+        first?.toLowerCase() === `@${handle}`
+      );
     return (
       isOnHosts(u.hostname, PLATFORMS.YOUTUBE.hosts) &&
       ((!!handle && first?.toLowerCase() === `@${handle}`) ||
@@ -261,6 +279,8 @@ export function authorInLinks(author: VideoAuthor, links: string[]): boolean {
 
 /** Страница автора на площадке — модератору открыть и сверить. */
 export function authorUrl(author: VideoAuthor): string {
+  if (author.platform === 'TIKTOK')
+    return `https://www.tiktok.com/@${author.handle}`;
   if (author.platform === 'X')
     return author.handle
       ? `https://x.com/${author.handle}`

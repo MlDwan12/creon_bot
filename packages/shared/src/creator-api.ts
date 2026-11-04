@@ -95,6 +95,10 @@ export function createCreatorApi(request: Requester) {
     updateProfileLinks: (links: string[]) =>
       request<{ ok: true }>('PUT', '/api/profile/links', { links }),
 
+    /** «Код добавлен» — ссылка из профиля уходит модератору сверить код в описании аккаунта. */
+    verifyProfileLink: (url: string) =>
+      request<{ ok: true }>('POST', '/api/profile/links/verify', { url }),
+
     updateNotifications: (newOrders: boolean) =>
       request<{ ok: true }>('PUT', '/api/profile/notifications', { newOrders }),
 

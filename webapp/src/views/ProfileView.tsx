@@ -21,6 +21,7 @@ import {
   updateProfileLinks,
   updateWallet,
 } from '../api';
+import LinkChecks from '../components/LinkChecks';
 import AppSettings from '../components/AppSettings';
 import LoadState from '../components/LoadState';
 import ModHistory from '../components/ModHistory';
@@ -647,6 +648,9 @@ export default function ProfileView() {
                   ? t('profile.linksChange')
                   : t('profile.linksAdd')}
               </button>
+            )}
+            {own && profile.linkChecks && (
+              <LinkChecks checks={profile.linkChecks} onSent={load} />
             )}
           </>
         )}

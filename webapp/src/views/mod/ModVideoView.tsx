@@ -263,7 +263,11 @@ export default function ModVideoView() {
 
       <p
         className={`${s.author} ${s[author.status] ?? ''}`}
-        role={author.status === 'verified' ? undefined : 'alert'}
+        role={
+          author.status === 'verified' || author.status === 'byCode'
+            ? undefined
+            : 'alert'
+        }
       >
         {author.status === 'verified' ? (
           <>
@@ -286,6 +290,10 @@ export default function ModVideoView() {
             {author.connectedDaysAgo !== null &&
               `. Аккаунт подключён ${author.connectedDaysAgo === 0 ? 'сегодня' : `${author.connectedDaysAgo} дн. назад`} — если ролик чужой и популярный, уточните у креатора через поддержку`}
           </>
+        ) : author.status === 'byCode' ? (
+          <>
+            Автор — {authorLink}: аккаунт креатора, подтверждён кодом в описании
+          </>
         ) : author.status === 'inProfile' ? (
           <>
             Автор — {authorLink}, есть в соцсетях креатора. Владение не
@@ -304,6 +312,19 @@ export default function ModVideoView() {
           </>
         )}
       </p>
+      {author.status !== 'byCode' && video.verifiedLinks.length > 0 && (
+        <p className={s.hint}>
+          Подтверждены кодом:{' '}
+          {video.verifiedLinks.map((l, i) => (
+            <span key={l}>
+              {i > 0 && ', '}
+              <a href={safeUrl(l)} target="_blank" rel="noreferrer">
+                {l}
+              </a>
+            </span>
+          ))}
+        </p>
+      )}
 
       <section className={s.block}>
         <h2 className="section-title">
