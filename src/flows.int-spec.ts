@@ -44,6 +44,7 @@ const orders = new OrdersService(prisma);
 // API площадки в тестах не отвечает — просмотры те, что указал креатор
 const submissions = new SubmissionsService(prisma, {
   fetchViews: () => Promise.resolve(new Map()),
+  isAutomatic: () => false,
 } as unknown as ViewCounterService);
 const analytics = new AnalyticsService(prisma);
 const profiles = new ProfilesService(prisma);
@@ -390,6 +391,21 @@ describe('отклик', () => {
       source: 'CHECK',
       views: 1_800,
     });
+  });
+
+  it('просмотры до сдачи: только по своему отклику; площадку без API не считаем', async () => {
+    const [advertiser, creator, other] = [
+      await user(),
+      await user(),
+      await user(),
+    ];
+    const order = await openOrder(advertiser.id);
+    const s = await submissions.claim(order.id, creator.id);
+    const url = 'https://www.tiktok.com/@a/video/7412345678901234567';
+    await expect(
+      submissions.previewViews(s.id, other.id, url),
+    ).rejects.toThrow();
+    expect(await submissions.previewViews(s.id, creator.id, url)).toBeNull();
   });
 
   it('двойной тап создаёт один отклик', async () => {

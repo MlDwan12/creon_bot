@@ -13,6 +13,7 @@ import {
   type VideoPlatform,
 } from '../api';
 import { OrderCard } from '../components/OrderCard';
+import { CreatorHome } from './CreatorHome';
 import { PlatformIcon } from '../components/PlatformIcon';
 import s from '../ui.module.css';
 
@@ -122,6 +123,7 @@ export function Catalog() {
         <h1>{t('catalog.title')}</h1>
         <p className={s.hint}>{t('catalog.subtitle')}</p>
       </header>
+      <CreatorHome />
 
       {/* Телефон: два списка в одну строку вместо пяти строк чипов (на компьютере — чипы) */}
       {(shownPlatforms.length > 0 || shownCategories.length > 0) && (

@@ -11,7 +11,7 @@ import { Throttle } from '@nestjs/throttler';
 import { ParseIdPipe } from '../common/parse-id.pipe';
 import { NotificationsService } from '../telegram/notifications.service';
 import { SubmissionsService } from './submissions.service';
-import { parseVideoSubmission } from './video-input';
+import { parseVideoSubmission, parseVideoUrl } from './video-input';
 import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
 import { toMySubmissions } from './my-submissions';
@@ -48,6 +48,23 @@ export class SubmissionsController {
     );
     this.notifications.videoSubmitted(submission);
     return { ok: true };
+  }
+
+  /** Просмотры ролика по API до сдачи — подставить на экране; null — вводит креатор. */
+  @Post(':id/views')
+  @Throttle({ default: { limit: 60, ttl: 60 * 60_000 } })
+  async previewViews(
+    @Param('id', ParseIdPipe) id: number,
+    @Body('videoUrl') videoUrl: unknown,
+    @Req() req: ApiRequest,
+  ) {
+    return {
+      views: await this.submissionsService.previewViews(
+        id,
+        req.user.id,
+        parseVideoUrl(videoUrl),
+      ),
+    };
   }
 
   /** Рекламодатель по желанию оценивает одобренный ролик (rate проверяет, что заказ его). */

@@ -18,7 +18,25 @@ import { toMinor } from '../common/money';
  */
 export function parseVideoSubmission(body: unknown) {
   const b = (body ?? {}) as Record<string, unknown>;
-  const url = typeof b.videoUrl === 'string' ? b.videoUrl.trim() : '';
+  const url = parseVideoUrl(b.videoUrl);
+  const accept = b.acceptPayout;
+  if (
+    accept !== undefined &&
+    accept !== null &&
+    (typeof accept !== 'number' || !Number.isFinite(accept) || accept < 0)
+  )
+    throw new BadRequestException(tr('errors.badAcceptPayout'));
+  return {
+    url,
+    views: parseViews(b.views),
+    acceptMinor: typeof accept === 'number' ? toMinor(accept) : null,
+    bioLinkConfirmed: b.bioLinkConfirmed === true,
+  };
+}
+
+/** Ссылка на ролик площадки — при сдаче и при подсчёте просмотров до сдачи. */
+export function parseVideoUrl(value: unknown) {
+  const url = typeof value === 'string' ? value.trim() : '';
   if (!VIDEO_URL_RE.test(url))
     throw new BadRequestException(tr('errors.notALink'));
   if (url.length > MAX_URL_LENGTH)
@@ -38,17 +56,5 @@ export function parseVideoSubmission(body: unknown) {
   // Короткую ссылку TikTok раскрывает SubmissionsService.submitVideo.
   if (!videoIdKey(url) && !isTiktokShortLink(url))
     throw new BadRequestException(tr('errors.videoNotPost'));
-  const accept = b.acceptPayout;
-  if (
-    accept !== undefined &&
-    accept !== null &&
-    (typeof accept !== 'number' || !Number.isFinite(accept) || accept < 0)
-  )
-    throw new BadRequestException(tr('errors.badAcceptPayout'));
-  return {
-    url,
-    views: parseViews(b.views),
-    acceptMinor: typeof accept === 'number' ? toMinor(accept) : null,
-    bioLinkConfirmed: b.bioLinkConfirmed === true,
-  };
+  return url;
 }

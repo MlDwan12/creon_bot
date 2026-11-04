@@ -66,6 +66,14 @@ export function createCreatorApi(request: Requester) {
         bioLinkConfirmed,
       }),
 
+    /** Просмотры по API до сдачи; null — площадку не считаем или API не ответило. */
+    previewViews: (submissionId: number, videoUrl: string) =>
+      request<{ views: number | null }>(
+        'POST',
+        `/api/submissions/${submissionId}/views`,
+        { videoUrl },
+      ),
+
     fetchBalance: () => request<Balance>('GET', '/api/balance'),
 
     requestPayout: (amount: number) =>

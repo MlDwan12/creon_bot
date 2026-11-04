@@ -4,3 +4,4 @@ export * from './mod-api';
 export * from './mod-labels';
 export * from './advertiser-api';
 export * from './creator-api';
+export * from './creator-home';
