@@ -43,6 +43,8 @@ export interface OrderSummary extends VideoFormat {
   description: string;
   /** Ссылка на бриф или материалы к заданию; null — нет. */
   referenceUrl: string | null;
+  /** Требования к ролику пунктами — креатор отмечает их при сдаче. */
+  requirements: string[];
   /** Свою ссылку на товар креатор держит ещё и в шапке профиля — до итога холда. */
   linkInBio: boolean;
   /** Выплата креатору за 1000 просмотров, USDT. */
@@ -134,6 +136,8 @@ export interface MySubmission {
     status: OrderStatus;
     /** При сдаче — подтвердить, что ссылка стоит в шапке профиля. */
     linkInBio: boolean;
+    /** Требования к ролику пунктами — в самопроверке перед сдачей. */
+    requirements: string[];
   };
 }
 
@@ -143,6 +147,7 @@ export interface MyOrder extends VideoFormat {
   title: string;
   description: string;
   exampleUrls: string[];
+  requirements: string[];
   referenceUrl: string | null;
   targetUrl: string | null;
   linkInBio: boolean;
@@ -177,6 +182,8 @@ export interface NewOrderInput extends VideoFormat {
   description: string;
   /** Примеры роликов: от 3 до 10 ссылок на ролики площадок. */
   exampleUrls: string[];
+  /** Требования к ролику пунктами, до 10, по желанию. */
+  requirements: string[];
   /** Ссылка на бриф или материалы; null — без ссылки. */
   referenceUrl: string | null;
   /** Страница товара: креаторы ставят в описание ролика свою ссылку на неё, считаем переходы. */
@@ -414,6 +421,7 @@ export interface ModOrder extends VideoFormat {
   description: string;
   /** Примеры роликов — модератору сами ссылки. */
   exampleUrls: string[];
+  requirements: string[];
   referenceUrl: string | null;
   targetUrl: string | null;
   linkInBio: boolean;
@@ -494,6 +502,8 @@ export interface ModVideo {
     /** Ролик сдан до правки заказа — условия выше прежние, проверять по ним. */
     termsBeforeEdit: boolean;
     exampleUrls: string[];
+    /** Требования при сдаче — из них выбирают нарушенный пункт при отказе. */
+    requirements: string[];
     /** Ссылка креатора должна стоять в шапке профиля; bioLink — какая именно (null — у ролика нет кода). */
     linkInBio: boolean;
     bioLink: string | null;

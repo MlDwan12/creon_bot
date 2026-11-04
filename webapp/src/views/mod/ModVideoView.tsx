@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { requirementReasons } from '@fixum/shared';
 import { Link, useNavigate, useParams } from 'react-router';
 import {
   ApiError,
@@ -203,6 +204,7 @@ export default function ModVideoView() {
   // ссылка креатора в шапке профиля — такой же пункт сверки, как требования к ролику
   const parts = [
     ...videoFormatParts(video.order),
+    ...video.order.requirements,
     ...(video.order.linkInBio
       ? [`Ссылка в шапке профиля: ${video.order.bioLink ?? 'ссылка креатора'}`]
       : []),
@@ -455,7 +457,10 @@ export default function ModVideoView() {
               id="reasons"
               value={comment}
               onChange={setComment}
-              presets={PRESETS}
+              presets={[
+                ...requirementReasons(video.order.requirements),
+                ...PRESETS,
+              ]}
             />
           )}
           {error && (

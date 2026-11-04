@@ -27,6 +27,43 @@ const valid = {
 };
 
 describe('parseOrderInput', () => {
+  it('требования: пустые и повторы отбрасываются, не передали — пусто, больше 10 — ошибка', () => {
+    expect(
+      parseOrderInput({
+        ...valid,
+        requirements: [
+          ' Сказать про доставку ',
+          '',
+          '—',
+          'Сказать про доставку',
+        ],
+      }).requirements,
+    ).toEqual(['Сказать про доставку']);
+    expect(parseOrderInput(valid).requirements).toEqual([]);
+    expect(() =>
+      parseOrderInput({
+        ...valid,
+        requirements: Array.from({ length: 11 }, (_, i) => `Пункт ${i}`),
+      }),
+    ).toThrow(BadRequestException);
+    expect(() =>
+      parseOrderInput({ ...valid, requirements: ['я'.repeat(201)] }),
+    ).toThrow(BadRequestException);
+  });
+
+  it('лимит за ролик: пусто — без лимита, в центы; больше бюджета — ошибка', () => {
+    expect(parseOrderInput(valid).maxPayoutMinor).toBeNull();
+    expect(parseOrderInput({ ...valid, maxPayout: 50 }).maxPayoutMinor).toBe(
+      5_000,
+    );
+    expect(() => parseOrderInput({ ...valid, maxPayout: 501 })).toThrow(
+      BadRequestException,
+    );
+    expect(() => parseOrderInput({ ...valid, maxPayout: 1.5 })).toThrow(
+      BadRequestException,
+    );
+  });
+
   it('невидимые символы форматирования вырезаются, склейка эмодзи — нет', () => {
     const r = parseOrderInput({
       ...valid,

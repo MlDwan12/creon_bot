@@ -31,6 +31,8 @@ const MAX_BUDGET = 100_000;
 const MAX_DURATION = 600;
 const MIN_EXAMPLES = 3;
 const MAX_EXAMPLES = 10;
+/** Требования к ролику пунктами — по желанию (src/common/validation.ts). */
+const MAX_REQUIREMENTS = 10;
 const ORIENTATIONS: { value: NewOrderInput['orientation']; label: string }[] = [
   { value: 'VERTICAL', label: 'createOrder.vertical' },
   { value: 'HORIZONTAL', label: 'createOrder.horizontal' },
@@ -66,6 +68,8 @@ type Form = {
   title: string;
   description: string;
   exampleUrls: string[];
+  /** Требования пунктами; пустые строки при отправке отбрасываются. */
+  requirements: string[];
   referenceUrl: string;
   targetUrl: string;
   linkInBio: boolean;
@@ -98,6 +102,7 @@ export default function CreateOrderView() {
     title: '',
     description: '',
     exampleUrls: Array<string>(MIN_EXAMPLES).fill(''),
+    requirements: [''],
     referenceUrl: '',
     targetUrl: '',
     linkInBio: false,
@@ -145,6 +150,9 @@ export default function CreateOrderView() {
               Math.max(0, MIN_EXAMPLES - source.exampleUrls.length),
             ).fill(''),
           ],
+          requirements: source.requirements.length
+            ? [...source.requirements]
+            : [''],
           referenceUrl: source.referenceUrl ?? '',
           targetUrl: source.targetUrl ?? '',
           linkInBio: source.linkInBio,
@@ -168,6 +176,16 @@ export default function CreateOrderView() {
     set({ exampleUrls: form.exampleUrls.filter((_, j) => j !== i) });
   }
   const examplesFilled = form.exampleUrls.filter((u) => u.trim()).length;
+  /** Требование: правка пункта и удаление (последнее поле остаётся пустым). */
+  function setRequirement(i: number, value: string) {
+    set({
+      requirements: form.requirements.map((r, j) => (j === i ? value : r)),
+    });
+  }
+  function removeRequirement(i: number) {
+    const rest = form.requirements.filter((_, j) => j !== i);
+    set({ requirements: rest.length ? rest : [''] });
+  }
   // без ссылки на товар ставить в шапку нечего — галочка выключена (и не уйдёт на бэкенд)
   const hasTarget = form.targetUrl.trim() !== '';
 
@@ -233,6 +251,7 @@ export default function CreateOrderView() {
     title: form.title,
     description: form.description,
     referenceUrl: form.referenceUrl || null,
+    requirements: form.requirements.map((r) => r.trim()).filter(Boolean),
     linkInBio: form.linkInBio && hasTarget,
     cpm: null,
     minViews: Number(form.minViews),
@@ -279,6 +298,7 @@ export default function CreateOrderView() {
         ...form,
         category,
         exampleUrls: form.exampleUrls.map((u) => u.trim()).filter(Boolean),
+        requirements: form.requirements.map((r) => r.trim()).filter(Boolean),
         referenceUrl: form.referenceUrl.trim() || null,
         targetUrl: form.targetUrl.trim() || null,
         linkInBio: form.linkInBio && hasTarget,
@@ -423,6 +443,46 @@ export default function CreateOrderView() {
               onClick={() => set({ exampleUrls: [...form.exampleUrls, ''] })}
             >
               {t('createOrder.addExample')}
+            </button>
+          )}
+        </fieldset>
+
+        <fieldset className={s.field}>
+          <legend className={`${s.labelRow} ${s.legendRow}`}>
+            <span className="section-title">
+              {t('createOrder.requirements')}
+            </span>
+          </legend>
+          <span className={s.hint}>{t('createOrder.requirementsHint')}</span>
+          {form.requirements.map((r, i) => (
+            <div key={i} className={s.exampleRow}>
+              <input
+                id={`requirement-${i}`}
+                value={r}
+                onChange={(e) => setRequirement(i, e.target.value)}
+                maxLength={200}
+                aria-label={t('createOrder.requirementN', { n: i + 1 })}
+                placeholder={t('createOrder.requirementPlaceholder')}
+              />
+              {(form.requirements.length > 1 || r) && (
+                <button
+                  type="button"
+                  className={s.exampleRemove}
+                  aria-label={t('createOrder.removeRequirement', { n: i + 1 })}
+                  onClick={() => removeRequirement(i)}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+          {form.requirements.length < MAX_REQUIREMENTS && (
+            <button
+              type="button"
+              className={s.exampleAdd}
+              onClick={() => set({ requirements: [...form.requirements, ''] })}
+            >
+              {t('createOrder.addRequirement')}
             </button>
           )}
         </fieldset>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { requirementReasons } from '@fixum/shared';
 import { Link, useNavigate, useParams } from 'react-router';
 import {
   errorText,
@@ -156,6 +157,7 @@ export function VideoReview({
   const bioLink = video.order.bioLink ?? 'ссылка креатора';
   const parts = [
     ...videoFormatParts(video.order),
+    ...video.order.requirements,
     ...(video.order.linkInBio ? [`Ссылка в шапке профиля: ${bioLink}`] : []),
   ];
   const author = video.author;
@@ -385,7 +387,10 @@ export function VideoReview({
                 <ReasonPicker
                   value={comment}
                   onChange={setComment}
-                  presets={PRESETS}
+                  presets={[
+                    ...requirementReasons(video.order.requirements),
+                    ...PRESETS,
+                  ]}
                 />
                 {error && (
                   <p className={s.error} role="alert">

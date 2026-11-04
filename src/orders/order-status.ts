@@ -87,6 +87,7 @@ export function termsOf(order: Order) {
     title: order.title,
     description: order.description,
     exampleUrls: order.exampleUrls,
+    requirements: order.requirements,
     referenceUrl: order.referenceUrl,
     targetUrl: order.targetUrl,
     linkInBio: order.linkInBio,

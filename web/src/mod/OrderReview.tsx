@@ -187,6 +187,16 @@ export function OrderReview({
                 <span>{videoFormat}</span>
               </div>
             )}
+            {order.requirements.length > 0 && (
+              <div className={s.row}>
+                <span>Требования</span>
+                <ul>
+                  {order.requirements.map((r) => (
+                    <li key={r}>{r}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </section>
 
           <section className={s.card}>

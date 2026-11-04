@@ -43,6 +43,8 @@ function toPublic(
     title: order.title,
     description: order.description,
     referenceUrl: order.referenceUrl,
+    // требования к ролику пунктами — креатор отмечает их при сдаче
+    requirements: order.requirements,
     // свою ссылку /r/<код> креатор держит ещё и в шапке профиля до итога холда
     linkInBio: order.linkInBio,
     ...videoFormat(order),

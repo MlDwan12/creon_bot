@@ -76,6 +76,7 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
         // ссылка /r/ ещё и в шапке профиля — при сдаче креатор подтверждает, что поставил её
         linkInBio: row.order.linkInBio,
         // требования к ролику — для самопроверки перед сдачей
+        requirements: row.order.requirements,
         ...videoFormat(row.order),
       },
     };

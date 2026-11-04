@@ -55,6 +55,7 @@ export class MyOrdersController {
       title: o.title,
       description: o.description,
       exampleUrls: o.exampleUrls,
+      requirements: o.requirements,
       referenceUrl: o.referenceUrl,
       targetUrl: o.targetUrl,
       linkInBio: o.linkInBio,

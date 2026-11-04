@@ -98,7 +98,8 @@ export default function OrderDetailView() {
           Math.round((views / 1000) * order.cpm * 100) / 100,
         )
       : 0;
-  const formatParts = videoFormatParts(order);
+  // формат ролика и требования заказчика пунктами — одним списком под заданием
+  const formatParts = [...videoFormatParts(order), ...order.requirements];
 
   return (
     <main className={s.detail}>

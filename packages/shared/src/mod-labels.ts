@@ -34,3 +34,11 @@ export function reportObject(
     return { text: `отзыв #${id}`, to: `/mod/videos/${id}` };
   return { text: 'профиль', to: null };
 }
+
+/**
+ * Причины отказа по требованиям заказа — первыми в выборе причины: креатор видит, какой именно
+ * пункт не выполнен, а одинаковый текст складывается в «Что работает» (частые причины отказа).
+ */
+export function requirementReasons(requirements: string[]): string[] {
+  return requirements.map((r) => `Не выполнено требование: «${r}»`);
+}

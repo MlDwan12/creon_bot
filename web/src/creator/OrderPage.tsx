@@ -155,6 +155,13 @@ export function OrderPage() {
                 ))}
               </div>
             )}
+            {order.requirements.length > 0 && (
+              <ul aria-label={t('order.requirementsList')}>
+                {order.requirements.map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+            )}
             {safeUrl(order.referenceUrl) && (
               <a
                 href={safeUrl(order.referenceUrl)}

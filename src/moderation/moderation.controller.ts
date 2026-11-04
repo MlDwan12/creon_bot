@@ -187,8 +187,13 @@ export class ModerationController {
         budgetRaised: budgetRaised(o),
         // похоже на контакты в обход площадки — модератору пометка в списке
         hasContacts:
-          findContacts(o.title, o.description, o.referenceUrl, o.targetUrl)
-            .length > 0,
+          findContacts(
+            o.title,
+            o.description,
+            ...o.requirements,
+            o.referenceUrl,
+            o.targetUrl,
+          ).length > 0,
       })),
       videos: videos.map((s) => ({
         id: s.id,
@@ -360,6 +365,7 @@ export class ModerationController {
       description: o.description,
       // модератору — сами ссылки: проверить, что это ролики по теме, а не аккаунт рекламодателя
       exampleUrls: o.exampleUrls,
+      requirements: o.requirements,
       referenceUrl: o.referenceUrl,
       targetUrl: o.targetUrl,
       linkInBio: o.linkInBio,
@@ -382,6 +388,7 @@ export class ModerationController {
       contacts: findContacts(
         o.title,
         o.description,
+        ...o.requirements,
         o.referenceUrl,
         o.targetUrl,
       ),
@@ -497,6 +504,8 @@ export class ModerationController {
         title: terms.title,
         description: terms.description,
         exampleUrls: terms.exampleUrls,
+        // по ним креатор проверял ролик при сдаче — из них выбирают нарушенный при отказе
+        requirements: terms.requirements ?? [],
         // ссылка креатора /r/ должна стоять в шапке профиля — при проверке и в конце холда
         linkInBio: terms.linkInBio,
         bioLink: terms.linkInBio ? trackLink(s.trackCode) : null,

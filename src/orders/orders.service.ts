@@ -52,6 +52,7 @@ const PUBLIC_ORDER_FIELDS = {
   referenceUrl: true,
   // наружу — не сами ссылки, а редирект /v/e/… (toPublic в orders.controller)
   exampleUrls: true,
+  requirements: true,
   linkInBio: true,
   budgetMinor: true,
   feePercent: true,
@@ -126,6 +127,7 @@ export class OrdersService {
       title: string;
       description: string;
       exampleUrls?: string[];
+      requirements?: string[];
       referenceUrl?: string;
       targetUrl?: string;
       linkInBio?: boolean;
@@ -157,6 +159,7 @@ export class OrdersService {
         title: data.title,
         description: data.description,
         exampleUrls: data.exampleUrls,
+        requirements: data.requirements,
         referenceUrl: data.referenceUrl,
         targetUrl: data.targetUrl,
         linkInBio: data.linkInBio,
@@ -629,6 +632,7 @@ export class OrdersService {
       title: string;
       description: string;
       exampleUrls?: string[];
+      requirements?: string[];
       referenceUrl?: string | null;
       targetUrl?: string | null;
       linkInBio?: boolean;

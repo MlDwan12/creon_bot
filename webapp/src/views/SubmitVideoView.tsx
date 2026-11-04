@@ -80,6 +80,8 @@ export default function SubmitVideoView() {
   const checks = order
     ? [
         ...videoFormatParts(order),
+        // требования заказчика пунктами: за невыполненный модератор и отклонит
+        ...order.requirements,
         ...(order.linkInBio ? [t('submit.checkLinkInBio')] : []),
         ...tList('submit.check'),
       ]
