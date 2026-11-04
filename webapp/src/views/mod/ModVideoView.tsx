@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { requirementReasons } from '@fixum/shared';
+import {
+  requirementReasons,
+  signalTexts,
+  VIEW_SOURCE_LABELS,
+} from '@fixum/shared';
 import { Link, useNavigate, useParams } from 'react-router';
 import {
   ApiError,
@@ -209,6 +213,8 @@ export default function ModVideoView() {
       ? [`Ссылка в шапке профиля: ${video.order.bioLink ?? 'ссылка креатора'}`]
       : []),
   ];
+  // сигналы накрутки — факты по истории просмотров, креатор их не видит
+  const signals = signalTexts(video.signals, formatViews, formatDate);
   const author = video.author;
   const authorLink = safeUrl(author.url) && (
     <a href={safeUrl(author.url)} target="_blank" rel="noopener noreferrer">
@@ -395,6 +401,31 @@ export default function ModVideoView() {
             </span>
           </div>
         )}
+        {signals.length > 0 && (
+          <div className={s.row}>
+            <span>Сигналы накрутки</span>
+            <span className={s.flag}>
+              {signals.map((line) => (
+                <span key={line}>
+                  {line}
+                  <br />
+                </span>
+              ))}
+            </span>
+          </div>
+        )}
+        {video.viewHistory.length > 1 &&
+          video.viewHistory.map((p) => (
+            <div key={`${p.source}-${p.at}`} className={s.row}>
+              <span>
+                {formatDate(p.at)} · {VIEW_SOURCE_LABELS[p.source]}
+              </span>
+              <span>
+                {formatViews(p.views)}
+                {p.likes !== null && ` · ${formatViews(p.likes)} ♥`}
+              </span>
+            </div>
+          ))}
       </section>
 
       {(video.status === 'SUBMITTED' || holdEndsAt) && (

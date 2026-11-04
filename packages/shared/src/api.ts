@@ -464,6 +464,10 @@ export interface ModVideo {
   likes: number | null;
   /** Лайки по данным API площадки; null — нет API или автор их скрыл. */
   autoLikes: number | null;
+  /** История просмотров от старых к новым; NOW — сейчас по API (не хранится). */
+  viewHistory: ViewPoint[];
+  /** Сигналы накрутки по истории — см. src/submissions/view-signals.ts. */
+  signals: ViewSignals;
   /**
    * Чей ролик: verified — посчитан по подключённому аккаунту креатора; inProfile — автор есть в
    * соцсетях профиля, но владение не подтверждено; mismatch — автора нет в профиле;
@@ -784,4 +788,23 @@ export interface Me {
   cabinet: 'creator' | 'advertiser' | null;
   /** Имя из Telegram; null — не указано. */
   firstName: string | null;
+}
+
+/** Точка истории просмотров ролика — модератору. */
+export interface ViewPoint {
+  views: number;
+  likes: number | null;
+  source: 'SUBMIT' | 'APPROVE' | 'CHECK' | 'FINAL' | 'NOW';
+  at: string;
+}
+
+/** Сигналы накрутки — факты для модератора, решает он. */
+export interface ViewSignals {
+  /** Доля лайков от просмотров по последнему снимку с лайками; null — неизвестно. */
+  likesShare: number | null;
+  lowLikes: boolean;
+  /** При сдаче заявлено почти ровно на порог. */
+  nearThreshold: boolean;
+  /** Резкий рост между соседними снимками. */
+  jumps: { from: number; to: number; at: string }[];
 }

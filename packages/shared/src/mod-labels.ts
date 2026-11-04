@@ -1,4 +1,9 @@
-import type { ModeratorActionType, ReportTarget } from './api';
+import type {
+  ModeratorActionType,
+  ReportTarget,
+  ViewPoint,
+  ViewSignals,
+} from './api';
 
 /** Подписи действий модератора — кабинет и история пользователя (окно модератора только на русском; общие с сайтом). */
 export const ACTION_LABELS: Record<ModeratorActionType, string> = {
@@ -41,4 +46,29 @@ export function reportObject(
  */
 export function requirementReasons(requirements: string[]): string[] {
   return requirements.map((r) => `Не выполнено требование: «${r}»`);
+}
+
+/** Откуда точка истории просмотров. */
+export const VIEW_SOURCE_LABELS: Record<ViewPoint['source'], string> = {
+  SUBMIT: 'при сдаче',
+  APPROVE: 'при одобрении',
+  CHECK: 'проверка по API',
+  FINAL: 'итог холда',
+  NOW: 'сейчас по API',
+};
+
+/** Сигналы накрутки строками для карточки ролика; пусто — сигналов нет. */
+export function signalTexts(
+  s: ViewSignals,
+  views: (n: number) => string,
+  date: (iso: string) => string,
+): string[] {
+  return [
+    s.lowLikes &&
+      `Мало лайков: ${(s.likesShare! * 100).toLocaleString('ru-RU', { maximumFractionDigits: 2 })}% от просмотров`,
+    s.nearThreshold && 'При сдаче заявлено почти ровно на порог',
+    ...s.jumps.map(
+      (j) => `Скачок: ${views(j.from)} → ${views(j.to)} к ${date(j.at)}`,
+    ),
+  ].filter((x): x is string => !!x);
 }

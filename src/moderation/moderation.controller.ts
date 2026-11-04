@@ -25,6 +25,7 @@ import { trackLink } from '../orders/order-report';
 import { budgetRaised, payoutPool, HOLD_DAYS } from '../orders/budget';
 import { OrdersService } from '../orders/orders.service';
 import { submittedTerms, videoTerms } from '../orders/order-status';
+import { viewSignals } from '../submissions/view-signals';
 import { DAY_MS } from '../orders/deadline';
 import { authorInLinks, authorUrl, platformOf } from '../common/platforms';
 import {
@@ -459,18 +460,39 @@ export class ModerationController {
   async video(@Param('id', ParseIdPipe) id: number) {
     const s = await this.submissionsService.findById(id);
     if (!s) throw new NotFoundException('Отклик не найден');
-    const [attempt, budget, inflatedBefore, counted] = await Promise.all([
-      this.submissionsService.attemptNumber(s),
-      this.submissionsService.orderBudget(s.order),
-      this.submissionsService.inflatedCount(s.creatorId),
-      s.videoUrl
-        ? this.viewCounter.fetchViews(
-            [{ url: s.videoUrl, creatorId: s.creatorId }],
-            { withAuthor: true },
-          )
-        : new Map<string, CountedVideo>(),
-    ]);
+    const [attempt, budget, inflatedBefore, history, counted] =
+      await Promise.all([
+        this.submissionsService.attemptNumber(s),
+        this.submissionsService.orderBudget(s.order),
+        this.submissionsService.inflatedCount(s.creatorId),
+        this.submissionsService.viewHistory(s.id),
+        s.videoUrl
+          ? this.viewCounter.fetchViews(
+              [{ url: s.videoUrl, creatorId: s.creatorId }],
+              { withAuthor: true },
+            )
+          : new Map<string, CountedVideo>(),
+      ]);
     const stats = counted.get(s.videoUrl ?? '');
+    // сейчас по API — последней точкой истории (в базу не пишем: это просто открытие карточки)
+    const points = [
+      ...history.map((h) => ({
+        views: h.views,
+        likes: h.likes,
+        source: h.source,
+        at: h.at,
+      })),
+      ...(stats
+        ? [
+            {
+              views: stats.views,
+              likes: stats.likes,
+              source: 'NOW' as const,
+              at: new Date(),
+            },
+          ]
+        : []),
+    ];
     // Проверять по условиям, которые креатор видел при сдаче (те же, по которым начислят).
     const terms = { ...s.order, ...submittedTerms(s.order, s) };
     const changedSince =
@@ -489,6 +511,9 @@ export class ModerationController {
       // сейчас по данным API площадки; null — считается вручную или API не ответило
       autoViews: stats?.views ?? null,
       autoLikes: stats?.likes ?? null,
+      // история просмотров и сигналы накрутки — только модератору, креатор их не видит
+      viewHistory: points,
+      signals: viewSignals(points, videoTerms(s.order, s).minViews),
       author: videoAuthor(stats, s.creator.socialLinks),
       platform: platformOf(s.videoUrl),
       payout: fromMinor(s.payoutMinor),

@@ -14,6 +14,7 @@ import {
   OrderStatus,
   SubmissionStatus,
   VideoPlatform,
+  ViewSnapshotSource,
 } from '@prisma/client';
 import {
   ACCRUED,
@@ -414,6 +415,10 @@ export class SubmissionsService implements OnApplicationBootstrap {
           },
           ACCEPTS_VIDEOS,
         );
+        // история просмотров — модератору сигналы накрутки (view-signals.ts)
+        await tx.viewSnapshot.create({
+          data: { submissionId, views, source: ViewSnapshotSource.SUBMIT },
+        });
         await syncFundBusy(tx, submission.orderId);
         return this.mustFind(submissionId, tx);
       });
@@ -610,6 +615,14 @@ export class SubmissionsService implements OnApplicationBootstrap {
         },
         NOT_TAKEN_DOWN,
       );
+      await tx.viewSnapshot.create({
+        data: {
+          submissionId,
+          views,
+          likes,
+          source: ViewSnapshotSource.APPROVE,
+        },
+      });
       return {
         submission: await tx.submission.findUniqueOrThrow({
           where: { id: submissionId },
@@ -662,6 +675,14 @@ export class SubmissionsService implements OnApplicationBootstrap {
   }
 
   /** Сколько роликов креатора отклонено за завышенные просмотры — модератору: повтор — повод для бана. */
+  /** История просмотров ролика от старых снимков к новым — модератору (view-signals.ts). */
+  viewHistory(submissionId: number) {
+    return this.prisma.viewSnapshot.findMany({
+      where: { submissionId },
+      orderBy: { at: 'asc' },
+    });
+  }
+
   inflatedCount(creatorId: number) {
     return this.prisma.submission.count({
       where: {
@@ -804,6 +825,9 @@ export class SubmissionsService implements OnApplicationBootstrap {
       });
       if (count === 0)
         throw new ForbiddenException('Итог по этому ролику уже зафиксирован');
+      await tx.viewSnapshot.create({
+        data: { submissionId, views, likes, source: ViewSnapshotSource.FINAL },
+      });
       return this.mustFind(submissionId, tx);
     });
   }

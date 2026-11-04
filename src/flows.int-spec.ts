@@ -346,6 +346,24 @@ describe('отклик', () => {
     expect(submission.payoutMinor).toBe(5_000);
   });
 
+  it('история просмотров: снимок при сдаче и при одобрении', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const order = await openOrder(advertiser.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS);
+    await submissions.moderatorApprove(s.id, 1n, 1_500, 30);
+    expect(
+      (await submissions.viewHistory(s.id)).map((h) => [
+        h.source,
+        h.views,
+        h.likes,
+      ]),
+    ).toEqual([
+      ['SUBMIT', VIEWS, null],
+      ['APPROVE', 1_500, 30],
+    ]);
+  });
+
   it('двойной тап создаёт один отклик', async () => {
     const [advertiser, creator] = [await user(), await user()];
     const order = await openOrder(advertiser.id);
