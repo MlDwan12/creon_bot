@@ -255,6 +255,8 @@ export interface OrderReport {
   };
   /** Советы, что поправить в заказе. */
   insights: { code: string; text: string }[];
+  /** Публичная ссылка на отчёт; url null — ссылки нет; available — делиться можно (задан адрес сайта). */
+  share: { url: string | null; available: boolean };
   /** Одобренные ролики, больше просмотров — выше. */
   items: {
     id: number;
@@ -811,4 +813,27 @@ export interface ViewSignals {
   nearThreshold: boolean;
   /** Резкий рост между соседними снимками. */
   jumps: { from: number; to: number; at: string }[];
+}
+
+/**
+ * Ответ `GET /api/share/:token` — отчёт для тех, у кого есть ссылка (src/orders/order-report.ts,
+ * publicReport): без бюджета, остатка, воронки, оценок и id креаторов.
+ */
+export interface PublicReport {
+  order: { title: string; status: OrderStatus };
+  summary: Pick<
+    OrderReport['summary'],
+    'spent' | 'views' | 'likes' | 'clicks' | 'videos' | 'creators' | 'cpm'
+  >;
+  platforms: OrderReport['platforms'];
+  items: Pick<
+    OrderReport['items'][number],
+    | 'videoUrl'
+    | 'platform'
+    | 'creator'
+    | 'views'
+    | 'likes'
+    | 'clicks'
+    | 'approvedAt'
+  >[];
 }

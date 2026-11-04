@@ -801,6 +801,8 @@
     "maxPayoutRange": "The per-video cap must be a whole number of USDT, no more than the budget",
     "requirementsCount": "No more than {{max}} requirements",
     "requirementTooLong": "Each requirement must be at most {{max}} characters",
+    "shareOff": "Sharing reports is not available yet — please contact support",
+    "shareGone": "This link no longer works — ask the brand for a new one",
     "durationOrder": "The minimum duration is greater than the maximum",
     "badOrientation": "Unknown video orientation",
     "badPlatform": "Unknown platform",
@@ -986,5 +988,21 @@
     "rejectedBadge": "Not yet",
     "openBadge": "Open",
     "closedBadge": "Closed"
+  },
+  "share": {
+    "title": "Share report",
+    "hint": "A link to this report that works without signing in — e.g. for your manager. It shows results and spend, but not the budget or creators' contacts.",
+    "link": "Report link",
+    "create": "Create link",
+    "copy": "Copy",
+    "copied": "Copied",
+    "revoke": "Revoke",
+    "revokeHint": "Revoke — the link stops working right away. You can create a new one any time.",
+    "error": "Something went wrong, please try again",
+    "publicTitle": "Order report",
+    "publicNote": "View-only report. Data as of when the page was opened.",
+    "publicGone": "This link no longer works — ask the brand for a new one.",
+    "spent": "spent",
+    "by": "Fixum — creator ads paid per view"
   }
 }

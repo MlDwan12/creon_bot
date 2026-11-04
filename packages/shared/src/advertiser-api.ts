@@ -44,6 +44,15 @@ export function createAdvertiserApi(request: Requester) {
     fetchOrderReport: (orderId: number) =>
       request<OrderReport>('GET', `/api/my-orders/${orderId}/report`),
 
+    /** Публичная ссылка на отчёт: новая (прежняя перестаёт работать) и отозвать. */
+    shareReport: (orderId: number) =>
+      request<{ url: string }>(
+        'POST',
+        `/api/my-orders/${orderId}/report/share`,
+      ),
+    unshareReport: (orderId: number) =>
+      request<{ ok: true }>('DELETE', `/api/my-orders/${orderId}/report/share`),
+
     /** Отчёт файлом CSV — придёт в чат с ботом. */
     sendReportCsv: (orderId: number) =>
       request<{ ok: true }>('POST', `/api/my-orders/${orderId}/report/csv`),

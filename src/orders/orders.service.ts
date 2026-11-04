@@ -400,6 +400,18 @@ export class OrdersService {
     return this.prisma.order.findUnique({ where: { id } });
   }
 
+  /** Ссылка на публичный отчёт: новый токен (старая ссылка перестаёт работать) или null — отозвать. */
+  setShareToken(orderId: number, token: string | null) {
+    return this.prisma.order.update({
+      where: { id: orderId },
+      data: { shareToken: token },
+    });
+  }
+
+  findByShareToken(token: string) {
+    return this.prisma.order.findUnique({ where: { shareToken: token } });
+  }
+
   /**
    * Закрыть заказ. Открытый — начатые ролики ещё принимаются, пока есть бюджет. Замороженный
    * (правку не одобрили) — слоты «в работе» сгорают: работать по нему больше не на чем, а правка

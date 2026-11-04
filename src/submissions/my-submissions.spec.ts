@@ -14,6 +14,7 @@ const order = (id: number): Order => ({
   minViews: 250,
   maxPayoutMinor: null,
   requirements: [],
+  shareToken: null,
   minDurationSec: null,
   maxDurationSec: null,
   orientation: null,
