@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router';
-import { holdOverdue } from '@fixum/shared';
+import { holdOverdue, reviewDueAt, reviewOverdue } from '@fixum/shared';
 import {
   claimOrder,
   errorText,
@@ -11,6 +11,7 @@ import {
 } from '../api';
 import {
   formatDate,
+  formatDateTime,
   formatDeadline,
   formatMoney,
   formatViews,
@@ -215,7 +216,22 @@ function timeline(sub: MySubmission): Step[] {
           .filter(Boolean)
           .join(' · '),
       },
-      { label: st('review'), detail: st('reviewNote'), state: 'now' },
+      {
+        label: st('review'),
+        // срок решения — REVIEW_SLA_HOURS со сдачи; просрочили — честно говорим, что задерживаемся
+        detail: [
+          sub.submittedAt &&
+            (reviewOverdue(sub.submittedAt)
+              ? st('reviewLate')
+              : st('reviewDue', {
+                  date: formatDateTime(reviewDueAt(sub.submittedAt)),
+                })),
+          st('reviewNote'),
+        ]
+          .filter(Boolean)
+          .join(' '),
+        state: 'now',
+      },
       { label: st('accrual'), state: 'next' },
       { label: st('hold'), state: 'next' },
     ];

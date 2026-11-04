@@ -55,20 +55,23 @@ export function SubmitVideo() {
 
   const order = submission?.order;
   const viewsNum = Number(views);
+  /** Оплата за просмотры по ставке, не больше лимита заказа на ролик. */
+  const payFor = (n: number, cpm: number) =>
+    Math.min(Math.floor((n * cpm) / 10) / 100, order?.maxPayout ?? Infinity);
   /** Сколько примерно начислят за указанные просмотры — если ставка уже есть. */
   const estimate =
-    order?.cpm && viewsNum
-      ? formatMoney(Math.floor((viewsNum * order.cpm) / 10) / 100)
-      : '';
+    order?.cpm && viewsNum ? formatMoney(payFor(viewsNum, order.cpm)) : '';
   /** Резерв при сдаче — оплата за порог просмотров заказа (не за заявленные). */
   const reserve = order?.cpm
-    ? formatMoney(Math.floor((order.minViews * order.cpm) / 10) / 100)
+    ? formatMoney(payFor(order.minViews, order.cpm))
     : '';
 
   // ссылка в шапке профиля — тоже пункт самопроверки: без отметки бэкенд ролик не примет
   const checks = order
     ? [
         ...videoFormatParts(order),
+        // требования заказчика пунктами: за невыполненный модератор и отклонит
+        ...order.requirements,
         ...(order.linkInBio ? [t('submit.checkLinkInBio')] : []),
         ...tList('submit.check'),
       ]

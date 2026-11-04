@@ -4,6 +4,7 @@ import { i18next, locale } from './i18n';
 // Форматирование — общее с сайтом (packages/shared/src/format.ts), здесь — на переводе мини-аппа.
 export const {
   formatDate,
+  formatDateTime,
   formatDeadline,
   timeAgo,
   formatMoney,

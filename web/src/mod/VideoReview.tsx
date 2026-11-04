@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { requirementReasons } from '@fixum/shared';
 import { Link, useNavigate, useParams } from 'react-router';
 import {
   errorText,
@@ -130,11 +131,16 @@ export function VideoReview({
       void run(() => markPublicationDeleted(id, bioLink), 'holds');
   }
 
-  /** Сколько начислится за введённые просмотры (без учёта остатка бюджета). */
+  /** Сколько начислится за введённые просмотры: не больше лимита на ролик (без учёта остатка бюджета). */
   const cpm = video.order.cpm;
   const estimate =
     cpm && Number(views)
-      ? formatMoney(Math.floor((Number(views) * cpm) / 10) / 100)
+      ? formatMoney(
+          Math.min(
+            Math.floor((Number(views) * cpm) / 10) / 100,
+            video.order.maxPayout ?? Infinity,
+          ),
+        )
       : '';
   /** Когда кончается холд и можно зафиксировать итог; null — не одобрен или уже зафиксирован. */
   const holdEndsAt =
@@ -151,6 +157,7 @@ export function VideoReview({
   const bioLink = video.order.bioLink ?? 'ссылка креатора';
   const parts = [
     ...videoFormatParts(video.order),
+    ...video.order.requirements,
     ...(video.order.linkInBio ? [`Ссылка в шапке профиля: ${bioLink}`] : []),
   ];
   const author = video.author;
@@ -286,6 +293,14 @@ export function VideoReview({
               <span>от {formatViews(video.order.minViews)} просмотров</span>
             </div>
             <div className={s.row}>
+              <span>Лимит за ролик</span>
+              <span>
+                {video.order.maxPayout !== null
+                  ? formatMoney(video.order.maxPayout)
+                  : 'без лимита'}
+              </span>
+            </div>
+            <div className={s.row}>
               <span>Свободно в бюджете</span>
               <span>{formatMoney(video.order.free)}</span>
             </div>
@@ -372,7 +387,10 @@ export function VideoReview({
                 <ReasonPicker
                   value={comment}
                   onChange={setComment}
-                  presets={PRESETS}
+                  presets={[
+                    ...requirementReasons(video.order.requirements),
+                    ...PRESETS,
+                  ]}
                 />
                 {error && (
                   <p className={s.error} role="alert">

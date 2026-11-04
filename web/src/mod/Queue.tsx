@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { reviewOverdue } from '@fixum/shared';
 import {
   approveApplication,
   approveReview,
@@ -140,8 +141,13 @@ export function Queue() {
       .filter((d): d is string => !!d) ?? []),
     ...(queue?.reviews.map((r) => r.queuedAt) ?? []),
   ].sort()[0];
+  // дольше срока проверки (REVIEW_SLA_HOURS) — красным, дольше 4 часов — оранжевым
   const waitClass = (iso: string) =>
-    isWaitingLong(iso) ? `${s.wait} ${s.long}` : s.wait;
+    reviewOverdue(iso)
+      ? `${s.wait} ${s.overdue}`
+      : isWaitingLong(iso)
+        ? `${s.wait} ${s.long}`
+        : s.wait;
 
   /**
    * Решение принято — убираем его из списка сразу (не ждём ответа очереди), открываем первый
@@ -287,12 +293,21 @@ export function Queue() {
         {oldest && (
           <>
             {' · '}
-            <span className={isWaitingLong(oldest) ? s.long : undefined}>
+            <span
+              className={
+                reviewOverdue(oldest)
+                  ? s.overdue
+                  : isWaitingLong(oldest)
+                    ? s.long
+                    : undefined
+              }
+            >
               самое старое — {waitingFor(oldest)}
             </span>
           </>
         )}
-        {' · '}сначала самые старые, оранжевым — ждут дольше 4 часов
+        {' · '}сначала самые старые, оранжевым — ждут дольше 4 часов, красным —
+        дольше суток
       </p>
       <div className={s.chips} role="tablist" aria-label="Очередь">
         {TABS.map((t) => (

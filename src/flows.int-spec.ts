@@ -326,6 +326,26 @@ describe('отклик', () => {
     ).toBe(MAX_IN_REVIEW);
   });
 
+  it('лимит на ролик: сверх него не начисляют, снятый после сдачи лимит ролик не догонит', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const pending = await pendingOrder(advertiser.id);
+    // лимит 50 USDT: ролик на 1000 просмотров по ставке стоил бы 100
+    await prisma.order.update({
+      where: { id: pending.id },
+      data: { maxPayoutMinor: 5_000 },
+    });
+    const order = await approveOrder(pending.id, 1n);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS);
+    // лимит при сдаче в снимке условий: правка заказа его не снимет для этого ролика
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { maxPayoutMinor: null },
+    });
+    const { submission } = await submissions.moderatorApprove(s.id, 1n, VIEWS);
+    expect(submission.payoutMinor).toBe(5_000);
+  });
+
   it('двойной тап создаёт один отклик', async () => {
     const [advertiser, creator] = [await user(), await user()];
     const order = await openOrder(advertiser.id);

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { requirementReasons } from '@fixum/shared';
 import { Link, useNavigate, useParams } from 'react-router';
 import {
   ApiError,
@@ -179,11 +180,16 @@ export default function ModVideoView() {
       </main>
     );
 
-  /** Сколько начислится за введённые просмотры (без учёта остатка бюджета). */
+  /** Сколько начислится за введённые просмотры: не больше лимита на ролик (без учёта остатка бюджета). */
   const cpm = video.order.cpm;
   const estimate =
     cpm && Number(views)
-      ? formatMoney(Math.floor((Number(views) * cpm) / 10) / 100)
+      ? formatMoney(
+          Math.min(
+            Math.floor((Number(views) * cpm) / 10) / 100,
+            video.order.maxPayout ?? Infinity,
+          ),
+        )
       : '';
   /** Когда кончается холд и можно зафиксировать итог; null — не одобрен или уже зафиксирован. */
   const holdEndsAt =
@@ -198,6 +204,7 @@ export default function ModVideoView() {
   // ссылка креатора в шапке профиля — такой же пункт сверки, как требования к ролику
   const parts = [
     ...videoFormatParts(video.order),
+    ...video.order.requirements,
     ...(video.order.linkInBio
       ? [`Ссылка в шапке профиля: ${video.order.bioLink ?? 'ссылка креатора'}`]
       : []),
@@ -352,6 +359,14 @@ export default function ModVideoView() {
           <span>от {formatViews(video.order.minViews)} просмотров</span>
         </div>
         <div className={s.row}>
+          <span>Лимит за ролик</span>
+          <span>
+            {video.order.maxPayout !== null
+              ? formatMoney(video.order.maxPayout)
+              : 'без лимита'}
+          </span>
+        </div>
+        <div className={s.row}>
           <span>Свободно в бюджете</span>
           <span>{formatMoney(video.order.free)}</span>
         </div>
@@ -423,8 +438,8 @@ export default function ModVideoView() {
 
       {video.status === 'SUBMITTED' && video.inflatedBefore > 0 && (
         <p className={s.error} role="status">
-          Уже отклоняли за завышенные просмотры: {video.inflatedBefore}. Повтор —
-          повод для бана.
+          Уже отклоняли за завышенные просмотры: {video.inflatedBefore}. Повтор
+          — повод для бана.
         </p>
       )}
       {inflated && (
@@ -442,7 +457,10 @@ export default function ModVideoView() {
               id="reasons"
               value={comment}
               onChange={setComment}
-              presets={PRESETS}
+              presets={[
+                ...requirementReasons(video.order.requirements),
+                ...PRESETS,
+              ]}
             />
           )}
           {error && (

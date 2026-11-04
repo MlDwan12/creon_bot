@@ -52,11 +52,13 @@ const PUBLIC_ORDER_FIELDS = {
   referenceUrl: true,
   // наружу — не сами ссылки, а редирект /v/e/… (toPublic в orders.controller)
   exampleUrls: true,
+  requirements: true,
   linkInBio: true,
   budgetMinor: true,
   feePercent: true,
   cpmMinor: true,
   minViews: true,
+  maxPayoutMinor: true,
   minDurationSec: true,
   maxDurationSec: true,
   orientation: true,
@@ -125,11 +127,13 @@ export class OrdersService {
       title: string;
       description: string;
       exampleUrls?: string[];
+      requirements?: string[];
       referenceUrl?: string;
       targetUrl?: string;
       linkInBio?: boolean;
       budgetMinor: number;
       minViews: number;
+      maxPayoutMinor?: number | null;
       minDurationSec?: number | null;
       maxDurationSec?: number | null;
       orientation?: VideoOrientation | null;
@@ -155,6 +159,7 @@ export class OrdersService {
         title: data.title,
         description: data.description,
         exampleUrls: data.exampleUrls,
+        requirements: data.requirements,
         referenceUrl: data.referenceUrl,
         targetUrl: data.targetUrl,
         linkInBio: data.linkInBio,
@@ -162,6 +167,7 @@ export class OrdersService {
         budgetMinor: data.budgetMinor,
         feePercent: platformFeePercent(),
         minViews: data.minViews,
+        maxPayoutMinor: data.maxPayoutMinor,
         minDurationSec: data.minDurationSec,
         maxDurationSec: data.maxDurationSec,
         orientation: data.orientation,
@@ -626,11 +632,13 @@ export class OrdersService {
       title: string;
       description: string;
       exampleUrls?: string[];
+      requirements?: string[];
       referenceUrl?: string | null;
       targetUrl?: string | null;
       linkInBio?: boolean;
       budgetMinor: number;
       minViews: number;
+      maxPayoutMinor?: number | null;
       minDurationSec?: number | null;
       maxDurationSec?: number | null;
       orientation?: VideoOrientation | null;

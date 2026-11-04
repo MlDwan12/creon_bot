@@ -13,6 +13,21 @@ export function holdOverdue(holdEndsAt: string | null, now = Date.now()) {
   return holdEndsAt !== null && new Date(holdEndsAt).getTime() <= now;
 }
 
+/** Срок проверки ролика модератором: креатор видит «решение до …», в очереди дольше — красным. */
+export const REVIEW_SLA_HOURS = 24;
+
+/** До когда модератор обещает решение по сданному ролику. */
+export function reviewDueAt(submittedAt: string) {
+  return new Date(
+    new Date(submittedAt).getTime() + REVIEW_SLA_HOURS * 3600_000,
+  ).toISOString();
+}
+
+/** Ждёт дольше срока проверки — просрочено. */
+export function reviewOverdue(since: string, now = Date.now()) {
+  return now - new Date(since).getTime() > REVIEW_SLA_HOURS * 3600_000;
+}
+
 /** Ролики в холде (одобрены, итога нет) — для списка в «Балансе», ближайшие к выводу первыми. */
 export function heldVideos(subs: MySubmission[]) {
   return subs
@@ -43,6 +58,16 @@ export function createFormat({ t, locale }: Translator) {
     return new Date(iso).toLocaleDateString(locale(), {
       day: 'numeric',
       month: 'long',
+    });
+  }
+
+  /** «5 ноября, 14:30». */
+  function formatDateTime(iso: string): string {
+    return new Date(iso).toLocaleString(locale(), {
+      day: 'numeric',
+      month: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
     });
   }
 
@@ -194,6 +219,7 @@ export function createFormat({ t, locale }: Translator) {
     videoFormatParts,
     formatCompact,
     formatPlatforms,
+    formatDateTime,
     waitingFor,
     isWaitingLong,
     describeVideoUrl,
