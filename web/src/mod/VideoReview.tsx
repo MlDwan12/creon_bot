@@ -398,6 +398,13 @@ export function VideoReview({
             </>
           )}
 
+          {video.goneAt && !video.finalizedAt && (
+            <p className={s.dangerNote} role="status">
+              Площадка не нашла ролик с {formatDate(video.goneAt)} — удалён или
+              скрыт. Креатору написали вернуть публикацию; итог сам не
+              зафиксируется. Ролика нет и в конце холда — «Публикация удалена».
+            </p>
+          )}
           {video.status === 'SUBMITTED' && video.inflatedBefore > 0 && (
             <p className={s.dangerNote} role="status">
               Уже отклоняли за завышенные просмотры: {video.inflatedBefore}.

@@ -278,7 +278,14 @@ export function Queue() {
           ? queue.holds.map((v) => ({
               id: v.id,
               title: v.orderTitle,
-              sub: <>{v.creator} · итог просмотров</>,
+              sub: (
+                <>
+                  {v.creator} · итог просмотров
+                  {v.goneAt && (
+                    <span className={s.flag}> · не найден на площадке</span>
+                  )}
+                </>
+              ),
               since: null as string | null,
             }))
           : [];

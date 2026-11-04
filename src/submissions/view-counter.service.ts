@@ -70,11 +70,17 @@ export class ViewCounterService {
   /**
    * Просмотры и лайки по ссылкам; нет в карте — посчитать не удалось. `withAuthor` — ещё и автор
    * (YouTube, X) для модератора: это лишний запрос к YouTube и чтение пользователей в X, поэтому
-   * только по запросу, не в фоновых задачах.
+   * только по запросу, не в фоновых задачах. `gone` — сюда попадут ссылки, которых площадка точно
+   * нет (ответила, но ролика в ответе нет: удалён или скрыт); сбой API сюда не попадает.
+   * ponytail: «нет точно» умеют YouTube и X; TikTok, VK и Instagram (по токену креатора) — нет,
+   * там пропавший ролик неотличим от сбоя, его найдёт модератор в конце холда.
    */
   async fetchViews(
     videos: VideoRef[],
-    { withAuthor = false } = {},
+    {
+      withAuthor = false,
+      gone,
+    }: { withAuthor?: boolean; gone?: Set<string> } = {},
   ): Promise<Map<string, CountedVideo>> {
     const result = new Map<string, CountedVideo>();
     const auto = videos.map((v) => v.url).filter((u) => this.isAutomatic(u));
@@ -82,8 +88,9 @@ export class ViewCounterService {
       platformOf(u) === 'YOUTUBE' ? youtubeId(u) : null,
     );
     const x = byId(auto, xPostId);
-    if (this.youtubeKey) await this.fetchYoutube(youtube, result, withAuthor);
-    if (this.xToken) await this.fetchX(x, result, withAuthor);
+    if (this.youtubeKey)
+      await this.fetchYoutube(youtube, result, withAuthor, gone);
+    if (this.xToken) await this.fetchX(x, result, withAuthor, gone);
     await this.fetchByCreator(videos, result);
     return result;
   }
@@ -129,6 +136,7 @@ export class ViewCounterService {
     urlsById: Map<string, string[]>,
     result: Map<string, CountedVideo>,
     withAuthor: boolean,
+    gone?: Set<string>,
   ) {
     const authors: VideoAuthor[] = [];
     // До 50 роликов за запрос — это 1 единица из суточной квоты 10 000 (snippet её не меняет).
@@ -143,6 +151,13 @@ export class ViewCounterService {
         'YOUTUBE',
         `https://www.googleapis.com/youtube/v3/videos?part=statistics${withAuthor ? ',snippet' : ''}&id=${batch.join(',')}&key=${this.youtubeKey}`,
       );
+      // ответ пришёл, а ролика в нём нет — удалён или скрыт (приватный ролик YouTube не отдаёт)
+      if (data && gone) {
+        const found = new Set((data.items ?? []).map((i) => i.id));
+        for (const id of batch)
+          if (!found.has(id))
+            for (const url of urlsById.get(id) ?? []) gone.add(url);
+      }
       for (const item of data?.items ?? []) {
         const stats: CountedVideo | null = toStats(
           item.statistics?.viewCount,
@@ -190,6 +205,7 @@ export class ViewCounterService {
     urlsById: Map<string, string[]>,
     result: Map<string, CountedVideo>,
     withAuthor: boolean,
+    gone?: Set<string>,
   ) {
     // до 100 постов за запрос; платится каждый прочитанный пост
     for (const batch of chunks([...urlsById.keys()], 100)) {
@@ -208,6 +224,7 @@ export class ViewCounterService {
           }[];
           users?: { id: string; username?: string; name?: string }[];
         };
+        errors?: { resource_id?: string; type?: string }[];
       }>(
         'X',
         withAuthor
@@ -215,6 +232,15 @@ export class ViewCounterService {
           : `https://api.x.com/2/tweets?ids=${batch.join(',')}&tweet.fields=public_metrics&expansions=attachments.media_keys&media.fields=public_metrics,type`,
         { Authorization: `Bearer ${this.xToken}` },
       );
+      // удалённый пост X отдаёт в errors как resource-not-found (скрытый — authorization-error:
+      // автор закрыл аккаунт, ролик тоже не видно)
+      for (const e of data?.errors ?? [])
+        if (
+          gone &&
+          e.resource_id &&
+          /not-found|authorization-error/.test(e.type ?? '')
+        )
+          for (const url of urlsById.get(e.resource_id) ?? []) gone.add(url);
       const media = new Map(
         (data?.includes?.media ?? []).map((m) => [m.media_key, m]),
       );

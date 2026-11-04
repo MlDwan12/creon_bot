@@ -310,6 +310,8 @@ export interface ModQueue {
     orderTitle: string;
     creator: string;
     decidedAt: string | null;
+    /** Во время холда площадка не нашла ролик — с этого момента; null — на месте или не проверяли. */
+    goneAt: string | null;
   }[];
   /** Отзывы рекламодателей с текстом — в профиле креатора только после проверки. */
   reviews: {
@@ -491,6 +493,8 @@ export interface ModVideo {
   inflatedBefore: number;
   decidedAt: string | null;
   finalizedAt: string | null;
+  /** Во время холда площадка не нашла ролик — с этого момента; null — на месте или не проверяли. */
+  goneAt: string | null;
   /** Через сколько дней после одобрения фиксируется итог просмотров. */
   holdDays: number;
   order: {

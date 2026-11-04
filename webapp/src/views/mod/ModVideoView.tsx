@@ -467,6 +467,13 @@ export default function ModVideoView() {
         </>
       )}
 
+      {video.goneAt && !video.finalizedAt && (
+        <p className={s.error} role="status">
+          Площадка не нашла ролик с {formatDate(video.goneAt)} — удалён или
+          скрыт. Креатору написали вернуть публикацию; итог сам не
+          зафиксируется. Ролика нет и в конце холда — «Публикация удалена».
+        </p>
+      )}
       {video.status === 'SUBMITTED' && video.inflatedBefore > 0 && (
         <p className={s.error} role="status">
           Уже отклоняли за завышенные просмотры: {video.inflatedBefore}. Повтор

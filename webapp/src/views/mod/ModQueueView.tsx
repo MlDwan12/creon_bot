@@ -573,6 +573,9 @@ export default function ModQueueView() {
                     <span className={s.title}>{v.orderTitle}</span>
                     <span className={s.sub}>
                       {v.creator} · зафиксировать итог просмотров
+                      {v.goneAt && (
+                        <span className={s.flag}> · не найден на площадке</span>
+                      )}
                     </span>
                   </span>
                   <span className={s.chevron} aria-hidden="true">

@@ -364,6 +364,34 @@ describe('отклик', () => {
     ]);
   });
 
+  it('проверка на месте: пропал — пометка один раз, вернулся — снята и снимок; в очередь — через сутки', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const order = await openOrder(advertiser.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS);
+    await submissions.moderatorApprove(s.id, 1n, VIEWS);
+    // сразу после одобрения проверять рано
+    expect(await submissions.listPresenceDue()).toHaveLength(0);
+    const later = new Date(Date.now() + DAY + 1000);
+    expect((await submissions.listPresenceDue(later)).map((x) => x.id)).toEqual(
+      [s.id],
+    );
+
+    expect(await submissions.recordPresence(s.id, null)).not.toBeNull();
+    // повторная проверка — пометка уже стоит, второго уведомления нет
+    expect(await submissions.recordPresence(s.id, null)).toBeNull();
+    await submissions.recordPresence(s.id, { views: 1_800, likes: 9 });
+    const after = await prisma.submission.findUniqueOrThrow({
+      where: { id: s.id },
+    });
+    expect(after.goneAt).toBeNull();
+    expect(after.presenceCheckedAt).not.toBeNull();
+    expect((await submissions.viewHistory(s.id)).at(-1)).toMatchObject({
+      source: 'CHECK',
+      views: 1_800,
+    });
+  });
+
   it('двойной тап создаёт один отклик', async () => {
     const [advertiser, creator] = [await user(), await user()];
     const order = await openOrder(advertiser.id);

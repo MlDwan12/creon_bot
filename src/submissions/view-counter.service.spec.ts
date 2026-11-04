@@ -142,6 +142,44 @@ describe('ViewCounterService', () => {
     expect(init?.headers).toEqual({ Authorization: 'Bearer secret' });
   });
 
+  it('пропавший ролик: площадка ответила без него — в gone; сбой API — не в gone', async () => {
+    const [kept, deleted] = [
+      'https://youtu.be/dQw4w9WgXcQ',
+      'https://youtu.be/aaaaaaaaaaa',
+    ];
+    reply({ items: [{ id: 'dQw4w9WgXcQ', statistics: { viewCount: '5' } }] });
+    const gone = new Set<string>();
+    const stats = await service({ YOUTUBE_API_KEY: 'k' }).fetchViews(
+      refs([kept, deleted]),
+      { gone },
+    );
+    expect(stats.get(kept)?.views).toBe(5);
+    expect([...gone]).toEqual([deleted]);
+
+    jest.restoreAllMocks();
+    reply({ error: { message: 'quota' } }, false);
+    const none = new Set<string>();
+    await service({ YOUTUBE_API_KEY: 'k' }).fetchViews(refs([kept]), {
+      gone: none,
+    });
+    expect(none.size).toBe(0);
+  });
+
+  it('X: удалённый пост из errors — в gone', async () => {
+    const post = 'https://x.com/anya/status/1789';
+    reply({
+      errors: [
+        {
+          resource_id: '1789',
+          type: 'https://api.twitter.com/2/problems/resource-not-found',
+        },
+      ],
+    });
+    const gone = new Set<string>();
+    await service({ X_BEARER_TOKEN: 't' }).fetchViews(refs([post]), { gone });
+    expect([...gone]).toEqual([post]);
+  });
+
   it('API не ответило — пустая карта, не исключение', async () => {
     reply({ title: 'Unauthorized' }, false);
     const stats = await service({ X_BEARER_TOKEN: 't' }).fetchViews(

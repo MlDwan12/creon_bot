@@ -210,6 +210,8 @@ export class ModerationController {
         orderTitle: s.order.title,
         creator: creatorLabel(s.creator),
         decidedAt: s.decidedAt,
+        // площадка не нашла ролик во время холда — сам итог не зафиксируется
+        goneAt: s.goneAt,
       })),
       // отзывы рекламодателей с текстом — до публикации в профиле креатора
       reviews: reviews.map((s) => ({
@@ -523,6 +525,7 @@ export class ModerationController {
       inflatedBefore,
       decidedAt: s.decidedAt,
       finalizedAt: s.finalizedAt,
+      goneAt: s.goneAt,
       holdDays: HOLD_DAYS,
       order: {
         id: s.order.id,
