@@ -181,6 +181,13 @@ export function createModApi(request: Requester) {
         { comment },
       ),
 
+    /** Аккаунт соцсети: код в описании найден (`found`) или нет. */
+    decideLink: (id: number, found: boolean) =>
+      request<{ ok: true }>(
+        'POST',
+        `/api/mod/link-verifications/${id}/${found ? 'verify' : 'no-code'}`,
+      ),
+
     /** Открыть кабинет заказчика без заявки или вернуть закрытый. */
     openAdvertiser: (userId: number) =>
       request<{ ok: true }>('POST', `/api/mod/users/${userId}/advertiser/open`),

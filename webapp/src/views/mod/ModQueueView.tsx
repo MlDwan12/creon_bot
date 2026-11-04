@@ -4,6 +4,7 @@ import { reviewOverdue } from '@fixum/shared';
 import {
   ApiError,
   approveApplication,
+  decideLink,
   approveReview,
   fetchModQueue,
   fetchModReports,
@@ -17,11 +18,17 @@ import {
 } from '../../api';
 import SupportLink from '../../components/SupportLink';
 import { formatMoney, isWaitingLong, timeAgo, waitingFor } from '../../format';
-import { confirmAction } from '../../telegram';
+import { confirmAction, safeUrl } from '../../telegram';
 import s from './ModQueueView.module.css';
 
 type Tab =
-  'orders' | 'videos' | 'holds' | 'reviews' | 'reports' | 'applications';
+  | 'orders'
+  | 'videos'
+  | 'holds'
+  | 'reviews'
+  | 'reports'
+  | 'applications'
+  | 'links';
 const TABS: Tab[] = [
   'orders',
   'videos',
@@ -29,6 +36,7 @@ const TABS: Tab[] = [
   'reviews',
   'reports',
   'applications',
+  'links',
 ];
 // «Заказчики» — первыми: заявок мало, и в конце ряда на телефоне вкладка уходит за край
 const TAB_LIST: { id: Tab; label: string }[] = [
@@ -38,6 +46,7 @@ const TAB_LIST: { id: Tab; label: string }[] = [
   { id: 'holds', label: 'Итоги' },
   { id: 'reviews', label: 'Отзывы' },
   { id: 'reports', label: 'Жалобы' },
+  { id: 'links', label: 'Аккаунты' },
 ];
 
 /** Мера по жалобам — своя для каждого типа объекта (см. ReportsService.resolve). */
@@ -128,6 +137,7 @@ export default function ModQueueView() {
     reviews: queue?.reviews.length ?? 0,
     reports: reports.length,
     applications: queue?.applications.length ?? 0,
+    links: queue?.links.length ?? 0,
   };
   const total = TABS.reduce((sum, t) => sum + counts[t], 0);
   // Вкладка — в адресе (?tab=videos), чтобы «Назад» из карточки вернул на ту же вкладку.
@@ -224,6 +234,21 @@ export default function ModQueueView() {
     fetchModQueue().then(setQueue, () => {});
   }
 
+  /** Аккаунт соцсети: код в описании найден или нет. */
+  async function decideLinkCheck(id: number, found: boolean) {
+    setApplicationError('');
+    try {
+      await decideLink(id, found);
+    } catch (err) {
+      setApplicationError(
+        err instanceof ApiError
+          ? err.userMessage
+          : 'Не получилось, попробуйте ещё раз',
+      );
+    }
+    fetchModQueue().then(setQueue, () => {});
+  }
+
   /** Самое старое ожидание в обеих очередях — главный сигнал «пора разбирать». */
   const oldest = [
     ...(queue?.orders.map((o) => o.queuedAt) ?? []),
@@ -291,7 +316,63 @@ export default function ModQueueView() {
             дольше суток
           </p>
 
-          {tab === 'applications' ? (
+          {tab === 'links' ? (
+            <>
+              {queue.links.length === 0 && (
+                <p className={`${s.empty} ${s.list}`}>
+                  Аккаунтов на проверке нет.
+                </p>
+              )}
+              {applicationError && (
+                <p className={s.error} role="alert">
+                  {applicationError}
+                </p>
+              )}
+              {queue.links.map((l) => (
+                <article key={l.id} className={s.report}>
+                  <div className={s.reportTop}>
+                    <Link
+                      to={`/mod/creators/${l.userId}`}
+                      className={s.subject}
+                    >
+                      {l.user} ›
+                    </Link>
+                    <span className={waitClass(l.createdAt)}>
+                      {waitingFor(l.createdAt)}
+                    </span>
+                  </div>
+                  {safeUrl(l.url) ? (
+                    <a href={safeUrl(l.url)} target="_blank" rel="noreferrer">
+                      {l.url}
+                    </a>
+                  ) : (
+                    <span>{l.url}</span>
+                  )}
+                  <span>
+                    Код в описании: <strong>{l.code}</strong>
+                  </span>
+                  <span className={s.hint}>
+                    Откройте аккаунт и найдите код в описании профиля.
+                  </span>
+                  <div className={s.actions}>
+                    <button
+                      type="button"
+                      className={s.danger}
+                      onClick={() => decideLinkCheck(l.id, false)}
+                    >
+                      Кода нет
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => decideLinkCheck(l.id, true)}
+                    >
+                      Подтвердить
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </>
+          ) : tab === 'applications' ? (
             <>
               {queue.applications.length === 0 && (
                 <p className={`${s.empty} ${s.list}`}>Заявок нет.</p>

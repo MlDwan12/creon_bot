@@ -717,6 +717,8 @@
     "insight": "💡 A tip for order “{{title}}”\n\n{{text}}\n\nThe funnel and all tips are in the order report.",
     "deadlineSoon": "⏳ Less than a day left until the deadline of order {{order}} — hurry to submit your video. It won't be accepted after the deadline.",
     "slotEndingSoon": "⏳ Your slot for order {{order}} expires in less than a day — hurry to submit your video.",
+    "linkVerified": "✅ Account {{url}} is verified. You can remove the code from its bio.",
+    "linkNoCode": "We couldn't find the code in the bio of {{url}}. Check that it's saved and the profile is public, then send it again — “Profile”.",
     "publicationGone": "⚠️ Your video for order {{order}} can't be found at its link — it looks deleted or hidden. Please restore it: if it's not there when the hold ends, the payout will be cancelled.\n\nIf this is a mistake, contact support.",
     "slotExpired": "⌛ Your slot for order {{order}} expired: no video within {{days}} days. If the order is still open, you can apply again.",
     "walletChanged": "🔐 Your payout wallet was changed: {{wallet}}. If it wasn't you, contact support right away.",
@@ -809,6 +811,9 @@
     "requirementTooLong": "Each requirement must be at most {{max}} characters",
     "shareOff": "Sharing reports is not available yet — please contact support",
     "shareGone": "This link no longer works — ask the brand for a new one",
+    "linkNotInProfile": "Add this link to your profile first",
+    "link_PENDING": "This account is already under review — please wait",
+    "link_VERIFIED": "This account is already verified",
     "durationOrder": "The minimum duration is greater than the maximum",
     "badOrientation": "Unknown video orientation",
     "badPlatform": "Unknown platform",
@@ -1027,6 +1032,20 @@
       "account": "Connect a platform account — we'll count views for you",
       "order": "Take your first order",
       "lesson": "Read a lesson in “Learn”"
+    }
+  },
+  "linkCheck": {
+    "intro": "Optional: confirm the account is yours — it makes it easier for a moderator to accept your videos.",
+    "verify": "Verify",
+    "how": "Add this code to the bio of your profile on the platform, save it and tap “Code added”. A moderator will check; once verified you can remove the code.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "sent": "Code added",
+    "noCode": "We couldn't find the code — check that it's saved and the profile is public, then send it again.",
+    "error": "Something went wrong, please try again",
+    "status": {
+      "PENDING": "Under review",
+      "VERIFIED": "✓ Verified"
     }
   }
 }

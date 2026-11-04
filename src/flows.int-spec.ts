@@ -24,6 +24,10 @@ import {
 } from './submissions/submissions.service';
 import { UsersService } from './users/users.service';
 import { ViewCounterService } from './submissions/view-counter.service';
+import {
+  linkCode,
+  LinkVerificationsService,
+} from './profiles/link-verifications.service';
 
 /**
  * Интеграционные тесты сервисов на настоящем Postgres: статусы, гонки и права, которые держатся
@@ -109,6 +113,8 @@ async function openOrder(advertiserId: number, deadline?: Date) {
   const order = await pendingOrder(advertiserId, deadline);
   return approveOrder(order.id, 1n);
 }
+
+const linkChecks = new LinkVerificationsService(prisma);
 
 const statusOf = async (orderId: number) =>
   (await prisma.order.findUniqueOrThrow({ where: { id: orderId } })).status;
@@ -419,6 +425,30 @@ describe('отклик', () => {
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect(await prisma.submission.count()).toBe(1);
+  });
+});
+
+describe('подтверждение аккаунта кодом', () => {
+  it('отправка, «кода нет», повтор, подтверждение; убрали ссылку из профиля — не действует', async () => {
+    const creator = await user();
+    const link = 'https://www.tiktok.com/@anya';
+    await expect(linkChecks.submit(creator.id, [], link)).rejects.toThrow();
+
+    const first = await linkChecks.submit(creator.id, [link], link);
+    expect(first.code).toBe(linkCode(creator.id, link));
+    // уже на проверке — второй раз нельзя
+    await expect(linkChecks.submit(creator.id, [link], link)).rejects.toThrow();
+    await linkChecks.decide(first.id, 1n, false);
+    await expect(linkChecks.decide(first.id, 1n, true)).rejects.toThrow();
+    expect((await linkChecks.checks(creator.id, [link]))[0].status).toBe(
+      'NO_CODE',
+    );
+
+    const again = await linkChecks.submit(creator.id, [link], link);
+    await linkChecks.decide(again.id, 1n, true);
+    expect(await linkChecks.verified(creator.id, [link])).toEqual([link]);
+    expect(await linkChecks.verified(creator.id, [])).toEqual([]);
+    await expect(linkChecks.submit(creator.id, [link], link)).rejects.toThrow();
   });
 });
 

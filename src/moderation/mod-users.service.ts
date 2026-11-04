@@ -181,6 +181,8 @@ export class ModUsersService {
                   ModeratorActionType.ADVERTISER_OPEN,
                   ModeratorActionType.ADVERTISER_REJECT,
                   ModeratorActionType.ADVERTISER_CLOSE,
+                  ModeratorActionType.LINK_VERIFY,
+                  ModeratorActionType.LINK_NO_CODE,
                 ],
               },
               objectId: userId,

@@ -15,6 +15,8 @@ describe('videoAuthor', () => {
       videoAuthor(
         { views: 1, likes: null, ownAccount: true, connectedAt: at(days) },
         [],
+        [],
+        null,
         now,
       ).connectedDaysAgo;
     expect(author(0.5)).toBe(0);
@@ -36,6 +38,36 @@ describe('videoAuthor', () => {
     expect(videoAuthor(stats, ['https://x.com/someone']).status).toBe(
       'mismatch',
     );
+  });
+
+  it('подтверждённый кодом аккаунт — byCode; ник TikTok берётся из ссылки на ролик', () => {
+    const stats = { views: 1, likes: null, author };
+    const channel = 'https://youtube.com/@MrBeast';
+    expect(videoAuthor(stats, [channel], [channel]).status).toBe('byCode');
+
+    const tiktok = 'https://www.tiktok.com/@anya.ugc/video/7412345678901234567';
+    const profile = 'https://www.tiktok.com/@Anya.UGC';
+    expect(videoAuthor(undefined, [profile], [profile], tiktok).status).toBe(
+      'byCode',
+    );
+    expect(videoAuthor(undefined, [profile], [], tiktok).status).toBe(
+      'inProfile',
+    );
+    expect(
+      videoAuthor(undefined, ['https://www.tiktok.com/@other'], [], tiktok),
+    ).toMatchObject({
+      status: 'mismatch',
+      url: 'https://www.tiktok.com/@anya.ugc',
+    });
+    // ссылка без ника (m.tiktok.com/v/…) — автора не узнать
+    expect(
+      videoAuthor(
+        undefined,
+        [profile],
+        [profile],
+        'https://m.tiktok.com/v/7412345678901234567.html',
+      ).status,
+    ).toBe('unknown');
   });
 });
 

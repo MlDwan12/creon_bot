@@ -7,7 +7,8 @@
   background: var(--orange-soft);
   color: var(--orange-text);
 }
-.author.verified {
+.author.verified,
+.author.byCode {
   background: var(--success-soft);
   color: var(--success-text);
 }

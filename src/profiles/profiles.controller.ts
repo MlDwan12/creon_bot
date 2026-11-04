@@ -8,6 +8,7 @@ import {
   Get,
   NotFoundException,
   Param,
+  Post,
   Put,
   Req,
   Res,
@@ -28,6 +29,8 @@ import { ModeratorGuard } from '../auth/moderator.guard';
 import { parseWallet } from '../payouts/trc20';
 import { parseLinks } from './profile-input';
 import { ProfilesService } from './profiles.service';
+import { LinkVerificationsService } from './link-verifications.service';
+import { Throttle } from '@nestjs/throttler';
 import { AdvertisersService } from '../advertisers/advertisers.service';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
 
@@ -40,25 +43,43 @@ export class ProfilesController {
     private readonly photos: TelegramPhotosService,
     private readonly notifications: NotificationsService,
     private readonly advertisers: AdvertisersService,
+    private readonly links: LinkVerificationsService,
   ) {}
 
   /** Свой профиль креатора; `advertiser` — что показать на месте кнопки «Стать заказчиком». */
   @Get('profile')
   async mine(@Req() req: ApiRequest) {
-    const [profile, advertiser] = await Promise.all([
+    const [profile, advertiser, linkChecks] = await Promise.all([
       this.profiles.profile(req.user.id, true),
       this.advertisers.access(
         req.user,
         this.moderatorGuard.isModerator(req.user),
       ),
+      // код и статус подтверждения каждой ссылки — только самому креатору
+      this.links.checks(req.user.id, req.user.socialLinks),
     ]);
-    return { ...profile, ban: null, advertiser };
+    return { ...profile, ban: null, advertiser, linkChecks };
   }
 
   /** Ссылки на соцсети в своём профиле. */
   @Put('profile/links')
   async updateLinks(@Body() body: unknown, @Req() req: ApiRequest) {
     await this.profiles.updateLinks(req.user.id, parseLinks(body));
+    return { ok: true };
+  }
+
+  /** «Код добавлен»: ссылка из профиля уходит модератору сверить код в описании аккаунта. */
+  @Post('profile/links/verify')
+  @Throttle({ default: { limit: 20, ttl: 60 * 60_000 } })
+  async verifyLink(@Body('url') url: unknown, @Req() req: ApiRequest) {
+    if (typeof url !== 'string')
+      throw new BadRequestException(tr('errors.linkNotInProfile'));
+    const check = await this.links.submit(
+      req.user.id,
+      req.user.socialLinks,
+      url,
+    );
+    this.notifications.linkSubmitted(check.user, url);
     return { ok: true };
   }
 

@@ -4,6 +4,7 @@ import { reviewOverdue } from '@fixum/shared';
 import {
   approveApplication,
   approveReview,
+  decideLink,
   errorText,
   fetchModQueue,
   fetchModReports,
@@ -14,6 +15,7 @@ import {
   removeReview,
   type ReportTarget,
   resolveReports,
+  safeUrl,
 } from '../api';
 import { formatMoney, isWaitingLong, timeAgo, waitingFor } from '../format';
 import s from '../ui.module.css';
@@ -21,7 +23,13 @@ import { OrderReview } from './OrderReview';
 import { VideoReview } from './VideoReview';
 
 type Tab =
-  'applications' | 'videos' | 'orders' | 'holds' | 'reviews' | 'reports';
+  | 'applications'
+  | 'videos'
+  | 'orders'
+  | 'holds'
+  | 'reviews'
+  | 'reports'
+  | 'links';
 // «Заказчики» — первыми, как в мини-аппе: на узком экране вкладка в конце ряда уходит за край
 const TABS: { id: Tab; label: string }[] = [
   { id: 'applications', label: 'Заказчики' },
@@ -30,6 +38,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'holds', label: 'Итоги' },
   { id: 'reviews', label: 'Отзывы' },
   { id: 'reports', label: 'Жалобы' },
+  { id: 'links', label: 'Аккаунты' },
 ];
 
 /** Мера по жалобам — своя для каждого типа объекта (см. ReportsService.resolve). */
@@ -122,6 +131,7 @@ export function Queue() {
     holds: queue?.holds.length ?? 0,
     reviews: queue?.reviews.length ?? 0,
     reports: reports.length,
+    links: queue?.links.length ?? 0,
   };
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   // вкладка и открытый элемент — в адресе: ссылку можно открыть в новой вкладке и вернуться назад.
@@ -199,6 +209,17 @@ export function Queue() {
       await (publish
         ? approveReview(submissionId)
         : removeReview(submissionId));
+    } catch (err) {
+      setActionError(errorText(err));
+    }
+    void load();
+  }
+
+  /** Аккаунт соцсети: код в описании найден или нет. */
+  async function decideLinkCheck(id: number, found: boolean) {
+    setActionError('');
+    try {
+      await decideLink(id, found);
     } catch (err) {
       setActionError(errorText(err));
     }
@@ -338,7 +359,55 @@ export function Queue() {
         </p>
       )}
 
-      {tab === 'applications' ? (
+      {tab === 'links' ? (
+        queue.links.length === 0 ? (
+          <p className={s.hint}>Аккаунтов на проверке нет.</p>
+        ) : (
+          <div className={s.cards}>
+            {queue.links.map((l) => (
+              <article key={l.id} className={s.card}>
+                <div className={s.row}>
+                  <Link to={`/mod/creators/${l.userId}`}>
+                    <strong>{l.user} ›</strong>
+                  </Link>
+                  <span className={waitClass(l.createdAt)}>
+                    {waitingFor(l.createdAt)}
+                  </span>
+                </div>
+                {safeUrl(l.url) ? (
+                  <a href={safeUrl(l.url)} target="_blank" rel="noreferrer">
+                    {l.url}
+                  </a>
+                ) : (
+                  <span>{l.url}</span>
+                )}
+                <span>
+                  Код в описании: <strong>{l.code}</strong>
+                </span>
+                <p className={`${s.hint} ${s.small}`}>
+                  Откройте аккаунт и найдите код в описании профиля.
+                </p>
+                <div className={s.buttons}>
+                  <button
+                    type="button"
+                    className={`${s.btn} ${s.primary}`}
+                    onClick={() => decideLinkCheck(l.id, true)}
+                  >
+                    Подтвердить
+                  </button>
+                  <button
+                    type="button"
+                    className={`${s.btn} ${s.reject}`}
+                    onClick={() => decideLinkCheck(l.id, false)}
+                  >
+                    Кода нет
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )
+      ) : tab === 'applications' ? (
         queue.applications.length === 0 ? (
           <p className={s.hint}>Заявок нет.</p>
         ) : (

@@ -539,6 +539,23 @@ export class NotificationsService
     );
   }
 
+  /** Модераторам: креатор просит подтвердить аккаунт соцсети кодом. */
+  linkSubmitted(user: User, url: string) {
+    this.toModerators(
+      `🔑 <b>Подтверждение аккаунта</b>\nОт: ${escapeHtml(creatorLabel(user))}\n${escapeHtml(url)}`,
+      '/mod?tab=links',
+    );
+  }
+
+  /** Креатору: модератор проверил код в описании аккаунта. */
+  linkDecided(user: User, url: string, verified: boolean) {
+    this.send(
+      user,
+      (t) => t(verified ? 'notify.linkVerified' : 'notify.linkNoCode', { url }),
+      '/profile',
+    );
+  }
+
   /** Кабинет заказчика открыт — по заявке или модератором сам. */
   advertiserOpened(user: User) {
     this.send(user, (t) => t('notify.advertiserOpened'), '/my-orders');
