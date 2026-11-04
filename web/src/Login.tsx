@@ -126,6 +126,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
         <div className={s.pitch}>
           <h1>{t('web.title')}</h1>
           <p className={s.wideOnly}>{t('web.lead')}</p>
+          <Points className={s.wideOnly} />
         </div>
       </section>
       <section className={s.side}>
@@ -197,7 +198,33 @@ export function Login({ onLogin }: { onLogin: () => void }) {
         </div>
         {/* на телефоне описание — под входом: кто пришёл войти, видит кнопку сразу */}
         <p className={`${s.narrowOnly} ${s.lead}`}>{t('web.lead')}</p>
+        <Points className={s.narrowOnly} />
       </section>
+    </div>
+  );
+}
+
+/** Чем Fixum отличается — по сторонам сделки (web.points). */
+function Points({ className }: { className: string }) {
+  const { t } = useTranslation();
+  const groups = t('web.points', { returnObjects: true }) as unknown as {
+    title: string;
+    items: { b: string; text: string }[];
+  }[];
+  return (
+    <div className={`${className} ${s.points}`}>
+      {groups.map((g) => (
+        <section key={g.title}>
+          <h2>{g.title}</h2>
+          <ul>
+            {g.items.map((i) => (
+              <li key={i.b}>
+                <strong>{i.b}</strong> {i.text}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
     </div>
   );
 }

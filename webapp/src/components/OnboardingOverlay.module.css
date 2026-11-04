@@ -177,3 +177,11 @@
     line-height: 1.4;
   }
 }
+
+/* «Почему Fixum» под шагами */
+.why {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+}
