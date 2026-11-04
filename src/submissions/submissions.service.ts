@@ -14,6 +14,7 @@ import {
   OrderStatus,
   SubmissionStatus,
   VideoPlatform,
+  ViewSnapshotSource,
 } from '@prisma/client';
 import {
   ACCRUED,
@@ -60,6 +61,9 @@ const NOT_TAKEN_DOWN: Prisma.OrderWhereInput = {
 export const SLOT_DAYS = 7;
 
 /** До какого момента креатор должен прислать видео по отклику «в работе». */
+/** Сколько роликов проверять на месте за один проход ScheduledJob (listPresenceDue). */
+const PRESENCE_BATCH = 200;
+
 export function slotDueAt(createdAt: Date) {
   return new Date(createdAt.getTime() + SLOT_DAYS * DAY_MS);
 }
@@ -414,6 +418,10 @@ export class SubmissionsService implements OnApplicationBootstrap {
           },
           ACCEPTS_VIDEOS,
         );
+        // история просмотров — модератору сигналы накрутки (view-signals.ts)
+        await tx.viewSnapshot.create({
+          data: { submissionId, views, source: ViewSnapshotSource.SUBMIT },
+        });
         await syncFundBusy(tx, submission.orderId);
         return this.mustFind(submissionId, tx);
       });
@@ -610,6 +618,14 @@ export class SubmissionsService implements OnApplicationBootstrap {
         },
         NOT_TAKEN_DOWN,
       );
+      await tx.viewSnapshot.create({
+        data: {
+          submissionId,
+          views,
+          likes,
+          source: ViewSnapshotSource.APPROVE,
+        },
+      });
       return {
         submission: await tx.submission.findUniqueOrThrow({
           where: { id: submissionId },
@@ -662,6 +678,86 @@ export class SubmissionsService implements OnApplicationBootstrap {
   }
 
   /** Сколько роликов креатора отклонено за завышенные просмотры — модератору: повтор — повод для бана. */
+  /**
+   * Одобренные ролики в холде, которые пора проверить по API площадки: раз в сутки, первый раз — через
+   * сутки после одобрения (при одобрении просмотры и так сверены). Ссылки без API отсеивает ScheduledJob.
+   * ponytail: до PRESENCE_BATCH за проход раз в 5 минут — тысячи роликов в сутки; станет мало — поднять.
+   */
+  listPresenceDue(now = new Date()) {
+    const dayAgo = new Date(now.getTime() - DAY_MS);
+    return this.prisma.submission.findMany({
+      where: {
+        status: SubmissionStatus.MODERATOR_APPROVED,
+        finalizedAt: null,
+        OR: [
+          { presenceCheckedAt: { lt: dayAgo } },
+          { presenceCheckedAt: null, decidedAt: { lt: dayAgo } },
+        ],
+      },
+      orderBy: { decidedAt: 'asc' },
+      take: PRESENCE_BATCH,
+      include: { order: true, creator: true },
+    });
+  }
+
+  /**
+   * Итог проверки публикации во время холда. `stats` — на месте: снимок просмотров, пометка
+   * «пропал» снимается (ролик вернули). null — площадка ролика не нашла: пометка с этого момента.
+   * Возвращает ролик, только если пометку поставили сейчас, — для уведомлений один раз; итог
+   * холда успели зафиксировать или ролик сняли — ничего не меняет.
+   */
+  async recordPresence(
+    submissionId: number,
+    stats: { views: number; likes: number | null } | null,
+  ) {
+    const inHold = {
+      id: submissionId,
+      status: SubmissionStatus.MODERATOR_APPROVED,
+      finalizedAt: null,
+    };
+    const now = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      if (stats) {
+        const { count } = await tx.submission.updateMany({
+          where: inHold,
+          data: { presenceCheckedAt: now, goneAt: null },
+        });
+        if (count)
+          await tx.viewSnapshot.create({
+            data: {
+              submissionId,
+              views: stats.views,
+              likes: stats.likes,
+              source: ViewSnapshotSource.CHECK,
+            },
+          });
+        return null;
+      }
+      await tx.submission.updateMany({
+        where: inHold,
+        data: { presenceCheckedAt: now },
+      });
+      const { count } = await tx.submission.updateMany({
+        where: { ...inHold, goneAt: null },
+        data: { goneAt: now },
+      });
+      return count
+        ? tx.submission.findUniqueOrThrow({
+            where: { id: submissionId },
+            include: { order: true, creator: true },
+          })
+        : null;
+    });
+  }
+
+  /** История просмотров ролика от старых снимков к новым — модератору (view-signals.ts). */
+  viewHistory(submissionId: number) {
+    return this.prisma.viewSnapshot.findMany({
+      where: { submissionId },
+      orderBy: { at: 'asc' },
+    });
+  }
+
   inflatedCount(creatorId: number) {
     return this.prisma.submission.count({
       where: {
@@ -804,6 +900,9 @@ export class SubmissionsService implements OnApplicationBootstrap {
       });
       if (count === 0)
         throw new ForbiddenException('Итог по этому ролику уже зафиксирован');
+      await tx.viewSnapshot.create({
+        data: { submissionId, views, likes, source: ViewSnapshotSource.FINAL },
+      });
       return this.mustFind(submissionId, tx);
     });
   }

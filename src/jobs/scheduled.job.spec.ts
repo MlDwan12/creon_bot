@@ -81,4 +81,45 @@ describe('итог холда без модератора', () => {
 
     expect(finalizeViews.mock.calls.map((c: unknown[]) => c[0])).toEqual([1]);
   });
+
+  it('проверка на месте: посчитан — снимок, не нашли — пометка и уведомление, сбой API — пропуск', async () => {
+    const url = (n: number) => `https://youtu.be/${String(n).repeat(11)}`;
+    const due = [1, 2, 3].map((id) => ({
+      id,
+      videoUrl: url(id),
+      creatorId: id,
+    }));
+    const recordPresence = jest.fn((id: number) =>
+      Promise.resolve(id === 2 ? { id } : null),
+    );
+    const publicationGone = jest.fn();
+    const job = new ScheduledJob(
+      {} as PrismaService,
+      {} as OrdersService,
+      {
+        listPresenceDue: () => Promise.resolve(due),
+        recordPresence,
+      } as unknown as SubmissionsService,
+      { publicationGone } as unknown as NotificationsService,
+      {} as PayoutsService,
+      {
+        isAutomatic: () => true,
+        fetchViews: (_: unknown, { gone }: { gone: Set<string> }) => {
+          gone.add(url(2));
+          // ролик 3 — API не ответило: ни в просмотрах, ни в gone
+          return Promise.resolve(new Map([[url(1), { views: 10, likes: 1 }]]));
+        },
+      } as unknown as ViewCounterService,
+    );
+
+    await (
+      job as unknown as { checkPresence(): Promise<void> }
+    ).checkPresence();
+
+    expect(recordPresence.mock.calls).toEqual([
+      [1, { views: 10, likes: 1 }],
+      [2, null],
+    ]);
+    expect(publicationGone).toHaveBeenCalledTimes(1);
+  });
 });

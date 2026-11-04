@@ -59,6 +59,8 @@ const submission = (
   payoutMinor: 0,
   agreedPayoutMinor: null,
   finalizedAt: null,
+  goneAt: null,
+  presenceCheckedAt: null,
   rating: null,
   review: null,
   reviewQueuedAt: null,

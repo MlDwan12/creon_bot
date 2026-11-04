@@ -212,3 +212,10 @@
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
+
+/* сигналы накрутки — заметно, но не как ошибка: решает модератор */
+.flag {
+  color: var(--orange-text);
+  font-weight: 600;
+  text-align: right;
+}

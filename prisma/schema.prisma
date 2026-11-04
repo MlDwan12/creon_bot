@@ -259,6 +259,12 @@ model Submission {
   decidedAt          DateTime?
   /// Креатору напомнили, что слот сгорает меньше чем через сутки.
   slotReminderSentAt DateTime?
+  /// Во время холда API площадки не нашло публикацию (удалена или скрыта) с этого момента; null — на
+  /// месте или не проверяли. Пока стоит, итог холда сам не фиксируется — решает модератор.
+  goneAt             DateTime?
+  /// Когда последний раз проверили публикацию по API во время холда (раз в сутки, ScheduledJob).
+  presenceCheckedAt  DateTime?
+  viewSnapshots      ViewSnapshot[]
 
   /// Один отклик «в работе» на креатора и заказ — дубль (двойной тап) отсекает сама база.
   @@unique([orderId, creatorId], map: "Submission_one_in_progress", where: { status: "IN_PROGRESS" })
@@ -339,6 +345,31 @@ model Payout {
   @@index([creatorId])
   /// Очередь заявок (REQUESTED, старые первыми).
   @@index([status, createdAt])
+}
+
+/// Откуда снимок просмотров ролика.
+enum ViewSnapshotSource {
+  /// При сдаче: по API площадки, а если не посчитать — со слов креатора.
+  SUBMIT
+  /// Модератор зафиксировал при одобрении.
+  APPROVE
+  /// Ежедневная проверка по API во время холда.
+  CHECK
+  /// Итог холда.
+  FINAL
+}
+
+/// История просмотров ролика — модератору сигналы накрутки (src/submissions/view-signals.ts).
+model ViewSnapshot {
+  id           Int                @id @default(autoincrement())
+  submission   Submission         @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submissionId Int
+  views        Int
+  likes        Int?
+  source       ViewSnapshotSource
+  at           DateTime           @default(now())
+
+  @@index([submissionId, at])
 }
 
 /// Очередь уведомлений в чат бота (src/telegram/notifications.service.ts). Пишется при событии,

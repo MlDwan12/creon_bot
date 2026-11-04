@@ -285,6 +285,34 @@ export class NotificationsService
     );
   }
 
+  /**
+   * Во время холда площадка не нашла ролик: креатору — вернуть публикацию, модераторам — пометка
+   * (решение — при итоге холда, «Публикация удалена»).
+   */
+  publicationGone(submission: SubmissionWithParties) {
+    this.send(
+      submission.creator,
+      (t, lang) =>
+        t('notify.publicationGone', {
+          order: forCreator(submission.order, lang),
+        }),
+      '/submissions',
+      true,
+    );
+    this.toModerators(
+      [
+        '👻 <b>Ролик пропал во время холда</b>',
+        '',
+        `Заказ #${submission.order.id}: <b>${escapeHtml(submission.order.title)}</b>`,
+        `Креатор: ${escapeHtml(creatorLabel(submission.creator))}`,
+        `Видео: ${escapeHtml(submission.videoUrl ?? '')}`,
+        '',
+        'Площадка не нашла публикацию. Итог холда сам не зафиксируется — проверьте в конце холда.',
+      ].join('\n'),
+      `/mod/videos/${submission.id}`,
+    );
+  }
+
   /** Креатору: при итоге публикации (или ссылки в шапке профиля) не оказалось — начисление отменено. */
   publicationDeleted(submission: SubmissionWithParties, bioLink = false) {
     this.send(
