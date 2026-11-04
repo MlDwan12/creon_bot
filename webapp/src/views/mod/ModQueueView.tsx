@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { reviewOverdue } from '@fixum/shared';
 import {
   ApiError,
   approveApplication,
@@ -232,8 +233,13 @@ export default function ModQueueView() {
     ...(queue?.reviews.map((r) => r.queuedAt) ?? []),
   ].sort()[0];
 
+  // дольше срока проверки (REVIEW_SLA_HOURS) — красным, дольше 4 часов — оранжевым
   const waitClass = (iso: string) =>
-    isWaitingLong(iso) ? `${s.wait} ${s.long}` : s.wait;
+    reviewOverdue(iso)
+      ? `${s.wait} ${s.overdue}`
+      : isWaitingLong(iso)
+        ? `${s.wait} ${s.long}`
+        : s.wait;
 
   return (
     <main className={s.page}>
@@ -250,7 +256,15 @@ export default function ModQueueView() {
             {oldest && (
               <>
                 {' · '}
-                <span className={isWaitingLong(oldest) ? s.long : undefined}>
+                <span
+                  className={
+                    reviewOverdue(oldest)
+                      ? s.overdue
+                      : isWaitingLong(oldest)
+                        ? s.long
+                        : undefined
+                  }
+                >
                   самое старое — {waitingFor(oldest)}
                 </span>
               </>
@@ -273,7 +287,8 @@ export default function ModQueueView() {
             ))}
           </div>
           <p className={s.hint}>
-            Сначала самые старые. Оранжевым — ждут дольше 4 часов
+            Сначала самые старые. Оранжевым — ждут дольше 4 часов, красным —
+            дольше суток
           </p>
 
           {tab === 'applications' ? (

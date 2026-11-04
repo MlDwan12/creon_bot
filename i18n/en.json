@@ -309,6 +309,8 @@
       "submitted": "Video submitted",
       "review": "Under review",
       "reviewNote": "A moderator will check the video and its views. Meanwhile you can take the order again and submit another one.",
+      "reviewDue": "Decision by {{date}}",
+      "reviewLate": "Review is taking longer — we will decide shortly",
       "approved": "Approved",
       "accrual": "Payout",
       "hold": "5-day hold",

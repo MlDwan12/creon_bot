@@ -363,6 +363,10 @@
   color: var(--orange-text);
 }
 
+.overdue {
+  color: var(--danger);
+}
+
 .flag {
   color: var(--orange-text);
   font-weight: 700;
