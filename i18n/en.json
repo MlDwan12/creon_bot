@@ -552,6 +552,11 @@
     "fundBusy": "New videos aren't accepted: the whole fund is reserved for videos under review. If some are rejected, the order reopens; if approved, it closes."
   },
   "createOrder": {
+    "calcTitle": "Rough estimate",
+    "calcViews": "≈ {{views}} views",
+    "calcVideos_one": "up to {{count}} video",
+    "calcVideos_other": "up to {{count}} videos",
+    "calcNote": "At the usual price in “{{category}}” — {{price}} per 1000 views. Videos — if each one gets exactly the {{views}}-view threshold; videos with more views cost more, so there will be fewer. A moderator sets the exact rate.",
     "vertical": "Vertical",
     "horizontal": "Horizontal",
     "anyOrientation": "Any",
@@ -626,8 +631,7 @@
     "linkInBio": "Link in profile bio",
     "linkInBioHint": "The creator also puts their product link in the profile bio and keeps it until the final count — 5 days after the video is approved. It is an extra step: such orders get fewer takers, and the moderator will factor it into the rate.",
     "linkInBioNeedsTarget": "Add a product link first — that is what the creator puts in the bio.",
-    "priceHint": "1,000 views in “{{category}}” usually cost about {{price}}.",
-    "priceHintViews": "1,000 views in “{{category}}” usually cost about {{price}} — your budget buys roughly {{views}} views. A moderator sets the exact rate."
+    "priceHint": "1,000 views in “{{category}}” usually cost about {{price}}."
   },
   "review": {
     "csvError": "Couldn't send the file",
