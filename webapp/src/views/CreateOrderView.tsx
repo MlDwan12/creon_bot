@@ -71,6 +71,8 @@ type Form = {
   linkInBio: boolean;
   budget: string;
   minViews: string;
+  /** Лимит за один ролик, USDT; '' — без лимита. */
+  maxPayout: string;
   minDurationSec: string;
   maxDurationSec: string;
   orientation: NewOrderInput['orientation'];
@@ -100,6 +102,7 @@ export default function CreateOrderView() {
     targetUrl: '',
     linkInBio: false,
     budget: '',
+    maxPayout: '',
     ...DEFAULTS,
     // при правке срок по умолчанию — «как было», а не «без срока»
     deadlineDays: id === undefined ? DEFAULTS.deadlineDays : undefined,
@@ -147,6 +150,7 @@ export default function CreateOrderView() {
           linkInBio: source.linkInBio,
           budget: String(source.budget),
           minViews: String(source.minViews),
+          maxPayout: String(source.maxPayout ?? ''),
           minDurationSec: String(source.minDurationSec ?? ''),
           maxDurationSec: String(source.maxDurationSec ?? ''),
           orientation: source.orientation,
@@ -232,6 +236,7 @@ export default function CreateOrderView() {
     linkInBio: form.linkInBio && hasTarget,
     cpm: null,
     minViews: Number(form.minViews),
+    maxPayout: Number(form.maxPayout) || null,
     // остаток в предпросмотре не показываем (OrderCard preview): по нему видна комиссия
     free: Number(form.budget),
     freeUnder: null,
@@ -279,6 +284,7 @@ export default function CreateOrderView() {
         linkInBio: form.linkInBio && hasTarget,
         budget: Number(form.budget),
         minViews: Number(form.minViews),
+        maxPayout: Number(form.maxPayout) || null,
         minDurationSec: Number(form.minDurationSec),
         maxDurationSec: Number(form.maxDurationSec),
       };
@@ -625,6 +631,20 @@ export default function CreateOrderView() {
               placeholder="250"
             />
           </label>
+          <label className={`${s.row} ${s.bordered}`}>
+            <span>{t('createOrder.maxPayout')}</span>
+            <input
+              id="maxPayout"
+              value={form.maxPayout}
+              onChange={bind('maxPayout')}
+              type="number"
+              inputMode="numeric"
+              min="1"
+              max={Number(form.budget) || MAX_BUDGET}
+              step="1"
+              placeholder={t('createOrder.maxPayoutPlaceholder')}
+            />
+          </label>
           <div className={`${s.row} ${s.column}`}>
             <span id="deadline-label">
               {t('createOrder.deadline')} {isDefault.deadline && byDefault}
@@ -648,7 +668,10 @@ export default function CreateOrderView() {
             </div>
           </div>
         </div>
-        {fieldError(fieldErrors.budget || fieldErrors.minViews)}
+        {fieldError(
+          fieldErrors.budget || fieldErrors.minViews || fieldErrors.maxPayout,
+        )}
+        <p className={s.hint}>{t('createOrder.maxPayoutHint')}</p>
 
         {pricePer1000 !== null && form.category && (
           <p className={s.hint}>
@@ -696,6 +719,14 @@ export default function CreateOrderView() {
             <div className={s.row}>
               <span>{t('createOrder.preview.budget')}</span>
               <strong>{formatMoney(Number(form.budget))}</strong>
+            </div>
+            <div className={`${s.row} ${s.bordered}`}>
+              <span>{t('createOrder.maxPayout')}</span>
+              <strong>
+                {Number(form.maxPayout)
+                  ? formatMoney(Number(form.maxPayout))
+                  : t('createOrder.noMaxPayout')}
+              </strong>
             </div>
           </div>
           <p className={s.lead}>{t('createOrder.preview.moneyNote')}</p>

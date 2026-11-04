@@ -49,6 +49,8 @@ export interface OrderSummary extends VideoFormat {
   cpm: number | null;
   /** Ролик можно сдать, когда он наберёт столько просмотров. */
   minViews: number;
+  /** Больше за один ролик не платим, USDT; null — без лимита. */
+  maxPayout: number | null;
   /** Сколько ещё осталось на выплаты креаторам, USDT — округлено вниз до 100 (точное не показываем). */
   free: number;
   /** Осталось меньше этой суммы (free тогда 0); null — free как есть. */
@@ -126,6 +128,8 @@ export interface MySubmission {
     title: string;
     cpm: number | null;
     minViews: number;
+    /** Больше за ролик не начислят, USDT; null — без лимита. */
+    maxPayout: number | null;
     deadline: string | null;
     status: OrderStatus;
     /** При сдаче — подтвердить, что ссылка стоит в шапке профиля. */
@@ -145,6 +149,8 @@ export interface MyOrder extends VideoFormat {
   /** Весь бюджет, USDT. */
   budget: number;
   minViews: number;
+  /** Больше за один ролик не платим, USDT; null — без лимита. */
+  maxPayout: number | null;
   category: OrderCategory;
   deadline: string | null;
   status: OrderStatus;
@@ -181,6 +187,8 @@ export interface NewOrderInput extends VideoFormat {
   budget: number;
   /** Порог просмотров для сдачи; null — по умолчанию (250). */
   minViews: number | null;
+  /** Лимит за один ролик, целые USDT, не больше бюджета; null — без лимита. */
+  maxPayout: number | null;
   category: OrderCategory;
   deadlineDays: number | null;
 }
@@ -418,6 +426,8 @@ export interface ModOrder extends VideoFormat {
   minViews: number;
   /** Ставка за 1000 просмотров, USDT; null — ещё не назначена. */
   cpm: number | null;
+  /** Больше за один ролик не платим, USDT; null — без лимита. */
+  maxPayout: number | null;
   category: OrderCategory;
   deadline: string | null;
   status: OrderStatus;
@@ -477,6 +487,8 @@ export interface ModVideo {
     description: string;
     cpm: number | null;
     minViews: number;
+    /** Лимит на ролик при сдаче, USDT: больше не начислят; null — без лимита. */
+    maxPayout: number | null;
     /** Свободный остаток фонда, USDT. */
     free: number;
     /** Ролик сдан до правки заказа — условия выше прежние, проверять по ним. */

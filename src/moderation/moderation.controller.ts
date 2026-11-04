@@ -24,7 +24,7 @@ import { creatorLabel } from '../common/format';
 import { trackLink } from '../orders/order-report';
 import { budgetRaised, payoutPool, HOLD_DAYS } from '../orders/budget';
 import { OrdersService } from '../orders/orders.service';
-import { submittedTerms } from '../orders/order-status';
+import { submittedTerms, videoTerms } from '../orders/order-status';
 import { DAY_MS } from '../orders/deadline';
 import { authorInLinks, authorUrl, platformOf } from '../common/platforms';
 import {
@@ -372,6 +372,7 @@ export class ModerationController {
       pool: fromMinor(payoutPool(o)),
       minViews: o.minViews,
       cpm: fromMinor(o.cpmMinor),
+      maxPayout: fromMinor(o.maxPayoutMinor),
       category: o.category,
       deadline: o.deadline,
       status: o.status,
@@ -503,6 +504,8 @@ export class ModerationController {
         // по ней начислят (videoTerms): сдан до правки — ставка до неё
         cpm: fromMinor(terms.cpmMinor),
         minViews: terms.minViews,
+        // лимит на ролик при сдаче: больше не начислят, сколько бы ни набрал
+        maxPayout: fromMinor(videoTerms(s.order, s).maxPayoutMinor),
         free: fromMinor(budget.free),
         termsBeforeEdit: changedSince,
       },

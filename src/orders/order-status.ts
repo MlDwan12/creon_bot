@@ -94,6 +94,8 @@ export function termsOf(order: Order) {
     minViews: order.minViews,
     // ролик оплачивается по ставке, при которой его сдали (videoTerms)
     cpmMinor: order.cpmMinor,
+    // и с лимитом на ролик, который был при сдаче
+    maxPayoutMinor: order.maxPayoutMinor,
     minDurationSec: order.minDurationSec,
     maxDurationSec: order.maxDurationSec,
     orientation: order.orientation,
@@ -133,13 +135,18 @@ export function needsBioLink(
  * В старых снимках ставки нет — тогда текущая.
  */
 export function videoTerms(
-  order: Pick<Order, 'minViews' | 'cpmMinor' | 'editedAt' | 'prevTerms'>,
+  order: Pick<
+    Order,
+    'minViews' | 'cpmMinor' | 'maxPayoutMinor' | 'editedAt' | 'prevTerms'
+  >,
   submission: Pick<Submission, 'submittedAt' | 'terms'>,
 ) {
   const prev = submittedTerms(order, submission);
   return {
     minViews: prev?.minViews ?? order.minViews,
     cpmMinor: prev?.cpmMinor ?? order.cpmMinor,
+    // в снимках до появления лимита поля нет (undefined) — тогда лимита не было
+    maxPayoutMinor: prev ? (prev.maxPayoutMinor ?? null) : order.maxPayoutMinor,
   };
 }
 

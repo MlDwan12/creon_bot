@@ -18,7 +18,23 @@ describe('условия ролика (videoTerms)', () => {
     expect(videoTerms(edited, { submittedAt: sent, terms: atSubmit })).toEqual({
       minViews: 10_000,
       cpmMinor: 500,
+      maxPayoutMinor: null,
     });
+  });
+
+  it('лимит на ролик — тот, что был при сдаче; в старом снимке поля нет — лимита не было', () => {
+    const capped = { ...order(10_000, 500), maxPayoutMinor: 5_000 } as Order;
+    const edited = { ...order(10_000, 500), editedAt: new Date('2026-10-05') };
+    expect(
+      videoTerms(edited, { submittedAt: sent, terms: termsOf(capped) })
+        .maxPayoutMinor,
+    ).toBe(5_000);
+    expect(
+      videoTerms(
+        { ...capped, editedAt: new Date('2026-10-05') },
+        { submittedAt: sent, terms: { minViews: 10_000 } },
+      ).maxPayoutMinor,
+    ).toBeNull();
   });
 
   it('старый ролик без снимка: сдан до правки — по условиям до неё', () => {
@@ -30,6 +46,7 @@ describe('условия ролика (videoTerms)', () => {
     expect(videoTerms(edited, { submittedAt: sent, terms: null })).toEqual({
       minViews: 10_000,
       cpmMinor: 900,
+      maxPayoutMinor: null,
     });
     expect(
       videoTerms(edited, { submittedAt: new Date('2026-10-06'), terms: null }),

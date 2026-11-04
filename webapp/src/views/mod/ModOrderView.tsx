@@ -203,6 +203,14 @@ export default function ModOrderView() {
           <span>Порог</span>
           <span>от {formatViews(order.minViews)} просмотров</span>
         </div>
+        <div className={s.row}>
+          <span>Лимит за ролик</span>
+          <span>
+            {order.maxPayout !== null
+              ? formatMoney(order.maxPayout)
+              : 'без лимита'}
+          </span>
+        </div>
         {order.cpm !== null && (
           <div className={s.row}>
             <span>Ставка</span>

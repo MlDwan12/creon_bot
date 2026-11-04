@@ -369,9 +369,15 @@ export class SubmissionsService implements OnApplicationBootstrap {
       return await this.prisma.$transaction(async (tx) => {
         const { order, budget } = await this.lockBudget(tx, submission.orderId);
         if (budget.exhausted) throw new ForbiddenException(EXHAUSTED_MESSAGE());
-        const reserve = payoutFor(order.minViews, order.cpmMinor!);
-        // резерв за порог уже не больше остатка (иначе exhausted), так что остаток — весь free
-        const overBudget = payoutFor(views, order.cpmMinor!) > budget.free;
+        const reserve = payoutFor(
+          order.minViews,
+          order.cpmMinor!,
+          order.maxPayoutMinor,
+        );
+        // резерв за порог уже не больше остатка (иначе exhausted), так что остаток — весь free;
+        // сверх лимита на ролик не платим — и за фонд такой ролик не «выходит»
+        const overBudget =
+          payoutFor(views, order.cpmMinor!, order.maxPayoutMinor) > budget.free;
         if (overBudget && (acceptMinor === null || acceptMinor > budget.free))
           throw new ConflictException({
             code: 'OVER_BUDGET',
@@ -585,8 +591,9 @@ export class SubmissionsService implements OnApplicationBootstrap {
       const { order, budget } = await this.lockBudget(tx, found.orderId);
       // свой резерв ролик может использовать целиком — он уже в `spent`
       const current = await this.mustFind(submissionId, tx);
+      const terms = videoTerms(order, current);
       const payoutMinor = Math.min(
-        payoutFor(views, videoTerms(order, current).cpmMinor!),
+        payoutFor(views, terms.cpmMinor!, terms.maxPayoutMinor),
         budget.free + current.payoutMinor,
       );
       await transitionSubmission(

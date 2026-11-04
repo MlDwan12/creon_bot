@@ -61,6 +61,7 @@ export class MyOrdersController {
       ...videoFormat(o),
       budget: fromMinor(o.budgetMinor),
       minViews: o.minViews,
+      maxPayout: fromMinor(o.maxPayoutMinor),
       category: o.category,
       deadline: o.deadline,
       status: o.status,

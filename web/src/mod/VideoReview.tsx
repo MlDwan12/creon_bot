@@ -130,11 +130,16 @@ export function VideoReview({
       void run(() => markPublicationDeleted(id, bioLink), 'holds');
   }
 
-  /** Сколько начислится за введённые просмотры (без учёта остатка бюджета). */
+  /** Сколько начислится за введённые просмотры: не больше лимита на ролик (без учёта остатка бюджета). */
   const cpm = video.order.cpm;
   const estimate =
     cpm && Number(views)
-      ? formatMoney(Math.floor((Number(views) * cpm) / 10) / 100)
+      ? formatMoney(
+          Math.min(
+            Math.floor((Number(views) * cpm) / 10) / 100,
+            video.order.maxPayout ?? Infinity,
+          ),
+        )
       : '';
   /** Когда кончается холд и можно зафиксировать итог; null — не одобрен или уже зафиксирован. */
   const holdEndsAt =
@@ -284,6 +289,14 @@ export function VideoReview({
             <div className={s.row}>
               <span>Порог</span>
               <span>от {formatViews(video.order.minViews)} просмотров</span>
+            </div>
+            <div className={s.row}>
+              <span>Лимит за ролик</span>
+              <span>
+                {video.order.maxPayout !== null
+                  ? formatMoney(video.order.maxPayout)
+                  : 'без лимита'}
+              </span>
             </div>
             <div className={s.row}>
               <span>Свободно в бюджете</span>

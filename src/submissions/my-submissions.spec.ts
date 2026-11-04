@@ -12,6 +12,7 @@ const order = (id: number): Order => ({
   feePercent: 20,
   cpmMinor: 15_000,
   minViews: 250,
+  maxPayoutMinor: null,
   minDurationSec: null,
   maxDurationSec: null,
   orientation: null,

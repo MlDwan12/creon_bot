@@ -48,6 +48,8 @@ function toPublic(
     ...videoFormat(order),
     minViews: order.minViews,
     cpm: fromMinor(order.cpmMinor),
+    // больше за один ролик не заплатят; null — без лимита
+    maxPayout: fromMinor(order.maxPayoutMinor),
     ...freeForCreators(order.freeMinor),
     budgetLow: isBudgetLow(order.freeMinor, payoutPool(order)),
     // весь фонд зарезервирован под ролики на проверке: взять нельзя, пока место не освободится

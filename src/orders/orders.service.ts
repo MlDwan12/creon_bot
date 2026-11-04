@@ -57,6 +57,7 @@ const PUBLIC_ORDER_FIELDS = {
   feePercent: true,
   cpmMinor: true,
   minViews: true,
+  maxPayoutMinor: true,
   minDurationSec: true,
   maxDurationSec: true,
   orientation: true,
@@ -130,6 +131,7 @@ export class OrdersService {
       linkInBio?: boolean;
       budgetMinor: number;
       minViews: number;
+      maxPayoutMinor?: number | null;
       minDurationSec?: number | null;
       maxDurationSec?: number | null;
       orientation?: VideoOrientation | null;
@@ -162,6 +164,7 @@ export class OrdersService {
         budgetMinor: data.budgetMinor,
         feePercent: platformFeePercent(),
         minViews: data.minViews,
+        maxPayoutMinor: data.maxPayoutMinor,
         minDurationSec: data.minDurationSec,
         maxDurationSec: data.maxDurationSec,
         orientation: data.orientation,
@@ -631,6 +634,7 @@ export class OrdersService {
       linkInBio?: boolean;
       budgetMinor: number;
       minViews: number;
+      maxPayoutMinor?: number | null;
       minDurationSec?: number | null;
       maxDurationSec?: number | null;
       orientation?: VideoOrientation | null;

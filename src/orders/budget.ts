@@ -51,9 +51,17 @@ export function budgetRaised(order: {
   );
 }
 
-/** Выплата за просмотры по ставке за 1000. */
-export function payoutFor(views: number, cpmMinor: number) {
-  return Math.floor((views * cpmMinor) / 1000);
+/**
+ * Выплата за просмотры по ставке за 1000, не больше лимита заказа на один ролик
+ * (`maxPayoutMinor`, null — без лимита).
+ */
+export function payoutFor(
+  views: number,
+  cpmMinor: number,
+  maxPayoutMinor: number | null = null,
+) {
+  const full = Math.floor((views * cpmMinor) / 1000);
+  return maxPayoutMinor === null ? full : Math.min(full, maxPayoutMinor);
 }
 
 /** Отклики, за которыми закреплены деньги фонда: резерв на проверке и начисленное. */
@@ -99,6 +107,7 @@ export function budgetState(
     feePercent: number;
     cpmMinor: number | null;
     minViews: number;
+    maxPayoutMinor: number | null;
   },
   spent: number,
 ) {
@@ -106,7 +115,7 @@ export function budgetState(
   const minPayout =
     order.cpmMinor === null
       ? Infinity
-      : payoutFor(order.minViews, order.cpmMinor);
+      : payoutFor(order.minViews, order.cpmMinor, order.maxPayoutMinor);
   return { free, spent, exhausted: free < minPayout };
 }
 

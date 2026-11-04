@@ -98,6 +98,16 @@ export function parseOrderInput(body: unknown) {
 
   const minViews = parseViews(b.minViews, tr('errors.thresholdWhat'));
 
+  // Лимит за один ролик, целыми USDT, по желанию: пусто — без лимита. Не больше бюджета.
+  const maxPayout = b.maxPayout ?? null;
+  if (
+    maxPayout !== null &&
+    (!Number.isInteger(maxPayout) ||
+      (maxPayout as number) < 1 ||
+      (maxPayout as number) > (budget as number))
+  )
+    throw new BadRequestException(tr('errors.maxPayoutRange'));
+
   const minDurationSec = durationSec(b.minDurationSec);
   const maxDurationSec = durationSec(b.maxDurationSec);
   if (minDurationSec > maxDurationSec)
@@ -147,6 +157,7 @@ export function parseOrderInput(body: unknown) {
     linkInBio,
     budgetMinor: toMinor(budget as number),
     minViews,
+    maxPayoutMinor: maxPayout === null ? null : toMinor(maxPayout as number),
     minDurationSec,
     maxDurationSec,
     orientation,
@@ -321,6 +332,7 @@ export function parseOrderEdit(body: unknown) {
     linkInBio: input.linkInBio,
     budgetMinor: input.budgetMinor,
     minViews: input.minViews,
+    maxPayoutMinor: input.maxPayoutMinor,
     minDurationSec: input.minDurationSec,
     maxDurationSec: input.maxDurationSec,
     orientation: input.orientation,
