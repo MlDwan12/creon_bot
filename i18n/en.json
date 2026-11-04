@@ -1010,5 +1010,23 @@
     "publicGone": "This link no longer works — ask the brand for a new one.",
     "spent": "spent",
     "by": "Fixum — creator ads paid per view"
+  },
+  "home": {
+    "title": "What matters now",
+    "money": "Available {{available}}",
+    "moneyHeld": " · {{held}} more on hold",
+    "moneyHeldUntil": " · {{held}} more on hold until {{date}}",
+    "due": "“{{title}}” — submit by {{date}}",
+    "resubmit_one": "{{count}} response is waiting for a new video",
+    "resubmit_other": "{{count}} responses are waiting for a new video",
+    "startTitle": "Getting started",
+    "startDone": "{{done}} of {{total}}",
+    "hide": "Hide",
+    "step": {
+      "wallet": "Add a USDT wallet in your profile",
+      "account": "Connect a platform account — we'll count views for you",
+      "order": "Take your first order",
+      "lesson": "Read a lesson in “Learn”"
+    }
   }
 }
