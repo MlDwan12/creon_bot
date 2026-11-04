@@ -90,6 +90,7 @@ export default function OnboardingOverlay() {
               </li>
             ))}
           </ol>
+          <p className={s.why}>{t(`onboarding.${picked}.why`)}</p>
           {/* заказ сразу не создать — объясняем заметно, а не мелкой серой строкой */}
           <p className={applyFirst ? s.applyNote : s.note}>
             {t(applyFirst ? 'onboarding.applyNote' : 'onboarding.note')}

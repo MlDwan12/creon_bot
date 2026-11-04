@@ -86,7 +86,8 @@
         "Creators post videos on their accounts — you pay only for views",
         "When the budget runs out, the order closes by itself — you never overspend"
       ],
-      "action": "Create an order"
+      "action": "Create an order",
+      "why": "Why Fixum: pay only for verified views, deleted videos aren't paid, the sides' contacts stay hidden."
     },
     "creator": {
       "title": "How to earn",
@@ -96,7 +97,8 @@
         "Once it reaches the view threshold, send us the link",
         "A moderator checks the video and records the views — we pay you; you can withdraw 5 days later"
       ],
-      "action": "Browse orders"
+      "action": "Browse orders",
+      "why": "Why Fixum: your pay is locked in when you submit, a moderator decides by the brief, withdrawals in USDT."
     },
     "note": "The parties don't see each other's contacts: questions, disputes and payments go through support (menu ⋯ → “Settings”).",
     "applyNote": "The Fixum team opens advertiser accounts: send a request, we’ll have a call and open it.",
@@ -588,7 +590,6 @@
     "budgetPlaceholder": "from {{min}}",
     "minViews": "Video can be submitted from, views",
     "maxPayout": "Max per video, USDT",
-    "requirements": "Video requirements",
     "requirementsHint": "Optional, one per line. The creator ticks them off before submitting, and a video can only be rejected for a missed item or a general platform rule. Anything not in the requirements or brief is no reason to reject.",
     "requirementPlaceholder": "E.g. mention 30-minute delivery",
     "requirementN": "Requirement {{n}}",
@@ -956,7 +957,48 @@
     "loginOpenTelegram": "Open Telegram again",
     "loginByPhone": "Sign in with a phone number",
     "loginQr": "Telegram on your phone? Point the camera at the code — the bot sends the digits there, enter them here.",
-    "loginQrAlt": "QR code: link to the Fixum bot to sign in"
+    "loginQrAlt": "QR code: link to the Fixum bot to sign in",
+    "points": [
+      {
+        "title": "For creators",
+        "items": [
+          {
+            "b": "Your pay is locked in when you submit.",
+            "text": "The payment for a video is reserved the moment you submit it: the brand can't change its mind after you publish."
+          },
+          {
+            "b": "A moderator decides, not the brand.",
+            "text": "Videos are checked against the brief. A rejection needs a missed requirement, not “didn't like it”."
+          },
+          {
+            "b": "Withdraw in USDT.",
+            "text": "To your own TRC20 wallet, 5 days after approval."
+          }
+        ]
+      },
+      {
+        "title": "For brands",
+        "items": [
+          {
+            "b": "Pay only for verified views.",
+            "text": "A moderator records them; inflated views aren't paid. When the budget runs out, the order closes by itself."
+          },
+          {
+            "b": "Deleted videos aren't paid.",
+            "text": "We check the post during the hold and at its end."
+          }
+        ]
+      },
+      {
+        "title": "For both sides",
+        "items": [
+          {
+            "b": "Contacts are protected.",
+            "text": "The sides don't see each other; questions and disputes go through Fixum support."
+          }
+        ]
+      }
+    ]
   },
   "apply": {
     "title": "Become an advertiser",
