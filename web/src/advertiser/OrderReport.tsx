@@ -16,6 +16,7 @@ import { Complaint } from '../components/Complaint';
 import { PlatformIcon } from '../components/PlatformIcon';
 import { formatDate, formatMoney, formatViews } from '../format';
 import s from '../ui.module.css';
+import { ShareReport } from './ShareReport';
 
 const EMPTY_FEEDBACK: Feedback = {
   rating: 0,
@@ -151,7 +152,7 @@ export function OrderReport() {
         {t('review.left', { amount: formatMoney(data.summary.left) })}
       </p>
 
-      <div className={s.twoCols}>
+      <div className={`${s.twoCols} ${s.alignStart}`}>
         <section className={s.card}>
           <h2>{t('review.funnel')}</h2>
           {funnelBars.map((bar) => (
@@ -226,6 +227,7 @@ export function OrderReport() {
           {csvError}
         </p>
       )}
+      <ShareReport orderId={id} share={data.share} />
 
       <div className={s.cardHead}>
         <h2>{t('review.videos')}</h2>
@@ -314,7 +316,10 @@ function VideoItem({
   return (
     <article className={s.card}>
       <div className={s.cardHead}>
-        <Link to={`/creators/${item.creatorId}`} className={s.check}>
+        <Link
+          to={`/creators/${item.creatorId}`}
+          className={`${s.check} ${s.person}`}
+        >
           <Avatar userId={item.creatorId} name={item.creator} size={36} />
           <strong>{item.creator}</strong>
         </Link>
@@ -341,11 +346,10 @@ function VideoItem({
           rel="noopener noreferrer"
           className={s.videoLink}
         >
-          <PlatformIcon platform={item.platform} size={36} inverse />
-          <span>
-            <strong>{t('review.open')}</strong>
-            <small>{item.videoUrl}</small>
-          </span>
+          <PlatformIcon platform={item.platform} size={32} inverse />
+          {/* адрес — наш редирект /v/<код>, заказчику он ничего не говорит: только площадка */}
+          <strong>{t('review.open')}</strong>
+          <em>{PLATFORM_NAMES[item.platform]}</em>
         </a>
       ) : (
         <p className={s.hint}>{t('review.badUrl', { url: item.videoUrl })}</p>
@@ -416,12 +420,12 @@ function VideoItem({
           </div>
         </fieldset>
       ) : (
-        // оценку не меняют (бэкенд не даст) — кнопка только у неоценённых
-        !item.rating && (
+        // оценку не меняют и снятую не ставят заново (бэкенд не даст)
+        item.rateable && (
           <div className={s.buttons}>
             <button
               type="button"
-              className={`${s.btn} ${s.primary}`}
+              className={`${s.btn} ${s.outline}`}
               onClick={() => {
                 setFeedback(EMPTY_FEEDBACK);
                 setRating(true);

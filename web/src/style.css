@@ -85,10 +85,24 @@ body {
   color: var(--text);
   font-family: var(--font-text);
   -webkit-font-smoothing: antialiased;
+  /* длинное слово, которому не хватает строки, переносится, а не растягивает страницу вбок.
+     Не anywhere: тот разрешает колонкам flex/grid сжиматься уже слова — «Выпл|ата» в подписях */
+  overflow-wrap: break-word;
 }
 
 a {
   color: var(--link);
+  /* ссылки и @ники — сплошные строки без пробелов: им можно рвать где угодно */
+  overflow-wrap: anywhere;
+}
+
+code {
+  overflow-wrap: anywhere;
+}
+
+/* последняя строка абзаца — не из одного слова */
+p {
+  text-wrap: pretty;
 }
 
 :focus-visible {

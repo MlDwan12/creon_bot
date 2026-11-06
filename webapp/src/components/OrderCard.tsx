@@ -103,6 +103,8 @@ export default function OrderCard({
         )}
         <span>
           {t('orderCard.minViews', { views: formatViews(order.minViews) })}
+          {order.maxPayout !== null &&
+            ` · ${t('orderCard.maxPayout', { amount: formatMoney(order.maxPayout) })}`}
         </span>
       </div>
     </>

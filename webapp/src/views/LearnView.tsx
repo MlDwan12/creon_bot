@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { LESSON_SEEN_KEY } from '@fixum/shared';
 import { useTranslation } from 'react-i18next';
 import { tList } from '../i18n';
 import { safeUrl } from '../telegram';
@@ -22,6 +23,8 @@ export default function LearnView() {
   const { t } = useTranslation();
   /** Раскрыт один урок за раз — список короткий, видно все заголовки; -1 — все свёрнуты. */
   const [open, setOpen] = useState(0);
+  // пункт «Прочитать урок» в чек-листе «Старт» (CreatorHome) — открыл «Обучение», значит прочитал
+  useEffect(() => localStorage.setItem(LESSON_SEEN_KEY, '1'), []);
   return (
     <main className={s.learn}>
       <header className={s.head}>

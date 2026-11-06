@@ -13,6 +13,7 @@ import {
   type VideoPlatform,
 } from '../api';
 import { OrderCard } from '../components/OrderCard';
+import { CreatorHome } from './CreatorHome';
 import { PlatformIcon } from '../components/PlatformIcon';
 import s from '../ui.module.css';
 
@@ -122,9 +123,54 @@ export function Catalog() {
         <h1>{t('catalog.title')}</h1>
         <p className={s.hint}>{t('catalog.subtitle')}</p>
       </header>
+      <CreatorHome />
 
+      {/* Телефон: два списка в одну строку вместо пяти строк чипов (на компьютере — чипы) */}
+      {(shownPlatforms.length > 0 || shownCategories.length > 0) && (
+        <div className={s.filterSelects}>
+          {shownPlatforms.length > 0 && (
+            <label className={s.selectField}>
+              <span>{t('catalog.platformLabel')}</span>
+              <select
+                value={platform ?? ''}
+                onChange={(e) =>
+                  setPlatform((e.target.value || undefined) as VideoPlatform)
+                }
+              >
+                <option value="">{t('catalog.allPlatforms')}</option>
+                {shownPlatforms.map((p) => (
+                  <option key={p} value={p}>
+                    {PLATFORM_NAMES[p]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {shownCategories.length > 0 && (
+            <label className={s.selectField}>
+              <span>{t('catalog.categoryLabel')}</span>
+              <select
+                value={category ?? ''}
+                onChange={(e) =>
+                  setCategory((e.target.value || undefined) as OrderCategory)
+                }
+              >
+                <option value="">{t('catalog.allCategories')}</option>
+                {shownCategories.map((c) => (
+                  <option key={c} value={c}>
+                    {categoryLabel(c)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      )}
       {shownPlatforms.length > 0 && (
-        <nav className={s.chips} aria-label={t('catalog.platformsAria')}>
+        <nav
+          className={`${s.chips} ${s.wideFilters}`}
+          aria-label={t('catalog.platformsAria')}
+        >
           <button
             type="button"
             aria-pressed={!platform}
@@ -151,7 +197,10 @@ export function Catalog() {
         </nav>
       )}
       {shownCategories.length > 0 && (
-        <nav className={s.chips} aria-label={t('catalog.categoriesAria')}>
+        <nav
+          className={`${s.chips} ${s.wideFilters}`}
+          aria-label={t('catalog.categoriesAria')}
+        >
           <button
             type="button"
             aria-pressed={!category}

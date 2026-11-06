@@ -12,6 +12,7 @@ describe('бюджет заказа', () => {
     feePercent: 20,
     cpmMinor: 10_000,
     minViews: 250,
+    maxPayoutMinor: null as number | null,
   };
 
   it('фонд выплат — бюджет без комиссии', () => {
@@ -22,6 +23,18 @@ describe('бюджет заказа', () => {
     expect(payoutFor(1000, 10_000)).toBe(10_000);
     expect(payoutFor(1, 333)).toBe(0);
     expect(payoutFor(1500, 333)).toBe(499);
+  });
+
+  it('лимит на ролик — сверх него не платим; без лимита — по ставке', () => {
+    expect(payoutFor(100_000, 10_000, 50_000)).toBe(50_000);
+    expect(payoutFor(1000, 10_000, 50_000)).toBe(10_000);
+    expect(payoutFor(100_000, 10_000, null)).toBe(1_000_000);
+  });
+
+  it('лимит ниже оплаты за порог — ролику хватает остатка в размере лимита', () => {
+    const capped = { ...order, maxPayoutMinor: 1_000 };
+    expect(budgetState(capped, 4_000_000 - 1_000).exhausted).toBe(false);
+    expect(budgetState(capped, 4_000_000 - 999).exhausted).toBe(true);
   });
 
   it('остаток исчерпан, когда его не хватает на ролик с порогом', () => {

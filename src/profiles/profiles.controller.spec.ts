@@ -5,6 +5,8 @@ import type { TelegramPhotosService } from '../telegram/telegram-photos.service'
 import type { NotificationsService } from '../telegram/notifications.service';
 import { ProfilesController } from './profiles.controller';
 import type { ProfilesService } from './profiles.service';
+import type { AdvertisersService } from '../advertisers/advertisers.service';
+import type { LinkVerificationsService } from './link-verifications.service';
 
 const WALLET = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 
@@ -16,6 +18,8 @@ describe('PUT /api/profile/wallet', () => {
     {} as ModeratorGuard,
     {} as TelegramPhotosService,
     { walletChanged } as unknown as NotificationsService,
+    {} as AdvertisersService,
+    {} as LinkVerificationsService,
   );
   const now = () => Math.floor(Date.now() / 1000);
   const req = (payoutWallet: string | null, authDate = now()) =>
@@ -61,6 +65,8 @@ describe('PUT /api/profile/cabinet', () => {
     {} as ModeratorGuard,
     {} as TelegramPhotosService,
     {} as NotificationsService,
+    {} as AdvertisersService,
+    {} as LinkVerificationsService,
   );
   const req = { user: { id: 7 } as User } as ApiRequest;
 

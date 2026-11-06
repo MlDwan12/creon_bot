@@ -1,29 +1,44 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { reviewOverdue } from '@fixum/shared';
 import {
+  approveApplication,
   approveReview,
+  decideLink,
   errorText,
   fetchModQueue,
   fetchModReports,
   type ModQueue,
   type ModReportGroup,
   reasonLabel,
+  rejectApplication,
   removeReview,
   type ReportTarget,
   resolveReports,
+  safeUrl,
 } from '../api';
 import { formatMoney, isWaitingLong, timeAgo, waitingFor } from '../format';
 import s from '../ui.module.css';
 import { OrderReview } from './OrderReview';
 import { VideoReview } from './VideoReview';
 
-type Tab = 'videos' | 'orders' | 'holds' | 'reviews' | 'reports';
+type Tab =
+  | 'applications'
+  | 'videos'
+  | 'orders'
+  | 'holds'
+  | 'reviews'
+  | 'reports'
+  | 'links';
+// «Заказчики» — первыми, как в мини-аппе: на узком экране вкладка в конце ряда уходит за край
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'applications', label: 'Заказчики' },
   { id: 'videos', label: 'Видео' },
   { id: 'orders', label: 'Заказы' },
   { id: 'holds', label: 'Итоги' },
   { id: 'reviews', label: 'Отзывы' },
   { id: 'reports', label: 'Жалобы' },
+  { id: 'links', label: 'Аккаунты' },
 ];
 
 /** Мера по жалобам — своя для каждого типа объекта (см. ReportsService.resolve). */
@@ -81,6 +96,9 @@ export function Queue() {
   /** Карточка жалоб, в которой открыта форма блокировки автора, и причина. */
   const [banningKey, setBanningKey] = useState('');
   const [banReason, setBanReason] = useState('');
+  /** Заявка в заказчики, по которой открыта форма отказа, и заметка для команды. */
+  const [rejectingId, setRejectingId] = useState(0);
+  const [rejectNote, setRejectNote] = useState('');
 
   const load = useCallback(
     () =>
@@ -96,12 +114,24 @@ export function Queue() {
   );
   useEffect(() => void load(), [load]);
 
+  // Список листается вместе со страницей (без своей прокрутки): выбрали элемент далеко внизу —
+  // карточка справа ушла за верх экрана, поднимаем к ней.
+  const reviewRef = useRef<HTMLDivElement>(null);
+  const selected = query.get('id');
+  useEffect(() => {
+    const el = reviewRef.current;
+    if (selected && el && el.getBoundingClientRect().top < 0)
+      el.scrollIntoView({ block: 'start' });
+  }, [selected]);
+
   const counts: Record<Tab, number> = {
+    applications: queue?.applications.length ?? 0,
     videos: queue?.videos.length ?? 0,
     orders: queue?.orders.length ?? 0,
     holds: queue?.holds.length ?? 0,
     reviews: queue?.reviews.length ?? 0,
     reports: reports.length,
+    links: queue?.links.length ?? 0,
   };
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   // вкладка и открытый элемент — в адресе: ссылку можно открыть в новой вкладке и вернуться назад.
@@ -109,7 +139,8 @@ export function Queue() {
   const queryTab = query.get('tab') as Tab;
   const tab: Tab = TABS.some((t) => t.id === queryTab)
     ? queryTab
-    : (TABS.find((t) => counts[t.id])?.id ?? 'videos');
+    : // заявки в заказчики — после роликов и заказов: у тех идут сроки
+      ([...TABS.slice(1), TABS[0]].find((t) => counts[t.id])?.id ?? 'videos');
   const setTab = (t: Tab) => setQuery({ tab: t });
 
   /** Самое старое ожидание — главный сигнал «пора разбирать». */
@@ -120,8 +151,13 @@ export function Queue() {
       .filter((d): d is string => !!d) ?? []),
     ...(queue?.reviews.map((r) => r.queuedAt) ?? []),
   ].sort()[0];
+  // дольше срока проверки (REVIEW_SLA_HOURS) — красным, дольше 4 часов — оранжевым
   const waitClass = (iso: string) =>
-    isWaitingLong(iso) ? `${s.wait} ${s.long}` : s.wait;
+    reviewOverdue(iso)
+      ? `${s.wait} ${s.overdue}`
+      : isWaitingLong(iso)
+        ? `${s.wait} ${s.long}`
+        : s.wait;
 
   /**
    * Решение принято — убираем его из списка сразу (не ждём ответа очереди), открываем первый
@@ -173,6 +209,37 @@ export function Queue() {
       await (publish
         ? approveReview(submissionId)
         : removeReview(submissionId));
+    } catch (err) {
+      setActionError(errorText(err));
+    }
+    void load();
+  }
+
+  /** Аккаунт соцсети: код в описании найден или нет. */
+  async function decideLinkCheck(id: number, found: boolean) {
+    setActionError('');
+    try {
+      await decideLink(id, found);
+    } catch (err) {
+      setActionError(errorText(err));
+    }
+    void load();
+  }
+
+  /** Заявка в заказчики: открыть кабинет или отказать (`note` — заметка для команды). */
+  async function decideApplication(id: number, note?: string) {
+    if (
+      note === undefined &&
+      !window.confirm('Открыть кабинет заказчика? Он сможет создавать заказы.')
+    )
+      return;
+    setActionError('');
+    try {
+      await (note === undefined
+        ? approveApplication(id)
+        : rejectApplication(id, note));
+      setRejectingId(0);
+      setRejectNote('');
     } catch (err) {
       setActionError(errorText(err));
     }
@@ -232,7 +299,14 @@ export function Queue() {
           ? queue.holds.map((v) => ({
               id: v.id,
               title: v.orderTitle,
-              sub: <>{v.creator} · итог просмотров</>,
+              sub: (
+                <>
+                  {v.creator} · итог просмотров
+                  {v.goneAt && (
+                    <span className={s.flag}> · не найден на площадке</span>
+                  )}
+                </>
+              ),
               since: null as string | null,
             }))
           : [];
@@ -247,12 +321,21 @@ export function Queue() {
         {oldest && (
           <>
             {' · '}
-            <span className={isWaitingLong(oldest) ? s.long : undefined}>
+            <span
+              className={
+                reviewOverdue(oldest)
+                  ? s.overdue
+                  : isWaitingLong(oldest)
+                    ? s.long
+                    : undefined
+              }
+            >
               самое старое — {waitingFor(oldest)}
             </span>
           </>
         )}
-        {' · '}сначала самые старые, оранжевым — ждут дольше 4 часов
+        {' · '}сначала самые старые, оранжевым — ждут дольше 4 часов, красным —
+        дольше суток
       </p>
       <div className={s.chips} role="tablist" aria-label="Очередь">
         {TABS.map((t) => (
@@ -276,7 +359,140 @@ export function Queue() {
         </p>
       )}
 
-      {tab === 'reports' ? (
+      {tab === 'links' ? (
+        queue.links.length === 0 ? (
+          <p className={s.hint}>Аккаунтов на проверке нет.</p>
+        ) : (
+          <div className={s.cards}>
+            {queue.links.map((l) => (
+              <article key={l.id} className={s.card}>
+                <div className={s.row}>
+                  <Link to={`/mod/creators/${l.userId}`}>
+                    <strong>{l.user} ›</strong>
+                  </Link>
+                  <span className={waitClass(l.createdAt)}>
+                    {waitingFor(l.createdAt)}
+                  </span>
+                </div>
+                {safeUrl(l.url) ? (
+                  <a href={safeUrl(l.url)} target="_blank" rel="noreferrer">
+                    {l.url}
+                  </a>
+                ) : (
+                  <span>{l.url}</span>
+                )}
+                <span>
+                  Код в описании: <strong>{l.code}</strong>
+                </span>
+                <p className={`${s.hint} ${s.small}`}>
+                  Откройте аккаунт и найдите код в описании профиля.
+                </p>
+                <div className={s.buttons}>
+                  <button
+                    type="button"
+                    className={`${s.btn} ${s.primary}`}
+                    onClick={() => decideLinkCheck(l.id, true)}
+                  >
+                    Подтвердить
+                  </button>
+                  <button
+                    type="button"
+                    className={`${s.btn} ${s.reject}`}
+                    onClick={() => decideLinkCheck(l.id, false)}
+                  >
+                    Кода нет
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )
+      ) : tab === 'applications' ? (
+        queue.applications.length === 0 ? (
+          <p className={s.hint}>Заявок нет.</p>
+        ) : (
+          <div className={s.cards}>
+            {queue.applications.map((a) => (
+              <article key={a.id} className={s.card}>
+                <div className={s.cardHead}>
+                  <Link to={`/mod/creators/${a.userId}`} className={s.person}>
+                    <strong>{a.user} ›</strong>
+                  </Link>
+                  <span className={waitClass(a.createdAt)}>
+                    {waitingFor(a.createdAt)}
+                  </span>
+                </div>
+                <span>
+                  Почта: <a href={`mailto:${a.email}`}>{a.email}</a>
+                </span>
+                <span>
+                  Телефон:{' '}
+                  {a.phone ? (
+                    <a href={`tel:${a.phone}`}>{a.phone}</a>
+                  ) : (
+                    <span className={s.muted}>не указан</span>
+                  )}
+                </span>
+                <p className={`${s.hint} ${s.small}`}>
+                  Заявка и в его теме поддержки — там можно договориться о
+                  созвоне.
+                </p>
+                {rejectingId === a.id ? (
+                  <>
+                    <label className={s.field}>
+                      Почему отказ
+                      <textarea
+                        value={rejectNote}
+                        onChange={(e) => setRejectNote(e.target.value)}
+                        rows={2}
+                        maxLength={500}
+                        placeholder="Заметка для команды — пользователь её не увидит"
+                      />
+                    </label>
+                    <div className={s.buttons}>
+                      <button
+                        type="button"
+                        className={s.btn}
+                        onClick={() => setRejectingId(0)}
+                      >
+                        Отмена
+                      </button>
+                      <button
+                        type="button"
+                        className={`${s.btn} ${s.reject}`}
+                        disabled={!rejectNote.trim()}
+                        onClick={() => decideApplication(a.id, rejectNote)}
+                      >
+                        Отказать
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className={s.buttons}>
+                    <button
+                      type="button"
+                      className={`${s.btn} ${s.primary}`}
+                      onClick={() => decideApplication(a.id)}
+                    >
+                      Открыть кабинет
+                    </button>
+                    <button
+                      type="button"
+                      className={`${s.btn} ${s.reject}`}
+                      onClick={() => {
+                        setRejectingId(a.id);
+                        setRejectNote('');
+                      }}
+                    >
+                      Отказать
+                    </button>
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        )
+      ) : tab === 'reports' ? (
         reports.length === 0 ? (
           <p className={s.hint}>Жалоб нет.</p>
         ) : (
@@ -459,7 +675,7 @@ export function Queue() {
               </div>
             )}
           </div>
-          <div>
+          <div ref={reviewRef}>
             {open !== undefined &&
               (tab === 'orders' ? (
                 <OrderReview

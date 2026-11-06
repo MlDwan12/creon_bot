@@ -14,6 +14,7 @@ import {
   OrderStatus,
   SubmissionStatus,
   VideoPlatform,
+  ViewSnapshotSource,
 } from '@prisma/client';
 import {
   ACCRUED,
@@ -39,6 +40,7 @@ import {
   fundOf,
   isFrozen,
   lockOrder,
+  needsBioLink,
   syncFundBusy,
   termsOf,
   videoTerms,
@@ -59,6 +61,9 @@ const NOT_TAKEN_DOWN: Prisma.OrderWhereInput = {
 export const SLOT_DAYS = 7;
 
 /** До какого момента креатор должен прислать видео по отклику «в работе». */
+/** Сколько роликов проверять на месте за один проход ScheduledJob (listPresenceDue). */
+const PRESENCE_BATCH = 200;
+
 export function slotDueAt(createdAt: Date) {
   return new Date(createdAt.getTime() + SLOT_DAYS * DAY_MS);
 }
@@ -308,6 +313,19 @@ export class SubmissionsService implements OnApplicationBootstrap {
   }
 
   /**
+   * Просмотры ролика до сдачи — креатору на экране сдачи: при сдаче возьмём это же число
+   * (countedAtSubmit, тот же кэш — квоту второй раз не тратит). null — эту площадку API не считает
+   * или не ответило: просмотры вводит креатор. Короткую ссылку TikTok здесь не раскрываем.
+   */
+  async previewViews(submissionId: number, creatorId: number, url: string) {
+    const submission = await this.mustFind(submissionId);
+    if (submission.creatorId !== creatorId)
+      throw new ForbiddenException(tr('errors.notYourSubmission'));
+    if (!this.viewCounter.isAutomatic(url)) return null;
+    return (await this.countedAtSubmit(url, creatorId)) ?? null;
+  }
+
+  /**
    * Просмотры ролика при сдаче по API площадки; undefined — не посчитать. Запоминаем на
    * SUBMIT_COUNT_TTL_MS: повторные сдачи той же ссылки («не хватило — ещё раз») не тратят квоту
    * YouTube и платные чтения X.
@@ -368,9 +386,15 @@ export class SubmissionsService implements OnApplicationBootstrap {
       return await this.prisma.$transaction(async (tx) => {
         const { order, budget } = await this.lockBudget(tx, submission.orderId);
         if (budget.exhausted) throw new ForbiddenException(EXHAUSTED_MESSAGE());
-        const reserve = payoutFor(order.minViews, order.cpmMinor!);
-        // резерв за порог уже не больше остатка (иначе exhausted), так что остаток — весь free
-        const overBudget = payoutFor(views, order.cpmMinor!) > budget.free;
+        const reserve = payoutFor(
+          order.minViews,
+          order.cpmMinor!,
+          order.maxPayoutMinor,
+        );
+        // резерв за порог уже не больше остатка (иначе exhausted), так что остаток — весь free;
+        // сверх лимита на ролик не платим — и за фонд такой ролик не «выходит»
+        const overBudget =
+          payoutFor(views, order.cpmMinor!, order.maxPayoutMinor) > budget.free;
         if (overBudget && (acceptMinor === null || acceptMinor > budget.free))
           throw new ConflictException({
             code: 'OVER_BUDGET',
@@ -407,6 +431,10 @@ export class SubmissionsService implements OnApplicationBootstrap {
           },
           ACCEPTS_VIDEOS,
         );
+        // история просмотров — модератору сигналы накрутки (view-signals.ts)
+        await tx.viewSnapshot.create({
+          data: { submissionId, views, source: ViewSnapshotSource.SUBMIT },
+        });
         await syncFundBusy(tx, submission.orderId);
         return this.mustFind(submissionId, tx);
       });
@@ -469,15 +497,17 @@ export class SubmissionsService implements OnApplicationBootstrap {
   /**
    * Пример ролика из заказа по номеру с 1 (VideoLinkController). Только у заказов, которые модератор
    * хоть раз одобрил: примеры заказа на первой проверке никому, кроме модератора, не видны.
+   * Правка пишет новые примеры сразу — пока её не одобрили (и после снятия), не ведём по ним, как в click.
    * null — нет такого заказа или примера.
    */
   async exampleUrl(orderId: number, n: number) {
     if (!isDbId(orderId)) return null;
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, approvedBudgetMinor: { not: null } },
-      select: { exampleUrls: true },
+      select: { exampleUrls: true, status: true },
     });
-    return order?.exampleUrls[n - 1] ?? null;
+    if (!order || !titleVisibleToCreators(order)) return null;
+    return order.exampleUrls[n - 1] ?? null;
   }
 
   async click(trackCode: string) {
@@ -582,8 +612,9 @@ export class SubmissionsService implements OnApplicationBootstrap {
       const { order, budget } = await this.lockBudget(tx, found.orderId);
       // свой резерв ролик может использовать целиком — он уже в `spent`
       const current = await this.mustFind(submissionId, tx);
+      const terms = videoTerms(order, current);
       const payoutMinor = Math.min(
-        payoutFor(views, videoTerms(order, current).cpmMinor!),
+        payoutFor(views, terms.cpmMinor!, terms.maxPayoutMinor),
         budget.free + current.payoutMinor,
       );
       await transitionSubmission(
@@ -600,6 +631,14 @@ export class SubmissionsService implements OnApplicationBootstrap {
         },
         NOT_TAKEN_DOWN,
       );
+      await tx.viewSnapshot.create({
+        data: {
+          submissionId,
+          views,
+          likes,
+          source: ViewSnapshotSource.APPROVE,
+        },
+      });
       return {
         submission: await tx.submission.findUniqueOrThrow({
           where: { id: submissionId },
@@ -652,6 +691,86 @@ export class SubmissionsService implements OnApplicationBootstrap {
   }
 
   /** Сколько роликов креатора отклонено за завышенные просмотры — модератору: повтор — повод для бана. */
+  /**
+   * Одобренные ролики в холде, которые пора проверить по API площадки: раз в сутки, первый раз — через
+   * сутки после одобрения (при одобрении просмотры и так сверены). Ссылки без API отсеивает ScheduledJob.
+   * ponytail: до PRESENCE_BATCH за проход раз в 5 минут — тысячи роликов в сутки; станет мало — поднять.
+   */
+  listPresenceDue(now = new Date()) {
+    const dayAgo = new Date(now.getTime() - DAY_MS);
+    return this.prisma.submission.findMany({
+      where: {
+        status: SubmissionStatus.MODERATOR_APPROVED,
+        finalizedAt: null,
+        OR: [
+          { presenceCheckedAt: { lt: dayAgo } },
+          { presenceCheckedAt: null, decidedAt: { lt: dayAgo } },
+        ],
+      },
+      orderBy: { decidedAt: 'asc' },
+      take: PRESENCE_BATCH,
+      include: { order: true, creator: true },
+    });
+  }
+
+  /**
+   * Итог проверки публикации во время холда. `stats` — на месте: снимок просмотров, пометка
+   * «пропал» снимается (ролик вернули). null — площадка ролика не нашла: пометка с этого момента.
+   * Возвращает ролик, только если пометку поставили сейчас, — для уведомлений один раз; итог
+   * холда успели зафиксировать или ролик сняли — ничего не меняет.
+   */
+  async recordPresence(
+    submissionId: number,
+    stats: { views: number; likes: number | null } | null,
+  ) {
+    const inHold = {
+      id: submissionId,
+      status: SubmissionStatus.MODERATOR_APPROVED,
+      finalizedAt: null,
+    };
+    const now = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      if (stats) {
+        const { count } = await tx.submission.updateMany({
+          where: inHold,
+          data: { presenceCheckedAt: now, goneAt: null },
+        });
+        if (count)
+          await tx.viewSnapshot.create({
+            data: {
+              submissionId,
+              views: stats.views,
+              likes: stats.likes,
+              source: ViewSnapshotSource.CHECK,
+            },
+          });
+        return null;
+      }
+      await tx.submission.updateMany({
+        where: inHold,
+        data: { presenceCheckedAt: now },
+      });
+      const { count } = await tx.submission.updateMany({
+        where: { ...inHold, goneAt: null },
+        data: { goneAt: now },
+      });
+      return count
+        ? tx.submission.findUniqueOrThrow({
+            where: { id: submissionId },
+            include: { order: true, creator: true },
+          })
+        : null;
+    });
+  }
+
+  /** История просмотров ролика от старых снимков к новым — модератору (view-signals.ts). */
+  viewHistory(submissionId: number) {
+    return this.prisma.viewSnapshot.findMany({
+      where: { submissionId },
+      orderBy: { at: 'asc' },
+    });
+  }
+
   inflatedCount(creatorId: number) {
     return this.prisma.submission.count({
       where: {
@@ -773,6 +892,11 @@ export class SubmissionsService implements OnApplicationBootstrap {
         throw new ForbiddenException(
           `Итог фиксируется через ${HOLD_DAYS} дн. после одобрения`,
         );
+      // ссылку в шапке профиля проверяет только модератор: без неё деньги к выводу не выпускаем
+      if (automatic && needsBioLink(current))
+        throw new ForbiddenException(
+          'Ссылку в шапке профиля проверяет модератор',
+        );
       const { count } = await tx.submission.updateMany({
         where: {
           id: submissionId,
@@ -789,6 +913,9 @@ export class SubmissionsService implements OnApplicationBootstrap {
       });
       if (count === 0)
         throw new ForbiddenException('Итог по этому ролику уже зафиксирован');
+      await tx.viewSnapshot.create({
+        data: { submissionId, views, likes, source: ViewSnapshotSource.FINAL },
+      });
       return this.mustFind(submissionId, tx);
     });
   }
@@ -815,6 +942,8 @@ export class SubmissionsService implements OnApplicationBootstrap {
         id: submissionId,
         status: SubmissionStatus.MODERATOR_APPROVED,
         rating: null,
+        // снятую модератором оценку не ставят заново: иначе его решение обходилось бы повтором
+        reviewRemovedAt: null,
       },
       data: {
         ...feedback,
@@ -851,7 +980,12 @@ export class SubmissionsService implements OnApplicationBootstrap {
   async removeReview(submissionId: number) {
     const { count } = await this.prisma.submission.updateMany({
       where: { id: submissionId, rating: { not: null } },
-      data: { rating: null, review: null, reviewQueuedAt: null },
+      data: {
+        rating: null,
+        review: null,
+        reviewQueuedAt: null,
+        reviewRemovedAt: new Date(),
+      },
     });
     if (count === 0) throw new NotFoundException('Отзыв не найден');
   }

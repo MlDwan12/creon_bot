@@ -31,6 +31,11 @@ export const ACTION_LABELS: Record<ModeratorActionType, string> = {
   PAYOUT_REJECT: 'Выплата отклонена',
   USER_BAN: 'Блокировка',
   USER_UNBAN: 'Разблокировка',
+  ADVERTISER_OPEN: 'Кабинет заказчика открыт',
+  ADVERTISER_REJECT: 'Заявка в заказчики отклонена',
+  ADVERTISER_CLOSE: 'Кабинет заказчика закрыт',
+  LINK_VERIFY: 'Аккаунт подтверждён кодом',
+  LINK_NO_CODE: 'Кода в аккаунте нет',
 };
 
 /** Группы для медианы ожидания: сколько объект ждал решения этого модератора (по типу действия). */

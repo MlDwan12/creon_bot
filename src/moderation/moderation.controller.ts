@@ -24,9 +24,15 @@ import { creatorLabel } from '../common/format';
 import { trackLink } from '../orders/order-report';
 import { budgetRaised, payoutPool, HOLD_DAYS } from '../orders/budget';
 import { OrdersService } from '../orders/orders.service';
-import { submittedTerms } from '../orders/order-status';
+import { submittedTerms, videoTerms } from '../orders/order-status';
+import { viewSignals } from '../submissions/view-signals';
 import { DAY_MS } from '../orders/deadline';
-import { authorInLinks, authorUrl, platformOf } from '../common/platforms';
+import {
+  authorInLinks,
+  authorUrl,
+  platformOf,
+  tiktokAuthor,
+} from '../common/platforms';
 import {
   BIO_LINK_REMOVED,
   SubmissionsService,
@@ -35,6 +41,9 @@ import {
   type CountedVideo,
   ViewCounterService,
 } from '../submissions/view-counter.service';
+import { AdvertisersService } from '../advertisers/advertisers.service';
+import { LinkVerificationsService } from '../profiles/link-verifications.service';
+import { advertiserAccess } from '../advertisers/advertiser-access';
 import { AnalyticsService } from './analytics.service';
 import { ModeratorActionsService } from './moderator-actions.service';
 import { ModUsersService, type UsersFilter } from './mod-users.service';
@@ -64,14 +73,18 @@ const PAGE_SIZE = 20;
 const FRESH_ACCOUNT_DAYS = 7;
 
 /**
- * Чей ролик — модератору: `verified` — посчитан по подключённому аккаунту креатора; `inProfile` —
- * автор есть в соцсетях профиля, но ссылки креатор вписал сам, владение не доказано (иначе
- * вписал бы чужой канал и сдал чужой ролик); `mismatch` — автор известен, но в профиле его нет;
- * `unknown` — площадка автора не отдала. Решает модератор: сдачу и одобрение это не запрещает.
+ * Чей ролик — модератору: `verified` — посчитан по подключённому аккаунту креатора; `byCode` —
+ * автор — аккаунт из профиля, подтверждённый кодом в описании (LinkVerificationsService);
+ * `inProfile` — автор есть в соцсетях профиля, но ссылки креатор вписал сам, владение не доказано
+ * (иначе вписал бы чужой канал и сдал чужой ролик); `mismatch` — автор известен, но в профиле его
+ * нет; `unknown` — автора не узнать. Автор — по API (YouTube, X) или по нику в ссылке TikTok.
+ * Решает модератор: сдачу и одобрение это не запрещает.
  */
 export function videoAuthor(
   stats: CountedVideo | undefined,
   links: string[],
+  verifiedLinks: string[] = [],
+  videoUrl: string | null = null,
   now = Date.now(),
 ) {
   if (stats?.ownAccount) {
@@ -88,7 +101,7 @@ export function videoAuthor(
         days !== null && days < FRESH_ACCOUNT_DAYS ? days : null,
     };
   }
-  const a = stats?.author;
+  const a = stats?.author ?? tiktokAuthor(videoUrl);
   if (!a)
     return {
       status: 'unknown',
@@ -98,7 +111,11 @@ export function videoAuthor(
       connectedDaysAgo: null,
     };
   return {
-    status: authorInLinks(a, links) ? 'inProfile' : 'mismatch',
+    status: authorInLinks(a, verifiedLinks)
+      ? 'byCode'
+      : authorInLinks(a, links)
+        ? 'inProfile'
+        : 'mismatch',
     viaAccount: false,
     name: [a.name, a.handle && `@${a.handle}`].filter(Boolean).join(' · '),
     url: authorUrl(a),
@@ -151,18 +168,41 @@ export class ModerationController {
     private readonly viewCounter: ViewCounterService,
     private readonly actions: ModeratorActionsService,
     private readonly users: ModUsersService,
+    private readonly advertisers: AdvertisersService,
+    private readonly links: LinkVerificationsService,
   ) {}
 
   /** Обе очереди сразу: заказы и видео на проверке, старые первыми. */
   @Get('queue')
   async queue() {
-    const [orders, videos, holds, reviews] = await Promise.all([
-      this.ordersService.listPending(),
-      this.submissionsService.listPendingModeration(),
-      this.submissionsService.listHoldDue(),
-      this.submissionsService.listPendingReviews(),
-    ]);
+    const [orders, videos, holds, reviews, applications, links] =
+      await Promise.all([
+        this.ordersService.listPending(),
+        this.submissionsService.listPendingModeration(),
+        this.submissionsService.listHoldDue(),
+        this.submissionsService.listPendingReviews(),
+        this.advertisers.listPending(),
+        this.links.listPending(),
+      ]);
     return {
+      // аккаунты соцсетей: открыть ссылку и найти код в описании
+      links: links.map((l) => ({
+        id: l.id,
+        userId: l.userId,
+        user: creatorLabel(l.user),
+        url: l.url,
+        code: l.code,
+        createdAt: l.createdAt,
+      })),
+      // заявки в заказчики: созвониться по контактам и открыть кабинет или отказать
+      applications: applications.map((a) => ({
+        id: a.id,
+        userId: a.userId,
+        user: creatorLabel(a.user),
+        email: a.email,
+        phone: a.phone,
+        createdAt: a.createdAt,
+      })),
       orders: orders.map((o) => ({
         id: o.id,
         title: o.title,
@@ -174,8 +214,13 @@ export class ModerationController {
         budgetRaised: budgetRaised(o),
         // похоже на контакты в обход площадки — модератору пометка в списке
         hasContacts:
-          findContacts(o.title, o.description, o.referenceUrl, o.targetUrl)
-            .length > 0,
+          findContacts(
+            o.title,
+            o.description,
+            ...o.requirements,
+            o.referenceUrl,
+            o.targetUrl,
+          ).length > 0,
       })),
       videos: videos.map((s) => ({
         id: s.id,
@@ -191,6 +236,8 @@ export class ModerationController {
         orderTitle: s.order.title,
         creator: creatorLabel(s.creator),
         decidedAt: s.decidedAt,
+        // площадка не нашла ролик во время холда — сам итог не зафиксируется
+        goneAt: s.goneAt,
       })),
       // отзывы рекламодателей с текстом — до публикации в профиле креатора
       reviews: reviews.map((s) => ({
@@ -347,6 +394,7 @@ export class ModerationController {
       description: o.description,
       // модератору — сами ссылки: проверить, что это ролики по теме, а не аккаунт рекламодателя
       exampleUrls: o.exampleUrls,
+      requirements: o.requirements,
       referenceUrl: o.referenceUrl,
       targetUrl: o.targetUrl,
       linkInBio: o.linkInBio,
@@ -359,6 +407,7 @@ export class ModerationController {
       pool: fromMinor(payoutPool(o)),
       minViews: o.minViews,
       cpm: fromMinor(o.cpmMinor),
+      maxPayout: fromMinor(o.maxPayoutMinor),
       category: o.category,
       deadline: o.deadline,
       status: o.status,
@@ -368,6 +417,7 @@ export class ModerationController {
       contacts: findContacts(
         o.title,
         o.description,
+        ...o.requirements,
         o.referenceUrl,
         o.targetUrl,
       ),
@@ -438,18 +488,40 @@ export class ModerationController {
   async video(@Param('id', ParseIdPipe) id: number) {
     const s = await this.submissionsService.findById(id);
     if (!s) throw new NotFoundException('Отклик не найден');
-    const [attempt, budget, inflatedBefore, counted] = await Promise.all([
-      this.submissionsService.attemptNumber(s),
-      this.submissionsService.orderBudget(s.order),
-      this.submissionsService.inflatedCount(s.creatorId),
-      s.videoUrl
-        ? this.viewCounter.fetchViews(
-            [{ url: s.videoUrl, creatorId: s.creatorId }],
-            { withAuthor: true },
-          )
-        : new Map<string, CountedVideo>(),
-    ]);
+    const [attempt, budget, inflatedBefore, history, verifiedLinks, counted] =
+      await Promise.all([
+        this.submissionsService.attemptNumber(s),
+        this.submissionsService.orderBudget(s.order),
+        this.submissionsService.inflatedCount(s.creatorId),
+        this.submissionsService.viewHistory(s.id),
+        this.links.verified(s.creatorId, s.creator.socialLinks),
+        s.videoUrl
+          ? this.viewCounter.fetchViews(
+              [{ url: s.videoUrl, creatorId: s.creatorId }],
+              { withAuthor: true },
+            )
+          : new Map<string, CountedVideo>(),
+      ]);
     const stats = counted.get(s.videoUrl ?? '');
+    // сейчас по API — последней точкой истории (в базу не пишем: это просто открытие карточки)
+    const points = [
+      ...history.map((h) => ({
+        views: h.views,
+        likes: h.likes,
+        source: h.source,
+        at: h.at,
+      })),
+      ...(stats
+        ? [
+            {
+              views: stats.views,
+              likes: stats.likes,
+              source: 'NOW' as const,
+              at: new Date(),
+            },
+          ]
+        : []),
+    ];
     // Проверять по условиям, которые креатор видел при сдаче (те же, по которым начислят).
     const terms = { ...s.order, ...submittedTerms(s.order, s) };
     const changedSince =
@@ -468,7 +540,17 @@ export class ModerationController {
       // сейчас по данным API площадки; null — считается вручную или API не ответило
       autoViews: stats?.views ?? null,
       autoLikes: stats?.likes ?? null,
-      author: videoAuthor(stats, s.creator.socialLinks),
+      // история просмотров и сигналы накрутки — только модератору, креатор их не видит
+      viewHistory: points,
+      signals: viewSignals(points, videoTerms(s.order, s).minViews),
+      author: videoAuthor(
+        stats,
+        s.creator.socialLinks,
+        verifiedLinks,
+        s.videoUrl,
+      ),
+      // подтверждённые кодом аккаунты креатора — сверить автора там, где его не узнать (Instagram, VK)
+      verifiedLinks,
       platform: platformOf(s.videoUrl),
       payout: fromMinor(s.payoutMinor),
       // креатор согласился на остаток фонда при сдаче: больше этого (и свободного) не начислят
@@ -477,12 +559,15 @@ export class ModerationController {
       inflatedBefore,
       decidedAt: s.decidedAt,
       finalizedAt: s.finalizedAt,
+      goneAt: s.goneAt,
       holdDays: HOLD_DAYS,
       order: {
         id: s.order.id,
         title: terms.title,
         description: terms.description,
         exampleUrls: terms.exampleUrls,
+        // по ним креатор проверял ролик при сдаче — из них выбирают нарушенный при отказе
+        requirements: terms.requirements ?? [],
         // ссылка креатора /r/ должна стоять в шапке профиля — при проверке и в конце холда
         linkInBio: terms.linkInBio,
         bioLink: terms.linkInBio ? trackLink(s.trackCode) : null,
@@ -490,6 +575,8 @@ export class ModerationController {
         // по ней начислят (videoTerms): сдан до правки — ставка до неё
         cpm: fromMinor(terms.cpmMinor),
         minViews: terms.minViews,
+        // лимит на ролик при сдаче: больше не начислят, сколько бы ни набрал
+        maxPayout: fromMinor(videoTerms(s.order, s).maxPayoutMinor),
         free: fromMinor(budget.free),
         termsBeforeEdit: changedSince,
       },
@@ -565,6 +652,103 @@ export class ModerationController {
       objectId: id,
     });
     return { ok: true };
+  }
+
+  /** Заявка в заказчики одобрена — кабинет открыт. */
+  @Post('advertiser-applications/:id/approve')
+  async approveApplication(
+    @Param('id', ParseIdPipe) id: number,
+    @Req() req: ApiRequest,
+  ) {
+    const user = await this.advertisers.approve(id, req.user.telegramId);
+    await this.logAdvertiser(req, ModeratorActionType.ADVERTISER_OPEN, user.id);
+    this.notifications.advertiserOpened(user);
+    return { ok: true };
+  }
+
+  /** Отказ: `comment` — заметка для команды, пользователь видит только дату повторной заявки. */
+  @Post('advertiser-applications/:id/reject')
+  async rejectApplication(
+    @Param('id', ParseIdPipe) id: number,
+    @Body() body: unknown,
+    @Req() req: ApiRequest,
+  ) {
+    const comment = parseRejectComment(body);
+    const app = await this.advertisers.reject(id, req.user.telegramId, comment);
+    await this.logAdvertiser(
+      req,
+      ModeratorActionType.ADVERTISER_REJECT,
+      app.userId,
+      comment,
+    );
+    const { retryAt } = advertiserAccess(app.user, app, false);
+    if (retryAt) this.notifications.advertiserRejected(app.user, retryAt);
+    return { ok: true };
+  }
+
+  /** Код в описании аккаунта найден — аккаунт подтверждён. */
+  @Post('link-verifications/:id/verify')
+  verifyLink(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
+    return this.decideLink(id, req, true);
+  }
+
+  /** Кода в описании нет — креатор может отправить снова. */
+  @Post('link-verifications/:id/no-code')
+  noCodeLink(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
+    return this.decideLink(id, req, false);
+  }
+
+  /** Решение по коду — креатору уведомление, в журнал. */
+  private async decideLink(id: number, req: ApiRequest, found: boolean) {
+    const check = await this.links.decide(id, req.user.telegramId, found);
+    await this.actions.log({
+      moderatorId: req.user.telegramId,
+      type: found
+        ? ModeratorActionType.LINK_VERIFY
+        : ModeratorActionType.LINK_NO_CODE,
+      objectId: check.userId,
+      comment: check.url,
+    });
+    this.notifications.linkDecided(check.user, check.url, found);
+    return { ok: true };
+  }
+
+  /** Открыть кабинет заказчика из карточки: без заявки или вернуть закрытый. */
+  @Post('users/:id/advertiser/open')
+  async openAdvertiser(
+    @Param('id', ParseIdPipe) id: number,
+    @Req() req: ApiRequest,
+  ) {
+    const user = await this.advertisers.open(id, req.user.telegramId);
+    await this.logAdvertiser(req, ModeratorActionType.ADVERTISER_OPEN, id);
+    this.notifications.advertiserOpened(user);
+    return { ok: true };
+  }
+
+  /** Закрыть кабинет: активные заказы работают дальше, новых и правок нет; вернуть — только модератор. */
+  @Post('users/:id/advertiser/close')
+  async closeAdvertiser(
+    @Param('id', ParseIdPipe) id: number,
+    @Req() req: ApiRequest,
+  ) {
+    const user = await this.advertisers.close(id);
+    await this.logAdvertiser(req, ModeratorActionType.ADVERTISER_CLOSE, id);
+    this.notifications.advertiserClosed(user);
+    return { ok: true };
+  }
+
+  private logAdvertiser(
+    req: ApiRequest,
+    type: ModeratorActionType,
+    userId: number,
+    comment?: string,
+  ) {
+    return this.actions.log({
+      moderatorId: req.user.telegramId,
+      type,
+      objectId: userId,
+      comment,
+    });
   }
 
   /** Опубликовать отзыв с проверки в профиле креатора — креатору приходит уведомление об оценке. */

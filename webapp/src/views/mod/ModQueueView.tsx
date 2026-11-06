@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { reviewOverdue } from '@fixum/shared';
 import {
   ApiError,
+  approveApplication,
+  decideLink,
   approveReview,
   fetchModQueue,
   fetchModReports,
@@ -9,22 +12,41 @@ import {
   type ModReportGroup,
   reasonLabel,
   removeReview,
+  rejectApplication,
   type ReportTarget,
   resolveReports,
 } from '../../api';
 import SupportLink from '../../components/SupportLink';
 import { formatMoney, isWaitingLong, timeAgo, waitingFor } from '../../format';
-import { confirmAction } from '../../telegram';
+import { confirmAction, safeUrl } from '../../telegram';
 import s from './ModQueueView.module.css';
 
-type Tab = 'orders' | 'videos' | 'holds' | 'reviews' | 'reports';
-const TABS: Tab[] = ['orders', 'videos', 'holds', 'reviews', 'reports'];
+type Tab =
+  | 'orders'
+  | 'videos'
+  | 'holds'
+  | 'reviews'
+  | 'reports'
+  | 'applications'
+  | 'links';
+const TABS: Tab[] = [
+  'orders',
+  'videos',
+  'holds',
+  'reviews',
+  'reports',
+  'applications',
+  'links',
+];
+// «Заказчики» — первыми: заявок мало, и в конце ряда на телефоне вкладка уходит за край
 const TAB_LIST: { id: Tab; label: string }[] = [
+  { id: 'applications', label: 'Заказчики' },
   { id: 'videos', label: 'Видео' },
   { id: 'orders', label: 'Заказы' },
   { id: 'holds', label: 'Итоги' },
   { id: 'reviews', label: 'Отзывы' },
   { id: 'reports', label: 'Жалобы' },
+  { id: 'links', label: 'Аккаунты' },
 ];
 
 /** Мера по жалобам — своя для каждого типа объекта (см. ReportsService.resolve). */
@@ -92,6 +114,10 @@ export default function ModQueueView() {
   /** Карточка, в которой открыта форма блокировки автора, и причина. */
   const [banningKey, setBanningKey] = useState('');
   const [banReason, setBanReason] = useState('');
+  const [applicationError, setApplicationError] = useState('');
+  /** Заявка, по которой открыта форма отказа, и заметка для команды. */
+  const [rejectingId, setRejectingId] = useState(0);
+  const [rejectNote, setRejectNote] = useState('');
 
   useEffect(() => {
     Promise.all([fetchModQueue(), fetchModReports()]).then(
@@ -110,14 +136,18 @@ export default function ModQueueView() {
     holds: queue?.holds.length ?? 0,
     reviews: queue?.reviews.length ?? 0,
     reports: reports.length,
+    applications: queue?.applications.length ?? 0,
+    links: queue?.links.length ?? 0,
   };
   const total = TABS.reduce((sum, t) => sum + counts[t], 0);
   // Вкладка — в адресе (?tab=videos), чтобы «Назад» из карточки вернул на ту же вкладку.
   // Без неё — первая, где что-то ждёт: модератор сразу видит работу, а не пустой список.
+  // Заявки в заказчики — после роликов и заказов: у тех идут сроки, заявка подождёт созвона.
   const queryTab = query.get('tab') as Tab;
   const tab: Tab = TABS.includes(queryTab)
     ? queryTab
-    : (TAB_LIST.find((t) => counts[t.id])?.id ?? 'videos');
+    : ([...TAB_LIST.slice(1), TAB_LIST[0]].find((t) => counts[t.id])?.id ??
+      'videos');
   // вкладка по умолчанию зависит от очереди — выбранную пишем в адрес всегда
   const setTab = (t: Tab) => setQuery({ tab: t }, { replace: true });
 
@@ -178,6 +208,47 @@ export default function ModQueueView() {
     fetchModQueue().then(setQueue, () => {});
   }
 
+  /** Заявка в заказчики: открыть кабинет или отказать (`note` — заметка для команды). */
+  async function decideApplication(id: number, note?: string) {
+    if (
+      note === undefined &&
+      !(await confirmAction(
+        'Открыть кабинет заказчика? Он сможет создавать заказы.',
+      ))
+    )
+      return;
+    setApplicationError('');
+    try {
+      await (note === undefined
+        ? approveApplication(id)
+        : rejectApplication(id, note));
+      setRejectingId(0);
+      setRejectNote('');
+    } catch (err) {
+      setApplicationError(
+        err instanceof ApiError
+          ? err.userMessage
+          : 'Не получилось, попробуйте ещё раз',
+      );
+    }
+    fetchModQueue().then(setQueue, () => {});
+  }
+
+  /** Аккаунт соцсети: код в описании найден или нет. */
+  async function decideLinkCheck(id: number, found: boolean) {
+    setApplicationError('');
+    try {
+      await decideLink(id, found);
+    } catch (err) {
+      setApplicationError(
+        err instanceof ApiError
+          ? err.userMessage
+          : 'Не получилось, попробуйте ещё раз',
+      );
+    }
+    fetchModQueue().then(setQueue, () => {});
+  }
+
   /** Самое старое ожидание в обеих очередях — главный сигнал «пора разбирать». */
   const oldest = [
     ...(queue?.orders.map((o) => o.queuedAt) ?? []),
@@ -187,8 +258,13 @@ export default function ModQueueView() {
     ...(queue?.reviews.map((r) => r.queuedAt) ?? []),
   ].sort()[0];
 
+  // дольше срока проверки (REVIEW_SLA_HOURS) — красным, дольше 4 часов — оранжевым
   const waitClass = (iso: string) =>
-    isWaitingLong(iso) ? `${s.wait} ${s.long}` : s.wait;
+    reviewOverdue(iso)
+      ? `${s.wait} ${s.overdue}`
+      : isWaitingLong(iso)
+        ? `${s.wait} ${s.long}`
+        : s.wait;
 
   return (
     <main className={s.page}>
@@ -205,7 +281,15 @@ export default function ModQueueView() {
             {oldest && (
               <>
                 {' · '}
-                <span className={isWaitingLong(oldest) ? s.long : undefined}>
+                <span
+                  className={
+                    reviewOverdue(oldest)
+                      ? s.overdue
+                      : isWaitingLong(oldest)
+                        ? s.long
+                        : undefined
+                  }
+                >
                   самое старое — {waitingFor(oldest)}
                 </span>
               </>
@@ -228,10 +312,154 @@ export default function ModQueueView() {
             ))}
           </div>
           <p className={s.hint}>
-            Сначала самые старые. Оранжевым — ждут дольше 4 часов
+            Сначала самые старые. Оранжевым — ждут дольше 4 часов, красным —
+            дольше суток
           </p>
 
-          {tab === 'reports' ? (
+          {tab === 'links' ? (
+            <>
+              {queue.links.length === 0 && (
+                <p className={`${s.empty} ${s.list}`}>
+                  Аккаунтов на проверке нет.
+                </p>
+              )}
+              {applicationError && (
+                <p className={s.error} role="alert">
+                  {applicationError}
+                </p>
+              )}
+              {queue.links.map((l) => (
+                <article key={l.id} className={s.report}>
+                  <div className={s.reportTop}>
+                    <Link
+                      to={`/mod/creators/${l.userId}`}
+                      className={s.subject}
+                    >
+                      {l.user} ›
+                    </Link>
+                    <span className={waitClass(l.createdAt)}>
+                      {waitingFor(l.createdAt)}
+                    </span>
+                  </div>
+                  {safeUrl(l.url) ? (
+                    <a href={safeUrl(l.url)} target="_blank" rel="noreferrer">
+                      {l.url}
+                    </a>
+                  ) : (
+                    <span>{l.url}</span>
+                  )}
+                  <span>
+                    Код в описании: <strong>{l.code}</strong>
+                  </span>
+                  <span className={s.hint}>
+                    Откройте аккаунт и найдите код в описании профиля.
+                  </span>
+                  <div className={s.actions}>
+                    <button
+                      type="button"
+                      className={s.danger}
+                      onClick={() => decideLinkCheck(l.id, false)}
+                    >
+                      Кода нет
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => decideLinkCheck(l.id, true)}
+                    >
+                      Подтвердить
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </>
+          ) : tab === 'applications' ? (
+            <>
+              {queue.applications.length === 0 && (
+                <p className={`${s.empty} ${s.list}`}>Заявок нет.</p>
+              )}
+              {applicationError && (
+                <p className={s.error} role="alert">
+                  {applicationError}
+                </p>
+              )}
+              {queue.applications.map((a) => (
+                <article key={a.id} className={s.report}>
+                  <div className={s.reportTop}>
+                    <Link
+                      to={`/mod/creators/${a.userId}`}
+                      className={s.subject}
+                    >
+                      {a.user} ›
+                    </Link>
+                    <span className={waitClass(a.createdAt)}>
+                      {waitingFor(a.createdAt)}
+                    </span>
+                  </div>
+                  <span>
+                    Почта: <a href={`mailto:${a.email}`}>{a.email}</a>
+                  </span>
+                  <span>
+                    Телефон:{' '}
+                    {a.phone ? (
+                      <a href={`tel:${a.phone}`}>{a.phone}</a>
+                    ) : (
+                      <span className={s.hint}>не указан</span>
+                    )}
+                  </span>
+                  <span className={s.hint}>
+                    Заявка и в его теме поддержки — там можно договориться о
+                    созвоне.
+                  </span>
+                  {rejectingId === a.id ? (
+                    <div className={s.banForm}>
+                      <label className="field-label">
+                        <span>Почему отказ</span>
+                        <textarea
+                          value={rejectNote}
+                          onChange={(e) => setRejectNote(e.target.value)}
+                          rows={2}
+                          maxLength={500}
+                          placeholder="Заметка для команды — пользователь её не увидит"
+                        />
+                      </label>
+                      <div className={s.actions}>
+                        <button type="button" onClick={() => setRejectingId(0)}>
+                          Отмена
+                        </button>
+                        <button
+                          type="button"
+                          className={s.danger}
+                          disabled={!rejectNote.trim()}
+                          onClick={() => decideApplication(a.id, rejectNote)}
+                        >
+                          Отказать
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={s.actions}>
+                      <button
+                        type="button"
+                        className={s.danger}
+                        onClick={() => {
+                          setRejectingId(a.id);
+                          setRejectNote('');
+                        }}
+                      >
+                        Отказать
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => decideApplication(a.id)}
+                      >
+                        Открыть кабинет
+                      </button>
+                    </div>
+                  )}
+                </article>
+              ))}
+            </>
+          ) : tab === 'reports' ? (
             <>
               {reports.length === 0 && (
                 <p className={`${s.empty} ${s.list}`}>Жалоб нет.</p>
@@ -426,6 +654,9 @@ export default function ModQueueView() {
                     <span className={s.title}>{v.orderTitle}</span>
                     <span className={s.sub}>
                       {v.creator} · зафиксировать итог просмотров
+                      {v.goneAt && (
+                        <span className={s.flag}> · не найден на площадке</span>
+                      )}
                     </span>
                   </span>
                   <span className={s.chevron} aria-hidden="true">

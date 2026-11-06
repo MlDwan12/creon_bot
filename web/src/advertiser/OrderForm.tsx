@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { orderEstimate } from '@fixum/shared';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import {
@@ -31,6 +32,8 @@ const MAX_BUDGET = 100_000;
 const MAX_DURATION = 600;
 const MIN_EXAMPLES = 3;
 const MAX_EXAMPLES = 10;
+/** Требования к ролику пунктами — по желанию (src/common/validation.ts). */
+const MAX_REQUIREMENTS = 10;
 const ORIENTATIONS: { value: NewOrderInput['orientation']; label: string }[] = [
   { value: 'VERTICAL', label: 'createOrder.vertical' },
   { value: 'HORIZONTAL', label: 'createOrder.horizontal' },
@@ -58,11 +61,15 @@ type Form = {
   title: string;
   description: string;
   exampleUrls: string[];
+  /** Требования пунктами; пустые строки при отправке отбрасываются. */
+  requirements: string[];
   referenceUrl: string;
   targetUrl: string;
   linkInBio: boolean;
   budget: string;
   minViews: string;
+  /** Лимит за один ролик, USDT; '' — без лимита. */
+  maxPayout: string;
   minDurationSec: string;
   maxDurationSec: string;
   orientation: NewOrderInput['orientation'];
@@ -88,10 +95,12 @@ export function OrderForm() {
     title: '',
     description: '',
     exampleUrls: Array<string>(MIN_EXAMPLES).fill(''),
+    requirements: [''],
     referenceUrl: '',
     targetUrl: '',
     linkInBio: false,
     budget: '',
+    maxPayout: '',
     ...DEFAULTS,
     // при правке срок по умолчанию — «как было», а не «без срока»
     deadlineDays: id === undefined ? DEFAULTS.deadlineDays : undefined,
@@ -130,11 +139,15 @@ export function OrderForm() {
               Math.max(0, MIN_EXAMPLES - source.exampleUrls.length),
             ).fill(''),
           ],
+          requirements: source.requirements.length
+            ? [...source.requirements]
+            : [''],
           referenceUrl: source.referenceUrl ?? '',
           targetUrl: source.targetUrl ?? '',
           linkInBio: source.linkInBio,
           budget: String(source.budget),
           minViews: String(source.minViews),
+          maxPayout: String(source.maxPayout ?? ''),
           minDurationSec: String(source.minDurationSec ?? ''),
           maxDurationSec: String(source.maxDurationSec ?? ''),
           orientation: source.orientation,
@@ -208,9 +221,11 @@ export function OrderForm() {
     title: form.title,
     description: form.description,
     referenceUrl: form.referenceUrl || null,
+    requirements: form.requirements.map((r) => r.trim()).filter(Boolean),
     linkInBio: form.linkInBio && hasTarget,
     cpm: null,
     minViews: Number(form.minViews),
+    maxPayout: Number(form.maxPayout) || null,
     // остаток в предпросмотре не показываем (OrderCard preview): по нему видна комиссия
     free: Number(form.budget),
     freeUnder: null,
@@ -253,11 +268,13 @@ export function OrderForm() {
         ...form,
         category,
         exampleUrls: form.exampleUrls.map((u) => u.trim()).filter(Boolean),
+        requirements: form.requirements.map((r) => r.trim()).filter(Boolean),
         referenceUrl: form.referenceUrl.trim() || null,
         targetUrl: form.targetUrl.trim() || null,
         linkInBio: form.linkInBio && hasTarget,
         budget: Number(form.budget),
         minViews: Number(form.minViews),
+        maxPayout: Number(form.maxPayout) || null,
         minDurationSec: Number(form.minDurationSec),
         maxDurationSec: Number(form.maxDurationSec),
       };
@@ -289,6 +306,8 @@ export function OrderForm() {
       </p>
     );
   const budget = Number(form.budget);
+  // калькулятор «примерно получится» — пересчёт при каждом вводе бюджета и порога
+  const estimate = orderEstimate(budget, pricePer1000, Number(form.minViews));
 
   return (
     <div className={s.page}>
@@ -420,6 +439,61 @@ export function OrderForm() {
                     }
                   >
                     {t('createOrder.addExample')}
+                  </button>
+                )}
+              </fieldset>
+
+              <fieldset className={s.fieldset}>
+                <legend className={s.cardHead}>
+                  {t('createOrder.requirements')}
+                </legend>
+                <span className={`${s.hint} ${s.small}`}>
+                  {t('createOrder.requirementsHint')}
+                </span>
+                {form.requirements.map((r, i) => (
+                  <div key={i} className={s.inputRow}>
+                    <input
+                      id={`requirement-${i}`}
+                      value={r}
+                      onChange={(e) =>
+                        set({
+                          requirements: form.requirements.map((x, j) =>
+                            j === i ? e.target.value : x,
+                          ),
+                        })
+                      }
+                      maxLength={200}
+                      aria-label={t('createOrder.requirementN', { n: i + 1 })}
+                      placeholder={t('createOrder.requirementPlaceholder')}
+                    />
+                    {(form.requirements.length > 1 || r) && (
+                      <button
+                        type="button"
+                        className={s.btn}
+                        aria-label={t('createOrder.removeRequirement', {
+                          n: i + 1,
+                        })}
+                        onClick={() => {
+                          const rest = form.requirements.filter(
+                            (_, j) => j !== i,
+                          );
+                          set({ requirements: rest.length ? rest : [''] });
+                        }}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {form.requirements.length < MAX_REQUIREMENTS && (
+                  <button
+                    type="button"
+                    className={s.linkButton}
+                    onClick={() =>
+                      set({ requirements: [...form.requirements, ''] })
+                    }
+                  >
+                    {t('createOrder.addRequirement')}
                   </button>
                 )}
               </fieldset>
@@ -595,7 +669,7 @@ export function OrderForm() {
 
             <section className={s.card}>
               <h2>{t('createOrder.blockBudget')}</h2>
-              <div className={s.inputRow}>
+              <div className={s.fieldGrid}>
                 <label className={s.field}>
                   {t('createOrder.budget')}
                   <input
@@ -628,8 +702,28 @@ export function OrderForm() {
                     placeholder="250"
                   />
                 </label>
+                <label className={s.field}>
+                  {t('createOrder.maxPayout')}
+                  <input
+                    id="maxPayout"
+                    value={form.maxPayout}
+                    onChange={bind('maxPayout')}
+                    type="number"
+                    min="1"
+                    max={Number(form.budget) || MAX_BUDGET}
+                    step="1"
+                    placeholder={t('createOrder.maxPayoutPlaceholder')}
+                  />
+                </label>
               </div>
-              {fieldError(fieldErrors.budget || fieldErrors.minViews)}
+              {fieldError(
+                fieldErrors.budget ||
+                  fieldErrors.minViews ||
+                  fieldErrors.maxPayout,
+              )}
+              <p className={`${s.hint} ${s.small}`}>
+                {t('createOrder.maxPayoutHint')}
+              </p>
               <div className={s.field}>
                 <span id="deadline-label">
                   {t('createOrder.deadline')}
@@ -683,22 +777,48 @@ export function OrderForm() {
             <span>{t('createOrder.preview.budget')}</span>
             <span>{budget > 0 ? formatMoney(budget) : '—'}</span>
           </div>
-          {pricePer1000 !== null && form.category && (
-            <p className={`${s.hint} ${s.small}`}>
-              {budget > 0
-                ? t('createOrder.priceHintViews', {
+          <div className={s.row}>
+            <span>{t('createOrder.maxPayout')}</span>
+            <span>
+              {Number(form.maxPayout)
+                ? formatMoney(Number(form.maxPayout))
+                : t('createOrder.noMaxPayout')}
+            </span>
+          </div>
+          {pricePer1000 !== null &&
+            form.category &&
+            (estimate ? (
+              <div aria-live="polite">
+                <div className={s.row}>
+                  <span>{t('createOrder.calcTitle')}</span>
+                  <span>
+                    {t('createOrder.calcViews', {
+                      views: formatViews(estimate.views),
+                    })}
+                  </span>
+                </div>
+                <div className={s.row}>
+                  <span />
+                  <span>
+                    {t('createOrder.calcVideos', { count: estimate.videos })}
+                  </span>
+                </div>
+                <p className={`${s.hint} ${s.small}`}>
+                  {t('createOrder.calcNote', {
                     category: categoryLabel(form.category),
                     price: formatMoney(pricePer1000),
-                    views: formatViews(
-                      Math.floor((budget / pricePer1000) * 10) * 100,
-                    ),
-                  })
-                : t('createOrder.priceHint', {
-                    category: categoryLabel(form.category),
-                    price: formatMoney(pricePer1000),
+                    views: formatViews(Number(form.minViews) || 0),
                   })}
-            </p>
-          )}
+                </p>
+              </div>
+            ) : (
+              <p className={`${s.hint} ${s.small}`}>
+                {t('createOrder.priceHint', {
+                  category: categoryLabel(form.category),
+                  price: formatMoney(pricePer1000),
+                })}
+              </p>
+            ))}
           {rubPerUsdt && budget > 0 && (
             <p className={`${s.hint} ${s.small}`}>
               {t('createOrder.rate', {

@@ -47,11 +47,16 @@ export function youtubeId(url: string): string | null {
   }
   // ?v= бывает и в ссылке другой площадки — без проверки домена чужой ролик заняли бы ей
   if (!isOnHosts(u.hostname, PLATFORMS.YOUTUBE.hosts)) return null;
+  // ?v= — только у /watch: в /shorts/A?v=B или /redirect?…&v=B площадка покажет не B (или уведёт
+  // с YouTube), а просмотры и «один ролик — одна оплата» считались бы по B. Два разных id — отказ.
+  const v = u.searchParams.get('v');
   const id = isOnHosts(u.hostname, ['youtu.be'])
     ? u.pathname.split('/')[1]
-    : (u.searchParams.get('v') ??
-      u.pathname.match(/^\/(?:shorts|embed|live|v)\/([^/]+)/)?.[1]);
-  return id && /^[\w-]{11}$/.test(id) ? id : null;
+    : u.pathname === '/watch'
+      ? v
+      : u.pathname.match(/^\/(?:shorts|embed|live|v)\/([^/]+)/)?.[1];
+  if (!id || (v !== null && v !== id)) return null;
+  return /^[\w-]{11}$/.test(id) ? id : null;
 }
 
 /** id поста X: x.com/<автор>/status/ID, twitter.com/…/status/ID, x.com/i/status/ID. */
@@ -63,7 +68,10 @@ export function xPostId(url: string): string | null {
     return null;
   }
   if (!isOnHosts(u.hostname, PLATFORMS.X.hosts)) return null;
-  return u.pathname.match(/\/status(?:es)?\/(\d{1,20})(?:\/|$)/)?.[1] ?? null;
+  // без нулей впереди: «020» площадка может открыть как 20, а ключ ролика был бы другим
+  return (
+    u.pathname.match(/\/status(?:es)?\/([1-9]\d{0,19})(?:\/|$)/)?.[1] ?? null
+  );
 }
 
 /**
@@ -79,8 +87,9 @@ export function tiktokVideoId(url: string): string | null {
   }
   if (!isOnHosts(u.hostname, PLATFORMS.TIKTOK.hosts)) return null;
   return (
-    u.pathname.match(/\/(?:video|v)\/(\d{5,25})(?:\.html)?(?:\/|$)/)?.[1] ??
-    null
+    u.pathname.match(
+      /\/(?:video|v)\/([1-9]\d{4,24})(?:\.html)?(?:\/|$)/,
+    )?.[1] ?? null
   );
 }
 
@@ -96,8 +105,15 @@ export function vkVideoId(url: string): string | null {
     return null;
   }
   if (!isOnHosts(u.hostname, PLATFORMS.VK.hosts)) return null;
-  const where = `${u.pathname} ${u.searchParams.get('z') ?? ''}`;
-  return where.match(/(?:video|clip)(-?\d+_\d+)/)?.[1] ?? null;
+  // переход на чужой сайт через VK — не ролик, даже с z=video…
+  if (/^\/away(?:\.php)?$/.test(u.pathname)) return null;
+  // без нулей впереди: «video1_02» VK может открыть как 1_2, а ключ ролика был бы другим
+  const re = /(?:video|clip)(-?[1-9]\d*_[1-9]\d*)(?!\d)/;
+  const inPath = u.pathname.match(re)?.[1];
+  const inZ = u.searchParams.get('z')?.match(re)?.[1];
+  // ролик в адресе и другой в просмотрщике (z) — какой покажут, не угадать: отказ
+  if (inPath && inZ && inPath !== inZ) return null;
+  return inPath ?? inZ ?? null;
 }
 
 /**
@@ -210,15 +226,28 @@ export function videoKey(url: string): string {
 
 /** Автор публикации по данным API площадки — сверить с соцсетями в профиле креатора. */
 export interface VideoAuthor {
-  platform: 'YOUTUBE' | 'X';
-  /** id канала YouTube или пользователя X. */
+  platform: 'YOUTUBE' | 'X' | 'TIKTOK';
+  /** id канала YouTube или пользователя X; у TikTok — ник из ссылки на ролик. */
   id: string;
   /** @handle канала YouTube или username в X, без «@»; null — площадка не отдала. */
   handle: string | null;
   name: string | null;
 }
 
-/** Автор есть среди ссылок профиля: youtube.com/@handle, youtube.com/channel/<id>, x.com/<username>. */
+/**
+ * Автор ролика TikTok по самой ссылке, без API: tiktok.com/@anya/video/… → anya. Ник в ссылке
+ * ставит сам TikTok, когда делятся роликом; null — не TikTok или ссылка без ника.
+ */
+export function tiktokAuthor(url: string | null): VideoAuthor | null {
+  if (!url || !tiktokVideoId(url)) return null;
+  const handle = new URL(url).pathname.match(/^\/@([\w.]+)\//)?.[1];
+  return handle ? { platform: 'TIKTOK', id: handle, handle, name: null } : null;
+}
+
+/**
+ * Автор есть среди ссылок профиля: youtube.com/@handle, youtube.com/channel/<id>, x.com/<username>,
+ * tiktok.com/@ник.
+ */
 export function authorInLinks(author: VideoAuthor, links: string[]): boolean {
   const handle = author.handle?.toLowerCase();
   return links.some((link) => {
@@ -235,6 +264,11 @@ export function authorInLinks(author: VideoAuthor, links: string[]): boolean {
         !!handle &&
         first?.toLowerCase() === handle
       );
+    if (author.platform === 'TIKTOK')
+      return (
+        isOnHosts(u.hostname, PLATFORMS.TIKTOK.hosts) &&
+        first?.toLowerCase() === `@${handle}`
+      );
     return (
       isOnHosts(u.hostname, PLATFORMS.YOUTUBE.hosts) &&
       ((!!handle && first?.toLowerCase() === `@${handle}`) ||
@@ -245,6 +279,8 @@ export function authorInLinks(author: VideoAuthor, links: string[]): boolean {
 
 /** Страница автора на площадке — модератору открыть и сверить. */
 export function authorUrl(author: VideoAuthor): string {
+  if (author.platform === 'TIKTOK')
+    return `https://www.tiktok.com/@${author.handle}`;
   if (author.platform === 'X')
     return author.handle
       ? `https://x.com/${author.handle}`

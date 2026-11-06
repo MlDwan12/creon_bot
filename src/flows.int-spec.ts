@@ -24,6 +24,10 @@ import {
 } from './submissions/submissions.service';
 import { UsersService } from './users/users.service';
 import { ViewCounterService } from './submissions/view-counter.service';
+import {
+  linkCode,
+  LinkVerificationsService,
+} from './profiles/link-verifications.service';
 
 /**
  * Интеграционные тесты сервисов на настоящем Postgres: статусы, гонки и права, которые держатся
@@ -44,6 +48,7 @@ const orders = new OrdersService(prisma);
 // API площадки в тестах не отвечает — просмотры те, что указал креатор
 const submissions = new SubmissionsService(prisma, {
   fetchViews: () => Promise.resolve(new Map()),
+  isAutomatic: () => false,
 } as unknown as ViewCounterService);
 const analytics = new AnalyticsService(prisma);
 const profiles = new ProfilesService(prisma);
@@ -108,6 +113,8 @@ async function openOrder(advertiserId: number, deadline?: Date) {
   const order = await pendingOrder(advertiserId, deadline);
   return approveOrder(order.id, 1n);
 }
+
+const linkChecks = new LinkVerificationsService(prisma);
 
 const statusOf = async (orderId: number) =>
   (await prisma.order.findUniqueOrThrow({ where: { id: orderId } })).status;
@@ -326,6 +333,87 @@ describe('отклик', () => {
     ).toBe(MAX_IN_REVIEW);
   });
 
+  it('лимит на ролик: сверх него не начисляют, снятый после сдачи лимит ролик не догонит', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const pending = await pendingOrder(advertiser.id);
+    // лимит 50 USDT: ролик на 1000 просмотров по ставке стоил бы 100
+    await prisma.order.update({
+      where: { id: pending.id },
+      data: { maxPayoutMinor: 5_000 },
+    });
+    const order = await approveOrder(pending.id, 1n);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS);
+    // лимит при сдаче в снимке условий: правка заказа его не снимет для этого ролика
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { maxPayoutMinor: null },
+    });
+    const { submission } = await submissions.moderatorApprove(s.id, 1n, VIEWS);
+    expect(submission.payoutMinor).toBe(5_000);
+  });
+
+  it('история просмотров: снимок при сдаче и при одобрении', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const order = await openOrder(advertiser.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS);
+    await submissions.moderatorApprove(s.id, 1n, 1_500, 30);
+    expect(
+      (await submissions.viewHistory(s.id)).map((h) => [
+        h.source,
+        h.views,
+        h.likes,
+      ]),
+    ).toEqual([
+      ['SUBMIT', VIEWS, null],
+      ['APPROVE', 1_500, 30],
+    ]);
+  });
+
+  it('проверка на месте: пропал — пометка один раз, вернулся — снята и снимок; в очередь — через сутки', async () => {
+    const [advertiser, creator] = [await user(), await user()];
+    const order = await openOrder(advertiser.id);
+    const s = await submissions.claim(order.id, creator.id);
+    await submissions.attachVideo(s.id, creator.id, videoUrl(), VIEWS);
+    await submissions.moderatorApprove(s.id, 1n, VIEWS);
+    // сразу после одобрения проверять рано
+    expect(await submissions.listPresenceDue()).toHaveLength(0);
+    const later = new Date(Date.now() + DAY + 1000);
+    expect((await submissions.listPresenceDue(later)).map((x) => x.id)).toEqual(
+      [s.id],
+    );
+
+    expect(await submissions.recordPresence(s.id, null)).not.toBeNull();
+    // повторная проверка — пометка уже стоит, второго уведомления нет
+    expect(await submissions.recordPresence(s.id, null)).toBeNull();
+    await submissions.recordPresence(s.id, { views: 1_800, likes: 9 });
+    const after = await prisma.submission.findUniqueOrThrow({
+      where: { id: s.id },
+    });
+    expect(after.goneAt).toBeNull();
+    expect(after.presenceCheckedAt).not.toBeNull();
+    expect((await submissions.viewHistory(s.id)).at(-1)).toMatchObject({
+      source: 'CHECK',
+      views: 1_800,
+    });
+  });
+
+  it('просмотры до сдачи: только по своему отклику; площадку без API не считаем', async () => {
+    const [advertiser, creator, other] = [
+      await user(),
+      await user(),
+      await user(),
+    ];
+    const order = await openOrder(advertiser.id);
+    const s = await submissions.claim(order.id, creator.id);
+    const url = 'https://www.tiktok.com/@a/video/7412345678901234567';
+    await expect(
+      submissions.previewViews(s.id, other.id, url),
+    ).rejects.toThrow();
+    expect(await submissions.previewViews(s.id, creator.id, url)).toBeNull();
+  });
+
   it('двойной тап создаёт один отклик', async () => {
     const [advertiser, creator] = [await user(), await user()];
     const order = await openOrder(advertiser.id);
@@ -337,6 +425,30 @@ describe('отклик', () => {
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect(await prisma.submission.count()).toBe(1);
+  });
+});
+
+describe('подтверждение аккаунта кодом', () => {
+  it('отправка, «кода нет», повтор, подтверждение; убрали ссылку из профиля — не действует', async () => {
+    const creator = await user();
+    const link = 'https://www.tiktok.com/@anya';
+    await expect(linkChecks.submit(creator.id, [], link)).rejects.toThrow();
+
+    const first = await linkChecks.submit(creator.id, [link], link);
+    expect(first.code).toBe(linkCode(creator.id, link));
+    // уже на проверке — второй раз нельзя
+    await expect(linkChecks.submit(creator.id, [link], link)).rejects.toThrow();
+    await linkChecks.decide(first.id, 1n, false);
+    await expect(linkChecks.decide(first.id, 1n, true)).rejects.toThrow();
+    expect((await linkChecks.checks(creator.id, [link]))[0].status).toBe(
+      'NO_CODE',
+    );
+
+    const again = await linkChecks.submit(creator.id, [link], link);
+    await linkChecks.decide(again.id, 1n, true);
+    expect(await linkChecks.verified(creator.id, [link])).toEqual([link]);
+    expect(await linkChecks.verified(creator.id, [])).toEqual([]);
+    await expect(linkChecks.submit(creator.id, [link], link)).rejects.toThrow();
   });
 });
 

@@ -158,6 +158,11 @@ export const {
   resolveReports,
   banUser,
   unbanUser,
+  approveApplication,
+  decideLink,
+  rejectApplication,
+  openAdvertiser,
+  closeAdvertiser,
 } = createModApi(request);
 
 // Запросы кабинета заказчика, поддержки и жалоб — общие с сайтом (packages/shared/src/advertiser-api.ts).
@@ -171,6 +176,8 @@ export const {
   deleteOrder,
   fetchOrderReport,
   sendReportCsv,
+  shareReport,
+  unshareReport,
   rateVideo,
 } = createAdvertiserApi(request);
 export const { sendSupportMessage, createReport } = createAccountApi(request);
@@ -181,12 +188,15 @@ export const {
   fetchOrder,
   claimOrder,
   fetchMySubmissions,
+  previewViews,
   submitVideo,
   fetchBalance,
   requestPayout,
   fetchMyProfile,
+  applyAdvertiser,
   fetchCreator,
   updateProfileLinks,
+  verifyProfileLink,
   updateNotifications,
   updateWallet,
   fetchSocialAccounts,

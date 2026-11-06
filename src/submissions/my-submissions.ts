@@ -38,6 +38,8 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
       // согласился при сдаче на остаток фонда: просмотры сверх него не оплачиваются
       agreedPayout: fromMinor(row.agreedPayoutMinor),
       finalized: row.finalizedAt !== null,
+      // когда подвели итог холда — с этой даты деньги можно вывести
+      finalizedAt: row.finalizedAt,
       createdAt: row.createdAt,
       // Для шкалы статусов: сдан, проверен модератором и до когда холд (одобрен, итога ещё нет).
       submittedAt: row.submittedAt,
@@ -67,11 +69,14 @@ export function toMySubmissions(rows: (Submission & { order: Order })[]) {
           : tr('errors.orderUnderReview', { id: row.order.id }),
         cpm: fromMinor(row.order.cpmMinor),
         minViews: row.order.minViews,
+        // лимит за ролик: больше не начислят — для подсказки при сдаче
+        maxPayout: fromMinor(row.order.maxPayoutMinor),
         deadline: row.order.deadline,
         status: row.order.status,
         // ссылка /r/ ещё и в шапке профиля — при сдаче креатор подтверждает, что поставил её
         linkInBio: row.order.linkInBio,
         // требования к ролику — для самопроверки перед сдачей
+        requirements: row.order.requirements,
         ...videoFormat(row.order),
       },
     };

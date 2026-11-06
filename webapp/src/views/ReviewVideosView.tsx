@@ -12,6 +12,7 @@ import {
 } from '../api';
 import LoadState from '../components/LoadState';
 import PlatformIcon from '../components/PlatformIcon';
+import ShareReport from '../components/ShareReport';
 import SupportLink from '../components/SupportLink';
 import UserAvatar from '../components/UserAvatar';
 import { formatDate, formatMoney, formatViews } from '../format';
@@ -272,6 +273,7 @@ export default function ReviewVideosView() {
           {csvError}
         </p>
       )}
+      <ShareReport orderId={id} share={data.share} />
 
       <div className={s.titleRow}>
         <h2 className={`section-title ${s.flush}`}>{t('review.videos')}</h2>
@@ -442,8 +444,8 @@ export default function ReviewVideosView() {
               </div>
             </fieldset>
           ) : (
-            // оценку не меняют (бэкенд не даст) — кнопка только у неоценённых
-            !item.rating && (
+            // оценку не меняют и снятую не ставят заново (бэкенд не даст)
+            item.rateable && (
               <button
                 type="button"
                 className={s.secondary}
@@ -469,10 +471,7 @@ export default function ReviewVideosView() {
 
       <SupportLink
         label={t('order.supportLabel', { id: data.order.id })}
-        about={t('order.supportAbout', {
-          id: data.order.id,
-          title: data.order.title,
-        })}
+        about={{ orderId: data.order.id }}
       />
     </main>
   );

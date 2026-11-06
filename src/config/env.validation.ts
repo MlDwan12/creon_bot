@@ -24,6 +24,12 @@ export function validateEnv(config: Record<string, unknown>) {
     if (!Number.isInteger(n) || n < 0 || n > 90)
       throw new Error('PLATFORM_FEE_PERCENT — целое число от 0 до 90');
   }
+  // Адрес сайта (web/) — на нём открывается публичный отчёт по ссылке; не задан — делиться нельзя.
+  const web = typeof config.WEB_URL === 'string' ? config.WEB_URL : '';
+  if (web && !/^https?:\/\/[^\s/]+\/?$/.test(web))
+    throw new Error(
+      'WEB_URL — адрес сайта без пути, например https://web.fixumapp.com',
+    );
   // Подключение аккаунтов площадок (src/accounts): их токены хранятся зашифрованными этим ключом.
   if (
     (config.TIKTOK_CLIENT_KEY ||

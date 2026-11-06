@@ -12,6 +12,7 @@ import { acquireLease } from './job-lease';
 import { NotificationsService } from '../telegram/notifications.service';
 import { OrdersService } from '../orders/orders.service';
 import { SubmissionsService } from '../submissions/submissions.service';
+import { needsBioLink } from '../orders/order-status';
 import { ViewCounterService } from '../submissions/view-counter.service';
 import { PayoutsService } from '../payouts/payouts.service';
 
@@ -79,6 +80,7 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
       () => this.remindDeadlines(),
       () => this.expireSlots(),
       () => this.remindSlots(),
+      () => this.checkPresence(),
       () => this.finalizeAutomatic(),
       () => this.remindModerators(),
       () => this.sendInsights(),
@@ -121,14 +123,46 @@ export class ScheduledJob implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   /**
+   * Во время холда раз в сутки — на месте ли публикация (по API площадки): снимок просмотров для
+   * сигналов накрутки или пометка «пропал» с уведомлением креатору и модераторам. API не ответило —
+   * ролик проверим в следующий проход: наказывать за сбой площадки нельзя.
+   */
+  private async checkPresence() {
+    const due = (await this.submissionsService.listPresenceDue()).filter((s) =>
+      this.viewCounter.isAutomatic(s.videoUrl),
+    );
+    if (!due.length) return;
+    const gone = new Set<string>();
+    const counted = await this.viewCounter.fetchViews(
+      due.map((s) => ({ url: s.videoUrl!, creatorId: s.creatorId })),
+      { gone },
+    );
+    for (const s of due) {
+      const stats = counted.get(s.videoUrl!);
+      if (!stats && !gone.has(s.videoUrl!)) continue;
+      const marked = await this.submissionsService.recordPresence(
+        s.id,
+        stats ?? null,
+      );
+      if (marked) this.notifications.publicationGone(marked);
+    }
+  }
+
+  /**
    * Итог холда по роликам, чьи просмотры отдаёт API площадки (YouTube, X, а TikTok и VK — если
    * креатор подключил аккаунт), — без модератора.
    * API не ответило — ролик остаётся в очереди «Итоги», итог введёт модератор. Ролики заблокированного
    * креатора — тоже модератору: бан бывает за накрутку, деньги к выводу выпускать решает человек.
+   * И ролики по заказам со ссылкой в шапке профиля: есть ли она там, API не скажет.
    */
   private async finalizeAutomatic() {
     const due = (await this.submissionsService.listHoldDue()).filter(
-      (s) => !s.creator.bannedAt && this.viewCounter.isAutomatic(s.videoUrl),
+      (s) =>
+        !s.creator.bannedAt &&
+        // площадка не нашла ролик во время холда — решает модератор
+        !s.goneAt &&
+        !needsBioLink(s) &&
+        this.viewCounter.isAutomatic(s.videoUrl),
     );
     if (!due.length) return;
     const counted = await this.viewCounter.fetchViews(

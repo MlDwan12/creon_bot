@@ -22,9 +22,11 @@ import { payoutPool } from './budget';
 import { NotificationsService } from '../telegram/notifications.service';
 import { Throttle } from '@nestjs/throttler';
 import { OrdersService } from './orders.service';
-import { reportCsv } from './order-report';
+import { randomBytes } from 'node:crypto';
+import { canShare, reportCsv, shareLink } from './order-report';
 import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
+import { AdvertiserGuard } from '../auth/advertiser.guard';
 import {
   parseDeadlineDays,
   parseOrderEdit,
@@ -32,7 +34,11 @@ import {
   videoFormat,
 } from './order-input';
 
-/** Заказы текущего пользователя как рекламодателя. Права проверяют сервисы. */
+/**
+ * Заказы текущего пользователя как рекламодателя. Права на заказ проверяют сервисы; создать, править
+ * и продлить — только с открытым кабинетом (AdvertiserGuard). Закрытый кабинет — смотреть свои
+ * заказы, закрыть или удалить их, оценить ролики.
+ */
 @Controller('api/my-orders')
 @UseGuards(InitDataGuard, UserThrottlerGuard)
 export class MyOrdersController {
@@ -50,12 +56,14 @@ export class MyOrdersController {
       title: o.title,
       description: o.description,
       exampleUrls: o.exampleUrls,
+      requirements: o.requirements,
       referenceUrl: o.referenceUrl,
       targetUrl: o.targetUrl,
       linkInBio: o.linkInBio,
       ...videoFormat(o),
       budget: fromMinor(o.budgetMinor),
       minViews: o.minViews,
+      maxPayout: fromMinor(o.maxPayoutMinor),
       category: o.category,
       deadline: o.deadline,
       status: o.status,
@@ -98,6 +106,7 @@ export class MyOrdersController {
 
   /** Новый заказ → на модерацию, модераторам уведомление. */
   @Post()
+  @UseGuards(AdvertiserGuard)
   @Throttle({ default: { limit: 10, ttl: 60 * 60_000 } })
   async create(@Body() body: unknown, @Req() req: ApiRequest) {
     const order = await this.ordersService.create(
@@ -110,6 +119,7 @@ export class MyOrdersController {
 
   /** Правка заказа: снова на проверку; креаторам, уже работающим по открытому заказу, — уведомление. */
   @Put(':id')
+  @UseGuards(AdvertiserGuard)
   @Throttle({ default: { limit: 30, ttl: 60 * 60_000 } })
   async update(
     @Param('id', ParseIdPipe) id: number,
@@ -146,6 +156,7 @@ export class MyOrdersController {
 
   /** Продлить срок на `days` дней; заказ с истёкшим сроком снова открывается. */
   @Post(':id/extend')
+  @UseGuards(AdvertiserGuard)
   async extend(
     @Param('id', ParseIdPipe) id: number,
     @Body('days') days: unknown,
@@ -165,7 +176,36 @@ export class MyOrdersController {
   /** Отчёт по моему заказу: сводка, площадки, одобренные ролики, воронка и советы. */
   @Get(':id/report')
   async report(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
-    return this.ordersService.report(await this.ownOrder(id, req.user.id));
+    const order = await this.ownOrder(id, req.user.id);
+    return {
+      ...(await this.ordersService.report(order)),
+      // публичная ссылка на отчёт (null — нет); canShare — известен адрес сайта, где он откроется
+      share: { url: shareLink(order.shareToken), available: canShare() },
+    };
+  }
+
+  /**
+   * Ссылка на отчёт для тех, у кого нет входа (руководитель): новый токен — прежняя ссылка
+   * перестаёт работать. Публикует данные заказа — только с открытым кабинетом.
+   */
+  @Post(':id/report/share')
+  @UseGuards(AdvertiserGuard)
+  @Throttle({ default: { limit: 20, ttl: 60 * 60_000 } })
+  async share(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
+    const order = await this.ownOrder(id, req.user.id);
+    if (!canShare()) throw new BadRequestException(tr('errors.shareOff'));
+    // 16 байт — 22 символа base64url: перебором не подобрать
+    const token = randomBytes(16).toString('base64url');
+    await this.ordersService.setShareToken(order.id, token);
+    return { url: shareLink(token) };
+  }
+
+  /** Отозвать ссылку на отчёт — можно и с закрытым кабинетом. */
+  @Delete(':id/report/share')
+  async unshare(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
+    const order = await this.ownOrder(id, req.user.id);
+    await this.ordersService.setShareToken(order.id, null);
+    return { ok: true };
   }
 
   /** Тот же отчёт файлом CSV — в чат с ботом: скачивание файлов из мини-аппа работает не везде. */

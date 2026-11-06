@@ -41,12 +41,17 @@ const HINTS: RegExp[] = [
 
 /**
  * Один вид для поиска: полноширинные и прочие «похожие» символы — в обычные (NFKC: ＠ → @),
- * невидимые (zero-width, разворот текста) — прочь, %-коды в ссылках — раскодировать.
+ * невидимые (zero-width, разворот текста, селекторы вариантов) — прочь, %-коды в ссылках —
+ * раскодировать. Точки-«иероглифы» (「t。me」) — в обычную: браузер в адресе делает так же (IDNA).
  */
 function normalize(text: string): string {
   return text
     .normalize('NFKC')
-    .replace(/\p{Cf}/gu, '')
+    .replace(
+      /\p{Cf}|[\u034F\u180B-\u180F\uFE00-\uFE0F\u{E0100}-\u{E01EF}]/gu,
+      '',
+    )
+    .replace(/[\u3002\uFF0E\uFF61]/g, '.')
     .replace(/(?:%[0-9a-f]{2})+/gi, (m) => {
       try {
         return decodeURIComponent(m);

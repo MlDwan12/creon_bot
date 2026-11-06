@@ -1,5 +1,10 @@
 import type { Order, Submission, User } from '@prisma/client';
-import { buildOrderReport, reportCsv } from './order-report';
+import {
+  buildOrderReport,
+  publicReport,
+  reportCsv,
+  shareLink,
+} from './order-report';
 
 const order = {
   id: 1,
@@ -80,6 +85,40 @@ describe('buildOrderReport', () => {
     const json = JSON.stringify(report);
     expect(json).not.toContain('anya');
     expect(json).not.toContain('payout');
+  });
+});
+
+describe('публичный отчёт по ссылке', () => {
+  it('без бюджета, остатка, резерва, id креаторов и оценок; расход и цена — есть', () => {
+    const full = buildOrderReport(order, [
+      video('MODERATOR_APPROVED', 'https://youtu.be/x', 1000, 8_000),
+    ]);
+    const pub = publicReport(full);
+    expect(Object.keys(pub.summary).sort()).toEqual(
+      ['clicks', 'cpm', 'creators', 'likes', 'spent', 'videos', 'views'].sort(),
+    );
+    expect(Object.keys(pub.items[0]).sort()).toEqual(
+      [
+        'approvedAt',
+        'clicks',
+        'creator',
+        'likes',
+        'platform',
+        'videoUrl',
+        'views',
+      ].sort(),
+    );
+    expect(pub.summary.spent).toBe(full.summary.spent);
+  });
+
+  it('ссылка — на сайте; без WEB_URL или токена — нет', () => {
+    const before = process.env.WEB_URL;
+    process.env.WEB_URL = 'https://web.example/';
+    expect(shareLink('abc')).toBe('https://web.example/share/abc');
+    expect(shareLink(null)).toBeNull();
+    delete process.env.WEB_URL;
+    expect(shareLink('abc')).toBeNull();
+    process.env.WEB_URL = before;
   });
 });
 

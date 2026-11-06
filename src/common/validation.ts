@@ -17,6 +17,9 @@ export const MAX_DEADLINE_DAYS = 365;
 /** Примеры роликов в заказе: меньше трёх — потом вопросы, какой ролик нужен. */
 export const MIN_EXAMPLES = 3;
 export const MAX_EXAMPLES = 10;
+/** Требования к ролику — пунктами, по желанию; каждый — короткая строка. */
+export const MAX_REQUIREMENTS = 10;
+export const MAX_REQUIREMENT_LENGTH = 200;
 
 // Ссылка на готовое видео.
 export const VIDEO_URL_RE = /^https?:\/\/\S+$/i;

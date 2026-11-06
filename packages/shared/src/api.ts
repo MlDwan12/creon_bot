@@ -43,12 +43,16 @@ export interface OrderSummary extends VideoFormat {
   description: string;
   /** Ссылка на бриф или материалы к заданию; null — нет. */
   referenceUrl: string | null;
+  /** Требования к ролику пунктами — креатор отмечает их при сдаче. */
+  requirements: string[];
   /** Свою ссылку на товар креатор держит ещё и в шапке профиля — до итога холда. */
   linkInBio: boolean;
   /** Выплата креатору за 1000 просмотров, USDT. */
   cpm: number | null;
   /** Ролик можно сдать, когда он наберёт столько просмотров. */
   minViews: number;
+  /** Больше за один ролик не платим, USDT; null — без лимита. */
+  maxPayout: number | null;
   /** Сколько ещё осталось на выплаты креаторам, USDT — округлено вниз до 100 (точное не показываем). */
   free: number;
   /** Осталось меньше этой суммы (free тогда 0); null — free как есть. */
@@ -116,6 +120,8 @@ export interface MySubmission {
   agreedPayout: number | null;
   /** Холд закончился: итог зафиксирован, деньги можно вывести. */
   finalized: boolean;
+  /** Когда подвели итог холда — с этой даты деньги можно вывести. */
+  finalizedAt: string | null;
   /** Ссылка на товар для описания ролика — путь `/r/<код>` от адреса мини-аппа; null — у заказа нет товара. */
   trackPath: string | null;
   /** VideoFormat — требования к ролику, для самопроверки перед сдачей. */
@@ -124,10 +130,14 @@ export interface MySubmission {
     title: string;
     cpm: number | null;
     minViews: number;
+    /** Больше за ролик не начислят, USDT; null — без лимита. */
+    maxPayout: number | null;
     deadline: string | null;
     status: OrderStatus;
     /** При сдаче — подтвердить, что ссылка стоит в шапке профиля. */
     linkInBio: boolean;
+    /** Требования к ролику пунктами — в самопроверке перед сдачей. */
+    requirements: string[];
   };
 }
 
@@ -137,12 +147,15 @@ export interface MyOrder extends VideoFormat {
   title: string;
   description: string;
   exampleUrls: string[];
+  requirements: string[];
   referenceUrl: string | null;
   targetUrl: string | null;
   linkInBio: boolean;
   /** Весь бюджет, USDT. */
   budget: number;
   minViews: number;
+  /** Больше за один ролик не платим, USDT; null — без лимита. */
+  maxPayout: number | null;
   category: OrderCategory;
   deadline: string | null;
   status: OrderStatus;
@@ -169,6 +182,8 @@ export interface NewOrderInput extends VideoFormat {
   description: string;
   /** Примеры роликов: от 3 до 10 ссылок на ролики площадок. */
   exampleUrls: string[];
+  /** Требования к ролику пунктами, до 10, по желанию. */
+  requirements: string[];
   /** Ссылка на бриф или материалы; null — без ссылки. */
   referenceUrl: string | null;
   /** Страница товара: креаторы ставят в описание ролика свою ссылку на неё, считаем переходы. */
@@ -179,6 +194,8 @@ export interface NewOrderInput extends VideoFormat {
   budget: number;
   /** Порог просмотров для сдачи; null — по умолчанию (250). */
   minViews: number | null;
+  /** Лимит за один ролик, целые USDT, не больше бюджета; null — без лимита. */
+  maxPayout: number | null;
   category: OrderCategory;
   deadlineDays: number | null;
 }
@@ -238,6 +255,8 @@ export interface OrderReport {
   };
   /** Советы, что поправить в заказе. */
   insights: { code: string; text: string }[];
+  /** Публичная ссылка на отчёт; url null — ссылки нет; available — делиться можно (задан адрес сайта). */
+  share: { url: string | null; available: boolean };
   /** Одобренные ролики, больше просмотров — выше. */
   items: {
     id: number;
@@ -250,12 +269,32 @@ export interface OrderReport {
     likes: number | null;
     clicks: number | null;
     rating: number | null;
+    /** Можно оценить: ещё не оценён и модератор не снимал оценку. */
+    rateable: boolean;
     approvedAt: string | null;
   }[];
 }
 
 /** Ответы `/api/mod/*` — см. src/api/moderation.controller.ts. */
 export interface ModQueue {
+  /** Аккаунты соцсетей: открыть ссылку и найти код в описании. */
+  links: {
+    id: number;
+    userId: number;
+    user: string;
+    url: string;
+    code: string;
+    createdAt: string;
+  }[];
+  /** Заявки в заказчики: созвониться и открыть кабинет или отказать. */
+  applications: {
+    id: number;
+    userId: number;
+    user: string;
+    email: string;
+    phone: string | null;
+    createdAt: string;
+  }[];
   orders: {
     id: number;
     title: string;
@@ -282,6 +321,8 @@ export interface ModQueue {
     orderTitle: string;
     creator: string;
     decidedAt: string | null;
+    /** Во время холда площадка не нашла ролик — с этого момента; null — на месте или не проверяли. */
+    goneAt: string | null;
   }[];
   /** Отзывы рекламодателей с текстом — в профиле креатора только после проверки. */
   reviews: {
@@ -393,6 +434,7 @@ export interface ModOrder extends VideoFormat {
   description: string;
   /** Примеры роликов — модератору сами ссылки. */
   exampleUrls: string[];
+  requirements: string[];
   referenceUrl: string | null;
   targetUrl: string | null;
   linkInBio: boolean;
@@ -405,6 +447,8 @@ export interface ModOrder extends VideoFormat {
   minViews: number;
   /** Ставка за 1000 просмотров, USDT; null — ещё не назначена. */
   cpm: number | null;
+  /** Больше за один ролик не платим, USDT; null — без лимита. */
+  maxPayout: number | null;
   category: OrderCategory;
   deadline: string | null;
   status: OrderStatus;
@@ -433,13 +477,18 @@ export interface ModVideo {
   likes: number | null;
   /** Лайки по данным API площадки; null — нет API или автор их скрыл. */
   autoLikes: number | null;
+  /** История просмотров от старых к новым; NOW — сейчас по API (не хранится). */
+  viewHistory: ViewPoint[];
+  /** Сигналы накрутки по истории — см. src/submissions/view-signals.ts. */
+  signals: ViewSignals;
   /**
-   * Чей ролик: verified — посчитан по подключённому аккаунту креатора; inProfile — автор есть в
+   * Чей ролик: verified — посчитан по подключённому аккаунту креатора; byCode — автор — аккаунт,
+   * подтверждённый кодом в описании; inProfile — автор есть в
    * соцсетях профиля, но владение не подтверждено; mismatch — автора нет в профиле;
    * unknown — площадка автора не отдала, сверить вручную.
    */
   author: {
-    status: 'verified' | 'inProfile' | 'mismatch' | 'unknown';
+    status: 'verified' | 'byCode' | 'inProfile' | 'mismatch' | 'unknown';
     viaAccount: boolean;
     /** Аккаунт подключили столько дней назад (меньше 7) — повод проверить; null — давно или не по аккаунту. */
     connectedDaysAgo: number | null;
@@ -456,6 +505,10 @@ export interface ModVideo {
   inflatedBefore: number;
   decidedAt: string | null;
   finalizedAt: string | null;
+  /** Во время холда площадка не нашла ролик — с этого момента; null — на месте или не проверяли. */
+  goneAt: string | null;
+  /** Аккаунты креатора, подтверждённые кодом, — сверить автора там, где его не узнать. */
+  verifiedLinks: string[];
   /** Через сколько дней после одобрения фиксируется итог просмотров. */
   holdDays: number;
   order: {
@@ -464,11 +517,15 @@ export interface ModVideo {
     description: string;
     cpm: number | null;
     minViews: number;
+    /** Лимит на ролик при сдаче, USDT: больше не начислят; null — без лимита. */
+    maxPayout: number | null;
     /** Свободный остаток фонда, USDT. */
     free: number;
     /** Ролик сдан до правки заказа — условия выше прежние, проверять по ним. */
     termsBeforeEdit: boolean;
     exampleUrls: string[];
+    /** Требования при сдаче — из них выбирают нарушенный пункт при отказе. */
+    requirements: string[];
     /** Ссылка креатора должна стоять в шапке профиля; bioLink — какая именно (null — у ролика нет кода). */
     linkInBio: boolean;
     bioLink: string | null;
@@ -514,6 +571,16 @@ export interface ModPayout {
   createdAt: string;
 }
 
+/**
+ * Кабинет заказчика (src/advertisers/advertiser-access.ts): open — открыт; closed — закрыт
+ * модератором (свои заказы только смотреть, повтор — через поддержку); pending — заявка на
+ * рассмотрении; rejected — отказ, новая заявка с retryAt; none — можно подать заявку.
+ */
+export interface AdvertiserAccess {
+  state: 'open' | 'closed' | 'pending' | 'rejected' | 'none';
+  retryAt: string | null;
+}
+
 /** Профиль креатора — см. src/api/profiles.service.ts. */
 export interface CreatorProfile {
   id: number;
@@ -525,8 +592,19 @@ export interface CreatorProfile {
   /** Блокировка — приходит только модератору. */
   /** final — без права обжалования. */
   ban: { at: string; reason: string | null; final: boolean } | null;
+  /** Кабинет заказчика — в своём профиле и модератору; другим null. */
+  advertiser: AdvertiserAccess | null;
   /** Ссылки на соцсети, по порядку; на одной площадке может быть несколько. Чужим — пусто. */
   links: string[];
+  /**
+   * Подтверждение ссылок кодом в описании аккаунта — только в своём профиле (GET /api/profile).
+   * status null — ещё не отправляли.
+   */
+  linkChecks?: {
+    url: string;
+    code: string;
+    status: 'PENDING' | 'VERIFIED' | 'NO_CODE' | null;
+  }[];
   /** Кошелёк USDT (TRC20) для выплат — только в своём профиле и модератору. */
   wallet: string | null;
   /** Сообщения о новых заказах — только в своём профиле и модератору. */
@@ -642,7 +720,12 @@ export type ModeratorActionType =
   | 'PAYOUT_PAID'
   | 'PAYOUT_REJECT'
   | 'USER_BAN'
-  | 'USER_UNBAN';
+  | 'USER_UNBAN'
+  | 'ADVERTISER_OPEN'
+  | 'ADVERTISER_REJECT'
+  | 'ADVERTISER_CLOSE'
+  | 'LINK_VERIFY'
+  | 'LINK_NO_CODE';
 
 export interface ModeratorStats {
   moderatorId: string;
@@ -724,6 +807,8 @@ export interface ModReportGroup {
 /** GET /api/me — кто вошёл (мини-апп и сайт). */
 export interface Me {
   isModerator: boolean;
+  /** Кабинет заказчика: open, closed (свои заказы только смотреть) или null — нет. */
+  advertiser: 'open' | 'closed' | null;
   supportUrl: string | null;
   /** Язык интерфейса: выбранный в профиле или по Telegram; languageChosen — выбран ли вручную. */
   language: 'ru' | 'en';
@@ -732,4 +817,46 @@ export interface Me {
   cabinet: 'creator' | 'advertiser' | null;
   /** Имя из Telegram; null — не указано. */
   firstName: string | null;
+}
+
+/** Точка истории просмотров ролика — модератору. */
+export interface ViewPoint {
+  views: number;
+  likes: number | null;
+  source: 'SUBMIT' | 'APPROVE' | 'CHECK' | 'FINAL' | 'NOW';
+  at: string;
+}
+
+/** Сигналы накрутки — факты для модератора, решает он. */
+export interface ViewSignals {
+  /** Доля лайков от просмотров по последнему снимку с лайками; null — неизвестно. */
+  likesShare: number | null;
+  lowLikes: boolean;
+  /** При сдаче заявлено почти ровно на порог. */
+  nearThreshold: boolean;
+  /** Резкий рост между соседними снимками. */
+  jumps: { from: number; to: number; at: string }[];
+}
+
+/**
+ * Ответ `GET /api/share/:token` — отчёт для тех, у кого есть ссылка (src/orders/order-report.ts,
+ * publicReport): без бюджета, остатка, воронки, оценок и id креаторов.
+ */
+export interface PublicReport {
+  order: { title: string; status: OrderStatus };
+  summary: Pick<
+    OrderReport['summary'],
+    'spent' | 'views' | 'likes' | 'clicks' | 'videos' | 'creators' | 'cpm'
+  >;
+  platforms: OrderReport['platforms'];
+  items: Pick<
+    OrderReport['items'][number],
+    | 'videoUrl'
+    | 'platform'
+    | 'creator'
+    | 'views'
+    | 'likes'
+    | 'clicks'
+    | 'approvedAt'
+  >[];
 }

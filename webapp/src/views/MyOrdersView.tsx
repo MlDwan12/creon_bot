@@ -5,6 +5,9 @@ import { fetchMyOrders, type MyOrder } from '../api';
 import EmptyState from '../components/EmptyState';
 import LoadState from '../components/LoadState';
 import MyOrderCard from '../components/MyOrderCard';
+import SupportLink from '../components/SupportLink';
+import { advertiserCabinet } from '../role';
+import { useStore } from '../store';
 import s from './MyOrdersView.module.css';
 
 export default function MyOrdersView() {
@@ -12,6 +15,8 @@ export default function MyOrdersView() {
   const [orders, setOrders] = useState<MyOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  /** Кабинет закрыт модератором: свои заказы только смотреть, новых нет. */
+  const closed = useStore(advertiserCabinet) === 'closed';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -29,6 +34,13 @@ export default function MyOrdersView() {
   return (
     <main className={s.page}>
       <h1>{t('myOrders.title')}</h1>
+      {closed && (
+        <section className={s.closed} role="status">
+          <strong>{t('apply.closedTitle')}</strong>
+          <p>{t('apply.closedText')}</p>
+          <SupportLink />
+        </section>
+      )}
 
       {loading || error ? (
         <LoadState error={error} onRetry={load} />
@@ -52,14 +64,16 @@ export default function MyOrdersView() {
               </svg>
             }
           >
-            <Link to="/my-orders/new" className="main-button">
-              {t('myOrders.place')}
-            </Link>
+            {!closed && (
+              <Link to="/my-orders/new" className="main-button">
+                {t('myOrders.place')}
+              </Link>
+            )}
           </EmptyState>
         )
       )}
       {/* главное действие кабинета — крупно и первым, пока заказы есть */}
-      {orders.length > 0 && (
+      {orders.length > 0 && !closed && (
         <Link to="/my-orders/new" className={`main-button ${s.place}`}>
           <svg
             width="20"

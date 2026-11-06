@@ -157,6 +157,14 @@ export function OrderReview({
               <span>Порог</span>
               <span>от {formatViews(order.minViews)} просмотров</span>
             </div>
+            <div className={s.row}>
+              <span>Лимит за ролик</span>
+              <span>
+                {order.maxPayout !== null
+                  ? formatMoney(order.maxPayout)
+                  : 'без лимита'}
+              </span>
+            </div>
             {order.cpm !== null && (
               <div className={s.row}>
                 <span>Ставка</span>
@@ -177,6 +185,16 @@ export function OrderReview({
               <div className={s.row}>
                 <span>Ролик</span>
                 <span>{videoFormat}</span>
+              </div>
+            )}
+            {order.requirements.length > 0 && (
+              <div className={s.row}>
+                <span>Требования</span>
+                <ul>
+                  {order.requirements.map((r) => (
+                    <li key={r}>{r}</li>
+                  ))}
+                </ul>
               </div>
             )}
           </section>

@@ -166,5 +166,36 @@ export function createModApi(request: Requester) {
 
     unbanUser: (userId: number) =>
       request<{ ok: true }>('POST', `/api/mod/users/${userId}/unban`),
+
+    approveApplication: (id: number) =>
+      request<{ ok: true }>(
+        'POST',
+        `/api/mod/advertiser-applications/${id}/approve`,
+      ),
+
+    /** `comment` — заметка для команды, пользователь её не видит. */
+    rejectApplication: (id: number, comment: string) =>
+      request<{ ok: true }>(
+        'POST',
+        `/api/mod/advertiser-applications/${id}/reject`,
+        { comment },
+      ),
+
+    /** Аккаунт соцсети: код в описании найден (`found`) или нет. */
+    decideLink: (id: number, found: boolean) =>
+      request<{ ok: true }>(
+        'POST',
+        `/api/mod/link-verifications/${id}/${found ? 'verify' : 'no-code'}`,
+      ),
+
+    /** Открыть кабинет заказчика без заявки или вернуть закрытый. */
+    openAdvertiser: (userId: number) =>
+      request<{ ok: true }>('POST', `/api/mod/users/${userId}/advertiser/open`),
+
+    closeAdvertiser: (userId: number) =>
+      request<{ ok: true }>(
+        'POST',
+        `/api/mod/users/${userId}/advertiser/close`,
+      ),
   };
 }

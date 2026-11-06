@@ -66,6 +66,14 @@ export function createCreatorApi(request: Requester) {
         bioLinkConfirmed,
       }),
 
+    /** Просмотры по API до сдачи; null — площадку не считаем или API не ответило. */
+    previewViews: (submissionId: number, videoUrl: string) =>
+      request<{ views: number | null }>(
+        'POST',
+        `/api/submissions/${submissionId}/views`,
+        { videoUrl },
+      ),
+
     fetchBalance: () => request<Balance>('GET', '/api/balance'),
 
     requestPayout: (amount: number) =>
@@ -73,12 +81,23 @@ export function createCreatorApi(request: Requester) {
 
     fetchMyProfile: () => request<CreatorProfile>('GET', '/api/profile'),
 
+    /** Заявка «Стать заказчиком»: почта обязательна, телефон — по желанию (пусто — без него). */
+    applyAdvertiser: (email: string, phone: string) =>
+      request<{ ok: true }>('POST', '/api/advertiser/application', {
+        email,
+        phone,
+      }),
+
     /** Профиль креатора; модератору — с блокировкой, кошельком и ссылками. */
     fetchCreator: (id: number) =>
       request<CreatorProfile>('GET', `/api/creators/${id}`),
 
     updateProfileLinks: (links: string[]) =>
       request<{ ok: true }>('PUT', '/api/profile/links', { links }),
+
+    /** «Код добавлен» — ссылка из профиля уходит модератору сверить код в описании аккаунта. */
+    verifyProfileLink: (url: string) =>
+      request<{ ok: true }>('POST', '/api/profile/links/verify', { url }),
 
     updateNotifications: (newOrders: boolean) =>
       request<{ ok: true }>('PUT', '/api/profile/notifications', { newOrders }),

@@ -34,7 +34,7 @@
     "@opentelemetry/sdk-metrics": "^2.12.0",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
-    "@sentry/nestjs": "^11.7.0",
+    "@sentry/nestjs": "^11.11.0",
     "i18next": "^26.4.4",
     "nestjs-telegraf": "^2.9.1",
     "reflect-metadata": "^0.2.2",
@@ -84,5 +84,10 @@
     "moduleNameMapper": {
       "^@nestjs/config$": "<rootDir>/../test/nestjs-config.stub.ts"
     }
+  },
+  "resolutions": {
+    "multer": "^2.5.0",
+    "body-parser": "^2.4.0",
+    "qs": "^6.16.1"
   }
 }

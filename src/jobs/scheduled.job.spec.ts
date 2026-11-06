@@ -7,7 +7,12 @@ import type { ViewCounterService } from '../submissions/view-counter.service';
 import { ScheduledJob } from './scheduled.job';
 
 describe('итог холда без модератора', () => {
-  it('ролики заблокированного креатора не выпускает — их решает модератор', async () => {
+  it('ролики заблокированного и по заказам со ссылкой в шапке не выпускает — их решает модератор', async () => {
+    const order = (linkInBio: boolean) => ({
+      linkInBio,
+      editedAt: null,
+      prevTerms: null,
+    });
     const due = [
       {
         id: 1,
@@ -15,6 +20,9 @@ describe('итог холда без модератора', () => {
         creatorId: 1,
         views: 1,
         creator: { bannedAt: null },
+        order: order(false),
+        terms: null,
+        submittedAt: null,
       },
       {
         id: 2,
@@ -22,6 +30,30 @@ describe('итог холда без модератора', () => {
         creatorId: 2,
         views: 1,
         creator: { bannedAt: new Date() },
+        order: order(false),
+        terms: null,
+        submittedAt: null,
+      },
+      {
+        id: 3,
+        videoUrl: 'https://youtu.be/ccccccccccc',
+        creatorId: 3,
+        views: 1,
+        creator: { bannedAt: null },
+        order: order(true),
+        terms: null,
+        submittedAt: null,
+      },
+      // ссылку убрали из заказа правкой после сдачи — ролик сдан на условиях со ссылкой
+      {
+        id: 4,
+        videoUrl: 'https://youtu.be/ddddddddddd',
+        creatorId: 4,
+        views: 1,
+        creator: { bannedAt: null },
+        order: order(false),
+        terms: { linkInBio: true },
+        submittedAt: null,
       },
     ];
     const finalizeViews = jest.fn(() => Promise.resolve({}));
@@ -48,5 +80,46 @@ describe('итог холда без модератора', () => {
     ).finalizeAutomatic();
 
     expect(finalizeViews.mock.calls.map((c: unknown[]) => c[0])).toEqual([1]);
+  });
+
+  it('проверка на месте: посчитан — снимок, не нашли — пометка и уведомление, сбой API — пропуск', async () => {
+    const url = (n: number) => `https://youtu.be/${String(n).repeat(11)}`;
+    const due = [1, 2, 3].map((id) => ({
+      id,
+      videoUrl: url(id),
+      creatorId: id,
+    }));
+    const recordPresence = jest.fn((id: number) =>
+      Promise.resolve(id === 2 ? { id } : null),
+    );
+    const publicationGone = jest.fn();
+    const job = new ScheduledJob(
+      {} as PrismaService,
+      {} as OrdersService,
+      {
+        listPresenceDue: () => Promise.resolve(due),
+        recordPresence,
+      } as unknown as SubmissionsService,
+      { publicationGone } as unknown as NotificationsService,
+      {} as PayoutsService,
+      {
+        isAutomatic: () => true,
+        fetchViews: (_: unknown, { gone }: { gone: Set<string> }) => {
+          gone.add(url(2));
+          // ролик 3 — API не ответило: ни в просмотрах, ни в gone
+          return Promise.resolve(new Map([[url(1), { views: 10, likes: 1 }]]));
+        },
+      } as unknown as ViewCounterService,
+    );
+
+    await (
+      job as unknown as { checkPresence(): Promise<void> }
+    ).checkPresence();
+
+    expect(recordPresence.mock.calls).toEqual([
+      [1, { views: 10, likes: 1 }],
+      [2, null],
+    ]);
+    expect(publicationGone).toHaveBeenCalledTimes(1);
   });
 });

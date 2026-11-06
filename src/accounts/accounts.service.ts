@@ -210,6 +210,13 @@ export class AccountsService {
       pending.expiresAt.getTime() < Date.now()
     )
       throw new BadRequestException(tr('errors.oauthExpired'));
+    // вход на площадке начали до бана — подключение после него не сохраняем
+    const owner = await this.prisma.user.findUnique({
+      where: { id: pending.userId },
+      select: { bannedAt: true },
+    });
+    if (!owner || owner.bannedAt)
+      throw new ForbiddenException(tr('errors.banned'));
     const account = pending.account as unknown as ReturnType<
       AccountsService['encrypted']
     > & { label: string | null };

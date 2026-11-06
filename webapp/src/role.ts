@@ -58,10 +58,26 @@ export const role = createStore<Role | undefined>(readLocal());
  */
 export const moderator = createStore(false);
 
+/**
+ * Кабинет заказчика: open — открыт модератором; closed — закрыт (свои заказы только смотреть);
+ * null — нет, вместо кабинета — заявка «Стать заказчиком» в профиле. Это только навигация:
+ * создавать и править заказы без открытого кабинета не даёт бэкенд (AdvertiserGuard).
+ */
+export const advertiserCabinet = createStore<'open' | 'closed' | null>(null);
+
+/** Экран заявки «Стать заказчиком» — сюда ведут экраны заказчика, пока кабинета нет. */
+export const APPLY_PATH = '/profile/advertiser';
+
 /** Кабинет с сервера главнее копии на устройстве (выбран на другом устройстве). */
 export const roleReady: Promise<void> = fetchMe()
-  .then(({ cabinet, isModerator }) => {
+  .then(({ cabinet, isModerator, advertiser }) => {
     moderator.set(isModerator);
+    advertiserCabinet.set(advertiser);
+    // кабинет заказчика закрыт или ещё не открыт — остаёмся креатором
+    if (cabinet === 'advertiser' && !advertiser) {
+      setRole('creator');
+      return;
+    }
     // выбор не дошёл до сервера (сбой сети) — досохраняем
     if (!cabinet) {
       const r = role.get();

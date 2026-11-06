@@ -1,6 +1,14 @@
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Navigate, NavLink, Outlet, useNavigate } from 'react-router';
-import { updateCabinet } from './api';
+import {
+  Link,
+  Navigate,
+  NavLink,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from 'react-router';
+import { APPLIED_EVENT, fetchMyProfile, updateCabinet } from './api';
 import { Catalog } from './creator/Catalog';
 import { Logo } from './Login';
 import { useSession } from './session';
@@ -20,6 +28,7 @@ const MOD_NAV = [
 ];
 const ADVERTISER_NAV = [
   { to: '/my-orders', label: 'tabs.myOrders' },
+  // при закрытом кабинете пункта нет (Shell убирает его)
   { to: '/my-orders/new', label: 'createOrder.titleNew' },
   { to: '/help', label: 'tabs.help' },
   { to: '/account', label: 'tabs.profile' },
@@ -31,19 +40,80 @@ const CREATOR_NAV = [
   { to: '/learn', label: 'tabs.learn' },
   { to: '/profile', label: 'tabs.profile' },
 ];
+/** Страница заявки «Стать заказчиком» — как в мини-аппе (webapp/src/role.ts, APPLY_PATH). */
+export const APPLY_PATH = '/profile/advertiser';
+
+/** Экран кабинета заказчика: без кабинета ведём на заявку. */
+const isAdvertiserPath = (path: string) =>
+  /^\/(my-orders|help|account)(\/|$)/.test(path);
+
 /** Куда вести после выбора кабинета. */
 const CABINET_HOME: Record<Cabinet, string> = {
   advertiser: '/my-orders',
   creator: '/',
 };
 
-/** Каркас после входа: боковая панель (кабинет, разделы, кто вошёл, выход) и экран раздела справа. */
+/** Раздел меню для открытого адреса: точное совпадение или самый длинный префикс («/» — только сам). */
+function currentItem(items: { to: string; label: string }[], path: string) {
+  return items
+    .filter(
+      (i) => path === i.to || (i.to !== '/' && path.startsWith(`${i.to}/`)),
+    )
+    .sort((a, b) => b.to.length - a.to.length)[0];
+}
+
+/**
+ * Каркас после входа: боковая панель (кабинет, разделы, кто вошёл, выход) и экран раздела справа.
+ * На телефоне панель — меню под кнопкой в тонкой полосе сверху: иначе она занимала бы треть экрана.
+ */
 export function Shell() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { me, setMe, logout } = useSession();
-  const cabinet: Cabinet = me.cabinet ?? 'creator';
+  // кабинет заказчика открывает модератор (me.advertiser); без него — только кабинет креатора
+  const cabinet: Cabinet = (me.advertiser && me.cabinet) || 'creator';
+  // заявка на рассмотрении — метка в меню; /api/me про заявки не знает, спрашиваем профиль
+  const [pending, setPending] = useState(false);
+  useEffect(() => {
+    if (me.isModerator || me.advertiser) return;
+    const check = () =>
+      fetchMyProfile().then(
+        (p) => setPending(p.advertiser?.state === 'pending'),
+        () => {},
+      );
+    check();
+    window.addEventListener(APPLIED_EVENT, check);
+    return () => window.removeEventListener(APPLIED_EVENT, check);
+  }, [me.isModerator, me.advertiser]);
   const role = me.isModerator ? t('web.moderator') : t(`web.${cabinet}`);
+  const [menuOpen, setMenuOpen] = useState(false);
+  // перешли в другой раздел — меню закрываем
+  useEffect(() => setMenuOpen(false), [pathname]);
+  // открыли меню — фокус на первый пункт: с клавиатуры и в читалке экрана сразу внутри меню
+  const menuRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (menuOpen)
+      menuRef.current?.querySelector<HTMLElement>('a, button')?.focus();
+  }, [menuOpen]);
+  function closeMenu() {
+    setMenuOpen(false);
+    menuButtonRef.current?.focus();
+  }
+
+  const items = me.isModerator
+    ? MOD_NAV
+    : (cabinet === 'advertiser' ? ADVERTISER_NAV : CREATOR_NAV).map((i) => ({
+        ...i,
+        label: t(i.label),
+      }));
+  const section =
+    pathname === '/support'
+      ? t('common.support')
+      : pathname === APPLY_PATH
+        ? t('apply.title')
+        : (currentItem(items, pathname)?.label ?? 'Fixum');
 
   function pickCabinet(c: Cabinet) {
     setMe({ ...me, cabinet: c });
@@ -52,11 +122,80 @@ export function Shell() {
     void navigate(CABINET_HOME[c]);
   }
 
+  // Кабинета заказчика нет — его экраны ведут на заявку (создать заказ не даст и API).
+  if (!me.isModerator && !me.advertiser && isAdvertiserPath(pathname))
+    return <Navigate to={APPLY_PATH} replace />;
+  // кабинет закрыт — заказы только смотреть: форму заказа не открываем
+  if (
+    me.advertiser === 'closed' &&
+    /^\/my-orders\/(new|\d+\/edit)$/.test(pathname)
+  )
+    return <Navigate to="/my-orders" replace />;
+
   return (
     <div className={s.layout}>
-      <aside className={s.nav}>
+      <header className={s.bar}>
+        <Link to="/" className={s.barLogo} aria-label={t('web.home')}>
+          <span aria-hidden="true">F</span>
+        </Link>
+        <span className={s.barTitle}>{section}</span>
+        <button
+          type="button"
+          ref={menuButtonRef}
+          className={s.menuButton}
+          aria-expanded={menuOpen}
+          aria-controls="site-menu"
+          onClick={() => setMenuOpen(!menuOpen)}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path
+              d={menuOpen ? 'M5 5l10 10M15 5L5 15' : 'M3 6h14M3 10h14M3 14h14'}
+            />
+          </svg>
+          {menuOpen ? t('web.menuClose') : t('web.menu')}
+        </button>
+      </header>
+      {menuOpen && (
+        <div
+          className={s.scrim}
+          aria-hidden="true"
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
+      <aside
+        id="site-menu"
+        ref={menuRef}
+        className={`${s.nav} ${menuOpen ? s.navOpen : ''}`}
+        onKeyDown={(e) => menuOpen && e.key === 'Escape' && closeMenu()}
+        // Tab увёл фокус из меню на страницу под затемнением — меню закрываем
+        onBlur={(e) => {
+          const to = e.relatedTarget as Node | null;
+          if (
+            menuOpen &&
+            to &&
+            !menuRef.current?.contains(to) &&
+            to !== menuButtonRef.current
+          )
+            setMenuOpen(false);
+        }}
+        // нажали раздел, где уже находимся, — адрес тот же, закрываем сами
+        onClick={(e) =>
+          (e.target as HTMLElement).closest('a') && setMenuOpen(false)
+        }
+      >
         <div className={s.head}>
-          <Logo />
+          <Link to="/" className={s.logoLink} aria-label={t('web.home')}>
+            <Logo />
+          </Link>
         </div>
         {me.isModerator ? (
           <nav aria-label={t('tabs.aria')} className={s.links}>
@@ -68,30 +207,58 @@ export function Shell() {
           </nav>
         ) : (
           <>
-            <div
-              role="group"
-              aria-label={t('web.cabinet')}
-              className={s.switch}
-            >
-              {(['creator', 'advertiser'] as const).map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  aria-pressed={cabinet === c}
-                  onClick={() => pickCabinet(c)}
-                >
-                  {t(`web.${c}`)}
-                </button>
-              ))}
-            </div>
+            {me.advertiser ? (
+              <div
+                role="group"
+                aria-label={t('web.cabinet')}
+                className={s.switch}
+              >
+                {(['creator', 'advertiser'] as const).map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    aria-pressed={cabinet === c}
+                    onClick={() => pickCabinet(c)}
+                  >
+                    {t(`web.${c}`)}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              // вместо переключателя — заявка: кабинет заказчика открывает команда после созвона
+              <NavLink to={APPLY_PATH} className={s.apply}>
+                {pending ? (
+                  <>
+                    <span className={s.applyTitle}>
+                      {t('apply.title')}
+                      <span className={s.applyBadge}>
+                        {t('apply.pendingBadge')}
+                      </span>
+                    </span>
+                    <span className={s.applyHint}>
+                      {t('apply.pendingHint')}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className={s.applyHint}>{t('apply.navHint')}</span>
+                    <span className={s.applyCta}>{t('apply.title')} ›</span>
+                  </>
+                )}
+              </NavLink>
+            )}
             <nav aria-label={t('tabs.aria')} className={s.links}>
-              {(cabinet === 'advertiser' ? ADVERTISER_NAV : CREATOR_NAV).map(
-                (item) => (
-                  <NavLink key={item.to} to={item.to} end>
-                    {t(item.label)}
-                  </NavLink>
-                ),
-              )}
+              {(cabinet === 'advertiser'
+                ? ADVERTISER_NAV.filter(
+                    (i) =>
+                      me.advertiser === 'open' || i.to !== '/my-orders/new',
+                  )
+                : CREATOR_NAV
+              ).map((item) => (
+                <NavLink key={item.to} to={item.to} end>
+                  {t(item.label)}
+                </NavLink>
+              ))}
             </nav>
           </>
         )}
@@ -116,7 +283,10 @@ export function Shell() {
         </div>
       </aside>
       <main className={s.main}>
-        <Outlet />
+        {/* страницы кабинетов грузятся при первом переходе (router.tsx) — доли секунды, без заглушки */}
+        <Suspense fallback={null}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   );
@@ -126,6 +296,7 @@ export function Shell() {
 export function Home() {
   const { me } = useSession();
   if (me.isModerator) return <Navigate to="/mod" replace />;
-  if (me.cabinet === 'advertiser') return <Navigate to="/my-orders" replace />;
+  if (me.advertiser && me.cabinet === 'advertiser')
+    return <Navigate to="/my-orders" replace />;
   return <Catalog />;
 }

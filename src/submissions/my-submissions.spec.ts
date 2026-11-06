@@ -12,6 +12,9 @@ const order = (id: number): Order => ({
   feePercent: 20,
   cpmMinor: 15_000,
   minViews: 250,
+  maxPayoutMinor: null,
+  requirements: [],
+  shareToken: null,
   minDurationSec: null,
   maxDurationSec: null,
   orientation: null,
@@ -57,9 +60,12 @@ const submission = (
   payoutMinor: 0,
   agreedPayoutMinor: null,
   finalizedAt: null,
+  goneAt: null,
+  presenceCheckedAt: null,
   rating: null,
   review: null,
   reviewQueuedAt: null,
+  reviewRemovedAt: null,
   portfolioAllowed: false,
   createdAt: new Date(id * 1000),
   submittedAt: null,
@@ -161,6 +167,8 @@ describe('toMySubmissions — холд', () => {
     ]);
     expect(held.holdEndsAt).toEqual(new Date('2026-10-25T10:00:00Z'));
     expect(final.holdEndsAt).toBeNull();
+    expect(final.finalizedAt).toEqual(new Date('2026-10-25T10:00:00Z'));
+    expect(held.finalizedAt).toBeNull();
     expect(onReview.holdEndsAt).toBeNull();
   });
 });

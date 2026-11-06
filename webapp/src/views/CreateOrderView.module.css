@@ -319,3 +319,16 @@
   width: 100%;
   margin-bottom: 6px;
 }
+
+/* калькулятор «примерно получится» под бюджетом */
+.estimate {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.estimate strong {
+  font-size: 17px;
+}

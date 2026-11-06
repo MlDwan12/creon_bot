@@ -10,6 +10,8 @@ import {
   MAX_BUDGET,
   MAX_CPM,
   MAX_EXAMPLES,
+  MAX_REQUIREMENTS,
+  MAX_REQUIREMENT_LENGTH,
   MIN_BUDGET,
   MIN_EXAMPLES,
   MAX_VIEWS,
@@ -65,6 +67,7 @@ export function parseOrderInput(body: unknown) {
   }
 
   const exampleUrls = parseExamples(b.exampleUrls);
+  const requirements = parseRequirements(b.requirements);
   const referenceUrl = optionalUrl(
     b.referenceUrl,
     tr('errors.referenceWhat'),
@@ -97,6 +100,16 @@ export function parseOrderInput(body: unknown) {
     );
 
   const minViews = parseViews(b.minViews, tr('errors.thresholdWhat'));
+
+  // Лимит за один ролик, целыми USDT, по желанию: пусто — без лимита. Не больше бюджета.
+  const maxPayout = b.maxPayout ?? null;
+  if (
+    maxPayout !== null &&
+    (!Number.isInteger(maxPayout) ||
+      (maxPayout as number) < 1 ||
+      (maxPayout as number) > (budget as number))
+  )
+    throw new BadRequestException(tr('errors.maxPayoutRange'));
 
   const minDurationSec = durationSec(b.minDurationSec);
   const maxDurationSec = durationSec(b.maxDurationSec);
@@ -142,11 +155,13 @@ export function parseOrderInput(body: unknown) {
     title,
     description,
     exampleUrls,
+    requirements,
     referenceUrl,
     targetUrl,
     linkInBio,
     budgetMinor: toMinor(budget as number),
     minViews,
+    maxPayoutMinor: maxPayout === null ? null : toMinor(maxPayout as number),
     minDurationSec,
     maxDurationSec,
     orientation,
@@ -154,6 +169,26 @@ export function parseOrderInput(body: unknown) {
     category,
     deadline,
   };
+}
+
+/**
+ * Требования к ролику: до MAX_REQUIREMENTS пунктов, пустые строки отбрасываются, повторы — тоже.
+ * Контакты в них, как и в брифе, видит модератор (contacts в карточке заказа).
+ */
+function parseRequirements(value: unknown): string[] {
+  if (value === undefined) return [];
+  const list = Array.isArray(value)
+    ? [...new Set(value.map((v) => text(v)).filter(isMeaningfulText))]
+    : null;
+  if (!list || list.length > MAX_REQUIREMENTS)
+    throw new BadRequestException(
+      tr('errors.requirementsCount', { max: MAX_REQUIREMENTS }),
+    );
+  if (list.some((r) => r.length > MAX_REQUIREMENT_LENGTH))
+    throw new BadRequestException(
+      tr('errors.requirementTooLong', { max: MAX_REQUIREMENT_LENGTH }),
+    );
+  return list;
 }
 
 /**
@@ -204,9 +239,18 @@ function optionalUrl(value: unknown, what: string, instead: string) {
   if (url === undefined) return undefined;
   if (!VIDEO_URL_RE.test(url) || url.length > MAX_URL_LENGTH)
     throw new BadRequestException(tr('errors.urlScheme', { what }));
-  if (findExactContacts(url).length)
+  // и по домену, как его поймёт браузер: «t。me» в адресе — это t.me
+  if (findExactContacts(url).length || findExactContacts(hostOf(url)).length)
     throw new BadRequestException(tr('errors.urlIsContact', { instead }));
   return url;
+}
+
+function hostOf(url: string) {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
 }
 
 /** Требования к ролику из заказа — для ответов API, где поля перечислены явно. */
@@ -307,11 +351,13 @@ export function parseOrderEdit(body: unknown) {
     title: input.title,
     description: input.description,
     exampleUrls: input.exampleUrls,
+    requirements: input.requirements,
     referenceUrl: input.referenceUrl ?? null,
     targetUrl: input.targetUrl ?? null,
     linkInBio: input.linkInBio,
     budgetMinor: input.budgetMinor,
     minViews: input.minViews,
+    maxPayoutMinor: input.maxPayoutMinor,
     minDurationSec: input.minDurationSec,
     maxDurationSec: input.maxDurationSec,
     orientation: input.orientation,

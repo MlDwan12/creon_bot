@@ -88,16 +88,18 @@ export default function OrderDetailView() {
     .filter((v) => v >= min)
     .sort((a, b) => a - b);
   const views = calcViews ?? presets[Math.min(2, presets.length - 1)];
-  /** Выплата за просмотры по ставке, но не больше свободного остатка бюджета. */
+  /** Выплата за просмотры по ставке, но не больше лимита на ролик и свободного остатка бюджета. */
   const earning =
     order.cpm && views
       ? // остаток округлён вниз (меньше 100 — freeUnder): не обещаем больше, чем точно есть
         Math.min(
           order.freeUnder ?? order.free,
+          order.maxPayout ?? Infinity,
           Math.round((views / 1000) * order.cpm * 100) / 100,
         )
       : 0;
-  const formatParts = videoFormatParts(order);
+  // формат ролика и требования заказчика пунктами — одним списком под заданием
+  const formatParts = [...videoFormatParts(order), ...order.requirements];
 
   return (
     <main className={s.detail}>
@@ -177,6 +179,12 @@ export default function OrderDetailView() {
             {t('order.fromViews', { views: formatViews(order.minViews) })}
           </span>
         </div>
+        {order.maxPayout !== null && (
+          <div className={s.row}>
+            <span>{t('order.maxPayout')}</span>
+            <span className={s.value}>{formatMoney(order.maxPayout)}</span>
+          </div>
+        )}
         {order.deadline && (
           <div className={s.row}>
             <span>{t('order.dueBy')}</span>
@@ -262,7 +270,7 @@ export default function OrderDetailView() {
       )}
       <SupportLink
         label={t('order.supportLabel', { id: order.id })}
-        about={t('order.supportAbout', { id: order.id, title: order.title })}
+        about={{ orderId: order.id }}
       />
 
       {justClaimed && (
