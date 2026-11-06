@@ -163,7 +163,7 @@ export function Profile() {
     <div className={s.page}>
       <header className={s.check}>
         <Avatar userId={profile.id} name={profile.name} size={64} />
-        <span>
+        <span className={s.break}>
           <span className={`${s.hint} ${s.block}`}>
             {own ? t('profile.mine') : t('profile.creator')}
           </span>

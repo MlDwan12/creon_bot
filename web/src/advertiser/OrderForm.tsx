@@ -669,7 +669,7 @@ export function OrderForm() {
 
             <section className={s.card}>
               <h2>{t('createOrder.blockBudget')}</h2>
-              <div className={s.inputRow}>
+              <div className={s.fieldGrid}>
                 <label className={s.field}>
                   {t('createOrder.budget')}
                   <input

@@ -200,7 +200,9 @@ export function Balance() {
                 {held.map((sub) => (
                   <tr key={sub.id}>
                     <td>
-                      <Link to="/submissions">{sub.order.title}</Link>
+                      <Link className={s.cellLink} to="/submissions">
+                        {sub.order.title}
+                      </Link>
                       {sub.attempt > 1 && (
                         <small>
                           {t('submissionCard.attempt', { n: sub.attempt })}
