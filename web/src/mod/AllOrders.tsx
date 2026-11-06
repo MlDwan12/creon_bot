@@ -71,7 +71,9 @@ export function AllOrders() {
               {list.items.map((o) => (
                 <tr key={o.id}>
                   <td>
-                    <Link to={`/mod/orders/${o.id}`}>{o.title}</Link>
+                    <Link className={s.cellLink} to={`/mod/orders/${o.id}`}>
+                      {o.title}
+                    </Link>
                     <small>#{o.id}</small>
                   </td>
                   <td data-label="Рекламодатель">{o.advertiser}</td>

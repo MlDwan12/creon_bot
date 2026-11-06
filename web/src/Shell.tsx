@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Link,
@@ -283,7 +283,10 @@ export function Shell() {
         </div>
       </aside>
       <main className={s.main}>
-        <Outlet />
+        {/* страницы кабинетов грузятся при первом переходе (router.tsx) — доли секунды, без заглушки */}
+        <Suspense fallback={null}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   );

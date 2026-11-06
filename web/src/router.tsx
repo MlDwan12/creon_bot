@@ -1,29 +1,44 @@
+import { lazy, type ComponentType } from 'react';
 import { createBrowserRouter, Navigate, Outlet } from 'react-router';
-import { Account } from './advertiser/Account';
-import { Help } from './advertiser/Help';
-import { MyOrders } from './advertiser/MyOrders';
-import { OrderForm } from './advertiser/OrderForm';
-import { OrderReport } from './advertiser/OrderReport';
-import { AllOrders } from './mod/AllOrders';
-import { MyCabinet } from './mod/MyCabinet';
-import { OrderPage } from './mod/OrderReview';
-import { Payouts } from './mod/Payouts';
-import { Queue } from './mod/Queue';
-import { Stats } from './mod/Stats';
-import { UserPage } from './mod/UserPage';
-import { Users } from './mod/Users';
-import { VideoPage } from './mod/VideoReview';
-import { WhatWorks } from './mod/WhatWorks';
-import { Apply } from './creator/Apply';
-import { Balance } from './creator/Balance';
-import { Learn } from './creator/Learn';
-import { OrderPage as CreatorOrderPage } from './creator/OrderPage';
-import { Profile } from './creator/Profile';
-import { SubmitVideo } from './creator/SubmitVideo';
-import { Submissions } from './creator/Submissions';
 import { useSession } from './session';
 import { Home, Shell } from './Shell';
 import { Support } from './Support';
+
+/**
+ * Страницы кабинетов грузятся отдельными файлами при первом переходе: креатору не нужен код
+ * модератора, заказчику — креатора. Каталог (главная креатора) — в основной сборке, через Shell.
+ */
+function page<M>(load: () => Promise<M>, name: keyof M) {
+  return lazy(() =>
+    load().then((m) => ({ default: m[name] as ComponentType })),
+  );
+}
+
+const Account = page(() => import('./advertiser/Account'), 'Account');
+const Help = page(() => import('./advertiser/Help'), 'Help');
+const MyOrders = page(() => import('./advertiser/MyOrders'), 'MyOrders');
+const OrderForm = page(() => import('./advertiser/OrderForm'), 'OrderForm');
+const OrderReport = page(
+  () => import('./advertiser/OrderReport'),
+  'OrderReport',
+);
+const AllOrders = page(() => import('./mod/AllOrders'), 'AllOrders');
+const MyCabinet = page(() => import('./mod/MyCabinet'), 'MyCabinet');
+const OrderPage = page(() => import('./mod/OrderReview'), 'OrderPage');
+const Payouts = page(() => import('./mod/Payouts'), 'Payouts');
+const Queue = page(() => import('./mod/Queue'), 'Queue');
+const Stats = page(() => import('./mod/Stats'), 'Stats');
+const UserPage = page(() => import('./mod/UserPage'), 'UserPage');
+const Users = page(() => import('./mod/Users'), 'Users');
+const VideoPage = page(() => import('./mod/VideoReview'), 'VideoPage');
+const WhatWorks = page(() => import('./mod/WhatWorks'), 'WhatWorks');
+const Apply = page(() => import('./creator/Apply'), 'Apply');
+const Balance = page(() => import('./creator/Balance'), 'Balance');
+const Learn = page(() => import('./creator/Learn'), 'Learn');
+const CreatorOrderPage = page(() => import('./creator/OrderPage'), 'OrderPage');
+const Profile = page(() => import('./creator/Profile'), 'Profile');
+const SubmitVideo = page(() => import('./creator/SubmitVideo'), 'SubmitVideo');
+const Submissions = page(() => import('./creator/Submissions'), 'Submissions');
 
 /** Окно модератора — только модераторам (права всё равно проверяет API). */
 function ModOnly() {

@@ -75,7 +75,9 @@ export function Users() {
               {list.items.map((u) => (
                 <tr key={u.id}>
                   <td>
-                    <Link to={`/mod/creators/${u.id}`}>{u.label}</Link>
+                    <Link className={s.cellLink} to={`/mod/creators/${u.id}`}>
+                      {u.label}
+                    </Link>
                     <small>TG {u.telegramId}</small>
                   </td>
                   <td data-label="Креатор">

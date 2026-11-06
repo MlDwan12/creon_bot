@@ -154,6 +154,19 @@
 .row > :last-child {
   font-weight: 700;
   text-align: right;
+  /* значение может быть @ником или адресом без пробелов; подпись слева рвётся только по словам */
+  overflow-wrap: anywhere;
+}
+
+.row > button {
+  flex: none;
+  overflow-wrap: normal;
+}
+
+/* Сплошная строка (адрес, @ник) не текстом ссылки: переносить где угодно, а не распирать ряд */
+.break {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* Плитки с числами */
@@ -241,6 +254,14 @@
 .table th.num {
   text-align: right;
   white-space: nowrap;
+}
+
+/* Ссылка на запись в первой ячейке: на всю ширину ячейки и не ниже 24px — не промахнуться пальцем.
+   Отступ компенсирован полем, строка не выше прежней; текст рядом (TG ID) по-прежнему выделяется. */
+.cell-link {
+  display: block;
+  padding: 4px 0;
+  margin: -4px 0;
 }
 
 .table small {
@@ -740,6 +761,14 @@ details > summary {
 
 .input-row > button {
   flex: none;
+}
+
+/* Несколько полей с длинными подписями: в ряд, пока каждому хватает 180px, иначе — друг под другом */
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 12px;
+  align-items: end;
 }
 
 .block {

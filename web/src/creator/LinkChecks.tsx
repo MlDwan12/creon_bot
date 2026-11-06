@@ -48,7 +48,7 @@ export function LinkChecks({
         return (
           <div key={c.url} className={s.card}>
             <div className={s.row}>
-              <span className={s.small}>{name}</span>
+              <span className={`${s.small} ${s.break}`}>{name}</span>
               {c.status === 'VERIFIED' || c.status === 'PENDING' ? (
                 <span
                   className={`${s.badge} ${c.status === 'VERIFIED' ? s.success : s.warn}`}
