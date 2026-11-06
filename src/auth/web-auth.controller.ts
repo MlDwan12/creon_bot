@@ -8,8 +8,10 @@ import {
   Post,
   Res,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { UsersService } from '../users/users.service';
 import { WebLoginService } from './web-login.service';
@@ -34,9 +36,10 @@ const COOKIE = {
 /**
  * Вход на сайт через Telegram Login Widget: проверяем подпись данных виджета и ставим cookie сессии,
  * дальше все эндпоинты API пускает InitDataGuard — как мини-апп, но по cookie.
- * Лимит запросов — nginx (подделать подпись перебором всё равно нельзя).
+ * Лимит — по IP (пользователя до входа ещё нет): общий 60 в минуту, у входа — 20 в минуту.
  */
 @Controller('api/web')
+@UseGuards(ThrottlerGuard)
 export class WebAuthController {
   constructor(
     private readonly config: ConfigService,
@@ -56,6 +59,7 @@ export class WebAuthController {
   }
 
   @Post('login')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @HttpCode(204)
   async login(
     @Body() body: unknown,
@@ -82,6 +86,7 @@ export class WebAuthController {
 
   /** Вход кодом из бота, шаг 1: одноразовая ссылка на бота (WebLoginService). */
   @Post('login/start')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   startCodeLogin(@Headers('x-fixum-web') web: string | undefined) {
     if (web !== '1') throw new ForbiddenException();
     return this.webLogin.start();
@@ -89,6 +94,7 @@ export class WebAuthController {
 
   /** Шаг 2: код, который бот прислал в Telegram, — ставим ту же сессию, что и вход через виджет. */
   @Post('login/code')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @HttpCode(204)
   async codeLogin(
     @Body() body: { token?: unknown; code?: unknown } | undefined,
