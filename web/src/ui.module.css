@@ -966,3 +966,20 @@ details > summary {
     display: none;
   }
 }
+
+/* Прирост просмотров по дням (статистика заказчика): столбики SVG, подписи — первый и последний день */
+.daily-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+.daily-chart svg {
+  width: 100%;
+  height: 160px;
+  fill: var(--accent);
+}
+.daily-chart figcaption {
+  display: flex;
+  justify-content: space-between;
+}

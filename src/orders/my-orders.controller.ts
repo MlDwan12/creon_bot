@@ -1,3 +1,4 @@
+import { statsCsv } from './advertiser-stats';
 import { tr } from '../i18n/request-lang';
 import {
   BadRequestException,
@@ -9,6 +10,7 @@ import {
   Param,
   Post,
   ParseEnumPipe,
+  ParseIntPipe,
   Put,
   Query,
   Req,
@@ -19,6 +21,7 @@ import { OrderCategory, OrderStatus } from '@prisma/client';
 import { isFrozen } from './order-status';
 import { fromMinor } from '../common/money';
 import { payoutPool } from './budget';
+import { DAY_MS } from './deadline';
 import { NotificationsService } from '../telegram/notifications.service';
 import { Throttle } from '@nestjs/throttler';
 import { OrdersService } from './orders.service';
@@ -88,6 +91,42 @@ export class MyOrdersController {
       deletable: o.stats.deletable,
       createdAt: o.createdAt,
     }));
+  }
+
+  /**
+   * Статистика по всем моим заказам за `days` дней (7 или 30; без параметра — всё время): сводка,
+   * прирост просмотров по дням, заказы, площадки и 10 лучших роликов. Смотреть — и с закрытым кабинетом.
+   */
+  @Get('stats')
+  async stats(
+    @Query('days', new ParseIntPipe({ optional: true })) days: unknown,
+    @Req() req: ApiRequest,
+  ) {
+    const { videos, ...stats } = await this.ordersService.advertiserStats(
+      req.user.id,
+      statsSince(days),
+    );
+    return { ...stats, top: videos.slice(0, 10) };
+  }
+
+  /** Все ролики периода файлом CSV — в чат с ботом, как отчёт заказа. */
+  @Post('stats/csv')
+  @Throttle({ default: { limit: 10, ttl: 60 * 60_000 } })
+  async statsFile(
+    @Query('days', new ParseIntPipe({ optional: true })) days: unknown,
+    @Req() req: ApiRequest,
+  ) {
+    const stats = await this.ordersService.advertiserStats(
+      req.user.id,
+      statsSince(days),
+    );
+    const sent = await this.notifications.sendFile(
+      req.user.telegramId,
+      statsCsv(stats),
+      'fixum-stats.csv',
+    );
+    if (!sent) throw new BadRequestException(tr('errors.fileNotSent'));
+    return { ok: true };
   }
 
   /**
@@ -233,4 +272,12 @@ export class MyOrdersController {
       throw new NotFoundException(tr('errors.orderNotFound'));
     return order;
   }
+}
+
+/** Начало периода статистики: 7 или 30 дней назад; без параметра — всё время. */
+function statsSince(days: unknown) {
+  if (days === undefined) return undefined;
+  if (days !== 7 && days !== 30)
+    throw new BadRequestException('days — 7 или 30');
+  return new Date(Date.now() - days * DAY_MS);
 }

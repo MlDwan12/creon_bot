@@ -1,3 +1,4 @@
+import { buildAdvertiserStats } from './advertiser-stats';
 import { tr, trNum } from '../i18n/request-lang';
 import {
   BadRequestException,
@@ -935,6 +936,28 @@ export class OrdersService {
       funnel,
       insights: orderInsights(order, report, funnel),
     };
+  }
+
+  /** Статистика заказчика по всем заказам за период (src/orders/advertiser-stats.ts). */
+  async advertiserStats(advertiserId: number, since: Date | undefined) {
+    const approvedWhere = {
+      order: { advertiserId },
+      status: SubmissionStatus.MODERATOR_APPROVED,
+    };
+    const [orders, approved, snapshots] = await Promise.all([
+      this.prisma.order.findMany({ where: { advertiserId } }),
+      this.prisma.submission.findMany({
+        where: { ...approvedWhere, decidedAt: since && { gte: since } },
+        include: { creator: true },
+      }),
+      // ponytail: все замеры всех одобренных роликов — их несколько на ролик (холд ~неделя);
+      // станет много — считать прирост в SQL по дням
+      this.prisma.viewSnapshot.findMany({
+        where: { submission: approvedWhere },
+        select: { submissionId: true, views: true, at: true },
+      }),
+    ]);
+    return buildAdvertiserStats(orders, approved, snapshots, since);
   }
 
   /** Открытые заказы, по которым советы ещё не отправляли. */

@@ -162,12 +162,7 @@ export function publicReport(report: Report) {
  * пишет он сам, поэтому ячейки, похожие на формулу (=, +, -, @), экранируем апострофом.
  */
 export function reportCsv(report: Report): string {
-  const cell = (value: string | number) => {
-    const text = String(value);
-    const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
-    return `"${safe.replace(/"/g, '""')}"`;
-  };
-  const rows = [
+  return csvFile([
     [
       tr('errors.csvCreator'),
       tr('errors.csvPlatform'),
@@ -188,6 +183,15 @@ export function reportCsv(report: Report): string {
       i.clicks ?? '',
       i.approvedAt ? i.approvedAt.toISOString().slice(0, 10) : '',
     ]),
-  ];
+  ]);
+}
+
+/** Строки в CSV для Excel (см. выше). */
+export function csvFile(rows: (string | number)[][]): string {
+  const cell = (value: string | number) => {
+    const text = String(value);
+    const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+    return `"${safe.replace(/"/g, '""')}"`;
+  };
   return '﻿' + rows.map((r) => r.map(cell).join(';')).join('\r\n');
 }

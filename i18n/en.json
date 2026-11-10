@@ -12,7 +12,8 @@
     "modMe": "Me",
     "aria": "Sections",
     "help": "How it works",
-    "modPayouts": "Payouts"
+    "modPayouts": "Payouts",
+    "stats": "Statistics"
   },
   "categories": {
     "PRODUCT_REVIEW": "Product review",
@@ -218,50 +219,32 @@
       "take": {
         "title": "How to take an order",
         "text": "Pick a task in “Orders”: check the rate per 1,000 views, the remaining budget and the view threshold. Read the description and video requirements, then tap “Apply”. You have 7 days to publish and submit the video — after that the slot expires.",
-        "keys": [
-          "7 days to submit"
-        ]
+        "keys": ["7 days to submit"]
       },
       "shoot": {
         "title": "How to shoot a video that fits the requirements",
         "text": "Check the orientation, duration and example videos in the order card — shoot in the same spirit. A moderator will reject a video that doesn't meet the requirements.",
-        "keys": [
-          "orientation",
-          "length",
-          "examples"
-        ]
+        "keys": ["orientation", "length", "examples"]
       },
       "submit": {
         "title": "How to submit a video and get paid",
         "text": "Publish the video on your social media. Once it reaches the view threshold, send the link and the current view count in “My videos” — payment for the threshold is reserved right away. A moderator checks the views and credits you for all they see at review — that's the payment for the video; views gained after approval are not paid extra. While a video is under review, you can take the order again and submit the next one. The same video is paid once. Keep the post public: 5 days later we check it's still there, and if it's gone, the payment is cancelled.",
-        "keys": [
-          "threshold reserved",
-          "one video — one payout"
-        ]
+        "keys": ["threshold reserved", "one video — one payout"]
       },
       "timing": {
         "title": "When to submit a video",
         "text": "An order's budget is shared by all creators. When it runs out, the order closes on its own — and videos that weren't submitted in time can no longer be paid. So submit your video as soon as it reaches the view threshold, don't wait for bigger numbers: the moderator counts the views at review time, and you get paid while the order still has budget.",
-        "keys": [
-          "shared budget"
-        ]
+        "keys": ["shared budget"]
       },
       "withdraw": {
         "title": "How to withdraw money",
         "text": "Earnings for videos add up on your balance in USDT: “Profile” → “Balance”. The money for a video shows up right after approval, and you can withdraw it 5 days later, once we check the post is still there — this is the hold. It exists because sometimes a video gets approved and immediately deleted, while the advertiser paid for a placement that no longer exists. “Balance” shows how much is on hold, when the next amount is released, and how much you can withdraw. Add a USDT wallet on the TRC20 network in your profile and request a withdrawal of 10 USDT or more — a manager will send the money to that wallet.",
-        "keys": [
-          "5-day hold",
-          "from 10 USDT",
-          "TRC20"
-        ]
+        "keys": ["5-day hold", "from 10 USDT", "TRC20"]
       },
       "rules": {
         "title": "Platform rules",
         "text": "Don't leave contacts in videos or comments — communication and payments go through Fixum support. Someone else's or re-uploaded videos are not accepted.",
-        "keys": [
-          "no contacts",
-          "your own videos only"
-        ]
+        "keys": ["no contacts", "your own videos only"]
       }
     }
   },
@@ -588,7 +571,6 @@
     "budgetPlaceholder": "from {{min}}",
     "minViews": "Video can be submitted from, views",
     "maxPayout": "Max per video, USDT",
-    "requirements": "Video requirements",
     "requirementsHint": "Optional, one per line. The creator ticks them off before submitting, and a video can only be rejected for a missed item or a general platform rule. Anything not in the requirements or brief is no reason to reject.",
     "requirementPlaceholder": "E.g. mention delivery",
     "requirementN": "Requirement {{n}}",
@@ -846,6 +828,7 @@
     "oauthBackToTelegram": "You can go back to Telegram.",
     "oauthFailedTitle": "Couldn't connect",
     "oauthUnknown": "Something went wrong — try again later",
+    "csvOrder": "Order",
     "csvCreator": "Creator",
     "csvPlatform": "Platform",
     "csvLink": "Link",
@@ -1047,5 +1030,36 @@
       "PENDING": "Under review",
       "VERIFIED": "✓ Verified"
     }
+  },
+  "stats": {
+    "title": "Statistics",
+    "subtitle": "All your orders together: what views you get and where they're cheaper",
+    "periodAria": "Period",
+    "days7": "7 days",
+    "days30": "30 days",
+    "all": "All time",
+    "periodHint": "For videos approved during the period.",
+    "spent": "spent",
+    "clickRate": "clicks per 100 views: {{rate}}%",
+    "daily": "Views by day",
+    "dailyHint": "Growth from daily checks: they run while a video is on hold, and only on platforms where we count views ourselves. There are no checks after the hold, so the chart is approximate; the summary uses the views recorded by the moderator.",
+    "dailyEmpty": "No checks for this period.",
+    "dailyAria": "View growth by day, {{views}} total",
+    "dayViews": "{{date}}: +{{views}}",
+    "orders": "Orders",
+    "order": "Order",
+    "creator": "Creator",
+    "views": "Views",
+    "spentCol": "Spent",
+    "cpm": "Per 1000",
+    "videos": "Videos",
+    "clicks": "Clicks",
+    "sortAria": "Sort",
+    "platforms": "Platforms",
+    "platformCpm": "{{views}} views · {{cpm}} per 1000",
+    "top": "Top videos",
+    "empty": "No approved videos for this period. Pick a longer period or come back when the first videos are in.",
+    "loadError": "Couldn't load statistics",
+    "csv": "All videos for the period as CSV — to the bot chat"
   }
 }
