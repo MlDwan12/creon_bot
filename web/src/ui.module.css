@@ -983,3 +983,34 @@ details > summary {
   display: flex;
   justify-content: space-between;
 }
+
+/* Профиль заказчика: аватар рядом с именем, плитки-ссылки, строки «Ждёт вас» */
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.profile-head h1 {
+  margin: 0;
+}
+.tile-link {
+  color: var(--text);
+  text-decoration: none;
+}
+.tile-link:hover {
+  box-shadow: inset 0 0 0 2px var(--separator);
+}
+.todo-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--separator);
+  color: var(--text);
+  text-decoration: none;
+}
+.todo-row:last-child {
+  border-bottom: none;
+}

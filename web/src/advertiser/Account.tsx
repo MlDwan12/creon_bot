@@ -1,52 +1,137 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchMyOrders, type MyOrder } from '../api';
+import { Link } from 'react-router';
+import {
+  type AdvertiserStats,
+  advertiserTodo,
+  type CreatorProfile,
+  fetchAdvertiserStats,
+  fetchMyOrders,
+  fetchMyProfile,
+  fetchWebConfig,
+  type MyOrder,
+} from '../api';
+import { Avatar } from '../components/Avatar';
 import { LanguagePicker } from '../components/LanguagePicker';
-import { formatViews } from '../format';
+import { formatDate, formatMoney, formatViews } from '../format';
 import { useSession } from '../session';
 import s from '../ui.module.css';
 
-/** Профиль заказчика: сводка по его рекламе и язык (LanguagePicker) — как в мини-аппе (webapp/src/views/AccountView.tsx). */
+/**
+ * Профиль заказчика: кто он, сводка со ссылками в «Статистику» и «Мои заказы», что ждёт его действий,
+ * язык, поддержка и политика — как в мини-аппе (webapp/src/views/AccountView.tsx).
+ */
 export function Account() {
   const { t } = useTranslation();
   const { me } = useSession();
+  const [profile, setProfile] = useState<CreatorProfile>();
   const [orders, setOrders] = useState<MyOrder[]>();
-  // второстепенное: не загрузилось — просто не показываем
+  const [stats, setStats] = useState<AdvertiserStats>();
+  const [privacyUrl, setPrivacyUrl] = useState<string | null>(null);
+  // всё второстепенное: не загрузилось — просто не показываем
   useEffect(() => {
+    fetchMyProfile().then(setProfile, () => {});
     fetchMyOrders().then(setOrders, () => {});
+    fetchAdvertiserStats(undefined).then(setStats, () => {});
+    fetchWebConfig().then(
+      (c) => setPrivacyUrl(c.privacyUrl),
+      () => {},
+    );
   }, []);
 
+  const name = me.firstName ?? t('tabs.profile');
+  const approved = orders?.reduce((n, o) => n + o.approved, 0) ?? 0;
+  const todo = orders ? advertiserTodo(orders) : [];
+
   return (
-    <div className={s.page}>
-      <header>
-        <h1>{me.firstName ?? t('tabs.profile')}</h1>
-        <p className={s.hint}>{t('account.subtitle')}</p>
+    <div className={`${s.page} ${s.narrow}`}>
+      <header className={s.profileHead}>
+        {profile && <Avatar userId={profile.id} name={name} size={56} />}
+        <div>
+          <h1>{name}</h1>
+          <p className={s.hint}>
+            {me.advertiser === 'closed'
+              ? t('account.closed')
+              : me.advertiserSince
+                ? t('account.since', { date: formatDate(me.advertiserSince) })
+                : t('account.subtitle')}
+          </p>
+        </div>
       </header>
 
       {!!orders?.length && (
         <div className={s.tiles}>
-          <div className={s.tile}>
+          <Link to="/stats" className={`${s.tile} ${s.tileLink}`}>
             <strong>
               {formatViews(orders.reduce((n, o) => n + o.views, 0))}
             </strong>
             <span>{t('account.views')}</span>
-          </div>
-          <div className={s.tile}>
+          </Link>
+          {stats && (
+            <>
+              <Link to="/stats" className={`${s.tile} ${s.tileLink}`}>
+                <strong>{formatMoney(stats.summary.spent)}</strong>
+                <span>{t('account.spent')}</span>
+              </Link>
+              <Link to="/stats" className={`${s.tile} ${s.tileLink}`}>
+                <strong>
+                  {stats.summary.cpm === null
+                    ? '—'
+                    : formatMoney(stats.summary.cpm)}
+                </strong>
+                <span>{t('account.perThousand')}</span>
+              </Link>
+            </>
+          )}
+          <Link to="/my-orders" className={`${s.tile} ${s.tileLink}`}>
             <strong>{orders.length}</strong>
             <span>{t('account.orders', { count: orders.length })}</span>
-          </div>
-          <div className={s.tile}>
-            <strong>{orders.reduce((n, o) => n + o.approved, 0)}</strong>
-            <span>
-              {t('account.approved', {
-                count: orders.reduce((n, o) => n + o.approved, 0),
-              })}
-            </span>
-          </div>
+          </Link>
+          <Link to="/my-orders" className={`${s.tile} ${s.tileLink}`}>
+            <strong>{approved}</strong>
+            <span>{t('account.approved', { count: approved })}</span>
+          </Link>
         </div>
       )}
 
+      {todo.length > 0 && (
+        <section className={s.card}>
+          <h2>{t('account.todoTitle')}</h2>
+          {todo.map((item) => (
+            <Link
+              key={`${item.kind}-${item.orderId}`}
+              // оценка — в отчёте заказа, остальное — в списке заказов
+              to={
+                item.kind === 'rate'
+                  ? `/my-orders/${item.orderId}/report`
+                  : '/my-orders'
+              }
+              className={s.todoRow}
+            >
+              <span>
+                {t(`account.todo.${item.kind}`, {
+                  title: item.title,
+                  count: item.count,
+                })}
+              </span>
+              <span aria-hidden="true">›</span>
+            </Link>
+          ))}
+        </section>
+      )}
+
       <LanguagePicker />
+
+      <p className={`${s.hint} ${s.small}`}>{t('account.namesHint')}</p>
+      <p className={`${s.hint} ${s.small}`}>
+        {me.supportUrl && <Link to="/support">{t('common.support')}</Link>}
+        {me.supportUrl && privacyUrl && ' · '}
+        {privacyUrl && (
+          <a href={privacyUrl} target="_blank" rel="noopener noreferrer">
+            {t('catalog.privacy')}
+          </a>
+        )}
+      </p>
     </div>
   );
 }
