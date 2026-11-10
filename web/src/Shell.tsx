@@ -30,6 +30,7 @@ const ADVERTISER_NAV = [
   { to: '/my-orders', label: 'tabs.myOrders' },
   // при закрытом кабинете пункта нет (Shell убирает его)
   { to: '/my-orders/new', label: 'createOrder.titleNew' },
+  { to: '/stats', label: 'tabs.stats' },
   { to: '/help', label: 'tabs.help' },
   { to: '/account', label: 'tabs.profile' },
 ];
@@ -45,7 +46,7 @@ export const APPLY_PATH = '/profile/advertiser';
 
 /** Экран кабинета заказчика: без кабинета ведём на заявку. */
 const isAdvertiserPath = (path: string) =>
-  /^\/(my-orders|help|account)(\/|$)/.test(path);
+  /^\/(my-orders|stats|help|account)(\/|$)/.test(path);
 
 /** Куда вести после выбора кабинета. */
 const CABINET_HOME: Record<Cabinet, string> = {

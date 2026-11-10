@@ -1,4 +1,6 @@
 import type {
+  AdvertiserStats,
+  StatsDays,
   Feedback,
   MyOrder,
   NewOrderInput,
@@ -56,6 +58,20 @@ export function createAdvertiserApi(request: Requester) {
     /** Отчёт файлом CSV — придёт в чат с ботом. */
     sendReportCsv: (orderId: number) =>
       request<{ ok: true }>('POST', `/api/my-orders/${orderId}/report/csv`),
+
+    /** Статистика по всем заказам за период. */
+    fetchAdvertiserStats: (days: StatsDays) =>
+      request<AdvertiserStats>(
+        'GET',
+        `/api/my-orders/stats${days ? `?days=${days}` : ''}`,
+      ),
+
+    /** Все ролики периода файлом CSV — придёт в чат с ботом. */
+    sendStatsCsv: (days: StatsDays) =>
+      request<{ ok: true }>(
+        'POST',
+        `/api/my-orders/stats/csv${days ? `?days=${days}` : ''}`,
+      ),
 
     /** `onModeration` — отзыв с текстом ушёл на проверку и появится в профиле креатора после неё. */
     rateVideo: (submissionId: number, feedback: Feedback) =>

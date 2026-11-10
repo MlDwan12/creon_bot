@@ -18,6 +18,7 @@ const Account = page(() => import('./advertiser/Account'), 'Account');
 const Help = page(() => import('./advertiser/Help'), 'Help');
 const MyOrders = page(() => import('./advertiser/MyOrders'), 'MyOrders');
 const OrderForm = page(() => import('./advertiser/OrderForm'), 'OrderForm');
+const AdvertiserStats = page(() => import('./advertiser/Stats'), 'Stats');
 const OrderReport = page(
   () => import('./advertiser/OrderReport'),
   'OrderReport',
@@ -56,6 +57,7 @@ export const router = createBrowserRouter([
       { path: 'my-orders/new', element: <OrderForm /> },
       { path: 'my-orders/:id/edit', element: <OrderForm /> },
       { path: 'my-orders/:id/report', element: <OrderReport /> },
+      { path: 'stats', element: <AdvertiserStats /> },
       { path: 'help', element: <Help /> },
       { path: 'account', element: <Account /> },
       { path: 'support', element: <Support /> },

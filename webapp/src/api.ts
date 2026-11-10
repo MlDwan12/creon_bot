@@ -176,6 +176,8 @@ export const {
   deleteOrder,
   fetchOrderReport,
   sendReportCsv,
+  fetchAdvertiserStats,
+  sendStatsCsv,
   shareReport,
   unshareReport,
   rateVideo,

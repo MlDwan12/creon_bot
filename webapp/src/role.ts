@@ -27,7 +27,7 @@ export function roleOfPath(path: string): Role | undefined {
     /^\/(orders|submissions|balance|learn|profile)(\/|$)/.test(path)
   )
     return 'creator';
-  if (/^\/(my-orders|creators|help|account)(\/|$)/.test(path))
+  if (/^\/(my-orders|stats|creators|help|account)(\/|$)/.test(path))
     return 'advertiser';
   return undefined;
 }

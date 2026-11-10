@@ -12,7 +12,7 @@
 .bar {
   pointer-events: auto;
   display: grid;
-  /* 3 вкладки у заказчика, 4 у креатора, 5 у модератора. */
+  /* 4 вкладки у заказчика и креатора, 5 у модератора. */
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   padding: 6px;

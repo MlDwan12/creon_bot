@@ -275,6 +275,60 @@ export interface OrderReport {
   }[];
 }
 
+/** Статистика заказчика по всем заказам — GET /api/my-orders/stats (src/orders/advertiser-stats.ts). */
+export interface AdvertiserStats {
+  /** По роликам, одобренным за период. */
+  summary: {
+    spent: number;
+    views: number;
+    likes: number;
+    /** null — ни у одного заказа нет страницы товара. */
+    clicks: number | null;
+    /** Переходы на 100 просмотров роликов со ссылкой на товар, %. */
+    clickRate: number | null;
+    videos: number;
+    creators: number;
+    cpm: number | null;
+  };
+  /** Прирост просмотров по дням (UTC) по замерам: при сдаче, одобрении и каждый день холда. */
+  daily: { date: string; views: number }[];
+  /** Заказы с одобренными за период роликами, больше просмотров — выше. */
+  orders: {
+    id: number;
+    title: string;
+    status: OrderStatus;
+    spent: number;
+    views: number;
+    videos: number;
+    clicks: number | null;
+    cpm: number | null;
+  }[];
+  platforms: {
+    platform: Platform;
+    videos: number;
+    views: number;
+    spent: number;
+    cpm: number | null;
+  }[];
+  /** 10 роликов с наибольшими просмотрами; ссылка — через редирект /v/. */
+  top: {
+    id: number;
+    orderId: number;
+    orderTitle: string;
+    videoUrl: string | null;
+    platform: Platform;
+    creator: string;
+    creatorId: number;
+    views: number;
+    likes: number | null;
+    clicks: number | null;
+    approvedAt: string | null;
+  }[];
+}
+
+/** Период статистики заказчика: 7 или 30 дней; undefined — всё время. */
+export type StatsDays = 7 | 30 | undefined;
+
 /** Ответы `/api/mod/*` — см. src/api/moderation.controller.ts. */
 export interface ModQueue {
   /** Аккаунты соцсетей: открыть ссылку и найти код в описании. */

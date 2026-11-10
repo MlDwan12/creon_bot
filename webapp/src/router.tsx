@@ -23,6 +23,7 @@ import PrivacyView from './views/PrivacyView';
 import ProfileView from './views/ProfileView';
 import ReportView from './views/ReportView';
 import ReviewVideosView from './views/ReviewVideosView';
+import StatsView from './views/StatsView';
 import SubmitVideoView from './views/SubmitVideoView';
 import SupportView from './views/SupportView';
 
@@ -65,6 +66,8 @@ export const router = createBrowserRouter([
       { path: '/support', element: <SupportView />, handle: back },
       { path: '/my-orders', element: <MyOrdersView />, handle: tab },
       { path: '/learn', element: <LearnView />, handle: tab },
+      // Статистика заказчика по всем заказам.
+      { path: '/stats', element: <StatsView />, handle: tab },
       // Кабинет заказчика: «Как это работает» и профиль (свой профиль креатора — /profile).
       { path: '/help', element: <HelpView />, handle: tab },
       { path: '/account', element: <AccountView />, handle: tab },

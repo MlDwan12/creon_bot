@@ -1,0 +1,39 @@
+/* Остальное — классы отчёта заказа (ReviewVideosView.module.css). */
+.grow {
+  flex: 1;
+}
+.list {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 44px;
+  padding: 12px 16px;
+  color: var(--text);
+  text-decoration: none;
+}
+.row + .row {
+  border-top: 1px solid var(--separator);
+}
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+.chart svg {
+  width: 100%;
+  height: 140px;
+  fill: var(--accent);
+}
+.chart figcaption {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
