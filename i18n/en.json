@@ -918,7 +918,7 @@
     "title": "Ads in short videos. Pay for views.",
     "lead": "Brands set a budget, creators post videos on their own accounts and earn USDT for the views. A moderator checks every video.",
     "loginTitle": "Log in",
-    "loginText": "Same account as in the Telegram mini app: orders, responses and balance are shared.",
+    "loginText": "Same account as in the <app>Telegram mini app</app>: orders, responses and balance are shared.",
     "loginButton": "Log in with Telegram",
     "loginFailed": "Couldn't log in, please try again",
     "loginStep1": "The Fixum bot opens in Telegram — tap “Start”",

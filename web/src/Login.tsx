@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { renderSVG } from 'uqr';
 import {
   codeLogin,
@@ -78,6 +78,7 @@ function readPending(): Pending | undefined {
 export function Login({ onLogin }: { onLogin: () => void }) {
   const { t, i18n } = useTranslation();
   const [botId, setBotId] = useState<number | null>(null);
+  const [botUrl, setBotUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   // ссылка на бота получена — ждём код из Telegram
@@ -85,7 +86,12 @@ export function Login({ onLogin }: { onLogin: () => void }) {
   const [code, setCode] = useState('');
 
   useEffect(() => {
-    Promise.all([fetchWebConfig(), loadTelegramLogin()]).then(
+    const config = fetchWebConfig();
+    config.then(
+      (c) => setBotUrl(c.botUrl),
+      () => {},
+    );
+    Promise.all([config, loadTelegramLogin()]).then(
       ([config]) => setBotId(config.botId),
       () => {}, // без виджета останется вход кодом
     );
@@ -223,7 +229,16 @@ export function Login({ onLogin }: { onLogin: () => void }) {
             </ol>
           )}
           <span className={s.note}>
-            {t('web.loginText')}{' '}
+            <Trans
+              i18nKey="web.loginText"
+              components={{
+                app: botUrl ? (
+                  <a href={botUrl} target="_blank" rel="noopener noreferrer" />
+                ) : (
+                  <span />
+                ),
+              }}
+            />{' '}
             {botId !== null && (
               <button type="button" className={s.byPhone} onClick={byPhone}>
                 {t('web.loginByPhone')}

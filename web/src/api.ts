@@ -72,7 +72,10 @@ export async function fetchMe() {
 
 /** id бота для окна входа Telegram. */
 export function fetchWebConfig() {
-  return request<{ botId: number }>('GET', '/api/web/config');
+  return request<{ botId: number; botUrl: string | null }>(
+    'GET',
+    '/api/web/config',
+  );
 }
 
 /** Данные, которые Telegram отдаёт после подтверждения входа, — как есть, подпись проверит бэкенд. */
