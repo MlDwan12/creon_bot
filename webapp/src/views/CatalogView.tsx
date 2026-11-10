@@ -283,6 +283,9 @@ export default function CatalogView() {
         <Link to="/privacy" className="quiet-link">
           {t('catalog.privacy')}
         </Link>
+        <Link to="/terms" className="quiet-link">
+          {t('catalog.terms')}
+        </Link>
       </footer>
     </main>
   );

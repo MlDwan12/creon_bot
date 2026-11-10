@@ -110,7 +110,9 @@ export default function App() {
   // Модератора — в его окно, остальных — из него. Это только навигация:
   // права на каждый /api/mod/* всё равно проверяет бэкенд (ModeratorGuard).
   const inModeration = pathname.startsWith('/mod');
-  if (pathname !== '/privacy' && isModerator !== inModeration)
+  // юридические страницы открывают все, в том числе вне Telegram
+  const legal = pathname === '/privacy' || pathname === '/terms';
+  if (!legal && isModerator !== inModeration)
     return <Navigate to={isModerator ? '/mod' : '/'} replace />;
 
   // Кабинета заказчика нет — экраны заказчика ведут на заявку. Профиль креатора (/creators/:id)
@@ -175,7 +177,7 @@ export default function App() {
       {handle.tab && cabinet && <RoleSwitch key={`role:${lang}`} />}
       <Outlet key={`${lang}:${pathname}`} />
       <TabBar key={`tabs:${lang}`} />
-      {!inModeration && pathname !== '/privacy' && <OnboardingOverlay />}
+      {!inModeration && !legal && <OnboardingOverlay />}
       {/* модератору — своё введение: его окно и правила площадки */}
       {inModeration && <ModOnboarding />}
     </>

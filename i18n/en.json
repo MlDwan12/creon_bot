@@ -53,7 +53,8 @@
     "notifyMe": "Notify me about new orders",
     "filteredTitle": "Nothing found",
     "filteredText": "No orders for this platform or category — see them all.",
-    "resetFilters": "Show all orders"
+    "resetFilters": "Show all orders",
+    "terms": "Terms of use"
   },
   "orderCard": {
     "anyPlatform": "Any platform",
@@ -996,7 +997,8 @@
         ]
       }
     ],
-    "loginWaiting": "The bot is open in Telegram — tap “Start” and the code will arrive in the chat. Enter it here."
+    "loginWaiting": "The bot is open in Telegram — tap “Start” and the code will arrive in the chat. Enter it here.",
+    "legalAria": "Documents and support"
   },
   "apply": {
     "title": "Become an advertiser",

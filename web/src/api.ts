@@ -76,6 +76,7 @@ export function fetchWebConfig() {
     botId: number;
     botUrl: string | null;
     privacyUrl: string | null;
+    termsUrl: string | null;
   }>('GET', '/api/web/config');
 }
 
