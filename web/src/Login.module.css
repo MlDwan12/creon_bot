@@ -145,6 +145,10 @@
   text-align: center;
 }
 
+.code-form input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
 .secondary {
   display: flex;
   align-items: center;

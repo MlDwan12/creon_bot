@@ -915,7 +915,7 @@
     "approved_other": "videos approved"
   },
   "web": {
-    "title": "Ads in short videos. Pay for views.",
+    "title": "Ads in short videos. Pay for views.",
     "lead": "Brands set a budget, creators post videos on their own accounts and earn USDT for the views. A moderator checks every video.",
     "loginTitle": "Log in",
     "loginText": "Same account as in the Telegram mini app: orders, responses and balance are shared.",
@@ -939,7 +939,7 @@
     "loginCodeLabel": "Code from Telegram",
     "loginSubmit": "Sign in",
     "loginOpenTelegram": "Open Telegram again",
-    "loginByPhone": "Sign in with a phone number",
+    "loginByPhone": "No Telegram on this device?",
     "loginQr": "Telegram on your phone? Point the camera at the code — the bot sends the digits there, enter them here.",
     "loginQrAlt": "QR code: link to the Fixum bot to sign in",
     "points": [
@@ -982,7 +982,8 @@
           }
         ]
       }
-    ]
+    ],
+    "loginWaiting": "The bot is open in Telegram — tap “Start” and the code will arrive in the chat. Enter it here."
   },
   "apply": {
     "title": "Become an advertiser",
