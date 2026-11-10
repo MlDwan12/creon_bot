@@ -6,14 +6,17 @@ import s from '../ui.module.css';
 
 const LANG_NAMES = { ru: 'Русский', en: 'English' } as const;
 
-/** Язык интерфейса — в профилях заказчика и креатора. Хранится на сервере (User.language): на нём же пишет бот. */
+/**
+ * Язык интерфейса — в профилях заказчика и креатора. Хранится на сервере (User.language): на нём же пишет бот.
+ * Варианта «как в Telegram» на сайте нет: язык Telegram сайт не видит (его запоминают мини-апп и бот),
+ * поэтому отмечен язык, на котором интерфейс сейчас.
+ */
 export function LanguagePicker() {
   const { t } = useTranslation();
   const { me, setMe } = useSession();
   const [langError, setLangError] = useState('');
 
-  /** null — снова по языку Telegram. */
-  async function pickLang(lang: 'ru' | 'en' | null) {
+  async function pickLang(lang: 'ru' | 'en') {
     setLangError('');
     try {
       await updateLanguage(lang);
@@ -22,20 +25,11 @@ export function LanguagePicker() {
       setLangError(t('settings.languageError'));
     }
   }
-  const langPref = me.languageChosen ? me.language : null;
 
   return (
     <section className={s.card}>
       <h2 id="lang-label">{t('settings.languageTitle')}</h2>
       <div className={s.chips} role="radiogroup" aria-labelledby="lang-label">
-        <button
-          type="button"
-          role="radio"
-          aria-checked={langPref === null}
-          onClick={() => pickLang(null)}
-        >
-          {t('settings.languageAuto')}
-        </button>
         {/* названия языков — на самих языках: найдёт и тот, кто не понимает текущий */}
         {(['ru', 'en'] as const).map((l) => (
           <button
@@ -43,7 +37,7 @@ export function LanguagePicker() {
             type="button"
             role="radio"
             lang={l}
-            aria-checked={langPref === l}
+            aria-checked={me.language === l}
             onClick={() => pickLang(l)}
           >
             {LANG_NAMES[l]}

@@ -104,8 +104,8 @@ export function updateCabinet(cabinet: 'creator' | 'advertiser') {
   return request<{ ok: true }>('PUT', '/api/profile/cabinet', { cabinet });
 }
 
-/** Язык интерфейса и бота; null — снова по языку Telegram. */
-export function updateLanguage(language: 'ru' | 'en' | null) {
+/** Язык интерфейса и бота. */
+export function updateLanguage(language: 'ru' | 'en') {
   return request<{ ok: true }>('PUT', '/api/profile/language', { language });
 }
 
