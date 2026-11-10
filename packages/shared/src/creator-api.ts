@@ -99,6 +99,10 @@ export function createCreatorApi(request: Requester) {
     verifyProfileLink: (url: string) =>
       request<{ ok: true }>('POST', '/api/profile/links/verify', { url }),
 
+    /** Открыл «Обучение» — пункт чек-листа «Старт». */
+    markLessonSeen: () =>
+      request<{ ok: true }>('POST', '/api/profile/lesson-seen'),
+
     updateNotifications: (newOrders: boolean) =>
       request<{ ok: true }>('PUT', '/api/profile/notifications', { newOrders }),
 

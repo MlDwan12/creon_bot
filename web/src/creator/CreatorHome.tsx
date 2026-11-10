@@ -1,12 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
-import {
-  creatorHome,
-  LESSON_SEEN_KEY,
-  START_HIDDEN_KEY,
-  type StartStep,
-} from '@fixum/shared';
+import { creatorHome, START_HIDDEN_KEY, type StartStep } from '@fixum/shared';
 import { fetchBalance, fetchMySubmissions, fetchSocialAccounts } from '../api';
 import { formatDate, formatDeadline, formatMoney } from '../format';
 import s from '../ui.module.css';
@@ -26,6 +21,7 @@ const STEP_LINK: Record<StartStep, string | null> = {
 export function CreatorHome() {
   const { t } = useTranslation();
   const [home, setHome] = useState<ReturnType<typeof creatorHome>>();
+  const homeRef = useRef<HTMLElement>(null);
   const [startHidden, setStartHidden] = useState(
     () => localStorage.getItem(START_HIDDEN_KEY) === '1',
   );
@@ -36,14 +32,7 @@ export function CreatorHome() {
       fetchSocialAccounts().catch(() => []),
     ]).then(
       ([balance, subs, accounts]) =>
-        setHome(
-          creatorHome(
-            balance,
-            subs,
-            accounts,
-            localStorage.getItem(LESSON_SEEN_KEY) === '1',
-          ),
-        ),
+        setHome(creatorHome(balance, subs, accounts)),
       () => {},
     );
   }, []);
@@ -54,7 +43,7 @@ export function CreatorHome() {
   if (!money && !due && !resubmit && !start) return null;
 
   return (
-    <section className={s.list} aria-label={t('home.title')}>
+    <section ref={homeRef} className={s.list} aria-label={t('home.title')}>
       {money && (
         <Link to="/balance" className={s.item}>
           <span>
@@ -127,7 +116,25 @@ export function CreatorHome() {
               const to = STEP_LINK[step];
               return (
                 <li key={step} className={done ? s.muted : undefined}>
-                  {to && !done ? <Link to={to}>{label}</Link> : label}
+                  {done ? (
+                    label
+                  ) : to ? (
+                    <Link to={to}>{label}</Link>
+                  ) : (
+                    // «Взять первый заказ»: заказы — сразу под блоком, прокручиваем к ним
+                    <button
+                      type="button"
+                      className={s.linkButton}
+                      style={{ font: 'inherit' }}
+                      onClick={() =>
+                        homeRef.current?.nextElementSibling?.scrollIntoView({
+                          behavior: 'smooth',
+                        })
+                      }
+                    >
+                      {label}
+                    </button>
+                  )}
                 </li>
               );
             })}

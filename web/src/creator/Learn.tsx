@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LESSON_SEEN_KEY } from '@fixum/shared';
+import { markLessonSeen } from '../api';
 import { tList } from '../i18n';
 import s from '../ui.module.css';
 
@@ -13,7 +13,10 @@ const LESSONS = ['take', 'shoot', 'submit', 'timing', 'withdraw', 'rules'];
 export function Learn() {
   const { t } = useTranslation();
   // пункт «Прочитать урок» в чек-листе «Старт» (CreatorHome) — открыл «Обучение», значит прочитал
-  useEffect(() => localStorage.setItem(LESSON_SEEN_KEY, '1'), []);
+  // на сервере — отметка общая для мини-аппа и сайта; не дошло — отметится при следующем открытии
+  useEffect(() => {
+    markLessonSeen().catch(() => {});
+  }, []);
   return (
     <div className={`${s.page} ${s.narrow}`}>
       <header>

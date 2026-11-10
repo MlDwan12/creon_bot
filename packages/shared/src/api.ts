@@ -546,6 +546,8 @@ export interface Balance {
   minPayout: number;
   /** Кошелёк USDT (TRC20) из профиля; null — не указан, вывести нельзя. */
   wallet: string | null;
+  /** Креатор открывал «Обучение» — пункт чек-листа «Старт». */
+  lessonSeen: boolean;
   payouts: {
     id: number;
     amount: number;
