@@ -138,6 +138,9 @@ export default function AccountView() {
         <Link to="/privacy" className="quiet-link">
           {t('catalog.privacy')}
         </Link>
+        <Link to="/terms" className="quiet-link">
+          {t('catalog.terms')}
+        </Link>
       </div>
     </main>
   );

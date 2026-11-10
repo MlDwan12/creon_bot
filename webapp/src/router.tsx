@@ -23,6 +23,7 @@ import PrivacyView from './views/PrivacyView';
 import ProfileView from './views/ProfileView';
 import ReportView from './views/ReportView';
 import ReviewVideosView from './views/ReviewVideosView';
+import TermsView from './views/TermsView';
 import StatsView from './views/StatsView';
 import SubmitVideoView from './views/SubmitVideoView';
 import SupportView from './views/SupportView';
@@ -103,6 +104,8 @@ export const router = createBrowserRouter([
       { path: '/mod/videos/:id', element: <ModVideoView />, handle: back },
       // Открывается и вне Telegram — ссылка на неё указана в BotFather.
       { path: '/privacy', element: <PrivacyView />, handle: back },
+      // Пользовательское соглашение — тоже открывается вне Telegram (ссылка с сайта).
+      { path: '/terms', element: <TermsView />, handle: back },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

@@ -40,6 +40,9 @@
 .side {
   flex: 1 1 480px;
   display: flex;
+  /* карточка входа, под ней — ссылки на документы и поддержку */
+  flex-direction: column;
+  gap: 16px;
   align-items: center;
   justify-content: center;
   padding: 56px 16px;
@@ -76,8 +79,8 @@
   min-height: 54px;
   border: none;
   border-radius: var(--radius-button);
-  /* темнее фирменного #229ed9: белый текст на нём — 3:1, тут — 4,9:1 (WCAG AA) */
-  background: #1878a6;
+  /* насыщенный синий: фирменный #229ed9 с белым текстом — 3:1, этот — 4,75:1 (WCAG AA) */
+  background: #0073d6;
   color: #ffffff;
   font: inherit;
   font-size: 17px;
@@ -85,8 +88,10 @@
   cursor: pointer;
 }
 
+/* неактивная — серая, а не бледно-синяя: не путается с рабочей */
 .telegram:disabled {
-  opacity: 0.6;
+  background: var(--fill);
+  color: var(--hint);
   cursor: default;
 }
 
@@ -201,6 +206,18 @@
   display: none;
 }
 
+.legal {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 16px;
+  font-size: 13px;
+}
+.legal a {
+  padding: 6px 0;
+  color: var(--hint);
+}
+
 .error {
   color: var(--danger);
 }
@@ -233,8 +250,9 @@
   font-size: 17px;
 }
 
-@media (max-width: 600px) {
-  /* телефон: тёмный блок — только логотип и заголовок, вход — на первом экране */
+/* Планшет и телефон: колонки не помещаются рядом — тёмный блок только с логотипом и заголовком,
+   вход сразу под ним, описание и тезисы — под входом */
+@media (max-width: 1000px) {
   /* лишняя высота экрана — вниз, а не в тёмный блок (иначе пустота между логотипом и заголовком) */
   .page {
     align-content: flex-start;
@@ -242,12 +260,8 @@
   .hero {
     /* во всю ширину и не выше содержимого (flex: none растянул бы блок по заголовку в одну строку) */
     flex: 1 1 100%;
-    gap: 16px;
-    padding: 20px 16px 24px;
-  }
-  .pitch h1 {
-    font-size: 24px;
-    letter-spacing: -0.8px;
+    gap: 24px;
+    padding: 32px;
   }
   .wide-only {
     display: none;
@@ -257,9 +271,28 @@
   }
   .side {
     flex-direction: column;
-    align-items: stretch;
+    align-items: center;
     justify-content: flex-start;
     gap: 16px;
+    padding: 24px 16px;
+  }
+  .side > * {
+    width: 100%;
+    max-width: 480px;
+  }
+}
+
+@media (max-width: 600px) {
+  .hero {
+    gap: 16px;
+    padding: 20px 16px 24px;
+  }
+  .pitch h1 {
+    font-size: 24px;
+    letter-spacing: -0.8px;
+  }
+  .side {
+    align-items: stretch;
     padding: 16px;
   }
   .card {
