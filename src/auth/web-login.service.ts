@@ -49,15 +49,19 @@ export class WebLoginService {
         expiresAt: new Date(Date.now() + TTL_MS),
       },
     });
-    this.botUsername ??= this.bot.telegram.getMe().then((me) => me.username);
-    const username = await this.botUsername.catch((err: unknown) => {
-      this.botUsername = undefined; // Telegram недоступен — следующий вход спросит снова
-      throw err;
-    });
     return {
       token,
-      link: `https://t.me/${username}?start=${LOGIN_START_PREFIX}${token}`,
+      link: `https://t.me/${await this.username()}?start=${LOGIN_START_PREFIX}${token}`,
     };
+  }
+
+  /** Имя бота: у прода и дев-стенда боты разные. Telegram недоступен — ошибка, следующий вызов спросит снова. */
+  username(): Promise<string> {
+    this.botUsername ??= this.bot.telegram.getMe().then((me) => me.username);
+    return this.botUsername.catch((err: unknown) => {
+      this.botUsername = undefined;
+      throw err;
+    });
   }
 
   /**

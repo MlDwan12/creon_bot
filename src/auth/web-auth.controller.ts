@@ -49,12 +49,17 @@ export class WebAuthController {
 
   /**
    * id бота для окна входа Telegram (Telegram.Login.auth): у прода и дев-стенда боты разные, а сборка
-   * сайта — одна. id — часть токена до двоеточия, не секрет.
+   * сайта — одна. id — часть токена до двоеточия, не секрет. botUrl — ссылка «мини-приложение» под входом.
    */
   @Get('config')
-  webConfig() {
+  async webConfig() {
     return {
       botId: Number(this.config.get<string>('BOT_TOKEN')!.split(':')[0]),
+      // чат с ботом — из него открывается мини-апп; Telegram недоступен — без ссылки
+      botUrl: await this.webLogin.username().then(
+        (name) => `https://t.me/${name}`,
+        () => null,
+      ),
     };
   }
 
