@@ -912,7 +912,20 @@
     "orders_one": "order",
     "orders_other": "orders",
     "approved_one": "video approved",
-    "approved_other": "videos approved"
+    "approved_other": "videos approved",
+    "since": "Brand since {{date}}",
+    "closed": "Cabinet closed — you can only view your orders",
+    "namesHint": "Creators only see your name — no @username or contacts.",
+    "spent": "spent",
+    "perThousand": "per 1000 views",
+    "todoTitle": "Waiting for you",
+    "todo": {
+      "rejected": "“{{title}}” was rejected — fix it and send again",
+      "rate_one": "“{{title}}”: {{count}} video awaits your rating",
+      "rate_other": "“{{title}}”: {{count}} videos await your rating",
+      "fundBusy": "“{{title}}”: the whole budget is reserved for videos under review — no new ones accepted",
+      "pending": "“{{title}}” is under moderator review"
+    }
   },
   "web": {
     "title": "Ads in short videos. Pay for views.",

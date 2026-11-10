@@ -33,6 +33,8 @@ export class MeController {
       cabinet: req.user.cabinet?.toLowerCase() ?? null,
       // имя из Telegram — для шапки сайта (своё же, не другой стороне сделки)
       firstName: req.user.firstName,
+      // когда открыли кабинет заказчика — «Заказчик с …» в профиле; null — не открывали
+      advertiserSince: req.user.advertiserAt,
       // Комиссию площадки (src/orders/budget.ts) пока не отдаём ни креаторам, ни рекламодателям:
       // её размер ещё не решён.
     };

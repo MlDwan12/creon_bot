@@ -873,6 +873,8 @@ export interface Me {
   cabinet: 'creator' | 'advertiser' | null;
   /** Имя из Telegram; null — не указано. */
   firstName: string | null;
+  /** Когда открыли кабинет заказчика; null — не открывали. */
+  advertiserSince: string | null;
 }
 
 /** Точка истории просмотров ролика — модератору. */

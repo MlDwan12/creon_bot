@@ -60,6 +60,10 @@ export class WebAuthController {
         (name) => `https://t.me/${name}`,
         () => null,
       ),
+      // политика — страница мини-аппа, открывается и в обычном браузере (webapp/src/views/PrivacyView.tsx)
+      privacyUrl: process.env.WEBAPP_URL
+        ? `${process.env.WEBAPP_URL.replace(/\/$/, '')}/privacy`
+        : null,
     };
   }
 

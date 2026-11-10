@@ -57,3 +57,32 @@
   flex-wrap: wrap;
   justify-content: center;
 }
+.flat {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+.todo {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 16px;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+.todo h2 {
+  padding: 12px 0 4px;
+}
+.todo-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 0;
+  color: var(--text);
+  font-size: 15px;
+  text-decoration: none;
+}
+.todo-row + .todo-row {
+  border-top: 1px solid var(--separator);
+}
