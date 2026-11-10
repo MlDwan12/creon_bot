@@ -168,6 +168,14 @@ export class ProfilesService {
     });
   }
 
+  /** Отметить «Обучение» прочитанным; время — только первого открытия. */
+  markLessonSeen(userId: number) {
+    return this.prisma.user.updateMany({
+      where: { id: userId, lessonSeenAt: null },
+      data: { lessonSeenAt: new Date() },
+    });
+  }
+
   updateNotifications(userId: number, notifyNewOrders: boolean) {
     return this.prisma.user.update({
       where: { id: userId },

@@ -1,8 +1,6 @@
 import type { Balance, MySubmission, SocialAccount } from './api';
 import { heldVideos } from './format';
 
-/** Креатор открывал «Обучение» — пункт чек-листа «Старт» (хранится на устройстве). */
-export const LESSON_SEEN_KEY = 'fixum:lessonSeen';
 /** Креатор скрыл чек-лист «Старт». */
 export const START_HIDDEN_KEY = 'fixum:startHidden';
 
@@ -17,7 +15,6 @@ export function creatorHome(
   balance: Balance,
   subs: MySubmission[],
   accounts: SocialAccount[],
-  lessonSeen: boolean,
 ) {
   const money =
     balance.available > 0 || balance.held > 0
@@ -53,7 +50,7 @@ export function creatorHome(
         ]
       : []),
     { step: 'order', done: subs.length > 0 },
-    { step: 'lesson', done: lessonSeen },
+    { step: 'lesson', done: balance.lessonSeen },
   ];
   const start =
     subs.some((s) => s.status === 'MODERATOR_APPROVED') ||

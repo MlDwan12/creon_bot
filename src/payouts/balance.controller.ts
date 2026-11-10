@@ -42,6 +42,8 @@ export class BalanceController {
       minPayout: MIN_PAYOUT,
       /** Кошелёк из профиля: без него вывести нельзя. */
       wallet: req.user.payoutWallet,
+      /** Открывал «Обучение» — для чек-листа «Старт». */
+      lessonSeen: req.user.lessonSeenAt !== null,
       payouts: history.map((p) => ({
         id: p.id,
         amount: fromMinor(p.amountMinor),

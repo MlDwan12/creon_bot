@@ -83,6 +83,13 @@ export class ProfilesController {
     return { ok: true };
   }
 
+  /** Креатор открыл «Обучение» — пункт «Прочитать урок» в чек-листе «Старт», общий для мини-аппа и сайта. */
+  @Post('profile/lesson-seen')
+  async lessonSeen(@Req() req: ApiRequest) {
+    if (!req.user.lessonSeenAt) await this.profiles.markLessonSeen(req.user.id);
+    return { ok: true };
+  }
+
   /** Присылать ли сообщения о новых заказах. */
   @Put('profile/notifications')
   async updateNotifications(

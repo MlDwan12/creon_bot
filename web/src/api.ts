@@ -209,6 +209,7 @@ export const {
   fetchCreator,
   updateProfileLinks,
   verifyProfileLink,
+  markLessonSeen,
   updateNotifications,
   updateWallet,
   fetchSocialAccounts,
