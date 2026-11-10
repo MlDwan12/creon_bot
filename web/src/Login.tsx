@@ -53,10 +53,27 @@ const TG_ICON = (
   </svg>
 );
 
+/** Ждём код: токен входа переживает перезагрузку вкладки (телефон выгружает её, пока человек в Telegram). */
+const PENDING_KEY = 'fixum:loginPending';
+/** Как WebLoginService (TTL_MS): дольше токен не живёт. */
+const PENDING_TTL_MS = 10 * 60_000;
+type Pending = { token: string; link: string; at: number };
+
+function readPending(): Pending | undefined {
+  try {
+    const p = JSON.parse(
+      sessionStorage.getItem(PENDING_KEY) ?? 'null',
+    ) as Pending | null;
+    return p && Date.now() - p.at < PENDING_TTL_MS ? p : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Вход. Основной — кодом из бота: кнопка открывает бота по одноразовой ссылке, бот присылает код,
  * его вводят здесь (WebLoginService на бэкенде) — без окна Telegram, где он просит номер телефона.
- * Запасной — то самое окно (Telegram Login Widget): «Войти по номеру телефона».
+ * Запасной — то самое окно (Telegram Login Widget): «Нет Telegram на этом устройстве?».
  */
 export function Login({ onLogin }: { onLogin: () => void }) {
   const { t, i18n } = useTranslation();
@@ -64,7 +81,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   // ссылка на бота получена — ждём код из Telegram
-  const [pending, setPending] = useState<{ token: string; link: string }>();
+  const [pending, setPending] = useState(readPending);
   const [code, setCode] = useState('');
 
   useEffect(() => {
@@ -79,8 +96,9 @@ export function Login({ onLogin }: { onLogin: () => void }) {
     // окно — прямо из нажатия (иначе браузер его заблокирует), адрес — когда придёт ссылка
     const tab = window.open('', '_blank');
     try {
-      const res = await startCodeLogin();
+      const res = { ...(await startCodeLogin()), at: Date.now() };
       setPending(res);
+      sessionStorage.setItem(PENDING_KEY, JSON.stringify(res));
       setCode('');
       if (tab) tab.location.href = res.link;
     } catch (err) {
@@ -89,13 +107,13 @@ export function Login({ onLogin }: { onLogin: () => void }) {
     }
   }
 
-  async function sendCode(e: FormEvent) {
-    e.preventDefault();
-    if (!pending) return;
+  async function sendCode(value: string) {
+    if (!pending || busy) return;
     setBusy(true);
     setError('');
     try {
-      await codeLogin(pending.token, code);
+      await codeLogin(pending.token, value);
+      sessionStorage.removeItem(PENDING_KEY);
       onLogin();
     } catch (err) {
       setError(errorText(err, t('web.loginFailed')));
@@ -133,18 +151,32 @@ export function Login({ onLogin }: { onLogin: () => void }) {
         <div className={s.card}>
           <h2>{t('web.loginTitle')}</h2>
           {pending ? (
-            <form className={s.codeForm} onSubmit={sendCode}>
+            <form
+              className={s.codeForm}
+              onSubmit={(e: FormEvent) => {
+                e.preventDefault();
+                void sendCode(code);
+              }}
+            >
               <label htmlFor="login-code">{t('web.loginCodeLabel')}</label>
               <input
                 id="login-code"
                 value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '');
+                  setCode(value);
+                  // 4 цифры — отправляем сами; кнопка «Войти» — на случай ошибки
+                  if (value.length === 4) void sendCode(value);
+                }}
+                aria-invalid={!!error}
+                aria-describedby={error ? 'login-error' : undefined}
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 maxLength={4}
                 placeholder="••••"
                 autoFocus
               />
+              {error && <LoginError text={error} />}
               <button
                 type="submit"
                 className={s.telegram}
@@ -172,20 +204,23 @@ export function Login({ onLogin }: { onLogin: () => void }) {
               </div>
             </form>
           ) : (
-            <button type="button" className={s.telegram} onClick={startCode}>
-              {TG_ICON}
-              {t('web.loginButton')}
-            </button>
+            <>
+              <button type="button" className={s.telegram} onClick={startCode}>
+                {TG_ICON}
+                {t('web.loginButton')}
+              </button>
+              {error && <LoginError text={error} />}
+            </>
           )}
-          <ol className={s.steps}>
-            <li>{t('web.loginStep1')}</li>
-            <li>{t('web.loginStep2')}</li>
-            <li>{t('web.loginStep3')}</li>
-          </ol>
-          {error && (
-            <p className={s.error} role="alert">
-              {error}
-            </p>
+          {/* бот уже открыт — вместо шагов что делать сейчас */}
+          {pending ? (
+            <p className={s.note}>{t('web.loginWaiting')}</p>
+          ) : (
+            <ol className={s.steps}>
+              <li>{t('web.loginStep1')}</li>
+              <li>{t('web.loginStep2')}</li>
+              <li>{t('web.loginStep3')}</li>
+            </ol>
           )}
           <span className={s.note}>
             {t('web.loginText')}{' '}
@@ -201,6 +236,14 @@ export function Login({ onLogin }: { onLogin: () => void }) {
         <Points className={s.narrowOnly} />
       </section>
     </div>
+  );
+}
+
+function LoginError({ text }: { text: string }) {
+  return (
+    <p id="login-error" className={s.error} role="alert">
+      {text}
+    </p>
   );
 }
 

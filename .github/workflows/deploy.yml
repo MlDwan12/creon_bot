@@ -147,6 +147,8 @@ jobs:
           id="$(docker create "$APP-webapp:$TAG")"
           docker cp "$id:/webapp/dist" static
           docker rm "$id" >/dev/null
+          # dev-стенд — не в поиск (прод — ветка main)
+          [ "${{ github.event.workflow_run.head_branch }}" = main ] || printf 'User-agent: *\nDisallow: /\n' > static/robots.txt
           tar -czf "static-$SHA.tar.gz" -C static .
 
       - name: Build site
@@ -156,6 +158,8 @@ jobs:
           id="$(docker create "$APP-web:$TAG")"
           docker cp "$id:/web/dist" site
           docker rm "$id" >/dev/null
+          # dev-стенд — не в поиск (прод — ветка main)
+          [ "${{ github.event.workflow_run.head_branch }}" = main ] || printf 'User-agent: *\nDisallow: /\n' > site/robots.txt
           tar -czf "site-$SHA.tar.gz" -C site .
 
       - name: Upload image and script
