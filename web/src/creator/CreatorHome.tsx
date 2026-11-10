@@ -125,12 +125,14 @@ export function CreatorHome() {
                     <button
                       type="button"
                       className={s.linkButton}
-                      style={{ font: 'inherit' }}
-                      onClick={() =>
-                        homeRef.current?.nextElementSibling?.scrollIntoView({
-                          behavior: 'smooth',
-                        })
-                      }
+                      style={{ font: 'inherit', textDecoration: 'underline' }}
+                      onClick={() => {
+                        // первый видимый блок ниже: фильтры для телефона на компьютере скрыты
+                        let next = homeRef.current?.nextElementSibling;
+                        while (next && !next.getClientRects().length)
+                          next = next.nextElementSibling;
+                        next?.scrollIntoView({ behavior: 'smooth' });
+                      }}
                     >
                       {label}
                     </button>
