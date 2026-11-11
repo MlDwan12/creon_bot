@@ -677,7 +677,7 @@
     "supportClosed": "✅ The request is closed. If you have more questions, just write here.",
     "supportReply": "💬 Fixum support:\n\n{{text}}",
     "supportBusy": "Support is overloaded right now — write again in a minute: this message wasn't delivered.",
-    "loginCode": "Your Fixum sign-in code: {{code}}\n\nDon’t share it with anyone, not even Fixum support. If you didn’t start this sign-in, just ignore this message.",
+    "loginCode": "Your Fixum sign-in code: {{code}}\n\nDon’t share it with anyone, not even Fixum support. If you didn’t start this sign-in, just ignore this message.\n\nOr tap “Sign in to the site” — no need to type the code.",
     "loginExpired": "This sign-in link has expired. Tap “Sign in with Telegram” on the site again.",
     "loginOpenSite": "Sign in to the site"
   },
