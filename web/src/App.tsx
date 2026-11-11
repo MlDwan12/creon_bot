@@ -2,7 +2,7 @@ import { ApiError, type Me } from '@fixum/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RouterProvider } from 'react-router/dom';
-import { fetchMe, logout, RELOGIN_EVENT } from './api';
+import { codeLogin, fetchMe, logout, RELOGIN_EVENT } from './api';
 import { Login } from './Login';
 import { router } from './router';
 import { Session } from './session';
@@ -42,7 +42,14 @@ export function App() {
 
   const load = useCallback(() => {
     setState({ kind: 'loading' });
-    fetchMe().then(
+    // кнопка «Войти на сайт» из бота: #login=<токен>.<код> — входим без ввода кода
+    const link = /^#login=([\w-]+)\.(\d{4})$/.exec(location.hash);
+    if (link)
+      history.replaceState(null, '', location.pathname + location.search);
+    const signIn = link
+      ? codeLogin(link[1], link[2]).catch(() => {}) // устарела — обычный экран входа
+      : Promise.resolve();
+    signIn.then(fetchMe).then(
       (me) => setState({ kind: 'in', me }),
       (err: unknown) => {
         if (err instanceof ApiError && err.status === 401)
