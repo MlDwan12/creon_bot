@@ -13,6 +13,7 @@ import {
   VIDEO_PLATFORMS,
   type VideoPlatform,
 } from '../api';
+import CreatorHome from '../components/CreatorHome';
 import EmptyState from '../components/EmptyState';
 import LoadState from '../components/LoadState';
 import OrderCard from '../components/OrderCard';
@@ -134,6 +135,7 @@ export default function CatalogView() {
         <h1>{t('catalog.title')}</h1>
         <p>{t('catalog.subtitle')}</p>
       </header>
+      <CreatorHome />
 
       {/* пустой ряд не показываем: заказов нет ни в одной */}
       {shownPlatforms.length > 0 && (
@@ -280,6 +282,9 @@ export default function CatalogView() {
         <SupportLink />
         <Link to="/privacy" className="quiet-link">
           {t('catalog.privacy')}
+        </Link>
+        <Link to="/terms" className="quiet-link">
+          {t('catalog.terms')}
         </Link>
       </footer>
     </main>

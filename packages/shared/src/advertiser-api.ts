@@ -1,4 +1,6 @@
 import type {
+  AdvertiserStats,
+  StatsDays,
   Feedback,
   MyOrder,
   NewOrderInput,
@@ -44,9 +46,32 @@ export function createAdvertiserApi(request: Requester) {
     fetchOrderReport: (orderId: number) =>
       request<OrderReport>('GET', `/api/my-orders/${orderId}/report`),
 
+    /** Публичная ссылка на отчёт: новая (прежняя перестаёт работать) и отозвать. */
+    shareReport: (orderId: number) =>
+      request<{ url: string }>(
+        'POST',
+        `/api/my-orders/${orderId}/report/share`,
+      ),
+    unshareReport: (orderId: number) =>
+      request<{ ok: true }>('DELETE', `/api/my-orders/${orderId}/report/share`),
+
     /** Отчёт файлом CSV — придёт в чат с ботом. */
     sendReportCsv: (orderId: number) =>
       request<{ ok: true }>('POST', `/api/my-orders/${orderId}/report/csv`),
+
+    /** Статистика по всем заказам за период. */
+    fetchAdvertiserStats: (days: StatsDays) =>
+      request<AdvertiserStats>(
+        'GET',
+        `/api/my-orders/stats${days ? `?days=${days}` : ''}`,
+      ),
+
+    /** Все ролики периода файлом CSV — придёт в чат с ботом. */
+    sendStatsCsv: (days: StatsDays) =>
+      request<{ ok: true }>(
+        'POST',
+        `/api/my-orders/stats/csv${days ? `?days=${days}` : ''}`,
+      ),
 
     /** `onModeration` — отзыв с текстом ушёл на проверку и появится в профиле креатора после неё. */
     rateVideo: (submissionId: number, feedback: Feedback) =>
@@ -58,12 +83,32 @@ export function createAdvertiserApi(request: Requester) {
   };
 }
 
+/**
+ * Тема обращения в поддержку: заказ или выплата. В адресе формы — только `?order=12` или
+ * `?topic=payout`, не текстом: иначе чужая ссылка подставила бы свой текст в сообщение от имени
+ * пользователя. Текст темы собирают по шаблону приложение (показать) и сервер (менеджеру).
+ */
+export type SupportAbout = { orderId: number } | { topic: 'payout' };
+
+/** Адрес формы поддержки с темой. */
+export function supportSearch(about: SupportAbout | null): string {
+  if (!about) return '';
+  return 'orderId' in about ? `?order=${about.orderId}` : '?topic=payout';
+}
+
+/** Тема из адреса формы поддержки; что-то другое — без темы. */
+export function parseSupportAbout(q: URLSearchParams): SupportAbout | null {
+  const order = q.get('order');
+  if (order && /^[1-9]\d{0,9}$/.test(order)) return { orderId: Number(order) };
+  return q.get('topic') === 'payout' ? { topic: 'payout' } : null;
+}
+
 /** Запросы, общие для обоих кабинетов: поддержка и жалобы. */
 export function createAccountApi(request: Requester) {
   return {
-    /** Сообщение менеджеру; ответ придёт в чат с ботом. */
-    sendSupportMessage: (text: string) =>
-      request<{ ok: true }>('POST', '/api/support', { text }),
+    /** Сообщение менеджеру; ответ придёт в чат с ботом. Тему сервер подпишет сам. */
+    sendSupportMessage: (text: string, about: SupportAbout | null = null) =>
+      request<{ ok: true }>('POST', '/api/support', { text, ...about }),
 
     createReport: (report: {
       target: ReportTarget;

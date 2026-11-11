@@ -7,6 +7,7 @@ import {
   REPORT_REASONS,
   type Me,
   type OrderCategory,
+  type PublicReport,
   type ReportTarget,
 } from '@fixum/shared';
 import { i18next, setLang } from './i18n';
@@ -15,6 +16,9 @@ export * from '@fixum/shared';
 
 /** Действию нужен свежий вход (кошелёк, вывод) — событие на window, его слушает App.tsx. */
 export const RELOGIN_EVENT = 'fixum:relogin';
+
+/** Заявку «Стать заказчиком» отправили — меню (Shell.tsx) обновит метку «на рассмотрении». */
+export const APPLIED_EVENT = 'fixum:applied';
 
 /**
  * Запрос к API сайта. Вход — cookie сессии (ставит POST /api/web/login), браузер шлёт её сам;
@@ -51,6 +55,14 @@ async function request<T>(
   return (res.status === 204 ? undefined : await res.json()) as T;
 }
 
+/** Отчёт по публичной ссылке — без входа (src/orders/share.controller.ts); 404 — ссылку отозвали. */
+export function fetchSharedReport(token: string) {
+  return request<PublicReport>(
+    'GET',
+    `/api/share/${encodeURIComponent(token)}`,
+  );
+}
+
 /** Кто вошёл; 401 — не вошёл, 403 с banned — заблокирован. */
 export async function fetchMe() {
   const me = await request<Me>('GET', '/api/me');
@@ -60,11 +72,29 @@ export async function fetchMe() {
 
 /** id бота для окна входа Telegram. */
 export function fetchWebConfig() {
-  return request<{ botId: number }>('GET', '/api/web/config');
+  return request<{
+    botId: number;
+    botUrl: string | null;
+    privacyUrl: string | null;
+    termsUrl: string | null;
+  }>('GET', '/api/web/config');
 }
 
 /** Данные, которые Telegram отдаёт после подтверждения входа, — как есть, подпись проверит бэкенд. */
 export type TelegramAuth = Record<string, string | number>;
+
+/** Вход кодом из бота, шаг 1: одноразовая ссылка на бота. */
+export function startCodeLogin() {
+  return request<{ token: string; link: string }>(
+    'POST',
+    '/api/web/login/start',
+  );
+}
+
+/** Шаг 2: код из Telegram — бэкенд ставит cookie сессии. */
+export function codeLogin(token: string, code: string) {
+  return request<void>('POST', '/api/web/login/code', { token, code });
+}
 
 export function login(data: TelegramAuth) {
   return request<void>('POST', '/api/web/login', data);
@@ -79,8 +109,8 @@ export function updateCabinet(cabinet: 'creator' | 'advertiser') {
   return request<{ ok: true }>('PUT', '/api/profile/cabinet', { cabinet });
 }
 
-/** Язык интерфейса и бота; null — снова по языку Telegram. */
-export function updateLanguage(language: 'ru' | 'en' | null) {
+/** Язык интерфейса и бота. */
+export function updateLanguage(language: 'ru' | 'en') {
   return request<{ ok: true }>('PUT', '/api/profile/language', { language });
 }
 
@@ -132,6 +162,11 @@ export const {
   resolveReports,
   banUser,
   unbanUser,
+  approveApplication,
+  decideLink,
+  rejectApplication,
+  openAdvertiser,
+  closeAdvertiser,
 } = createModApi(request);
 
 /** Текст ошибки для экрана: наш ответ API — его текст, иначе общий. */
@@ -158,6 +193,10 @@ export const {
   deleteOrder,
   fetchOrderReport,
   sendReportCsv,
+  fetchAdvertiserStats,
+  sendStatsCsv,
+  shareReport,
+  unshareReport,
   rateVideo,
 } = createAdvertiserApi(request);
 export const { sendSupportMessage, createReport } = createAccountApi(request);
@@ -168,12 +207,16 @@ export const {
   fetchOrder,
   claimOrder,
   fetchMySubmissions,
+  previewViews,
   submitVideo,
   fetchBalance,
   requestPayout,
   fetchMyProfile,
+  applyAdvertiser,
   fetchCreator,
   updateProfileLinks,
+  verifyProfileLink,
+  markLessonSeen,
   updateNotifications,
   updateWallet,
   fetchSocialAccounts,

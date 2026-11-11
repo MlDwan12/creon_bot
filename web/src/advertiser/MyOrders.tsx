@@ -10,6 +10,7 @@ import {
   type MyOrder,
 } from '../api';
 import { formatDate, formatMoney, formatViews } from '../format';
+import { useSession } from '../session';
 import s from '../ui.module.css';
 
 /** Цвет метки статуса; текст — в словаре (myOrderCard.status). */
@@ -31,6 +32,8 @@ export function MyOrders() {
   const { t } = useTranslation();
   const [orders, setOrders] = useState<MyOrder[]>();
   const [error, setError] = useState(false);
+  /** Кабинет закрыт модератором: свои заказы только смотреть, новых нет (AdvertiserGuard). */
+  const closed = useSession().me.advertiser === 'closed';
 
   const load = useCallback(() => {
     setError(false);
@@ -42,13 +45,24 @@ export function MyOrders() {
     <div className={s.page}>
       <div className={s.cardHead}>
         <h1>{t('myOrders.title')}</h1>
-        <Link
-          to="/my-orders/new"
-          className={`${s.btn} ${s.primary} ${s.linkBtn}`}
-        >
-          + {t('myOrders.place')}
-        </Link>
+        {!closed && (
+          <Link
+            to="/my-orders/new"
+            className={`${s.btn} ${s.primary} ${s.linkBtn}`}
+          >
+            + {t('myOrders.place')}
+          </Link>
+        )}
       </div>
+      {closed && (
+        <div className={s.dangerNote} role="status">
+          <strong className={s.block}>{t('apply.closedTitle')}</strong>
+          <span className={s.block}>{t('apply.closedText')}</span>
+          <Link to="/support" className={s.block}>
+            {t('common.support')}
+          </Link>
+        </div>
+      )}
 
       {error ? (
         <div className={s.buttons}>
@@ -90,10 +104,14 @@ function OrderItem({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [extending, setExtending] = useState(false);
+  /** Кабинет закрыт модератором — заказ только смотреть, закрыть или удалить. */
+  const writable = useSession().me.advertiser === 'open';
 
   /** Продлить можно открытый заказ со сроком и заказ, закрытый по сроку. */
   const canExtend =
-    order.status === 'EXPIRED' || (order.status === 'OPEN' && !!order.deadline);
+    writable &&
+    (order.status === 'EXPIRED' ||
+      (order.status === 'OPEN' && !!order.deadline));
 
   async function run(question: string | null, action: () => Promise<unknown>) {
     if (question && !window.confirm(question)) return;
@@ -215,7 +233,7 @@ function OrderItem({
         </div>
       )}
       <div className={s.buttons}>
-        {order.status === 'REJECTED' && (
+        {writable && order.status === 'REJECTED' && (
           <button
             type="button"
             className={`${s.btn} ${s.primary}`}
@@ -224,18 +242,19 @@ function OrderItem({
             {t('myOrderCard.fix')}
           </button>
         )}
-        {(order.status === 'PENDING_MODERATION' ||
-          order.status === 'OPEN' ||
-          order.status === 'EDIT_REJECTED') && (
-          <button
-            type="button"
-            className={s.btn}
-            disabled={busy}
-            onClick={() => void navigate(`/my-orders/${order.id}/edit`)}
-          >
-            {t('myOrderCard.edit')}
-          </button>
-        )}
+        {writable &&
+          (order.status === 'PENDING_MODERATION' ||
+            order.status === 'OPEN' ||
+            order.status === 'EDIT_REJECTED') && (
+            <button
+              type="button"
+              className={s.btn}
+              disabled={busy}
+              onClick={() => void navigate(`/my-orders/${order.id}/edit`)}
+            >
+              {t('myOrderCard.edit')}
+            </button>
+          )}
         {canExtend && (
           <button
             type="button"
@@ -257,7 +276,8 @@ function OrderItem({
           </button>
         )}
         {/* та же форма, что «Исправить»: поля подставятся из этого заказа */}
-        {order.status !== 'REJECTED' &&
+        {writable &&
+          order.status !== 'REJECTED' &&
           order.status !== 'PENDING_MODERATION' &&
           order.status !== 'EDIT_REJECTED' && (
             <button

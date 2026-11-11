@@ -8,6 +8,7 @@ import {
   Get,
   NotFoundException,
   Param,
+  Post,
   Put,
   Req,
   Res,
@@ -28,6 +29,9 @@ import { ModeratorGuard } from '../auth/moderator.guard';
 import { parseWallet } from '../payouts/trc20';
 import { parseLinks } from './profile-input';
 import { ProfilesService } from './profiles.service';
+import { LinkVerificationsService } from './link-verifications.service';
+import { Throttle } from '@nestjs/throttler';
+import { AdvertisersService } from '../advertisers/advertisers.service';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
 
 @Controller('api')
@@ -38,18 +42,51 @@ export class ProfilesController {
     private readonly moderatorGuard: ModeratorGuard,
     private readonly photos: TelegramPhotosService,
     private readonly notifications: NotificationsService,
+    private readonly advertisers: AdvertisersService,
+    private readonly links: LinkVerificationsService,
   ) {}
 
-  /** Свой профиль креатора. */
+  /** Свой профиль креатора; `advertiser` — что показать на месте кнопки «Стать заказчиком». */
   @Get('profile')
   async mine(@Req() req: ApiRequest) {
-    return { ...(await this.profiles.profile(req.user.id, true)), ban: null };
+    const [profile, advertiser, linkChecks] = await Promise.all([
+      this.profiles.profile(req.user.id, true),
+      this.advertisers.access(
+        req.user,
+        this.moderatorGuard.isModerator(req.user),
+      ),
+      // код и статус подтверждения каждой ссылки — только самому креатору
+      this.links.checks(req.user.id, req.user.socialLinks),
+    ]);
+    return { ...profile, ban: null, advertiser, linkChecks };
   }
 
   /** Ссылки на соцсети в своём профиле. */
   @Put('profile/links')
   async updateLinks(@Body() body: unknown, @Req() req: ApiRequest) {
     await this.profiles.updateLinks(req.user.id, parseLinks(body));
+    return { ok: true };
+  }
+
+  /** «Код добавлен»: ссылка из профиля уходит модератору сверить код в описании аккаунта. */
+  @Post('profile/links/verify')
+  @Throttle({ default: { limit: 20, ttl: 60 * 60_000 } })
+  async verifyLink(@Body('url') url: unknown, @Req() req: ApiRequest) {
+    if (typeof url !== 'string')
+      throw new BadRequestException(tr('errors.linkNotInProfile'));
+    const check = await this.links.submit(
+      req.user.id,
+      req.user.socialLinks,
+      url,
+    );
+    this.notifications.linkSubmitted(check.user, url);
+    return { ok: true };
+  }
+
+  /** Креатор открыл «Обучение» — пункт «Прочитать урок» в чек-листе «Старт», общий для мини-аппа и сайта. */
+  @Post('profile/lesson-seen')
+  async lessonSeen(@Req() req: ApiRequest) {
+    if (!req.user.lessonSeenAt) await this.profiles.markLessonSeen(req.user.id);
     return { ok: true };
   }
 
@@ -116,9 +153,15 @@ export class ProfilesController {
       id,
       moderator || id === req.user.id,
       req.user.id,
+      moderator,
     );
-    // причина блокировки — внутреннее дело модерации
-    return moderator ? profile : { ...profile, ban: null };
+    // причина блокировки и кабинет заказчика — внутреннее дело модерации
+    if (!moderator) return { ...profile, ban: null, advertiser: null };
+    const user = await this.profiles.userOf(id);
+    return {
+      ...profile,
+      advertiser: user && (await this.advertisers.access(user, false)),
+    };
   }
 
   /**

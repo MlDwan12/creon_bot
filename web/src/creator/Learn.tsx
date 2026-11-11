@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { markLessonSeen } from '../api';
 import { tList } from '../i18n';
 import s from '../ui.module.css';
 
@@ -10,6 +12,11 @@ const LESSONS = ['take', 'shoot', 'submit', 'timing', 'withdraw', 'rules'];
 
 export function Learn() {
   const { t } = useTranslation();
+  // пункт «Прочитать урок» в чек-листе «Старт» (CreatorHome) — открыл «Обучение», значит прочитал
+  // на сервере — отметка общая для мини-аппа и сайта; не дошло — отметится при следующем открытии
+  useEffect(() => {
+    markLessonSeen().catch(() => {});
+  }, []);
   return (
     <div className={`${s.page} ${s.narrow}`}>
       <header>

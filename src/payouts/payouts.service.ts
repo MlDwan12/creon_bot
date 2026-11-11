@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PayoutStatus, Prisma, SubmissionStatus } from '@prisma/client';
+import { PayoutStatus, Prisma } from '@prisma/client';
 import { toMinor } from '../common/money';
 import { ORDER_CURRENCY, HOLD_DAYS } from '../orders/budget';
 import { DAY_MS } from '../orders/deadline';
@@ -43,17 +43,17 @@ export class PayoutsService {
    * подойдёт срок итога у самого раннего из них.
    */
   async balance(creatorId: number, db: Prisma.TransactionClient = this.prisma) {
-    const approved = { creatorId, status: SubmissionStatus.MODERATOR_APPROVED };
-    const [earned, held, payouts] = await Promise.all([
-      db.submission.aggregate({
-        where: approved,
-        _sum: { payoutMinor: true },
-      }),
-      db.submission.aggregate({
-        where: { ...approved, finalizedAt: null },
-        _sum: { payoutMinor: true },
-        _min: { decidedAt: true },
-      }),
+    // Начислено и в холде — одним запросом, в одном снимке: отмена начисления модератором
+    // (publicationDeleted) между двумя запросами убрала бы ролик из холда, но не из начисленного.
+    const [[approved], payouts] = await Promise.all([
+      db.$queryRaw<
+        { earned: bigint | null; held: bigint | null; firstHeld: Date | null }[]
+      >`
+        SELECT SUM("payoutMinor") AS earned,
+          SUM("payoutMinor") FILTER (WHERE "finalizedAt" IS NULL) AS held,
+          MIN("decidedAt") FILTER (WHERE "finalizedAt" IS NULL) AS "firstHeld"
+        FROM "Submission"
+        WHERE "creatorId" = ${creatorId} AND status = 'MODERATOR_APPROVED'`,
       db.payout.groupBy({
         by: ['status'],
         where: { creatorId, status: { in: HOLDS_BALANCE } },
@@ -62,11 +62,11 @@ export class PayoutsService {
     ]);
     const sum = (status: PayoutStatus) =>
       payouts.find((p) => p.status === status)?._sum.amountMinor ?? 0;
-    const earnedMinor = earned._sum.payoutMinor ?? 0;
-    const heldMinor = held._sum.payoutMinor ?? 0;
+    const earnedMinor = Number(approved.earned ?? 0);
+    const heldMinor = Number(approved.held ?? 0);
     const paidMinor = sum(PayoutStatus.PAID);
     const requestedMinor = sum(PayoutStatus.REQUESTED);
-    const firstHeld = held._min.decidedAt;
+    const firstHeld = approved.firstHeld;
     return {
       earnedMinor,
       heldMinor,

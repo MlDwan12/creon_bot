@@ -13,7 +13,15 @@ import OnboardingOverlay from './components/OnboardingOverlay';
 import RoleSwitch from './components/RoleSwitch';
 import TabBar from './components/TabBar';
 import { banned as bannedStore, fetchMe } from './api';
-import { moderator, role, roleOfPath, setRole } from './role';
+import {
+  advertiserCabinet,
+  APPLY_PATH,
+  moderator,
+  role,
+  roleLoaded,
+  roleOfPath,
+  setRole,
+} from './role';
 import type { RouteHandle } from './router';
 import { useStore } from './store';
 import { inTelegram, openTelegramLink, webApp } from './telegram';
@@ -24,6 +32,8 @@ export default function App() {
   const navigate = useNavigate();
   const banned = useStore(bannedStore);
   const isModerator = useStore(moderator);
+  const cabinet = useStore(advertiserCabinet);
+  const loaded = useStore(roleLoaded);
   const matches = useMatches();
   const handle = (matches[matches.length - 1]?.handle ?? {}) as RouteHandle;
 
@@ -100,8 +110,20 @@ export default function App() {
   // Модератора — в его окно, остальных — из него. Это только навигация:
   // права на каждый /api/mod/* всё равно проверяет бэкенд (ModeratorGuard).
   const inModeration = pathname.startsWith('/mod');
-  if (pathname !== '/privacy' && isModerator !== inModeration)
+  // юридические страницы открывают все, в том числе вне Telegram
+  const legal = pathname === '/privacy' || pathname === '/terms';
+  if (!legal && isModerator !== inModeration)
     return <Navigate to={isModerator ? '/mod' : '/'} replace />;
+
+  // Кабинета заказчика нет — экраны заказчика ведут на заявку. Профиль креатора (/creators/:id)
+  // открывают и без кабинета: сервер сам решает, кому он виден.
+  if (
+    loaded &&
+    !cabinet &&
+    roleOfPath(pathname) === 'advertiser' &&
+    !pathname.startsWith('/creators/')
+  )
+    return <Navigate to={APPLY_PATH} replace />;
 
   if (banned)
     return (
@@ -152,10 +174,10 @@ export default function App() {
         </button>
       )}
       {/* на главных экранах вкладок: «Креатор / Заказчик» (role.ts) */}
-      {handle.tab && <RoleSwitch key={`role:${lang}`} />}
+      {handle.tab && cabinet && <RoleSwitch key={`role:${lang}`} />}
       <Outlet key={`${lang}:${pathname}`} />
       <TabBar key={`tabs:${lang}`} />
-      {!inModeration && pathname !== '/privacy' && <OnboardingOverlay />}
+      {!inModeration && !legal && <OnboardingOverlay />}
       {/* модератору — своё введение: его окно и правила площадки */}
       {inModeration && <ModOnboarding />}
     </>

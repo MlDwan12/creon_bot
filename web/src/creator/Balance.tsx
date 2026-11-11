@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
+import { heldVideos, holdOverdue } from '@fixum/shared';
 import {
   type Balance as BalanceData,
   errorText,
   fetchBalance,
+  fetchMySubmissions,
+  type MySubmission,
   fetchRate,
   requestPayout,
 } from '../api';
@@ -34,6 +37,8 @@ function shortWallet(w: string) {
 export function Balance() {
   const { t } = useTranslation();
   const [balance, setBalance] = useState<BalanceData>();
+  // ролики в холде — из «Моих откликов»; не загрузились — просто без списка
+  const [held, setHeld] = useState<MySubmission[]>([]);
   const [loadError, setLoadError] = useState('');
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
@@ -46,8 +51,12 @@ export function Balance() {
   const load = useCallback(async () => {
     setLoadError('');
     try {
-      const b = await fetchBalance();
+      const [b, subs] = await Promise.all([
+        fetchBalance(),
+        fetchMySubmissions().catch(() => []),
+      ]);
       setBalance(b);
+      setHeld(heldVideos(subs));
       // выводим целые USDT, без центов
       setAmount(String(Math.floor(b.available) || ''));
     } catch (err) {
@@ -180,6 +189,42 @@ export function Balance() {
         <p className={s.hint}>
           {t('balance.minPayout', { amount: formatMoney(balance.minPayout) })}
         </p>
+      )}
+
+      {held.length > 0 && (
+        <>
+          <h2>{t('balance.heldList')}</h2>
+          <div className={s.tableWrap}>
+            <table className={s.table}>
+              <tbody>
+                {held.map((sub) => (
+                  <tr key={sub.id}>
+                    <td>
+                      <Link className={s.cellLink} to="/submissions">
+                        {sub.order.title}
+                      </Link>
+                      {sub.attempt > 1 && (
+                        <small>
+                          {t('submissionCard.attempt', { n: sub.attempt })}
+                        </small>
+                      )}
+                    </td>
+                    <td>
+                      {holdOverdue(sub.holdEndsAt)
+                        ? t('balance.heldChecking')
+                        : t('balance.heldUntil', {
+                            date: formatDate(sub.holdEndsAt!),
+                          })}
+                    </td>
+                    <td className={s.num}>
+                      <strong>{formatMoney(sub.payout)}</strong>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {balance.payouts.length > 0 && (

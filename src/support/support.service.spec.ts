@@ -70,6 +70,38 @@ describe('тема поддержки привязана к группе', () =>
     expect(text?.[2]).toMatchObject({ message_thread_id: 42 });
   });
 
+  it('тему подписывает сервер по номеру заказа — с названием из базы, отдельно от текста', async () => {
+    const sent: unknown[][] = [];
+    const s = new SupportService(
+      {
+        telegram: {
+          reopenForumTopic: () => Promise.resolve(),
+          createForumTopic: () => Promise.resolve({ message_thread_id: 42 }),
+          sendMessage: (...args: unknown[]) => (
+            sent.push(args),
+            Promise.resolve()
+          ),
+        },
+      } as unknown as Telegraf<Context>,
+      {
+        user: { update: () => Promise.resolve() },
+        order: {
+          count: () => Promise.resolve(0),
+          findUnique: () => Promise.resolve({ title: 'Обзор <крема>' }),
+        },
+        submission: { count: () => Promise.resolve(0) },
+      } as unknown as PrismaService,
+      { get: () => '-100new' } as unknown as ConfigService,
+    );
+    await s.fromApp(user as never, 'не пришли деньги', {
+      orderId: 12,
+      payout: false,
+    });
+    expect(sent.map((a) => String(a[1]))).toContain(
+      '📱 <i>из приложения</i> · <b>Вопрос по заказу #12 «Обзор &lt;крема&gt;»</b>\n\nне пришли деньги',
+    );
+  });
+
   it('ответ в теме ищет пользователя только в текущей группе', async () => {
     const findFirst = jest.fn(() => Promise.resolve(null));
     const s = new SupportService(

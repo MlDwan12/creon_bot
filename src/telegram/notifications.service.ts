@@ -60,6 +60,8 @@ const SEND_TIMEOUT_MS = 10_000;
 const MAX_ATTEMPTS = 5;
 /** Рассылки (новый заказ всем) — после обычных уведомлений. */
 const PRIORITY_BROADCAST = 1;
+/** Экран заказа в рассылке о новом заказе — по нему воркер узнаёт заказ. */
+const ORDER_PATH = '/orders/';
 
 /**
  * Все уведомления в чат бота о событиях из Mini App. К каждому — кнопка, открывающая нужный экран.
@@ -157,7 +159,7 @@ export class NotificationsService
       });
       this.prisma.$executeRaw`
         INSERT INTO "Notification" ("chatId", "text", "path", "priority", "lang")
-        SELECT "telegramId", ${text}, ${`/orders/${order.id}`}, ${PRIORITY_BROADCAST}, ${lang}
+        SELECT "telegramId", ${text}, ${`${ORDER_PATH}${order.id}`}, ${PRIORITY_BROADCAST}, ${lang}
         FROM "User"
         WHERE id <> ${order.advertiserId} AND "bannedAt" IS NULL AND "notifyNewOrders"
           AND ${lang === 'en' ? isEn : Prisma.sql`NOT ${isEn}`} ${notModerator}`.catch(
@@ -280,6 +282,34 @@ export class NotificationsService
         }),
       '/submissions',
       true,
+    );
+  }
+
+  /**
+   * Во время холда площадка не нашла ролик: креатору — вернуть публикацию, модераторам — пометка
+   * (решение — при итоге холда, «Публикация удалена»).
+   */
+  publicationGone(submission: SubmissionWithParties) {
+    this.send(
+      submission.creator,
+      (t, lang) =>
+        t('notify.publicationGone', {
+          order: forCreator(submission.order, lang),
+        }),
+      '/submissions',
+      true,
+    );
+    this.toModerators(
+      [
+        '👻 <b>Ролик пропал во время холда</b>',
+        '',
+        `Заказ #${submission.order.id}: <b>${escapeHtml(submission.order.title)}</b>`,
+        `Креатор: ${escapeHtml(creatorLabel(submission.creator))}`,
+        `Видео: ${escapeHtml(submission.videoUrl ?? '')}`,
+        '',
+        'Площадка не нашла публикацию. Итог холда сам не зафиксируется — проверьте в конце холда.',
+      ].join('\n'),
+      `/mod/videos/${submission.id}`,
     );
   }
 
@@ -501,6 +531,48 @@ export class NotificationsService
     );
   }
 
+  /** Модераторам: заявка в заказчики — контакты в теме поддержки и в очереди. */
+  advertiserApplied(user: User) {
+    this.toModerators(
+      `💼 <b>Заявка в заказчики</b>\nОт: ${escapeHtml(creatorLabel(user))}`,
+      '/mod',
+    );
+  }
+
+  /** Модераторам: креатор просит подтвердить аккаунт соцсети кодом. */
+  linkSubmitted(user: User, url: string) {
+    this.toModerators(
+      `🔑 <b>Подтверждение аккаунта</b>\nОт: ${escapeHtml(creatorLabel(user))}\n${escapeHtml(url)}`,
+      '/mod?tab=links',
+    );
+  }
+
+  /** Креатору: модератор проверил код в описании аккаунта. */
+  linkDecided(user: User, url: string, verified: boolean) {
+    this.send(
+      user,
+      (t) => t(verified ? 'notify.linkVerified' : 'notify.linkNoCode', { url }),
+      '/profile',
+    );
+  }
+
+  /** Кабинет заказчика открыт — по заявке или модератором сам. */
+  advertiserOpened(user: User) {
+    this.send(user, (t) => t('notify.advertiserOpened'), '/my-orders');
+  }
+
+  advertiserRejected(user: User, retryAt: Date) {
+    this.send(
+      user,
+      (t) => t('notify.advertiserRejected', { date: formatDeadline(retryAt) }),
+      '/profile',
+    );
+  }
+
+  advertiserClosed(user: User) {
+    this.send(user, (t) => t('notify.advertiserClosed'), '/my-orders');
+  }
+
   /** Креатору: заявку на вывод выполнили или отклонили. */
   payoutDecided(payout: Payout & { creator: User }) {
     this.send(
@@ -656,10 +728,26 @@ export class NotificationsService
         })
       ).map((u) => u.telegramId),
     );
+    // Рассылка о новом заказе ждёт в очереди: заказ могли снять, закрыть или отправить на правку —
+    // о таком не пишем (и по старому названию тоже), проверяем тоже в момент отправки.
+    const announced = batch
+      .filter((n) => n.priority === PRIORITY_BROADCAST)
+      .map((n) => Number(n.path.slice(ORDER_PATH.length)));
+    const open = new Set(
+      announced.length
+        ? (
+            await this.prisma.order.findMany({
+              where: { id: { in: announced }, status: OrderStatus.OPEN },
+              select: { id: true },
+            })
+          ).map((o) => `${ORDER_PATH}${o.id}`)
+        : [],
+    );
     for (const n of batch) {
       // остановка: недосланное из пачки уйдёт после рестарта, когда истечёт «аренда»
       if (this.stopping) break;
-      if (!banned.has(n.chatId)) await this.deliver(n);
+      const stale = n.priority === PRIORITY_BROADCAST && !open.has(n.path);
+      if (!banned.has(n.chatId) && !stale) await this.deliver(n);
       else await this.prisma.notification.delete({ where: { id: n.id } });
       await sleep(SEND_GAP_MS);
     }

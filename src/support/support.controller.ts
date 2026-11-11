@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { SupportService } from './support.service';
-import { isMeaningfulText } from '../common/validation';
+import { isDbId, isMeaningfulText } from '../common/validation';
 import { type ApiRequest, InitDataGuard } from '../auth/init-data.guard';
 import { UserThrottlerGuard } from '../auth/user-throttler.guard';
 
@@ -26,7 +26,11 @@ export class SupportController {
 
   @Post()
   @Throttle({ default: { limit: 10, ttl: 60 * 60_000 } })
-  async send(@Body('text') value: unknown, @Req() req: ApiRequest) {
+  async send(
+    @Body() body: { text?: unknown; orderId?: unknown; topic?: unknown },
+    @Req() req: ApiRequest,
+  ) {
+    const value = body?.text;
     if (!this.support.chatId)
       throw new NotFoundException(tr('errors.supportOff'));
     const text = typeof value === 'string' ? value.trim() : '';
@@ -42,7 +46,10 @@ export class SupportController {
         tr(allowed === 'flood' ? 'errors.supportFlood' : 'errors.supportBusy'),
         HttpStatus.TOO_MANY_REQUESTS,
       );
-    await this.support.fromApp(req.user, text);
+    // тема — только заказ или выплата: свой текст темы клиент не передаёт (подписывает сервер)
+    const orderId = isDbId(body.orderId) ? body.orderId : null;
+    const payout = body.topic === 'payout';
+    await this.support.fromApp(req.user, text, { orderId, payout });
     return { ok: true };
   }
 }

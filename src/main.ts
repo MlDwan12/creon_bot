@@ -30,6 +30,9 @@ async function bootstrap() {
   });
   // не подсказываем снаружи, на чём сервер
   app.disable('x-powered-by');
+  // Перед ботом — nginx на том же сервере (с хоста — 127.0.0.1, из docker — адрес моста 172.x):
+  // req.ip берём из его X-Forwarded-For, подделать адрес клиент не может — доверяем только этим сетям.
+  app.set('trust proxy', 'loopback, uniquelocal');
   app.use(securityHeaders);
   // язык запроса для текстов ошибок (src/i18n/request-lang.ts) — до всех обработчиков
   app.use(requestLangMiddleware);

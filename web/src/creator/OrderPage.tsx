@@ -10,6 +10,7 @@ import {
   PLATFORM_NAMES,
   safeUrl,
 } from '../api';
+import { supportSearch } from '@fixum/shared';
 import { Complaint } from '../components/Complaint';
 import { PlatformIcon } from '../components/PlatformIcon';
 import {
@@ -87,11 +88,12 @@ export function OrderPage() {
     .filter((v) => v >= min)
     .sort((a, b) => a - b);
   const views = calcViews ?? presets[Math.min(2, presets.length - 1)];
-  /** Выплата за просмотры по ставке, но не больше свободного остатка бюджета. */
+  /** Выплата за просмотры по ставке, но не больше лимита на ролик и свободного остатка бюджета. */
   const earning =
     order.cpm && views
       ? Math.min(
           order.freeUnder ?? order.free,
+          order.maxPayout ?? Infinity,
           Math.round((views / 1000) * order.cpm * 100) / 100,
         )
       : 0;
@@ -123,6 +125,12 @@ export function OrderPage() {
                 {t('order.fromViews', { views: formatViews(order.minViews) })}
               </span>
             </div>
+            {order.maxPayout !== null && (
+              <div className={s.row}>
+                <span>{t('order.maxPayout')}</span>
+                <span>{formatMoney(order.maxPayout)}</span>
+              </div>
+            )}
             {order.deadline && (
               <div className={s.row}>
                 <span>{t('order.dueBy')}</span>
@@ -146,6 +154,13 @@ export function OrderPage() {
                   </span>
                 ))}
               </div>
+            )}
+            {order.requirements.length > 0 && (
+              <ul aria-label={t('order.requirementsList')}>
+                {order.requirements.map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
             )}
             {safeUrl(order.referenceUrl) && (
               <a
@@ -301,7 +316,7 @@ export function OrderPage() {
             </button>
           )}
           <Link
-            to={`/support?${new URLSearchParams({ about: t('order.supportAbout', { id: order.id, title: order.title }) })}`}
+            to={`/support${supportSearch({ orderId: order.id })}`}
             className={s.small}
           >
             {t('order.supportLabel', { id: order.id })}

@@ -33,6 +33,17 @@ export function trackLink(trackCode: string | null) {
   return trackCode ? `${appBase()}/r/${trackCode}` : null;
 }
 
+/** Публичный отчёт заказа на сайте; null — ссылки нет или адрес сайта (WEB_URL) не задан. */
+export function shareLink(token: string | null) {
+  const web = (process.env.WEB_URL ?? '').replace(/\/$/, '');
+  return token && web ? `${web}/share/${token}` : null;
+}
+
+/** Делиться отчётом можно, только если известен адрес сайта, где он откроется. */
+export function canShare() {
+  return !!process.env.WEB_URL;
+}
+
 function appBase() {
   return (process.env.WEBAPP_URL ?? '').replace(/\/$/, '');
 }
@@ -83,6 +94,8 @@ export function buildOrderReport(
       likes: s.likes,
       clicks: order.targetUrl ? s.clicks : null,
       rating: s.rating,
+      // оценку ставят один раз; снятую модератором — не ставят заново
+      rateable: s.rating === null && !s.reviewRemovedAt,
       approvedAt: s.decidedAt,
     };
   });
@@ -114,16 +127,42 @@ export function buildOrderReport(
 type Report = ReturnType<typeof buildOrderReport>;
 
 /**
+ * Отчёт для тех, у кого есть ссылка (руководитель заказчика), — без входа. Результат и расход
+ * есть, а бюджет, остаток и резерв, id креаторов и оценки — только у самого заказчика.
+ * Ролики — тем же редиректом /v/<код>: контактов креаторов нет и здесь.
+ */
+export function publicReport(report: Report) {
+  const { summary } = report;
+  return {
+    order: { title: report.order.title, status: report.order.status },
+    summary: {
+      spent: summary.spent,
+      views: summary.views,
+      likes: summary.likes,
+      clicks: summary.clicks,
+      videos: summary.videos,
+      creators: summary.creators,
+      cpm: summary.cpm,
+    },
+    platforms: report.platforms,
+    items: report.items.map((i) => ({
+      videoUrl: i.videoUrl,
+      platform: i.platform,
+      creator: i.creator,
+      views: i.views,
+      likes: i.likes,
+      clicks: i.clicks,
+      approvedAt: i.approvedAt,
+    })),
+  };
+}
+
+/**
  * CSV для Excel: `;` и BOM — иначе русская Excel склеит колонки и сломает кириллицу. Имя креатора
  * пишет он сам, поэтому ячейки, похожие на формулу (=, +, -, @), экранируем апострофом.
  */
 export function reportCsv(report: Report): string {
-  const cell = (value: string | number) => {
-    const text = String(value);
-    const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
-    return `"${safe.replace(/"/g, '""')}"`;
-  };
-  const rows = [
+  return csvFile([
     [
       tr('errors.csvCreator'),
       tr('errors.csvPlatform'),
@@ -144,6 +183,15 @@ export function reportCsv(report: Report): string {
       i.clicks ?? '',
       i.approvedAt ? i.approvedAt.toISOString().slice(0, 10) : '',
     ]),
-  ];
+  ]);
+}
+
+/** Строки в CSV для Excel (см. выше). */
+export function csvFile(rows: (string | number)[][]): string {
+  const cell = (value: string | number) => {
+    const text = String(value);
+    const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+    return `"${safe.replace(/"/g, '""')}"`;
+  };
   return '﻿' + rows.map((r) => r.map(cell).join(';')).join('\r\n');
 }

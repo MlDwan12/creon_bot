@@ -152,6 +152,15 @@
   line-height: 1.5;
   color: var(--hint);
 }
+.apply-note {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--orange-soft);
+  color: var(--orange-text);
+  font-size: 14px;
+  line-height: 1.45;
+}
 .start {
   margin-top: auto;
 }
@@ -167,4 +176,12 @@
     font-size: 13px;
     line-height: 1.4;
   }
+}
+
+/* «Почему Fixum» под шагами */
+.why {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
 }

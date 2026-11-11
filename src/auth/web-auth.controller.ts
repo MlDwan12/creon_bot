@@ -1,15 +1,20 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
+  Headers,
   HttpCode,
   Post,
   Res,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { UsersService } from '../users/users.service';
+import { WebLoginService } from './web-login.service';
 import {
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
@@ -31,32 +36,47 @@ const COOKIE = {
 /**
  * Вход на сайт через Telegram Login Widget: проверяем подпись данных виджета и ставим cookie сессии,
  * дальше все эндпоинты API пускает InitDataGuard — как мини-апп, но по cookie.
- * Лимит запросов — nginx (подделать подпись перебором всё равно нельзя).
+ * Лимит — по IP (пользователя до входа ещё нет): общий 60 в минуту, у входа — 20 в минуту.
  */
 @Controller('api/web')
+@UseGuards(ThrottlerGuard)
 export class WebAuthController {
   constructor(
     private readonly config: ConfigService,
     private readonly users: UsersService,
+    private readonly webLogin: WebLoginService,
   ) {}
 
   /**
    * id бота для окна входа Telegram (Telegram.Login.auth): у прода и дев-стенда боты разные, а сборка
-   * сайта — одна. id — часть токена до двоеточия, не секрет.
+   * сайта — одна. id — часть токена до двоеточия, не секрет. botUrl — ссылка «мини-приложение» под входом.
    */
   @Get('config')
-  webConfig() {
+  async webConfig() {
     return {
       botId: Number(this.config.get<string>('BOT_TOKEN')!.split(':')[0]),
+      // чат с ботом — из него открывается мини-апп; Telegram недоступен — без ссылки
+      botUrl: await this.webLogin.username().then(
+        (name) => `https://t.me/${name}`,
+        () => null,
+      ),
+      // политика — страница мини-аппа, открывается и в обычном браузере (webapp/src/views/PrivacyView.tsx)
+      privacyUrl: legalUrl('privacy'),
+      termsUrl: legalUrl('terms'),
     };
   }
 
   @Post('login')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @HttpCode(204)
   async login(
     @Body() body: unknown,
+    @Headers('x-fixum-web') web: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ) {
+    // тот же заголовок, что для cookie (InitDataGuard): без него чужая страница отправила бы форму
+    // входа с чужими данными виджета, и жертва работала бы под аккаунтом того, кто её подсунул
+    if (web !== '1') throw new ForbiddenException();
     const token = this.config.get<string>('BOT_TOKEN')!;
     const login = validateLoginWidget(body, token, LOGIN_MAX_AGE_SECONDS);
     if (!login) throw new UnauthorizedException();
@@ -72,9 +92,45 @@ export class WebAuthController {
     });
   }
 
+  /** Вход кодом из бота, шаг 1: одноразовая ссылка на бота (WebLoginService). */
+  @Post('login/start')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  startCodeLogin(@Headers('x-fixum-web') web: string | undefined) {
+    if (web !== '1') throw new ForbiddenException();
+    return this.webLogin.start();
+  }
+
+  /** Шаг 2: код, который бот прислал в Telegram, — ставим ту же сессию, что и вход через виджет. */
+  @Post('login/code')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @HttpCode(204)
+  async codeLogin(
+    @Body() body: { token?: unknown; code?: unknown } | undefined,
+    @Headers('x-fixum-web') web: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (web !== '1') throw new ForbiddenException();
+    const token = typeof body?.token === 'string' ? body.token : '';
+    const code = typeof body?.code === 'string' ? body.code.trim() : '';
+    const userId = await this.webLogin.verify(token, code);
+    // свежесть входа (assertFreshLogin) — от момента ввода кода
+    const authDate = Math.floor(Date.now() / 1000);
+    res.cookie(
+      SESSION_COOKIE,
+      signSession(userId, authDate, this.config.get<string>('BOT_TOKEN')!),
+      { ...COOKIE, maxAge: SESSION_MAX_AGE_SECONDS * 1000 },
+    );
+  }
+
   @Post('logout')
   @HttpCode(204)
   logout(@Res({ passthrough: true }) res: Response) {
     res.clearCookie(SESSION_COOKIE, COOKIE);
   }
+}
+
+/** Юридическая страница мини-аппа (/privacy, /terms); без WEBAPP_URL — null. */
+function legalUrl(page: string) {
+  const app = process.env.WEBAPP_URL?.replace(/\/$/, '');
+  return app ? `${app}/${page}` : null;
 }

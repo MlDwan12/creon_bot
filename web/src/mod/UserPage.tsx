@@ -3,11 +3,13 @@ import { Link, useParams } from 'react-router';
 import {
   ACTION_LABELS,
   banUser,
+  closeAdvertiser,
   type CreatorProfile,
   errorText,
   fetchCreator,
   fetchUserHistory,
   type ModUserHistory,
+  openAdvertiser,
   reasonLabel,
   reportObject,
   safeUrl,
@@ -15,6 +17,15 @@ import {
 } from '../api';
 import { formatDate } from '../format';
 import s from '../ui.module.css';
+
+/** Кабинет заказчика словами — как в мини-аппе (ProfileView, MOD_ADVERTISER). */
+const ADVERTISER_STATE = {
+  open: 'Открыт',
+  closed: 'Закрыт модератором',
+  pending: 'Заявка на рассмотрении — решить можно и в очереди',
+  rejected: 'Заявка отклонена',
+  none: 'Нет',
+} as const;
 
 const REPORT_STATUS: Record<'OPEN' | 'ACTIONED' | 'DISMISSED', string> = {
   OPEN: 'ждёт решения',
@@ -196,7 +207,7 @@ export function UserPage() {
           {profile.ban ? (
             <>
               <p className={s.dangerNote}>
-                Заблокирован{profile.ban.final && ' без права обжалования'}{' '}
+                {profile.ban.final ? 'Бан без обжалования' : 'Бан'} с{' '}
                 {formatDate(profile.ban.at)}
                 {profile.ban.reason && `: ${profile.ban.reason}`}
               </p>
@@ -285,6 +296,45 @@ export function UserPage() {
             >
               Заблокировать пользователя
             </button>
+          )}
+          {profile.advertiser && (
+            <>
+              <h2>Кабинет заказчика</h2>
+              <p className={s.hint}>
+                {ADVERTISER_STATE[profile.advertiser.state]}
+                {profile.advertiser.retryAt &&
+                  `, повтор с ${formatDate(profile.advertiser.retryAt)}`}
+              </p>
+              {profile.advertiser.state === 'open' ? (
+                <button
+                  type="button"
+                  className={`${s.btn} ${s.reject}`}
+                  disabled={busy}
+                  onClick={() =>
+                    act(
+                      () => closeAdvertiser(profile.id),
+                      'Закрыть кабинет заказчика? Активные заказы останутся, новых и правок не будет. Вернуть — только модератор.',
+                    )
+                  }
+                >
+                  Закрыть кабинет заказчика
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={s.btn}
+                  disabled={busy}
+                  onClick={() =>
+                    act(
+                      () => openAdvertiser(profile.id),
+                      'Открыть кабинет заказчика? Он сможет создавать заказы.',
+                    )
+                  }
+                >
+                  Открыть кабинет заказчика
+                </button>
+              )}
+            </>
           )}
           {error && (
             <p className={s.error} role="alert">

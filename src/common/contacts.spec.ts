@@ -55,6 +55,11 @@ describe('обходы фильтра', () => {
     ['taplink.cc/brand', 'taplink.cc/brand'],
     ['+380 67 123 45 67', '+380 67 123 45 67'],
     ['+1 (555) 123-4567', '+1 (555) 123-4567'],
+    // точки-«иероглифы» и селекторы вариантов: браузер сведёт адрес к t.me / wa.me
+    ['https://t\u3002me/ivan', 'https://t.me/ivan'],
+    ['https://t\uFF61me/ivan', 'https://t.me/ivan'],
+    ['https://t.\uFE0Fme/ivan', 'https://t.me/ivan'],
+    ['https://wa\u3002me/79991234567', 'https://wa.me/79991234567'],
   ])('явный контакт: %s', (text, fragment) => {
     expect(findExactContacts(text)).toContain(fragment);
   });

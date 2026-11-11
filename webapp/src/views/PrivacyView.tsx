@@ -12,7 +12,7 @@ export default function PrivacyView() {
       <main className={s.page} lang="en">
         <h1>Privacy policy</h1>
         <p className={s.hint}>
-          Version of 13.10.2026. This is a translation for convenience; if it
+          Version of 10.11.2026. This is a translation for convenience; if it
           differs from the Russian version, the Russian version prevails.
         </p>
 
@@ -56,7 +56,18 @@ export default function PrivacyView() {
               consent to show a video in the creator's portfolio;
             </li>
             <li>
-              links to your social media, if you added them to your profile;
+              links to your social media, if you added them to your profile, and
+              the code you put in a profile description to confirm the account
+              is yours;
+            </li>
+            <li>
+              if you applied to become an advertiser — the e-mail and, if you
+              gave it, the phone number from the application, so the team can
+              contact you;
+            </li>
+            <li>
+              how many times people followed the product links in your videos —
+              only a counter, without data about who followed them;
             </li>
             <li>
               if you connected a TikTok, VK or Instagram account in your profile
@@ -81,8 +92,13 @@ export default function PrivacyView() {
             your wallet address — it is not shown to advertisers.
           </p>
           <p>
-            We don't receive your phone number, contact list or conversations
-            with other people.
+            We don't receive your phone number from Telegram, your contact list
+            or conversations with other people.
+          </p>
+          <p>
+            On the website we set one cookie for sign-in (valid for 30 days). No
+            advertising or analytics cookies. [If error reporting (Sentry) is on
+            — name it here.]
           </p>
         </section>
 
@@ -183,7 +199,7 @@ export default function PrivacyView() {
   return (
     <main className={s.page}>
       <h1>Политика конфиденциальности</h1>
-      <p className={s.hint}>Редакция от 13.10.2026</p>
+      <p className={s.hint}>Редакция от 10.11.2026</p>
 
       <section>
         <h2>1. Кто обрабатывает данные</h2>
@@ -224,7 +240,19 @@ export default function PrivacyView() {
             оценки и отзывы рекламодателей о креаторах, согласие рекламодателя
             показывать видео в портфолио креатора;
           </li>
-          <li>ссылки на ваши соцсети, если вы добавили их в профиль;</li>
+          <li>
+            ссылки на ваши соцсети, если вы добавили их в профиль, и код,
+            который вы добавили в описание профиля, чтобы подтвердить, что
+            аккаунт ваш;
+          </li>
+          <li>
+            если вы подали заявку «Стать заказчиком» — почту и, если вы его
+            указали, телефон из заявки: по ним с вами свяжется команда;
+          </li>
+          <li>
+            сколько раз переходили по ссылкам на товар из ваших роликов — только
+            счётчик, без данных о тех, кто переходил;
+          </li>
           <li>
             если вы подключили аккаунт TikTok, VK или Instagram в профиле —
             идентификатор и имя аккаунта на площадке и ключи доступа к нему (в
@@ -248,8 +276,13 @@ export default function PrivacyView() {
           рекламодателям он не показывается.
         </p>
         <p>
-          Мы не получаем ваш номер телефона, список контактов и переписку с
-          другими людьми.
+          Мы не получаем от Telegram ваш номер телефона, список контактов и
+          переписку с другими людьми.
+        </p>
+        <p>
+          На сайте мы ставим одну cookie для входа (действует 30 дней).
+          Рекламных и аналитических cookie нет. [Если включён сбор ошибок
+          (Sentry) — указать.]
         </p>
       </section>
 

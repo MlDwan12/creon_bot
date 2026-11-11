@@ -1,5 +1,5 @@
 .page {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-wrap: wrap;
 }
@@ -40,6 +40,9 @@
 .side {
   flex: 1 1 480px;
   display: flex;
+  /* карточка входа, под ней — ссылки на документы и поддержку */
+  flex-direction: column;
+  gap: 16px;
   align-items: center;
   justify-content: center;
   padding: 56px 16px;
@@ -76,7 +79,8 @@
   min-height: 54px;
   border: none;
   border-radius: var(--radius-button);
-  background: #229ed9;
+  /* насыщенный синий: фирменный #229ed9 с белым текстом — 3:1, этот — 4,75:1 (WCAG AA) */
+  background: #0073d6;
   color: #ffffff;
   font: inherit;
   font-size: 17px;
@@ -84,9 +88,134 @@
   cursor: pointer;
 }
 
+/* неактивная — серая, а не бледно-синяя: не путается с рабочей */
 .telegram:disabled {
-  opacity: 0.6;
+  background: var(--fill);
+  color: var(--hint);
   cursor: default;
+}
+
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.steps li {
+  counter-increment: step;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.steps li::before {
+  content: counter(step);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--fill);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.code-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.code-form label {
+  font-weight: 700;
+}
+
+/* код — крупно и с разрядкой: четыре цифры читаются и сверяются с сообщением бота */
+.code-form input {
+  min-height: 56px;
+  padding: 0 16px;
+  border: 1px solid var(--separator);
+  border-radius: 16px;
+  font: inherit;
+  font-family: var(--font-display);
+  font-size: 28px;
+  letter-spacing: 10px;
+  text-align: center;
+}
+
+.code-form input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border-radius: var(--radius-button);
+  background: var(--fill);
+  color: var(--text);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.qr {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--bg);
+  font-size: 14px;
+}
+
+.qr img {
+  flex: none;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.by-phone {
+  padding: 13px 0;
+  margin: -13px 0;
+  border: none;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.lead {
+  margin: 0;
+  max-width: 420px;
+  color: var(--hint);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.narrow-only {
+  display: none;
+}
+
+.legal {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 16px;
+  font-size: 13px;
+}
+.legal a {
+  padding: 6px 0;
+  color: var(--hint);
 }
 
 .error {
@@ -121,11 +250,83 @@
   font-size: 17px;
 }
 
+/* Планшет и телефон: колонки не помещаются рядом — тёмный блок только с логотипом и заголовком,
+   вход сразу под ним, описание и тезисы — под входом */
+@media (max-width: 1000px) {
+  /* лишняя высота экрана — вниз, а не в тёмный блок (иначе пустота между логотипом и заголовком) */
+  .page {
+    align-content: flex-start;
+  }
+  .hero {
+    /* во всю ширину и не выше содержимого (flex: none растянул бы блок по заголовку в одну строку) */
+    flex: 1 1 100%;
+    gap: 24px;
+    padding: 32px;
+  }
+  .wide-only {
+    display: none;
+  }
+  .narrow-only {
+    display: block;
+  }
+  .side {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 16px;
+    padding: 24px 16px;
+  }
+  .side > * {
+    width: 100%;
+    max-width: 480px;
+  }
+}
+
 @media (max-width: 600px) {
   .hero {
-    padding: 32px 16px;
+    gap: 16px;
+    padding: 20px 16px 24px;
+  }
+  .pitch h1 {
+    font-size: 24px;
+    letter-spacing: -0.8px;
+  }
+  .side {
+    align-items: stretch;
+    padding: 16px;
   }
   .card {
-    padding: 24px;
+    padding: 20px;
+    gap: 16px;
   }
+}
+
+/* «Чем отличаемся» — под описанием: по сторонам сделки. Без display — его задают
+   .wide-only / .narrow-only (показ на компьютере и телефоне) */
+.points {
+  max-width: 560px;
+}
+.points section + section {
+  margin-top: 16px;
+}
+.points h2 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--hint);
+}
+.points ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.pitch .points h2 {
+  color: var(--ink-hint);
 }

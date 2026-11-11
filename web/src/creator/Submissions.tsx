@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router';
+import { holdOverdue, reviewDueAt, reviewOverdue } from '@fixum/shared';
 import {
   claimOrder,
   errorText,
@@ -10,6 +11,7 @@ import {
 } from '../api';
 import {
   formatDate,
+  formatDateTime,
   formatDeadline,
   formatMoney,
   formatViews,
@@ -214,7 +216,22 @@ function timeline(sub: MySubmission): Step[] {
           .filter(Boolean)
           .join(' · '),
       },
-      { label: st('review'), detail: st('reviewNote'), state: 'now' },
+      {
+        label: st('review'),
+        // срок решения — REVIEW_SLA_HOURS со сдачи; просрочили — честно говорим, что задерживаемся
+        detail: [
+          sub.submittedAt &&
+            (reviewOverdue(sub.submittedAt)
+              ? st('reviewLate')
+              : st('reviewDue', {
+                  date: formatDateTime(reviewDueAt(sub.submittedAt)),
+                })),
+          st('reviewNote'),
+        ]
+          .filter(Boolean)
+          .join(' '),
+        state: 'now',
+      },
       { label: st('accrual'), state: 'next' },
       { label: st('hold'), state: 'next' },
     ];
@@ -228,18 +245,33 @@ function timeline(sub: MySubmission): Step[] {
     },
     sub.finalized
       ? { label: st('hold'), state: 'done' }
-      : {
-          label: st('holdUntil', { date: on(sub.holdEndsAt) }),
-          detail: st('holdNote'),
-          state: 'now',
-        },
-    { label: st('withdraw'), state: sub.finalized ? 'done' : 'next' },
+      : holdOverdue(sub.holdEndsAt)
+        ? {
+            label: st('holdChecking'),
+            detail: st('holdCheckingNote'),
+            state: 'now',
+          }
+        : {
+            label: st('holdUntil', { date: on(sub.holdEndsAt) }),
+            detail: st('holdNote'),
+            state: 'now',
+          },
+    sub.finalized
+      ? {
+          label: st('withdraw'),
+          detail: [on(sub.finalizedAt), formatMoney(sub.payout)]
+            .filter(Boolean)
+            .join(' · '),
+          state: 'done',
+        }
+      : { label: st('withdraw'), state: 'next' },
   ];
 }
 
 /** Сколько дней холда осталось — в метке статуса, видно и в свёрнутой карточке. */
 function holdLeft(end: string | null) {
-  if (!end) return '';
+  // дата прошла — дни не считаем, в шкале «проверяем публикацию»
+  if (!end || holdOverdue(end)) return '';
   const days = Math.max(
     1,
     Math.ceil((new Date(end).getTime() - Date.now()) / 86_400_000),

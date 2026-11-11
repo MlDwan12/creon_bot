@@ -17,3 +17,16 @@
   line-height: 1.4;
   color: var(--hint);
 }
+.closed {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+.closed p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--hint);
+}

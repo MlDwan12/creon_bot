@@ -1,0 +1,76 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 16px calc(96px + var(--safe-bottom));
+}
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.page h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+.hint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--hint);
+}
+.steps {
+  margin: 0;
+  padding: 18px;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.steps li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.num {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--link);
+  font-size: 13px;
+  font-weight: 700;
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.page input {
+  box-sizing: border-box;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+.page input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--danger);
+}

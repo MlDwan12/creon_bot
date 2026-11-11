@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
+import {
+  requirementReasons,
+  signalTexts,
+  VIEW_SOURCE_LABELS,
+} from '@fixum/shared';
 import { Link, useNavigate, useParams } from 'react-router';
 import {
   ApiError,
@@ -179,11 +184,16 @@ export default function ModVideoView() {
       </main>
     );
 
-  /** Сколько начислится за введённые просмотры (без учёта остатка бюджета). */
+  /** Сколько начислится за введённые просмотры: не больше лимита на ролик (без учёта остатка бюджета). */
   const cpm = video.order.cpm;
   const estimate =
     cpm && Number(views)
-      ? formatMoney(Math.floor((Number(views) * cpm) / 10) / 100)
+      ? formatMoney(
+          Math.min(
+            Math.floor((Number(views) * cpm) / 10) / 100,
+            video.order.maxPayout ?? Infinity,
+          ),
+        )
       : '';
   /** Когда кончается холд и можно зафиксировать итог; null — не одобрен или уже зафиксирован. */
   const holdEndsAt =
@@ -198,10 +208,13 @@ export default function ModVideoView() {
   // ссылка креатора в шапке профиля — такой же пункт сверки, как требования к ролику
   const parts = [
     ...videoFormatParts(video.order),
+    ...video.order.requirements,
     ...(video.order.linkInBio
       ? [`Ссылка в шапке профиля: ${video.order.bioLink ?? 'ссылка креатора'}`]
       : []),
   ];
+  // сигналы накрутки — факты по истории просмотров, креатор их не видит
+  const signals = signalTexts(video.signals, formatViews, formatDate);
   const author = video.author;
   const authorLink = safeUrl(author.url) && (
     <a href={safeUrl(author.url)} target="_blank" rel="noopener noreferrer">
@@ -250,7 +263,11 @@ export default function ModVideoView() {
 
       <p
         className={`${s.author} ${s[author.status] ?? ''}`}
-        role={author.status === 'verified' ? undefined : 'alert'}
+        role={
+          author.status === 'verified' || author.status === 'byCode'
+            ? undefined
+            : 'alert'
+        }
       >
         {author.status === 'verified' ? (
           <>
@@ -273,6 +290,10 @@ export default function ModVideoView() {
             {author.connectedDaysAgo !== null &&
               `. Аккаунт подключён ${author.connectedDaysAgo === 0 ? 'сегодня' : `${author.connectedDaysAgo} дн. назад`} — если ролик чужой и популярный, уточните у креатора через поддержку`}
           </>
+        ) : author.status === 'byCode' ? (
+          <>
+            Автор — {authorLink}: аккаунт креатора, подтверждён кодом в описании
+          </>
         ) : author.status === 'inProfile' ? (
           <>
             Автор — {authorLink}, есть в соцсетях креатора. Владение не
@@ -291,6 +312,19 @@ export default function ModVideoView() {
           </>
         )}
       </p>
+      {author.status !== 'byCode' && video.verifiedLinks.length > 0 && (
+        <p className={s.hint}>
+          Подтверждены кодом:{' '}
+          {video.verifiedLinks.map((l, i) => (
+            <span key={l}>
+              {i > 0 && ', '}
+              <a href={safeUrl(l)} target="_blank" rel="noreferrer">
+                {l}
+              </a>
+            </span>
+          ))}
+        </p>
+      )}
 
       <section className={s.block}>
         <h2 className="section-title">
@@ -352,6 +386,14 @@ export default function ModVideoView() {
           <span>от {formatViews(video.order.minViews)} просмотров</span>
         </div>
         <div className={s.row}>
+          <span>Лимит за ролик</span>
+          <span>
+            {video.order.maxPayout !== null
+              ? formatMoney(video.order.maxPayout)
+              : 'без лимита'}
+          </span>
+        </div>
+        <div className={s.row}>
           <span>Свободно в бюджете</span>
           <span>{formatMoney(video.order.free)}</span>
         </div>
@@ -380,6 +422,31 @@ export default function ModVideoView() {
             </span>
           </div>
         )}
+        {signals.length > 0 && (
+          <div className={s.row}>
+            <span>Сигналы накрутки</span>
+            <span className={s.flag}>
+              {signals.map((line) => (
+                <span key={line}>
+                  {line}
+                  <br />
+                </span>
+              ))}
+            </span>
+          </div>
+        )}
+        {video.viewHistory.length > 1 &&
+          video.viewHistory.map((p) => (
+            <div key={`${p.source}-${p.at}`} className={s.row}>
+              <span>
+                {formatDate(p.at)} · {VIEW_SOURCE_LABELS[p.source]}
+              </span>
+              <span>
+                {formatViews(p.views)}
+                {p.likes !== null && ` · ${formatViews(p.likes)} ♥`}
+              </span>
+            </div>
+          ))}
       </section>
 
       {(video.status === 'SUBMITTED' || holdEndsAt) && (
@@ -421,10 +488,17 @@ export default function ModVideoView() {
         </>
       )}
 
+      {video.goneAt && !video.finalizedAt && (
+        <p className={s.error} role="status">
+          Площадка не нашла ролик с {formatDate(video.goneAt)} — удалён или
+          скрыт. Креатору написали вернуть публикацию; итог сам не
+          зафиксируется. Ролика нет и в конце холда — «Публикация удалена».
+        </p>
+      )}
       {video.status === 'SUBMITTED' && video.inflatedBefore > 0 && (
         <p className={s.error} role="status">
-          Уже отклоняли за завышенные просмотры: {video.inflatedBefore}. Повтор —
-          повод для бана.
+          Уже отклоняли за завышенные просмотры: {video.inflatedBefore}. Повтор
+          — повод для бана.
         </p>
       )}
       {inflated && (
@@ -442,7 +516,10 @@ export default function ModVideoView() {
               id="reasons"
               value={comment}
               onChange={setComment}
-              presets={PRESETS}
+              presets={[
+                ...requirementReasons(video.order.requirements),
+                ...PRESETS,
+              ]}
             />
           )}
           {error && (

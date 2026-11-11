@@ -203,6 +203,14 @@ export default function ModOrderView() {
           <span>Порог</span>
           <span>от {formatViews(order.minViews)} просмотров</span>
         </div>
+        <div className={s.row}>
+          <span>Лимит за ролик</span>
+          <span>
+            {order.maxPayout !== null
+              ? formatMoney(order.maxPayout)
+              : 'без лимита'}
+          </span>
+        </div>
         {order.cpm !== null && (
           <div className={s.row}>
             <span>Ставка</span>
@@ -223,6 +231,16 @@ export default function ModOrderView() {
 
       <div className={s.text}>{order.description}</div>
       {videoFormat && <p className={s.reference}>Ролик: {videoFormat}</p>}
+      {order.requirements.length > 0 && (
+        <div className={s.reference}>
+          Требования:
+          <ul>
+            {order.requirements.map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {order.exampleUrls.length > 0 && (
         <div className={s.reference}>
           Примеры роликов — креаторы видят их без ника автора; проверьте, что

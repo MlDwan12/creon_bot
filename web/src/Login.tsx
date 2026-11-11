@@ -1,6 +1,14 @@
-import { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { fetchWebConfig, login, type TelegramAuth } from './api';
+import { type FormEvent, useEffect, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
+import { renderSVG } from 'uqr';
+import {
+  codeLogin,
+  errorText,
+  fetchWebConfig,
+  login,
+  startCodeLogin,
+  type TelegramAuth,
+} from './api';
 import s from './Login.module.css';
 
 declare global {
@@ -29,23 +37,104 @@ function loadTelegramLogin(): Promise<void> {
   });
 }
 
-/** Вход: Telegram подтверждает его в своём окне, бэкенд проверяет подпись и ставит cookie сессии. */
+const TG_ICON = (
+  <svg
+    width="22"
+    height="22"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M21 4L3 11l6 2 2 6 3-4 5 4z" />
+    <path d="M9 13l8-6" />
+  </svg>
+);
+
+/** Ждём код: токен входа переживает перезагрузку вкладки (телефон выгружает её, пока человек в Telegram). */
+const PENDING_KEY = 'fixum:loginPending';
+/** Как WebLoginService (TTL_MS): дольше токен не живёт. */
+const PENDING_TTL_MS = 10 * 60_000;
+type Pending = { token: string; link: string; at: number };
+
+function readPending(): Pending | undefined {
+  try {
+    const p = JSON.parse(
+      sessionStorage.getItem(PENDING_KEY) ?? 'null',
+    ) as Pending | null;
+    return p && Date.now() - p.at < PENDING_TTL_MS ? p : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Вход. Основной — кодом из бота: кнопка открывает бота по одноразовой ссылке, бот присылает код,
+ * его вводят здесь (WebLoginService на бэкенде) — без окна Telegram, где он просит номер телефона.
+ * Запасной — то самое окно (Telegram Login Widget): «Нет Telegram на этом устройстве?».
+ */
 export function Login({ onLogin }: { onLogin: () => void }) {
   const { t, i18n } = useTranslation();
   const [botId, setBotId] = useState<number | null>(null);
+  const [links, setLinks] = useState<{
+    botUrl: string | null;
+    privacyUrl: string | null;
+    termsUrl: string | null;
+  }>({ botUrl: null, privacyUrl: null, termsUrl: null });
+  const { botUrl } = links;
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [error, setError] = useState('');
+  // ссылка на бота получена — ждём код из Telegram
+  const [pending, setPending] = useState(readPending);
+  const [code, setCode] = useState('');
 
   useEffect(() => {
-    Promise.all([fetchWebConfig(), loadTelegramLogin()]).then(
+    const config = fetchWebConfig();
+    config.then(
+      (c) => setLinks(c),
+      () => {},
+    );
+    Promise.all([config, loadTelegramLogin()]).then(
       ([config]) => setBotId(config.botId),
-      () => setFailed(true),
+      () => {}, // без виджета останется вход кодом
     );
   }, []);
 
-  function start() {
+  async function startCode() {
+    setError('');
+    // окно — прямо из нажатия (иначе браузер его заблокирует), адрес — когда придёт ссылка
+    const tab = window.open('', '_blank');
+    try {
+      const res = { ...(await startCodeLogin()), at: Date.now() };
+      setPending(res);
+      sessionStorage.setItem(PENDING_KEY, JSON.stringify(res));
+      setCode('');
+      if (tab) tab.location.href = res.link;
+    } catch (err) {
+      tab?.close();
+      setError(errorText(err, t('web.loginFailed')));
+    }
+  }
+
+  async function sendCode(value: string) {
+    if (!pending || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await codeLogin(pending.token, value);
+      sessionStorage.removeItem(PENDING_KEY);
+      onLogin();
+    } catch (err) {
+      setError(errorText(err, t('web.loginFailed')));
+      setBusy(false);
+    }
+  }
+
+  function byPhone() {
     if (botId === null || !window.Telegram) return;
-    setFailed(false);
+    setError('');
     window.Telegram.Login.auth(
       { bot_id: botId, lang: i18n.language },
       (data) => {
@@ -53,7 +142,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
         setBusy(true);
         login(data).then(onLogin, () => {
           setBusy(false);
-          setFailed(true);
+          setError(t('web.loginFailed'));
         });
       },
     );
@@ -65,42 +154,162 @@ export function Login({ onLogin }: { onLogin: () => void }) {
         <Logo />
         <div className={s.pitch}>
           <h1>{t('web.title')}</h1>
-          <p>{t('web.lead')}</p>
+          <p className={s.wideOnly}>{t('web.lead')}</p>
+          <Points className={s.wideOnly} />
         </div>
       </section>
       <section className={s.side}>
         <div className={s.card}>
           <h2>{t('web.loginTitle')}</h2>
-          <p>{t('web.loginText')}</p>
-          <button
-            type="button"
-            className={s.telegram}
-            onClick={start}
-            disabled={botId === null || busy}
-          >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinejoin="round"
-              aria-hidden="true"
+          {pending ? (
+            <form
+              className={s.codeForm}
+              onSubmit={(e: FormEvent) => {
+                e.preventDefault();
+                void sendCode(code);
+              }}
             >
-              <path d="M21 4L3 11l6 2 2 6 3-4 5 4z" />
-              <path d="M9 13l8-6" />
-            </svg>
-            {busy ? t('common.loading') : t('web.loginButton')}
-          </button>
-          {failed && (
-            <p className={s.error} role="alert">
-              {t('web.loginFailed')}
-            </p>
+              <label htmlFor="login-code">{t('web.loginCodeLabel')}</label>
+              <input
+                id="login-code"
+                value={code}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '');
+                  setCode(value);
+                  // 4 цифры — отправляем сами; кнопка «Войти» — на случай ошибки
+                  if (value.length === 4) void sendCode(value);
+                }}
+                aria-invalid={!!error}
+                aria-describedby={error ? 'login-error' : undefined}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={4}
+                placeholder="••••"
+                autoFocus
+              />
+              {error && <LoginError text={error} />}
+              <button
+                type="submit"
+                className={s.telegram}
+                disabled={busy || code.length !== 4}
+              >
+                {busy ? t('common.loading') : t('web.loginSubmit')}
+              </button>
+              <a
+                href={pending.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={s.secondary}
+              >
+                {t('web.loginOpenTelegram')}
+              </a>
+              {/* Telegram только на телефоне: та же ссылка камерой — бот пришлёт код туда */}
+              <div className={`${s.qr} ${s.wideOnly}`}>
+                <img
+                  src={`data:image/svg+xml;utf8,${encodeURIComponent(renderSVG(pending.link, { border: 1 }))}`}
+                  alt={t('web.loginQrAlt')}
+                  width={132}
+                  height={132}
+                />
+                <span>{t('web.loginQr')}</span>
+              </div>
+            </form>
+          ) : (
+            <>
+              <button type="button" className={s.telegram} onClick={startCode}>
+                {TG_ICON}
+                {t('web.loginButton')}
+              </button>
+              {error && <LoginError text={error} />}
+            </>
           )}
-          <span className={s.note}>{t('web.loginNote')}</span>
+          {/* бот уже открыт — вместо шагов что делать сейчас */}
+          {pending ? (
+            <p className={s.note}>{t('web.loginWaiting')}</p>
+          ) : (
+            <ol className={s.steps}>
+              <li>{t('web.loginStep1')}</li>
+              <li>{t('web.loginStep2')}</li>
+              <li>{t('web.loginStep3')}</li>
+            </ol>
+          )}
+          <span className={s.note}>
+            <Trans
+              i18nKey="web.loginText"
+              components={{
+                app: botUrl ? (
+                  <a href={botUrl} target="_blank" rel="noopener noreferrer" />
+                ) : (
+                  <span />
+                ),
+              }}
+            />{' '}
+            {botId !== null && (
+              <button type="button" className={s.byPhone} onClick={byPhone}>
+                {t('web.loginByPhone')}
+              </button>
+            )}
+          </span>
         </div>
+        {/* на телефоне описание — под входом: кто пришёл войти, видит кнопку сразу */}
+        <p className={`${s.narrowOnly} ${s.lead}`}>{t('web.lead')}</p>
+        <Points className={s.narrowOnly} />
+        {/* правила и поддержка — до входа: сервис работает с деньгами */}
+        <nav className={s.legal} aria-label={t('web.legalAria')}>
+          {links.termsUrl && (
+            <a href={links.termsUrl} target="_blank" rel="noopener noreferrer">
+              {t('catalog.terms')}
+            </a>
+          )}
+          {links.privacyUrl && (
+            <a
+              href={links.privacyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {t('catalog.privacy')}
+            </a>
+          )}
+          {botUrl && (
+            <a href={botUrl} target="_blank" rel="noopener noreferrer">
+              {t('common.support')}
+            </a>
+          )}
+        </nav>
       </section>
+    </div>
+  );
+}
+
+function LoginError({ text }: { text: string }) {
+  return (
+    <p id="login-error" className={s.error} role="alert">
+      {text}
+    </p>
+  );
+}
+
+/** Чем Fixum отличается — по сторонам сделки (web.points). */
+function Points({ className }: { className: string }) {
+  const { t } = useTranslation();
+  const groups = t('web.points', { returnObjects: true }) as unknown as {
+    title: string;
+    items: { b: string; text: string }[];
+  }[];
+  return (
+    <div className={`${className} ${s.points}`}>
+      {groups.map((g) => (
+        <section key={g.title}>
+          <h2>{g.title}</h2>
+          <ul>
+            {g.items.map((i) => (
+              <li key={i.b}>
+                <strong>{i.b}</strong> {i.text}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
     </div>
   );
 }

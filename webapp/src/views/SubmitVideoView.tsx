@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router';
 import {
   ApiError,
   fetchMySubmissions,
+  previewViews,
   type MySubmission,
   PLATFORM_NAMES,
   submitVideo,
@@ -60,15 +61,43 @@ export default function SubmitVideoView() {
   useEffect(() => void load(), [load]);
 
   const order = submission?.order;
-  const viewsNum = Number(views);
+  /**
+   * Просмотры по API для распознанной ссылки — подставляем сами (поле только для чтения): при сдаче
+   * бэкенд возьмёт это же число. null — площадку не считаем или API не ответило: вводит креатор.
+   */
+  const [autoViews, setAutoViews] = useState<number | null>(null);
+  const [counting, setCounting] = useState(false);
+  const recognized = (describeVideoUrl(url)?.platform ?? 'OTHER') !== 'OTHER';
+  useEffect(() => {
+    setAutoViews(null);
+    if (!recognized) return;
+    let alive = true;
+    // пауза — чтобы не считать на каждую букву, пока ссылку правят руками
+    const timer = setTimeout(() => {
+      setCounting(true);
+      previewViews(id, url.trim())
+        .then(
+          (r) => alive && setAutoViews(r.views),
+          () => {}, // не посчитали — креатор введёт сам
+        )
+        .finally(() => alive && setCounting(false));
+    }, 400);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      setCounting(false);
+    };
+  }, [id, url, recognized]);
+  const viewsNum = autoViews ?? Number(views);
+  /** Оплата за просмотры по ставке, не больше лимита заказа на ролик. */
+  const payFor = (n: number, cpm: number) =>
+    Math.min(Math.floor((n * cpm) / 10) / 100, order?.maxPayout ?? Infinity);
   /** Сколько примерно начислят за указанные просмотры — если ставка уже есть. */
   const estimate =
-    order?.cpm && viewsNum
-      ? formatMoney(Math.floor((viewsNum * order.cpm) / 10) / 100)
-      : '';
+    order?.cpm && viewsNum ? formatMoney(payFor(viewsNum, order.cpm)) : '';
   /** Резерв при сдаче — оплата за порог просмотров заказа (не за заявленные). */
   const reserve = order?.cpm
-    ? formatMoney(Math.floor((order.minViews * order.cpm) / 10) / 100)
+    ? formatMoney(payFor(order.minViews, order.cpm))
     : '';
 
   /**
@@ -79,6 +108,8 @@ export default function SubmitVideoView() {
   const checks = order
     ? [
         ...videoFormatParts(order),
+        // требования заказчика пунктами: за невыполненный модератор и отклонит
+        ...order.requirements,
         ...(order.linkInBio ? [t('submit.checkLinkInBio')] : []),
         ...tList('submit.check'),
       ]
@@ -243,19 +274,30 @@ export default function SubmitVideoView() {
             </label>
             <input
               id="views"
-              value={views}
+              value={autoViews ?? views}
               onChange={(e) => setViews(e.target.value)}
+              readOnly={autoViews !== null}
               type="number"
               inputMode="numeric"
               min={order.minViews}
               step="1"
-              placeholder={t('submit.viewsPlaceholder', {
-                views: formatViews(order.minViews),
-              })}
+              placeholder={
+                counting
+                  ? t('submit.counting')
+                  : t('submit.viewsPlaceholder', {
+                      views: formatViews(order.minViews),
+                    })
+              }
               required
             />
             <p className={`${s.hint} ${s.help}`}>
-              {t('submit.viewsHelp', { views: formatViews(order.minViews) })}
+              {autoViews !== null && video
+                ? t('submit.autoViews', {
+                    platform: PLATFORM_NAMES[video.platform],
+                  })
+                : t('submit.viewsHelp', {
+                    views: formatViews(order.minViews),
+                  })}
             </p>
             {reserve && (
               <div className={s.reserve}>

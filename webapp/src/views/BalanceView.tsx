@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
+import { heldVideos, holdOverdue } from '@fixum/shared';
 import {
   ApiError,
   type Balance,
   fetchBalance,
+  fetchMySubmissions,
+  type MySubmission,
   fetchRate,
   requestPayout,
 } from '../api';
@@ -29,6 +32,8 @@ function shortWallet(w: string) {
 export default function BalanceView() {
   const { t } = useTranslation();
   const [balance, setBalance] = useState<Balance>();
+  // ролики в холде — из «Моих откликов»; не загрузились — просто без списка
+  const [held, setHeld] = useState<MySubmission[]>([]);
   const [loadError, setLoadError] = useState('');
   // строка из поля: '' — пусто
   const [amount, setAmount] = useState('');
@@ -42,8 +47,12 @@ export default function BalanceView() {
   const load = useCallback(async () => {
     setLoadError('');
     try {
-      const b = await fetchBalance();
+      const [b, subs] = await Promise.all([
+        fetchBalance(),
+        fetchMySubmissions().catch(() => []),
+      ]);
       setBalance(b);
+      setHeld(heldVideos(subs));
       // выводим целые USDT, без центов
       setAmount(String(Math.floor(b.available) || ''));
     } catch (err) {
@@ -183,6 +192,33 @@ export default function BalanceView() {
             </p>
           )}
 
+          {held.length > 0 && (
+            <>
+              <h2 className={`section-title ${s.flush}`}>
+                {t('balance.heldList')}
+              </h2>
+              {held.map((sub) => (
+                <Link key={sub.id} to="/submissions" className={s.payout}>
+                  <div className={s.row}>
+                    <span>
+                      {sub.order.title}
+                      {sub.attempt > 1 &&
+                        ` · ${t('submissionCard.attempt', { n: sub.attempt })}`}
+                    </span>
+                    <strong>{formatMoney(sub.payout)}</strong>
+                  </div>
+                  <span className={s.hint}>
+                    {holdOverdue(sub.holdEndsAt)
+                      ? t('balance.heldChecking')
+                      : t('balance.heldUntil', {
+                          date: formatDate(sub.holdEndsAt!),
+                        })}
+                  </span>
+                </Link>
+              ))}
+            </>
+          )}
+
           {balance.payouts.length > 0 && (
             <>
               <h2 className={`section-title ${s.flush}`}>
@@ -210,7 +246,7 @@ export default function BalanceView() {
           <p className={s.hint}>{t('balance.perVideo')}</p>
           <SupportLink
             label={t('balance.supportLabel')}
-            about={t('balance.supportAbout')}
+            about={{ topic: 'payout' }}
           />
         </>
       )}

@@ -1,3 +1,4 @@
+import { buildAdvertiserStats } from './advertiser-stats';
 import { tr, trNum } from '../i18n/request-lang';
 import {
   BadRequestException,
@@ -52,11 +53,13 @@ const PUBLIC_ORDER_FIELDS = {
   referenceUrl: true,
   // наружу — не сами ссылки, а редирект /v/e/… (toPublic в orders.controller)
   exampleUrls: true,
+  requirements: true,
   linkInBio: true,
   budgetMinor: true,
   feePercent: true,
   cpmMinor: true,
   minViews: true,
+  maxPayoutMinor: true,
   minDurationSec: true,
   maxDurationSec: true,
   orientation: true,
@@ -125,11 +128,13 @@ export class OrdersService {
       title: string;
       description: string;
       exampleUrls?: string[];
+      requirements?: string[];
       referenceUrl?: string;
       targetUrl?: string;
       linkInBio?: boolean;
       budgetMinor: number;
       minViews: number;
+      maxPayoutMinor?: number | null;
       minDurationSec?: number | null;
       maxDurationSec?: number | null;
       orientation?: VideoOrientation | null;
@@ -155,6 +160,7 @@ export class OrdersService {
         title: data.title,
         description: data.description,
         exampleUrls: data.exampleUrls,
+        requirements: data.requirements,
         referenceUrl: data.referenceUrl,
         targetUrl: data.targetUrl,
         linkInBio: data.linkInBio,
@@ -162,6 +168,7 @@ export class OrdersService {
         budgetMinor: data.budgetMinor,
         feePercent: platformFeePercent(),
         minViews: data.minViews,
+        maxPayoutMinor: data.maxPayoutMinor,
         minDurationSec: data.minDurationSec,
         maxDurationSec: data.maxDurationSec,
         orientation: data.orientation,
@@ -362,6 +369,7 @@ export class OrdersService {
           orderId,
           status: SubmissionStatus.MODERATOR_APPROVED,
           rating: null,
+          reviewRemovedAt: null,
         },
         _count: true,
       }),
@@ -391,6 +399,18 @@ export class OrdersService {
 
   findById(id: number) {
     return this.prisma.order.findUnique({ where: { id } });
+  }
+
+  /** Ссылка на публичный отчёт: новый токен (старая ссылка перестаёт работать) или null — отозвать. */
+  setShareToken(orderId: number, token: string | null) {
+    return this.prisma.order.update({
+      where: { id: orderId },
+      data: { shareToken: token },
+    });
+  }
+
+  findByShareToken(token: string) {
+    return this.prisma.order.findUnique({ where: { shareToken: token } });
   }
 
   /**
@@ -625,11 +645,13 @@ export class OrdersService {
       title: string;
       description: string;
       exampleUrls?: string[];
+      requirements?: string[];
       referenceUrl?: string | null;
       targetUrl?: string | null;
       linkInBio?: boolean;
       budgetMinor: number;
       minViews: number;
+      maxPayoutMinor?: number | null;
       minDurationSec?: number | null;
       maxDurationSec?: number | null;
       orientation?: VideoOrientation | null;
@@ -762,6 +784,15 @@ export class OrdersService {
     await this.prisma.$transaction(async (tx) => {
       // та же блокировка, что у начислений в SubmissionsService — начисленное не вырастет до записи
       await lockOrder(tx, orderId);
+      // бан закрывает заказы автора под той же блокировкой; заказ, созданный в момент бана, — сюда
+      const author = await tx.user.findUnique({
+        where: { id: order.advertiserId },
+        select: { bannedAt: true },
+      });
+      if (author?.bannedAt)
+        throw new ForbiddenException(
+          'Автор заказа заблокирован — отклоните заказ',
+        );
       const accrued =
         (await spentByOrder(tx, [orderId], ACCRUED)).get(orderId) ?? 0;
       const exhausted = budgetState({ ...order, cpmMinor }, accrued).exhausted;
@@ -905,6 +936,28 @@ export class OrdersService {
       funnel,
       insights: orderInsights(order, report, funnel),
     };
+  }
+
+  /** Статистика заказчика по всем заказам за период (src/orders/advertiser-stats.ts). */
+  async advertiserStats(advertiserId: number, since: Date | undefined) {
+    const approvedWhere = {
+      order: { advertiserId },
+      status: SubmissionStatus.MODERATOR_APPROVED,
+    };
+    const [orders, approved, snapshots] = await Promise.all([
+      this.prisma.order.findMany({ where: { advertiserId } }),
+      this.prisma.submission.findMany({
+        where: { ...approvedWhere, decidedAt: since && { gte: since } },
+        include: { creator: true },
+      }),
+      // ponytail: все замеры всех одобренных роликов — их несколько на ролик (холд ~неделя);
+      // станет много — считать прирост в SQL по дням
+      this.prisma.viewSnapshot.findMany({
+        where: { submission: approvedWhere },
+        select: { submissionId: true, views: true, at: true },
+      }),
+    ]);
+    return buildAdvertiserStats(orders, approved, snapshots, since);
   }
 
   /** Открытые заказы, по которым советы ещё не отправляли. */

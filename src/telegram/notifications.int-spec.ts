@@ -74,6 +74,19 @@ beforeEach(() =>
 );
 afterAll(() => prisma.$disconnect());
 
+const openOrder = (advertiserId: number, title: string) =>
+  prisma.order.create({
+    data: {
+      advertiserId,
+      title,
+      description: 'd',
+      budgetMinor: 10000,
+      feePercent: 10,
+      cpmMinor: 100,
+      status: 'OPEN',
+    },
+  });
+
 it('отправляет по порядку; заблокированным не пишет; 403 — удалить, 429 и сбой — повторить позже', async () => {
   const { service, sent } = setup();
   await prisma.user.create({
@@ -118,13 +131,7 @@ it('рассылка о новом заказе — всем, кроме авт�
       { telegramId: 30n, telegramLanguage: 'ru' }, // жаловался
     ],
   });
-  service.newOrderPublished({
-    id: 7,
-    title: 'Новый',
-    advertiserId: author.id,
-    cpmMinor: 100,
-    minViews: 250,
-  } as never);
+  service.newOrderPublished(await openOrder(author.id, 'Новый'));
   await flushWrites();
   await service.reportResolved([30n], true);
   await flushWrites();
@@ -137,4 +144,21 @@ it('рассылка о новом заказе — всем, кроме авт�
   expect(texts.get('21')!.text).toContain('Новый заказ: «Новый»');
   expect(texts.get('24')).toMatchObject({ button: 'Open' });
   expect(texts.get('24')!.text).toContain('New order: “Новый”');
+});
+
+it('рассылку о заказе, который сняли, пока она ждала в очереди, не отправляет', async () => {
+  const { service, sent } = setup();
+  const author = await prisma.user.create({ data: { telegramId: 20n } });
+  await prisma.user.create({ data: { telegramId: 21n } });
+  const order = await openOrder(author.id, 'Снятый');
+  service.newOrderPublished(order);
+  await flushWrites();
+  await prisma.order.update({
+    where: { id: order.id },
+    data: { status: 'REJECTED' },
+  });
+
+  await service.processBatch();
+  expect(sent).toEqual([]);
+  expect(await prisma.notification.count()).toBe(0);
 });

@@ -1,0 +1,68 @@
+.home {
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 15px;
+}
+.row + .row,
+.row + .start {
+  border-top: 1px solid var(--separator);
+}
+.start {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+}
+.startHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.hint {
+  color: var(--hint);
+  font-size: 14px;
+}
+.hide {
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: var(--link);
+  font-size: 14px;
+}
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+}
+.steps a {
+  color: var(--link);
+  text-decoration: none;
+}
+.done {
+  color: var(--hint);
+}
+.steps button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}

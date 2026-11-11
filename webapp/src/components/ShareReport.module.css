@@ -1,0 +1,38 @@
+.share {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--hint);
+}
+.url {
+  height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+}
+.two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.button {
+  height: 50px;
+  border: none;
+  border-radius: 12px;
+  background: var(--fill);
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 600;
+}
+.error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--danger);
+}
