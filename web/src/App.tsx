@@ -42,10 +42,11 @@ export function App() {
 
   const load = useCallback(() => {
     setState({ kind: 'loading' });
-    // кнопка «Войти на сайт» из бота: #login=<токен>.<код> — входим без ввода кода
-    const link = /^#login=([\w-]+)\.(\d{4})$/.exec(location.hash);
-    if (link)
-      history.replaceState(null, '', location.pathname + location.search);
+    // кнопка «Войти на сайт» из бота: ?login=<токен>.<код> — входим без ввода кода
+    const link = /^([\w-]+)\.(\d{4})$/.exec(
+      new URLSearchParams(location.search).get('login') ?? '',
+    );
+    if (link) history.replaceState(null, '', location.pathname + location.hash);
     const signIn = link
       ? codeLogin(link[1], link[2]).catch(() => {}) // устарела — обычный экран входа
       : Promise.resolve();

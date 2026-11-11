@@ -141,15 +141,17 @@ export class StartUpdate
         await ctx.reply(t('bot.loginExpired'));
         return;
       }
-      // кнопка — вход без ввода кода: во встроенном браузере Telegram страница с полем кода
-      // сворачивается и вернуться к ней трудно. Код и токен — во фрагменте (#): серверу и в Referer не уходят.
+      // Кнопка — сайт сразу со входом. Именно web_app, не url: ссылку из бота iPhone открывает во
+      // встроенном браузере, а если тот свёрнут (сайт и начал вход), окно «Открыть ссылку?» прячется
+      // под ним и Telegram виснет. web_app открывается поверх чата. Код и токен — в query, а не в #:
+      // фрагмент Telegram занимает своими параметрами; сайт сразу убирает их из адреса, вход одноразовый.
       await ctx.reply(
         t('bot.loginCode', { code }),
         this.webUrl
           ? Markup.inlineKeyboard([
-              Markup.button.url(
+              Markup.button.webApp(
                 t('bot.loginOpenSite'),
-                `${this.webUrl}/#login=${token}.${code}`,
+                `${this.webUrl}/?login=${token}.${code}`,
               ),
             ])
           : undefined,
