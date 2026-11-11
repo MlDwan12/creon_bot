@@ -28,7 +28,7 @@ export function validateEnv(config: Record<string, unknown>) {
   const web = typeof config.WEB_URL === 'string' ? config.WEB_URL : '';
   if (web && !/^https?:\/\/[^\s/]+\/?$/.test(web))
     throw new Error(
-      'WEB_URL — адрес сайта без пути, например https://web.fixumapp.com',
+      'WEB_URL — адрес сайта без пути, например https://site.fixumapp.com',
     );
   // Подключение аккаунтов площадок (src/accounts): их токены хранятся зашифрованными этим ключом.
   if (

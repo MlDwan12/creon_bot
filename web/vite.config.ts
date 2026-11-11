@@ -1,7 +1,7 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
-// Сайт Fixum (web.fixumapp.com) — отдельно от мини-аппа: своя сборка и выкатка, общий только API
+// Сайт Fixum (site.fixumapp.com) — отдельно от мини-аппа: своя сборка и выкатка, общий только API
 // и packages/shared. Настройки — как у webapp/vite.config.ts.
 export default defineConfig({
   plugins: [react()],
