@@ -33,6 +33,8 @@ export class StartUpdate
 {
   private readonly logger = new Logger(StartUpdate.name);
   private readonly webAppUrl: string;
+  /** Адрес сайта (WEB_URL); пусто — в сообщении с кодом нет кнопки входа. */
+  private readonly webUrl: string;
 
   constructor(
     @InjectBot() private readonly bot: Telegraf<Context>,
@@ -42,6 +44,7 @@ export class StartUpdate
     config: ConfigService,
   ) {
     this.webAppUrl = config.get<string>('WEBAPP_URL')!.replace(/\/$/, '');
+    this.webUrl = (config.get<string>('WEB_URL') ?? '').replace(/\/$/, '');
   }
 
   private stopping = false;
@@ -132,12 +135,24 @@ export class StartUpdate
       payload.startsWith(LOGIN_START_PREFIX) &&
       ctx.chat?.type === 'private'
     ) {
-      const code = await this.webLogin.issueCode(
-        payload.slice(LOGIN_START_PREFIX.length),
-        ctx.from!,
-      );
+      const token = payload.slice(LOGIN_START_PREFIX.length);
+      const code = await this.webLogin.issueCode(token, ctx.from!);
+      if (!code) {
+        await ctx.reply(t('bot.loginExpired'));
+        return;
+      }
+      // кнопка — вход без ввода кода: во встроенном браузере Telegram страница с полем кода
+      // сворачивается и вернуться к ней трудно. Код и токен — во фрагменте (#): серверу и в Referer не уходят.
       await ctx.reply(
-        code ? t('bot.loginCode', { code }) : t('bot.loginExpired'),
+        t('bot.loginCode', { code }),
+        this.webUrl
+          ? Markup.inlineKeyboard([
+              Markup.button.url(
+                t('bot.loginOpenSite'),
+                `${this.webUrl}/#login=${token}.${code}`,
+              ),
+            ])
+          : undefined,
       );
       return;
     }
