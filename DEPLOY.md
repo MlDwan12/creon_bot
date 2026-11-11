@@ -79,7 +79,7 @@ curl -sI "https://$DOMAIN/" | grep -i '^cache-control'          # пусто —
 
 ## Сайт
 
-Сайт (`web/`) — отдельный домен: прод — `web.fixumapp.com`, дев — `web.dev.creon.couchreboot.site`.
+Сайт (`web/`) — отдельный домен: прод — `site.fixumapp.com`, дев — `web.dev.creon.couchreboot.site`.
 Страницы отдаёт nginx из `SITE_DIR/current` (прод — `/var/www/fixum-web`, дев — `/var/www/creon-web`),
 `/api/` — тот же бот. Выкатывает `deploy.yml` тем же `remote-static.sh`, если изменились `web/`,
 `packages/` или `i18n/`. Пока папки на стенде нет, сайт при выкатке пропускается (бот и мини-апп выкатываются как обычно).
@@ -95,7 +95,7 @@ curl -sI "https://$DOMAIN/" | grep -i '^cache-control'          # пусто —
 4. На сервере (прод; для дева — `DOMAIN=web.dev.creon.couchreboot.site`, `SITE=/var/www/creon-web`, без `sudo` под root):
 
 ```bash
-DOMAIN=web.fixumapp.com SITE=/var/www/fixum-web
+DOMAIN=site.fixumapp.com SITE=/var/www/fixum-web
 # сертификат — через проверку в default.conf (/var/www/letsencrypt), vhost сайта для этого не нужен.
 # Дев: если там нет такого default.conf — sudo certbot certonly --nginx -d "$DOMAIN"
 sudo certbot certonly --webroot -w /var/www/letsencrypt -d "$DOMAIN"
