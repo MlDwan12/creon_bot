@@ -1,59 +1,9 @@
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import type { InitDataUser } from './init-data.util';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 /** Cookie сессии сайта: `<id пользователя>.<auth_date входа>.<подпись>`. */
 export const SESSION_COOKIE = 'fx_session';
 /** Сколько живёт вход на сайте: дальше — снова кнопка Telegram. */
 export const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
-
-/**
- * Проверяет данные Telegram Login Widget по алгоритму из
- * https://core.telegram.org/widgets/login#checking-authorization: ключ — SHA-256 токена бота,
- * в подпись входят все поля, кроме `hash`, отсортированные по ключу.
- * `null` — подпись не сошлась, данные устарели или битые.
- */
-export function validateLoginWidget(
-  data: unknown,
-  botToken: string,
-  maxAgeSeconds: number,
-  nowMs = Date.now(),
-): { user: InitDataUser; authDate: number } | null {
-  if (typeof data !== 'object' || data === null || Array.isArray(data))
-    return null;
-  const fields: Record<string, string> = {};
-  for (const [key, value] of Object.entries(data)) {
-    // виджет присылает id и auth_date числами, остальное — строками
-    if (typeof value !== 'string' && typeof value !== 'number') return null;
-    fields[key] = String(value);
-  }
-  const { hash, ...rest } = fields;
-  if (!hash) return null;
-
-  const dataCheckString = Object.keys(rest)
-    .sort()
-    .map((key) => `${key}=${rest[key]}`)
-    .join('\n');
-  const secretKey = createHash('sha256').update(botToken).digest();
-  const expected = createHmac('sha256', secretKey)
-    .update(dataCheckString)
-    .digest();
-  const given = Buffer.from(hash, 'hex');
-  if (given.length !== expected.length || !timingSafeEqual(given, expected))
-    return null;
-
-  const authDate = Number(rest.auth_date);
-  const id = Number(rest.id);
-  if (
-    !Number.isFinite(authDate) ||
-    nowMs / 1000 - authDate > maxAgeSeconds ||
-    !Number.isSafeInteger(id)
-  )
-    return null;
-  return {
-    user: { id, username: rest.username, first_name: rest.first_name },
-    authDate,
-  };
-}
 
 // ключ подписи сессий — из токена бота: сменили токен — все входы на сайте сброшены
 function sessionMac(value: string, botToken: string): Buffer {

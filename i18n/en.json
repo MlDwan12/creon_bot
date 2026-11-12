@@ -678,7 +678,7 @@
     "supportReply": "💬 Fixum support:\n\n{{text}}",
     "supportBusy": "Support is overloaded right now — write again in a minute: this message wasn't delivered.",
     "loginCode": "Your Fixum sign-in code: {{code}}\n\nDon’t share it with anyone, not even Fixum support. If you didn’t start this sign-in, just ignore this message.\n\nOr tap “Sign in to the site” — no need to type the code.",
-    "loginExpired": "This sign-in link has expired. Tap “Sign in with Telegram” on the site again.",
+    "loginExpired": "This sign-in link has expired. Start signing in on the site again.",
     "loginOpenSite": "Sign in to the site"
   },
   "notify": {
@@ -863,9 +863,9 @@
     "linkInBioNeedsTarget": "A link in the profile bio needs a product link — that is what the creator puts in the bio",
     "confirmLinkInBio": "This order requires your link in the profile bio — add it and tick it in the list",
     "relogin": "For security, please log in to the site again — then you can continue",
-    "loginCodeExpired": "The sign-in link has expired — tap “Sign in with Telegram” again",
+    "loginCodeExpired": "The sign-in link has expired — start signing in again",
     "loginCodeNotSent": "Open the bot in Telegram first — it will send you a code",
-    "loginCodeLocked": "Too many wrong codes — tap “Sign in with Telegram” again",
+    "loginCodeLocked": "Too many wrong codes — start signing in again",
     "loginCodeWrong": "Wrong code — check the bot’s message",
     "badEmail": "Check the email — for example, name@company.com",
     "badPhone": "Check the number: use international format, for example +1 202 555 0143",
@@ -954,7 +954,7 @@
     "loginCodeLabel": "Code from Telegram",
     "loginSubmit": "Sign in",
     "loginOpenTelegram": "Open Telegram again",
-    "loginByPhone": "No Telegram on this device?",
+    "loginByCode": "Log in with a code from the bot",
     "loginQr": "Telegram on your phone? Point the camera at the code — the bot sends the digits there, enter them here.",
     "loginQrAlt": "QR code: link to the Fixum bot to sign in",
     "points": [

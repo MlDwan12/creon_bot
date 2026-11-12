@@ -21,7 +21,7 @@ export const RELOGIN_EVENT = 'fixum:relogin';
 export const APPLIED_EVENT = 'fixum:applied';
 
 /**
- * Запрос к API сайта. Вход — cookie сессии (ставит POST /api/web/login), браузер шлёт её сам;
+ * Запрос к API сайта. Вход — cookie сессии (ставит вход через Telegram или кодом), браузер шлёт её сам;
  * заголовок X-Fixum-Web без неё API не примет cookie — защита от подделки запросов с чужих сайтов.
  */
 async function request<T>(
@@ -70,18 +70,15 @@ export async function fetchMe() {
   return me;
 }
 
-/** id бота для окна входа Telegram. */
+/** Настройки страницы входа; oidc — есть кнопка входа через Telegram. */
 export function fetchWebConfig() {
   return request<{
-    botId: number;
+    oidc: boolean;
     botUrl: string | null;
     privacyUrl: string | null;
     termsUrl: string | null;
   }>('GET', '/api/web/config');
 }
-
-/** Данные, которые Telegram отдаёт после подтверждения входа, — как есть, подпись проверит бэкенд. */
-export type TelegramAuth = Record<string, string | number>;
 
 /** Вход кодом из бота, шаг 1: одноразовая ссылка на бота. */
 export function startCodeLogin() {
@@ -94,10 +91,6 @@ export function startCodeLogin() {
 /** Шаг 2: код из Telegram — бэкенд ставит cookie сессии. */
 export function codeLogin(token: string, code: string) {
   return request<void>('POST', '/api/web/login/code', { token, code });
-}
-
-export function login(data: TelegramAuth) {
-  return request<void>('POST', '/api/web/login', data);
 }
 
 export function logout() {
