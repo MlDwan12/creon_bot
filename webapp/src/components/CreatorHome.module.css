@@ -57,12 +57,3 @@
 .done {
   color: var(--hint);
 }
-.steps button {
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--link);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}

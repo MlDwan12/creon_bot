@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { creatorHome, START_HIDDEN_KEY, type StartStep } from '@fixum/shared';
@@ -6,11 +6,11 @@ import { fetchBalance, fetchMySubmissions, fetchSocialAccounts } from '../api';
 import { formatDate, formatDeadline, formatMoney } from '../format';
 import s from '../ui.module.css';
 
-/** Куда ведёт пункт чек-листа «Старт»; заказ берут прямо в каталоге под карточкой. */
-const STEP_LINK: Record<StartStep, string | null> = {
+/** Куда ведёт пункт чек-листа «Старт»; «Взять первый заказ» — в раздел «Заказы» (каталог). */
+const STEP_LINK: Record<StartStep, string> = {
   wallet: '/profile',
   account: '/profile',
-  order: null,
+  order: '/',
   lesson: '/learn',
 };
 
@@ -21,7 +21,6 @@ const STEP_LINK: Record<StartStep, string | null> = {
 export function CreatorHome() {
   const { t } = useTranslation();
   const [home, setHome] = useState<ReturnType<typeof creatorHome>>();
-  const homeRef = useRef<HTMLElement>(null);
   const [startHidden, setStartHidden] = useState(
     () => localStorage.getItem(START_HIDDEN_KEY) === '1',
   );
@@ -41,9 +40,10 @@ export function CreatorHome() {
   const { money, due, resubmit } = home;
   const start = startHidden ? null : home.start;
   if (!money && !due && !resubmit && !start) return null;
+  const doneCount = start?.filter((x) => x.done).length ?? 0;
 
   return (
-    <section ref={homeRef} className={s.list} aria-label={t('home.title')}>
+    <section className={s.list} aria-label={t('home.title')}>
       {money && (
         <Link to="/balance" className={s.item}>
           <span>
@@ -85,18 +85,15 @@ export function CreatorHome() {
         </Link>
       )}
       {start && (
-        <div className={s.item} style={{ display: 'block' }}>
-          <div className={s.row}>
+        <div className={s.start}>
+          <div className={s.startHead}>
             <strong>{t('home.startTitle')}</strong>
             <span className={`${s.hint} ${s.small}`}>
-              {t('home.startDone', {
-                done: start.filter((x) => x.done).length,
-                total: start.length,
-              })}
+              {t('home.startDone', { done: doneCount, total: start.length })}
             </span>
             <button
               type="button"
-              className={`${s.btn} ${s.small}`}
+              className={s.startHide}
               onClick={() => {
                 localStorage.setItem(START_HIDDEN_KEY, '1');
                 setStartHidden(true);
@@ -105,37 +102,44 @@ export function CreatorHome() {
               {t('home.hide')}
             </button>
           </div>
-          <ul>
+          <div className={s.startBar} aria-hidden="true">
+            <span style={{ width: `${(doneCount / start.length) * 100}%` }} />
+          </div>
+          <ul className={s.startSteps}>
             {start.map(({ step, done }) => {
-              const label = (
+              const body = (
                 <>
-                  <span aria-hidden="true">{done ? '✓' : '○'}</span>{' '}
-                  {t(`home.step.${step}`)}
+                  <span className={s.startMark} aria-hidden="true">
+                    {done ? '✓' : ''}
+                  </span>
+                  <span>{t(`home.step.${step}`)}</span>
                 </>
               );
-              const to = STEP_LINK[step];
+              const chevron = (
+                <span className={s.startChevron} aria-hidden="true">
+                  ›
+                </span>
+              );
               return (
-                <li key={step} className={done ? s.muted : undefined}>
+                <li key={step}>
                   {done ? (
-                    label
-                  ) : to ? (
-                    <Link to={to}>{label}</Link>
+                    <div className={`${s.startStep} ${s.startDone}`}>
+                      {body}
+                    </div>
                   ) : (
-                    // «Взять первый заказ»: заказы — сразу под блоком, прокручиваем к ним
-                    <button
-                      type="button"
-                      className={s.linkButton}
-                      style={{ font: 'inherit', textDecoration: 'underline' }}
-                      onClick={() => {
-                        // первый видимый блок ниже: фильтры для телефона на компьютере скрыты
-                        let next = homeRef.current?.nextElementSibling;
-                        while (next && !next.getClientRects().length)
-                          next = next.nextElementSibling;
-                        next?.scrollIntoView({ behavior: 'smooth' });
-                      }}
+                    <Link
+                      to={STEP_LINK[step]}
+                      className={s.startStep}
+                      // чек-лист стоит над каталогом: «Заказы» — эта же страница, прокручиваем к списку
+                      onClick={() =>
+                        document
+                          .getElementById('orders')
+                          ?.scrollIntoView({ behavior: 'smooth' })
+                      }
                     >
-                      {label}
-                    </button>
+                      {body}
+                      {chevron}
+                    </Link>
                   )}
                 </li>
               );
