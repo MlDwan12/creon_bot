@@ -268,7 +268,11 @@ export function Catalog() {
           )}
         </div>
       ) : (
-        total > 0 && <h2>{t('catalog.openCount', { count: total })}</h2>
+        total > 0 && (
+          <h2 id="orders" className={s.scrollTarget}>
+            {t('catalog.openCount', { count: total })}
+          </h2>
+        )
       )}
 
       {loading && orders.length === 0 && (

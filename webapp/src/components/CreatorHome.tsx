@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { creatorHome, START_HIDDEN_KEY, type StartStep } from '@fixum/shared';
@@ -6,11 +6,11 @@ import { fetchBalance, fetchMySubmissions, fetchSocialAccounts } from '../api';
 import { formatDate, formatDeadline, formatMoney } from '../format';
 import s from './CreatorHome.module.css';
 
-/** Куда ведёт пункт чек-листа «Старт»; заказ берут прямо в каталоге под карточкой. */
-const STEP_LINK: Record<StartStep, string | null> = {
+/** Куда ведёт пункт чек-листа «Старт»; «Взять первый заказ» — в раздел «Заказы» (каталог). */
+const STEP_LINK: Record<StartStep, string> = {
   wallet: '/profile',
   account: '/profile',
-  order: null,
+  order: '/',
   lesson: '/learn',
 };
 
@@ -21,7 +21,6 @@ const STEP_LINK: Record<StartStep, string | null> = {
 export default function CreatorHome() {
   const { t } = useTranslation();
   const [home, setHome] = useState<ReturnType<typeof creatorHome>>();
-  const homeRef = useRef<HTMLElement>(null);
   const [startHidden, setStartHidden] = useState(
     () => localStorage.getItem(START_HIDDEN_KEY) === '1',
   );
@@ -43,7 +42,7 @@ export default function CreatorHome() {
   if (!money && !due && !resubmit && !start) return null;
 
   return (
-    <section ref={homeRef} className={s.home} aria-label={t('home.title')}>
+    <section className={s.home} aria-label={t('home.title')}>
       {money && (
         <Link to="/balance" className={s.row}>
           <span>
@@ -107,25 +106,22 @@ export default function CreatorHome() {
                   {t(`home.step.${step}`)}
                 </>
               );
-              const to = STEP_LINK[step];
               return (
                 <li key={step} className={done ? s.done : undefined}>
                   {done ? (
                     label
-                  ) : to ? (
-                    <Link to={to}>{label}</Link>
                   ) : (
-                    // «Взять первый заказ»: заказы — сразу под блоком, прокручиваем к ним
-                    <button
-                      type="button"
+                    <Link
+                      to={STEP_LINK[step]}
+                      // чек-лист стоит над каталогом: «Заказы» — эта же страница, прокручиваем к списку
                       onClick={() =>
-                        homeRef.current?.nextElementSibling?.scrollIntoView({
-                          behavior: 'smooth',
-                        })
+                        document
+                          .getElementById('orders')
+                          ?.scrollIntoView({ behavior: 'smooth' })
                       }
                     >
                       {label}
-                    </button>
+                    </Link>
                   )}
                 </li>
               );

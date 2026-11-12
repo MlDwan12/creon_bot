@@ -537,6 +537,140 @@
   text-decoration: none;
 }
 
+/* Чек-лист «Старт» новичка над каталогом (creator/CreatorHome.tsx) */
+.start {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.startHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.startHead strong {
+  font-size: 17px;
+}
+
+.startHide {
+  margin-left: auto;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: var(--hint);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.startHide:hover {
+  color: var(--text);
+}
+
+.startBar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--fill);
+  overflow: hidden;
+}
+
+.startBar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.startSteps {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.startSteps li + li {
+  border-top: 1px solid var(--separator);
+}
+
+/* строка пункта: ссылка, кнопка или (сделано / нечего делать) просто текст */
+.startStep {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+}
+
+a.startStep,
+button.startStep {
+  cursor: pointer;
+}
+
+a.startStep:hover,
+button.startStep:hover {
+  color: var(--link);
+}
+
+.startMark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--separator);
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.startDone {
+  color: var(--hint);
+}
+
+.startDone .startMark {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.startChevron {
+  margin-left: auto;
+  color: var(--hint);
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* кнопка, которая выглядит как ссылка */
+.linkButton {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  text-decoration: underline;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* цель прокрутки «Взять первый заказ»: на телефоне сверху липкая полоса 60px */
+.scrollTarget {
+  scroll-margin-top: 72px;
+}
+
 .item:last-child {
   border-bottom: none;
 }
