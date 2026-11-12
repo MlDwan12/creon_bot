@@ -252,7 +252,7 @@ export default function CatalogView() {
         </EmptyState>
       ) : (
         total > 0 && (
-          <h2 className={`section-title ${s.count}`}>
+          <h2 id="orders" className={`section-title ${s.count}`}>
             {t('catalog.openCount', { count: total })}
           </h2>
         )
