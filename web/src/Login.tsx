@@ -1,41 +1,8 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { renderSVG } from 'uqr';
-import {
-  codeLogin,
-  errorText,
-  fetchWebConfig,
-  login,
-  startCodeLogin,
-  type TelegramAuth,
-} from './api';
+import { codeLogin, errorText, fetchWebConfig, startCodeLogin } from './api';
 import s from './Login.module.css';
-
-declare global {
-  interface Window {
-    /** Скрипт входа Telegram (telegram-widget.js): окно подтверждения входа у Telegram. */
-    Telegram?: {
-      Login: {
-        auth(
-          options: { bot_id: number; lang?: string },
-          callback: (data: TelegramAuth | false) => void,
-        ): void;
-      };
-    };
-  }
-}
-
-// Окно открывается прямо из нажатия (иначе его заблокирует браузер), поэтому скрипт грузим заранее.
-function loadTelegramLogin(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (window.Telegram?.Login) return resolve();
-    const script = document.createElement('script');
-    script.src = 'https://telegram.org/js/telegram-widget.js?22';
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('telegram-widget.js'));
-    document.head.append(script);
-  });
-}
 
 const TG_ICON = (
   <svg
@@ -70,14 +37,29 @@ function readPending(): Pending | undefined {
   }
 }
 
+/** Telegram вернул на сайт с ошибкой входа (WebAuthController, oidc/callback) — убираем её из адреса. */
+function takeLoginError(): boolean {
+  const params = new URLSearchParams(location.search);
+  if (!params.has('login_error')) return false;
+  params.delete('login_error');
+  const query = params.toString();
+  history.replaceState(
+    null,
+    '',
+    location.pathname + (query ? `?${query}` : '') + location.hash,
+  );
+  return true;
+}
+
 /**
- * Вход. Основной — кодом из бота: кнопка открывает бота по одноразовой ссылке, бот присылает код,
- * его вводят здесь (WebLoginService на бэкенде) — без окна Telegram, где он просит номер телефона.
- * Запасной — то самое окно (Telegram Login Widget): «Нет Telegram на этом устройстве?».
+ * Вход. Основной — через Telegram (OpenID Connect): ссылка уводит на oauth.telegram.org, бэкенд
+ * ставит сессию и возвращает сюда. Запасной (и единственный, если OIDC не настроен) — кодом из бота:
+ * кнопка открывает бота по одноразовой ссылке, бот присылает код, его вводят здесь (WebLoginService).
  */
 export function Login({ onLogin }: { onLogin: () => void }) {
-  const { t, i18n } = useTranslation();
-  const [botId, setBotId] = useState<number | null>(null);
+  const { t } = useTranslation();
+  // null — настройки ещё грузятся
+  const [oidc, setOidc] = useState<boolean | null>(null);
   const [links, setLinks] = useState<{
     botUrl: string | null;
     privacyUrl: string | null;
@@ -85,20 +67,20 @@ export function Login({ onLogin }: { onLogin: () => void }) {
   }>({ botUrl: null, privacyUrl: null, termsUrl: null });
   const { botUrl } = links;
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() =>
+    takeLoginError() ? t('web.loginFailed') : '',
+  );
   // ссылка на бота получена — ждём код из Telegram
   const [pending, setPending] = useState(readPending);
   const [code, setCode] = useState('');
 
   useEffect(() => {
-    const config = fetchWebConfig();
-    config.then(
-      (c) => setLinks(c),
-      () => {},
-    );
-    Promise.all([config, loadTelegramLogin()]).then(
-      ([config]) => setBotId(config.botId),
-      () => {}, // без виджета останется вход кодом
+    fetchWebConfig().then(
+      (c) => {
+        setLinks(c);
+        setOidc(c.oidc);
+      },
+      () => setOidc(false), // без настроек — вход кодом
     );
   }, []);
 
@@ -130,22 +112,6 @@ export function Login({ onLogin }: { onLogin: () => void }) {
       setError(errorText(err, t('web.loginFailed')));
       setBusy(false);
     }
-  }
-
-  function byPhone() {
-    if (botId === null || !window.Telegram) return;
-    setError('');
-    window.Telegram.Login.auth(
-      { bot_id: botId, lang: i18n.language },
-      (data) => {
-        if (!data) return; // окно закрыли
-        setBusy(true);
-        login(data).then(onLogin, () => {
-          setBusy(false);
-          setError(t('web.loginFailed'));
-        });
-      },
-    );
   }
 
   return (
@@ -216,17 +182,39 @@ export function Login({ onLogin }: { onLogin: () => void }) {
             </form>
           ) : (
             <>
-              <button type="button" className={s.telegram} onClick={startCode}>
-                {TG_ICON}
-                {t('web.loginButton')}
-              </button>
+              {oidc ? (
+                <a className={s.telegram} href="/api/web/oidc/start">
+                  {TG_ICON}
+                  {t('web.loginButton')}
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  className={s.telegram}
+                  onClick={startCode}
+                  disabled={oidc === null}
+                >
+                  {TG_ICON}
+                  {t('web.loginButton')}
+                </button>
+              )}
               {error && <LoginError text={error} />}
+              {oidc && (
+                <button
+                  type="button"
+                  className={s.secondary}
+                  onClick={startCode}
+                >
+                  {t('web.loginByCode')}
+                </button>
+              )}
             </>
           )}
-          {/* бот уже открыт — вместо шагов что делать сейчас */}
+          {/* бот уже открыт — вместо шагов что делать сейчас; шаги — только у входа кодом */}
           {pending ? (
             <p className={s.note}>{t('web.loginWaiting')}</p>
           ) : (
+            oidc === false &&
             <ol className={s.steps}>
               <li>{t('web.loginStep1')}</li>
               <li>{t('web.loginStep2')}</li>
@@ -243,12 +231,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
                   <span />
                 ),
               }}
-            />{' '}
-            {botId !== null && (
-              <button type="button" className={s.byPhone} onClick={byPhone}>
-                {t('web.loginByPhone')}
-              </button>
-            )}
+            />
           </span>
         </div>
         {/* на телефоне описание — под входом: кто пришёл войти, видит кнопку сразу */}

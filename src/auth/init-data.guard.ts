@@ -49,7 +49,7 @@ export function assertFreshLogin(req: ApiRequest) {
 
 /**
  * Авторизация API. Mini App — заголовок `Authorization: tma <initData>`; сайт — cookie сессии после
- * входа через Telegram Login Widget (WebAuthController). Пользователь берётся только из проверенной
+ * входа через Telegram или кодом из бота (WebAuthController). Пользователь берётся только из проверенной
  * подписи — никогда из тела/параметров запроса.
  */
 @Injectable()

@@ -30,6 +30,14 @@ export function validateEnv(config: Record<string, unknown>) {
     throw new Error(
       'WEB_URL — адрес сайта без пути, например https://site.fixumapp.com',
     );
+  // Вход на сайт через Telegram (OpenID Connect, src/auth/oidc.util.ts); без WEB_URL выключен
+  if (
+    Boolean(config.TELEGRAM_OIDC_CLIENT_ID) !==
+    Boolean(config.TELEGRAM_OIDC_CLIENT_SECRET)
+  )
+    throw new Error(
+      'TELEGRAM_OIDC_CLIENT_ID и TELEGRAM_OIDC_CLIENT_SECRET задаются вместе',
+    );
   // Подключение аккаунтов площадок (src/accounts): их токены хранятся зашифрованными этим ключом.
   if (
     (config.TIKTOK_CLIENT_KEY ||
