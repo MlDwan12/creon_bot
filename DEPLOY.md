@@ -88,8 +88,10 @@ curl -sI "https://$DOMAIN/" | grep -i '^cache-control'          # пусто —
 Настройка — один раз на каждом стенде:
 
 1. DNS: A-запись домена сайта → IP сервера (прод `72.62.46.36`, дев `38.180.145.13`).
-2. BotFather → `/setdomain` → бот стенда (дев — `@creontest_bot`) → домен сайта. Без этого окно входа
-   Telegram отвечает «Bot domain invalid». У бота один домен для входа — другим сайтам его не давать.
+2. Вход через Telegram (OpenID Connect): BotFather → мини-апп → бот стенда (дев — `@creontest_bot`) →
+   Login Widget → Switch to OpenID Connect Login. В Redirect URIs — `https://<домен сайта>/api/web/oidc/callback`
+   (символ в символ), Client ID и Client Secret — в `.env` стенда: `TELEGRAM_OIDC_CLIENT_ID`,
+   `TELEGRAM_OIDC_CLIENT_SECRET` (нужен и `WEB_URL`), затем перезапуск бота. Не заданы — на сайте только вход кодом из бота.
 3. На ноутбуке, из корня репозитория: `scp -P <SSH_PORT> deploy/prod/nginx/fixum-web.conf ops@72.62.46.36:`
    (дев: `root@38.180.145.13`).
 4. На сервере (прод; для дева — `DOMAIN=web.dev.creon.couchreboot.site`, `SITE=/var/www/creon-web`, без `sudo` под root):
