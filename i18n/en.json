@@ -665,6 +665,7 @@
     "rejectedShort": "rejected {{count}}"
   },
   "bot": {
+    "devClosed": "This is a Fixum test stand — access is limited to the team.",
     "intro": "👋 Fixum is a marketplace for video ads.\n\nAdvertisers post tasks, creators take them on and get paid for views.\n\nOrders, applications and moderation are in the app 👇\nQuestions? Just send a message here — a Fixum manager will reply.",
     "openApp": "Open Fixum",
     "open": "Open",
@@ -724,6 +725,7 @@
     "advertiserClosed": "Your advertiser account has been closed. Active orders keep running and you can still view them, but you can’t create new ones. Questions — to support."
   },
   "errors": {
+    "devClosed": "This is a Fixum test stand — access is limited to the team.",
     "tooManyRequests": "Too many requests — wait a minute and try again",
     "banned": "Your account is blocked",
     "supportOff": "Support is not set up",

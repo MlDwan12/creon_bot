@@ -11,6 +11,8 @@ import { PLATFORM_PATHS } from '../components/PlatformIcon';
 export type Faq = { q: string; a: string }[];
 
 const LOGIN = '/login';
+/** Заявка «Стать заказчиком» на сайте (APPLY_PATH в Shell.tsx): сначала вход, потом сразу форма. */
+const APPLY = '/profile/advertiser';
 
 const PLATFORMS = [
   ['TIKTOK', 'TikTok'],
@@ -228,7 +230,7 @@ export function Landing({ faq }: { faq: Faq }) {
                 каталоге остаются только настоящие бренды.
               </p>
               <div>
-                <a className="btn violet" href={LOGIN} data-bot="">
+                <a className="btn violet" href={APPLY}>
                   Стать заказчиком
                 </a>
               </div>
@@ -244,7 +246,8 @@ export function Landing({ faq }: { faq: Faq }) {
                 уйдёт другим, пока ролик на проверке.
               </p>
               <div>
-                <a className="btn lime" href={LOGIN} data-bot="">
+                {/* после входа главная кабинета креатора — каталог заказов */}
+                <a className="btn lime" href={LOGIN}>
                   Смотреть заказы
                 </a>
               </div>

@@ -12,6 +12,7 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
+import { devAllowList, devAllowed } from './dev-access';
 import { ConfigService } from '@nestjs/config';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
@@ -123,6 +124,9 @@ export class WebAuthController {
       },
     );
     if (!login) return res.redirect(this.siteUrl(true));
+    // закрытый дев-стенд: чужим аккаунт не заводим
+    if (!devAllowed(devAllowList(this.config), login.id))
+      return res.redirect(this.siteUrl(true));
     const user = await this.users.findOrCreate({
       telegramId: BigInt(login.id),
       username: login.username,

@@ -37,6 +37,26 @@ function readPending(): Pending | undefined {
   }
 }
 
+/**
+ * Куда человек шёл до входа через Telegram: после OpenID Connect бэкенд всегда возвращает на «/»
+ * (WebAuthController, siteUrl), а с лендинга ведут, например, на заявку /profile/advertiser.
+ * Вход кодом из бота страницу не покидает — ему это не нужно.
+ */
+const RETURN_KEY = 'fixum:returnTo';
+
+function rememberReturn() {
+  const path = location.pathname;
+  if (path !== '/' && path !== '/login')
+    sessionStorage.setItem(RETURN_KEY, path + location.search);
+}
+
+/** Адрес, с которого ушли входить (один раз); только свой путь, не чужой сайт. */
+export function takeReturnPath(): string | null {
+  const path = sessionStorage.getItem(RETURN_KEY);
+  sessionStorage.removeItem(RETURN_KEY);
+  return path?.startsWith('/') && !path.startsWith('//') ? path : null;
+}
+
 /** Telegram вернул на сайт с ошибкой входа (WebAuthController, oidc/callback) — убираем её из адреса. */
 function takeLoginError(): boolean {
   const params = new URLSearchParams(location.search);
@@ -183,7 +203,11 @@ export function Login({ onLogin }: { onLogin: () => void }) {
           ) : (
             <>
               {oidc ? (
-                <a className={s.telegram} href="/api/web/oidc/start">
+                <a
+                  className={s.telegram}
+                  href="/api/web/oidc/start"
+                  onClick={rememberReturn}
+                >
                   {TG_ICON}
                   {t('web.loginButton')}
                 </a>
@@ -214,12 +238,13 @@ export function Login({ onLogin }: { onLogin: () => void }) {
           {pending ? (
             <p className={s.note}>{t('web.loginWaiting')}</p>
           ) : (
-            oidc === false &&
-            <ol className={s.steps}>
-              <li>{t('web.loginStep1')}</li>
-              <li>{t('web.loginStep2')}</li>
-              <li>{t('web.loginStep3')}</li>
-            </ol>
+            oidc === false && (
+              <ol className={s.steps}>
+                <li>{t('web.loginStep1')}</li>
+                <li>{t('web.loginStep2')}</li>
+                <li>{t('web.loginStep3')}</li>
+              </ol>
+            )
           )}
           <span className={s.note}>
             <Trans

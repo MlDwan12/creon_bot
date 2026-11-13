@@ -1,4 +1,4 @@
-import { userLang } from '../i18n/i18n';
+import { langFromTelegram, translator, userLang } from '../i18n/i18n';
 import { setRequestLang, tr } from '../i18n/request-lang';
 import {
   CanActivate,
@@ -12,6 +12,7 @@ import type { User } from '@prisma/client';
 import type { Request } from 'express';
 import { SupportService } from '../support/support.service';
 import { UsersService } from '../users/users.service';
+import { devAllowList, devAllowed } from './dev-access';
 import { validateInitData } from './init-data.util';
 import { readCookie, SESSION_COOKIE, verifySession } from './web-login.util';
 
@@ -54,11 +55,16 @@ export function assertFreshLogin(req: ApiRequest) {
  */
 @Injectable()
 export class InitDataGuard implements CanActivate {
+  /** Закрытый дев-стенд (DEV_ALLOWED_IDS); null — пускаем всех. */
+  private readonly devList: Set<string> | null;
+
   constructor(
     private readonly config: ConfigService,
     private readonly usersService: UsersService,
     private readonly support: SupportService,
-  ) {}
+  ) {
+    this.devList = devAllowList(config);
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<ApiRequest>();
@@ -94,6 +100,11 @@ export class InitDataGuard implements CanActivate {
       INIT_DATA_MAX_AGE_SECONDS,
     );
     if (!tgUser) return null;
+    // до findOrCreate: чужим на закрытом стенде и аккаунт не заводим
+    if (!devAllowed(this.devList, tgUser.id))
+      throw new ForbiddenException(
+        translator(langFromTelegram(tgUser.language_code))('errors.devClosed'),
+      );
     req.authDate = Number(new URLSearchParams(raw).get('auth_date'));
     return this.usersService.findOrCreate({
       telegramId: BigInt(tgUser.id),
@@ -114,6 +125,12 @@ export class InitDataGuard implements CanActivate {
     if (!session) return null;
     req.authDate = session.authDate;
     req.web = true;
-    return this.usersService.findById(session.userId);
+    const user = await this.usersService.findById(session.userId);
+    // сессия, выданная до того, как стенд закрыли
+    if (user && !devAllowed(this.devList, user.telegramId))
+      throw new ForbiddenException(
+        translator(userLang(user))('errors.devClosed'),
+      );
+    return user;
   }
 }
