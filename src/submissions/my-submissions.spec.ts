@@ -62,6 +62,7 @@ const submission = (
   finalizedAt: null,
   goneAt: null,
   presenceCheckedAt: null,
+  widgetMessageId: null,
   rating: null,
   review: null,
   reviewQueuedAt: null,

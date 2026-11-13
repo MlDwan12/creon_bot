@@ -8,41 +8,41 @@ datasource db {
 }
 
 model User {
-  id               Int       @id @default(autoincrement())
-  telegramId       BigInt    @unique
-  username         String?
-  firstName        String?
-  createdAt        DateTime  @default(now())
+  id                 Int       @id @default(autoincrement())
+  telegramId         BigInt    @unique
+  username           String?
+  firstName          String?
+  createdAt          DateTime  @default(now())
   /// Ссылки креатора на свои соцсети, по порядку; на одной площадке может быть несколько аккаунтов.
   /// Площадка — по домену ссылки (src/profiles/profile-input.ts, parseLinks).
-  socialLinks      String[]  @default([])
+  socialLinks        String[]  @default([])
   /// Кошелёк USDT (TRC20) для выплат — видят только сам креатор и модераторы (src/payouts/trc20.ts).
-  payoutWallet     String?
+  payoutWallet       String?
   /// Когда кошелёк сменили на другой (первый ввод не считается) — модератор видит свежую смену у
   /// заявки на вывод: так выводят деньги с угнанного аккаунта.
-  walletChangedAt  DateTime?
+  walletChangedAt    DateTime?
   /// Когда креатор впервые открыл «Обучение» — пункт чек-листа «Старт» (packages/shared/src/creator-home.ts).
-  lessonSeenAt     DateTime?
+  lessonSeenAt       DateTime?
   /// Присылать ли сообщение о каждом новом заказе в каталоге — переключатель в профиле.
-  notifyNewOrders  Boolean   @default(true)
+  notifyNewOrders    Boolean   @default(true)
   /// Язык интерфейса, выбранный в профиле (src/i18n/i18n.ts, LANGS); null — по языку Telegram.
-  language         String?
+  language           String?
   /// language_code из Telegram — по нему язык, пока человек сам не выбрал; бот пишет на нём же.
-  telegramLanguage String?
+  telegramLanguage   String?
   /// Кабинет, открытый в мини-аппе последним (webapp/src/role.ts); null — ещё не выбирал.
   /// Только вкладки и стартовый экран: прав не даёт, быть можно и тем и другим.
-  cabinet          Cabinet?
+  cabinet            Cabinet?
   /// Заблокирован модератором: мини-апп показывает только экран блокировки, бот не пишет.
-  bannedAt         DateTime?
-  banReason        String?
+  bannedAt           DateTime?
+  banReason          String?
   /// Бан без права обжалования: мини-апп и сайт — экран «Доступ закрыт» без причины и поддержки,
   /// бот молчит на любые сообщения, ответы поддержки ему не доходят.
-  banFinal         Boolean   @default(false)
+  banFinal           Boolean   @default(false)
   /// Тема этого пользователя в группе поддержки (message_thread_id), создаётся при первом обращении.
-  supportTopicId   Int?
+  supportTopicId     Int?
   /// В какой группе эта тема (SUPPORT_CHAT_ID на момент создания): номер темы уникален только внутри
   /// группы — после смены группы старый номер указал бы на чужую тему.
-  supportChatId    String?
+  supportChatId      String?
   /// Кабинет заказчика открыт модератором (по заявке или сам): без этого заказы не создать и не
   /// править (AdvertiserGuard). Модераторам из MODERATOR_IDS не нужен.
   advertiserAt       DateTime?
@@ -50,14 +50,14 @@ model User {
   /// поддержку (src/advertisers/advertiser-access.ts).
   advertiserClosedAt DateTime?
 
-  orders         Order[]
-  submissions    Submission[]
-  orderViews     OrderView[]
-  reports        Report[]
-  payouts        Payout[]
-  socialAccounts SocialAccount[]
-  oauthPendings  OAuthPending[]
-  webLogins      WebLogin[]
+  orders                 Order[]
+  submissions            Submission[]
+  orderViews             OrderView[]
+  reports                Report[]
+  payouts                Payout[]
+  socialAccounts         SocialAccount[]
+  oauthPendings          OAuthPending[]
+  webLogins              WebLogin[]
   advertiserApplications AdvertiserApplication[]
   linkVerifications      LinkVerification[]
 
@@ -270,6 +270,8 @@ model Submission {
   goneAt             DateTime?
   /// Когда последний раз проверили публикацию по API во время холда (раз в сутки, ScheduledJob).
   presenceCheckedAt  DateTime?
+  /// Карточка ролика (виджет Telegram) в чате креатора: её правят при смене статуса. null — не отправлена.
+  widgetMessageId    Int?
   viewSnapshots      ViewSnapshot[]
 
   /// Один отклик «в работе» на креатора и заказ — дубль (двойной тап) отсекает сама база.
@@ -381,20 +383,23 @@ model ViewSnapshot {
 /// Очередь уведомлений в чат бота (src/telegram/notifications.service.ts). Пишется при событии,
 /// отправляет фоновый воркер; отправленное удаляется. Переживает рестарт и падение процесса.
 model Notification {
-  id        Int      @id @default(autoincrement())
-  chatId    BigInt
-  text      String
-  html      Boolean  @default(false)
+  id           Int      @id @default(autoincrement())
+  chatId       BigInt
+  text         String
+  html         Boolean  @default(false)
   /// Экран мини-аппа для кнопки «Открыть»: путь вроде /my-orders.
-  path      String
+  path         String
+  /// Обновить карточку ролика (виджет) у креатора. С карточкой вместо text уходит короткий пинг ответом
+  /// на неё; text — если виджет не удался или выключен (WIDGETS_ENABLED). Пустой text — только карточка.
+  submissionId Int?
   /// Язык получателя (src/i18n): на нём подпись кнопки «Открыть». Текст уже переведён при постановке.
-  lang      String   @default("ru")
+  lang         String   @default("ru")
   /// 0 — обычные, 1 — рассылки: обычные уходят первыми, рассылка не задерживает срочное.
-  priority  Int      @default(0)
-  attempts  Int      @default(0)
+  priority     Int      @default(0)
+  attempts     Int      @default(0)
   /// Не раньше этого момента: пауза после 429 или сбоя, а взятое воркером — «аренда» на время отправки.
-  sendAfter DateTime @default(now())
-  createdAt DateTime @default(now())
+  sendAfter    DateTime @default(now())
+  createdAt    DateTime @default(now())
 
   /// Выборка воркера: готовые к отправке, по приоритету.
   @@index([priority, sendAfter])
