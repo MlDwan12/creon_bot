@@ -111,16 +111,16 @@ jobs:
           prev_site="${prev_site##*/}"
           api=false web=false site=false
           # бот — всё, кроме фронтов, документов и файлов только для статики
-          changed "$prev_api" . ':!webapp' ':!web' ':!packages' ':!*.md' \
+          changed "$prev_api" . ':!webapp' ':!web' ':!packages' ':!legal' ':!*.md' \
             ':!deploy/remote-static.sh' ':!deploy/prod/nginx' && api=true
           # пока папки нет, мини-апп отдаёт бот из своего образа — выкладывать статику некуда
           if ssh -n prod "test -d '$WEB_DIR'"; then
-            changed "$prev_web" webapp packages i18n && web=true
+            changed "$prev_web" webapp packages i18n legal && web=true
           else
             echo "::notice::мини-апп статикой на стенде не настроен (нет $WEB_DIR) — его отдаёт бот, DEPLOY.md «Мини-апп — статикой через nginx»"
           fi
           if ssh -n prod "test -d '$SITE_DIR'"; then
-            changed "$prev_site" web packages i18n && site=true
+            changed "$prev_site" web packages i18n legal && site=true
           else
             echo "::notice::сайт на стенде не настроен (нет $SITE_DIR) — пропускаем, DEPLOY.md «Сайт»"
           fi

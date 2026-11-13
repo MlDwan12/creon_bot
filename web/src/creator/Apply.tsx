@@ -7,7 +7,6 @@ import {
   applyAdvertiser,
   errorText,
   fetchMyProfile,
-  fetchWebConfig,
 } from '../api';
 import { formatDate } from '../format';
 import { useSession } from '../session';
@@ -34,14 +33,6 @@ export function Apply() {
   const [phone, setPhone] = useState('');
   // согласие на обработку данных — без него кнопка выключена (152-ФЗ)
   const [consent, setConsent] = useState(false);
-  // политика — страница мини-аппа: у прода и дев-стенда адреса разные
-  const [privacyUrl, setPrivacyUrl] = useState<string | null>(null);
-  useEffect(() => {
-    fetchWebConfig().then(
-      (c) => setPrivacyUrl(c.privacyUrl),
-      () => {},
-    );
-  }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -152,16 +143,13 @@ export function Apply() {
                   <Trans
                     i18nKey="apply.consent"
                     components={[
-                      privacyUrl ? (
-                        <a
-                          key="privacy"
-                          href={privacyUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                        />
-                      ) : (
-                        <span key="privacy" />
-                      ),
+                      // страница сайта (собирается вместе с лендингом)
+                      <a
+                        key="privacy"
+                        href="/privacy.html"
+                        target="_blank"
+                        rel="noreferrer"
+                      />,
                     ]}
                   />
                 </span>

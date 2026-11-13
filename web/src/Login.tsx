@@ -80,12 +80,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
   const { t } = useTranslation();
   // null — настройки ещё грузятся
   const [oidc, setOidc] = useState<boolean | null>(null);
-  const [links, setLinks] = useState<{
-    botUrl: string | null;
-    privacyUrl: string | null;
-    termsUrl: string | null;
-  }>({ botUrl: null, privacyUrl: null, termsUrl: null });
-  const { botUrl } = links;
+  const [botUrl, setBotUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(() =>
     takeLoginError() ? t('web.loginFailed') : '',
@@ -97,7 +92,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
   useEffect(() => {
     fetchWebConfig().then(
       (c) => {
-        setLinks(c);
+        setBotUrl(c.botUrl);
         setOidc(c.oidc);
       },
       () => setOidc(false), // без настроек — вход кодом
@@ -264,20 +259,13 @@ export function Login({ onLogin }: { onLogin: () => void }) {
         <Points className={s.narrowOnly} />
         {/* правила и поддержка — до входа: сервис работает с деньгами */}
         <nav className={s.legal} aria-label={t('web.legalAria')}>
-          {links.termsUrl && (
-            <a href={links.termsUrl} target="_blank" rel="noopener noreferrer">
-              {t('catalog.terms')}
-            </a>
-          )}
-          {links.privacyUrl && (
-            <a
-              href={links.privacyUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {t('catalog.privacy')}
-            </a>
-          )}
+          {/* страницы сайта (собираются вместе с лендингом), а не мини-аппа */}
+          <a href="/terms.html" target="_blank" rel="noopener noreferrer">
+            {t('catalog.terms')}
+          </a>
+          <a href="/privacy.html" target="_blank" rel="noopener noreferrer">
+            {t('catalog.privacy')}
+          </a>
           {botUrl && (
             <a href={botUrl} target="_blank" rel="noopener noreferrer">
               {t('common.support')}
