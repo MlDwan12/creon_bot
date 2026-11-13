@@ -14,6 +14,19 @@ export default defineConfig({
     },
   },
   css: { modules: { localsConvention: 'camelCaseOnly' } },
+  // две страницы: кабинеты (index.html) и лендинг (landing.html — тело дорисовывает scripts/prerender.mjs)
+  build: {
+    rollupOptions: {
+      input: {
+        main: decodeURIComponent(
+          new URL('index.html', import.meta.url).pathname,
+        ),
+        landing: decodeURIComponent(
+          new URL('landing.html', import.meta.url).pathname,
+        ),
+      },
+    },
+  },
   // В dev сайт на :5174 (мини-апп — на :5173), API — Nest на :3000, через прокси — один адрес, как в проде.
   // Вход через Telegram на localhost не работает (домен задаётся боту в BotFather) — проверять на дев-стенде.
   server: {

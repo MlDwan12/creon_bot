@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Лендинг для тех, кто не вошёл (nginx отдаёт его на «/» без cookie сессии). Тело страницы
+         подставляет scripts/prerender.mjs при сборке — поисковики видят текст без JS. -->
+    <title>Fixum — реклама у креаторов с оплатой за просмотры</title>
+    <meta
+      name="description"
+      content="Реклама в коротких роликах TikTok, YouTube, VK и Instagram с оплатой только за просмотры. Каждый ролик проверяет модератор, бюджет — от 10 USDT."
+    />
+    <!-- адрес прода: копия на дев-стенде не соперничает с ним в поиске -->
+    <link rel="canonical" href="https://site.fixumapp.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Fixum" />
+    <meta property="og:url" content="https://site.fixumapp.com/" />
+    <meta property="og:title" content="Fixum — реклама в коротких роликах, оплата за просмотры" />
+    <meta
+      property="og:description"
+      content="Бренды задают бюджет, креаторы публикуют ролики и получают USDT за проверенные просмотры."
+    />
+    <meta property="og:image" content="https://site.fixumapp.com/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preload" href="/fonts/unbounded-cyrillic.woff2" as="font" type="font/woff2" crossorigin />
+    <script type="application/ld+json"><!--faq-ld--></script>
+  </head>
+  <body>
+    <!--landing-->
+    <script type="module" src="/src/landing/client.ts"></script>
+  </body>
+</html>

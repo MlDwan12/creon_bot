@@ -1,0 +1,3 @@
+# Мини-апп живёт в Telegram, в поиске ему делать нечего. Публичная страница Fixum — site.fixumapp.com.
+User-agent: *
+Disallow: /

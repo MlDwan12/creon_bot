@@ -1,0 +1,11 @@
+# В поиске — только лендинг на главной; кабинеты за входом индексировать незачем.
+# CSS, шрифты и картинки открыты: без них поисковик не увидит страницу как человек.
+User-agent: *
+Allow: /$
+Allow: /assets/
+Allow: /fonts/
+Allow: /og.jpg
+Allow: /favicon.png
+Disallow: /
+
+Sitemap: https://site.fixumapp.com/sitemap.xml
