@@ -91,33 +91,79 @@ function Steps({ items }: { items: string[] }) {
   );
 }
 
+/** Шапка лендинга — и юридических страниц сайта (LegalPage). */
+export function Header() {
+  return (
+    <header className="top">
+      <div className="wrap topbar">
+        <a className="logo" href="/" aria-label="Fixum — на главную">
+          <span className="mark" aria-hidden="true">
+            F
+          </span>
+          Fixum
+        </a>
+        <nav className="navlinks" aria-label="Разделы">
+          <a href="/#brands">Брендам</a>
+          <a href="/#creators">Креаторам</a>
+          <a href="/#safe">Гарантии</a>
+          <a href="/#faq">Вопросы</a>
+        </nav>
+        <div className="topactions">
+          <a className="btn ghost small navlogin" href={LOGIN}>
+            Войти
+          </a>
+          <a className="btn violet small" href={LOGIN} data-bot="">
+            Открыть в Telegram
+          </a>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+/** Подвал лендинга и юридических страниц. */
+export function Footer() {
+  return (
+    <footer className="foot">
+      <div className="wrap footrow">
+        <span className="logo small">Fixum</span>
+        <nav aria-label="Подвал">
+          <a href="/privacy.html">Политика конфиденциальности</a>
+          <a href="/terms.html">Пользовательское соглашение</a>
+          <a href={LOGIN} data-bot="">
+            Поддержка в Telegram
+          </a>
+          <a href={LOGIN}>Вход</a>
+        </nav>
+        <span>© 2026 Fixum</span>
+      </div>
+    </footer>
+  );
+}
+
+/**
+ * Политика или соглашение на сайте: текст — из legal/ в корне (общий с мини-аппом), свой, поэтому
+ * вставляется как HTML; ссылку соглашения на политику ведём на страницу сайта.
+ */
+export function LegalPage({ html }: { html: string }) {
+  return (
+    <>
+      <Header />
+      <main
+        className="wrap legal"
+        dangerouslySetInnerHTML={{
+          __html: html.replace(/href="\/privacy"/g, 'href="/privacy.html"'),
+        }}
+      />
+      <Footer />
+    </>
+  );
+}
+
 export function Landing({ faq }: { faq: Faq }) {
   return (
     <>
-      <header className="top">
-        <div className="wrap topbar">
-          <a className="logo" href="/" aria-label="Fixum — на главную">
-            <span className="mark" aria-hidden="true">
-              F
-            </span>
-            Fixum
-          </a>
-          <nav className="navlinks" aria-label="Разделы">
-            <a href="#brands">Брендам</a>
-            <a href="#creators">Креаторам</a>
-            <a href="#safe">Гарантии</a>
-            <a href="#faq">Вопросы</a>
-          </nav>
-          <div className="topactions">
-            <a className="btn ghost small navlogin" href={LOGIN}>
-              Войти
-            </a>
-            <a className="btn violet small" href={LOGIN} data-bot="">
-              Открыть в Telegram
-            </a>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       <main>
         <section className="wrap hero">
@@ -323,24 +369,7 @@ export function Landing({ faq }: { faq: Faq }) {
         </section>
       </main>
 
-      <footer className="foot">
-        <div className="wrap footrow">
-          <span className="logo small">Fixum</span>
-          <nav aria-label="Подвал">
-            <a href={LOGIN} data-privacy="">
-              Политика конфиденциальности
-            </a>
-            <a href={LOGIN} data-terms="">
-              Пользовательское соглашение
-            </a>
-            <a href={LOGIN} data-bot="">
-              Поддержка в Telegram
-            </a>
-            <a href={LOGIN}>Вход</a>
-          </nav>
-          <span>© 2026 Fixum</span>
-        </div>
-      </footer>
+      <Footer />
     </>
   );
 }

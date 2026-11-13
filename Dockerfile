@@ -23,6 +23,8 @@ RUN yarn install --frozen-lockfile
 COPY webapp ./
 # словари общие с бэкендом и лежат в корне репозитория; webapp/src импортирует ../../i18n
 COPY i18n /i18n
+# юридические тексты — общие с сайтом (legal/, webapp/src/views импортирует ../../../legal)
+COPY legal /legal
 # общий код мини-аппа и сайта: webapp импортирует ../packages/shared (алиас @fixum/shared)
 COPY packages /packages
 # Sentry для мини-аппа (src/monitoring.ts) — адрес вшивается при сборке; пусто — выключен
@@ -36,8 +38,9 @@ WORKDIR /web
 COPY web/package.json web/yarn.lock ./
 RUN yarn install --frozen-lockfile
 COPY web ./
-# словари и общий код — из корня репозитория, как у webapp
+# словари, юридические тексты и общий код — из корня репозитория, как у webapp
 COPY i18n /i18n
+COPY legal /legal
 COPY packages /packages
 RUN yarn build
 

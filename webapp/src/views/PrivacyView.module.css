@@ -22,6 +22,12 @@
 .page ul {
   padding-left: 20px;
 }
-.hint {
+.page :global(.hint),
+.enNote {
   color: var(--hint);
+}
+.enNote {
+  margin: 0;
+  padding: 16px 16px 0;
+  line-height: 1.45;
 }

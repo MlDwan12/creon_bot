@@ -8,7 +8,6 @@ import {
   fetchAdvertiserStats,
   fetchMyOrders,
   fetchMyProfile,
-  fetchWebConfig,
   type MyOrder,
 } from '../api';
 import { Avatar } from '../components/Avatar';
@@ -27,16 +26,11 @@ export function Account() {
   const [profile, setProfile] = useState<CreatorProfile>();
   const [orders, setOrders] = useState<MyOrder[]>();
   const [stats, setStats] = useState<AdvertiserStats>();
-  const [legal, setLegal] = useState<{
-    privacyUrl: string | null;
-    termsUrl: string | null;
-  }>({ privacyUrl: null, termsUrl: null });
   // всё второстепенное: не загрузилось — просто не показываем
   useEffect(() => {
     fetchMyProfile().then(setProfile, () => {});
     fetchMyOrders().then(setOrders, () => {});
     fetchAdvertiserStats(undefined).then(setStats, () => {});
-    fetchWebConfig().then(setLegal, () => {});
   }, []);
 
   const name = me.firstName ?? t('tabs.profile');
@@ -131,26 +125,23 @@ export function Account() {
               {t('common.support')}
             </Link>
           ),
-          legal.privacyUrl && (
-            <a
-              key="privacy"
-              href={legal.privacyUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {t('catalog.privacy')}
-            </a>
-          ),
-          legal.termsUrl && (
-            <a
-              key="terms"
-              href={legal.termsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {t('catalog.terms')}
-            </a>
-          ),
+          // страницы сайта (собираются вместе с лендингом), а не мини-аппа
+          <a
+            key="privacy"
+            href="/privacy.html"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {t('catalog.privacy')}
+          </a>,
+          <a
+            key="terms"
+            href="/terms.html"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {t('catalog.terms')}
+          </a>,
         ]
           .filter(Boolean)
           .flatMap((link, i) => (i ? [' · ', link] : [link]))}

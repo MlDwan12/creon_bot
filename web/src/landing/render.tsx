@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import ru from '../../../i18n/ru.json';
-import { type Faq, Landing } from './Landing';
+import privacy from '../../../legal/privacy.ru.html?raw';
+import terms from '../../../legal/terms.ru.html?raw';
+import { type Faq, Landing, LegalPage } from './Landing';
 
 /**
  * Лендинг в HTML — при сборке (scripts/prerender.mjs). Вопросы — общие с экраном «Помощь»
@@ -34,6 +36,9 @@ export function render() {
   };
   return {
     html: renderToStaticMarkup(<Landing faq={faq} />),
+    // политика и соглашение на сайте — в оформлении лендинга, а не мини-аппа
+    privacy: renderToStaticMarkup(<LegalPage html={privacy} />),
+    terms: renderToStaticMarkup(<LegalPage html={terms} />),
     // < — чтобы текст не закрыл тег <script>
     faqLd: JSON.stringify(faqLd).replace(/</g, '\\u003c'),
   };
