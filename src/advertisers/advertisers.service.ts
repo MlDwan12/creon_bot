@@ -29,7 +29,7 @@ export class AdvertisersService {
   async apply(
     user: User,
     isModerator: boolean,
-    input: { email: string; phone: string | null },
+    input: { email: string; phone: string | null; consentVersion?: string },
   ) {
     const { state } = await this.access(user, isModerator);
     if (state !== 'none')

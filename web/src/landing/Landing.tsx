@@ -199,9 +199,7 @@ export function Landing({ faq }: { faq: Faq }) {
               </span>
               <div className="grow">
                 <p className="strong">Ролик одобрен</p>
-                <p className="hint small">
-                  12 400 просмотров · проверил модератор
-                </p>
+                <p className="hint small">12 400 просмотров · пример</p>
               </div>
               <span className="plus">+24,8 USDT</span>
             </div>
@@ -331,6 +329,9 @@ export function Landing({ faq }: { faq: Faq }) {
           <nav aria-label="Подвал">
             <a href={LOGIN} data-privacy="">
               Политика конфиденциальности
+            </a>
+            <a href={LOGIN} data-terms="">
+              Пользовательское соглашение
             </a>
             <a href={LOGIN} data-bot="">
               Поддержка в Telegram

@@ -74,3 +74,25 @@
   font-size: 14px;
   color: var(--danger);
 }
+
+/* Галочка согласия: общие стили полей (.page input) ей не подходят */
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--hint);
+}
+.page .consent input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.consent a {
+  color: var(--link);
+}

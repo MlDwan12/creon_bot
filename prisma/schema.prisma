@@ -591,19 +591,22 @@ model LinkVerification {
 }
 
 model AdvertiserApplication {
-  id          Int                         @id @default(autoincrement())
-  user        User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId      Int
-  email       String
+  id             Int                         @id @default(autoincrement())
+  user           User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         Int
+  email          String
   /// По желанию: с номером команда свяжется быстрее.
-  phone       String?
-  status      AdvertiserApplicationStatus @default(PENDING)
+  phone          String?
+  /// Согласие на обработку данных: редакция политики (PRIVACY_VERSION), на которую согласились, дата — createdAt.
+  /// null — заявка подана до галочки согласия.
+  consentVersion String?
+  status         AdvertiserApplicationStatus @default(PENDING)
   /// Telegram ID модератора, который решил заявку.
-  moderatorId BigInt?
+  moderatorId    BigInt?
   /// Заметка модератора при отказе — пользователю не показываем.
-  note        String?
-  decidedAt   DateTime?
-  createdAt   DateTime                    @default(now())
+  note           String?
+  decidedAt      DateTime?
+  createdAt      DateTime                    @default(now())
 
   /// Одна заявка на рассмотрении на человека — двойной тап не создаст вторую.
   @@unique([userId], map: "AdvertiserApplication_one_pending", where: { status: "PENDING" })

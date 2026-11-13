@@ -81,11 +81,15 @@ export function createCreatorApi(request: Requester) {
 
     fetchMyProfile: () => request<CreatorProfile>('GET', '/api/profile'),
 
-    /** Заявка «Стать заказчиком»: почта обязательна, телефон — по желанию (пусто — без него). */
+    /**
+     * Заявка «Стать заказчиком»: почта обязательна, телефон — по желанию (пусто — без него).
+     * consent — галочка согласия на обработку данных: без неё форма кнопку не включает.
+     */
     applyAdvertiser: (email: string, phone: string) =>
       request<{ ok: true }>('POST', '/api/advertiser/application', {
         email,
         phone,
+        consent: true,
       }),
 
     /** Профиль креатора; модератору — с блокировкой, кошельком и ссылками. */
