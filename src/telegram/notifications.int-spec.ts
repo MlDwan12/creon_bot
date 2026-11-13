@@ -162,3 +162,153 @@ it('рассылку о заказе, который сняли, пока она
   expect(sent).toEqual([]);
   expect(await prisma.notification.count()).toBe(0);
 });
+
+describe('карточка ролика виджетом (WIDGETS_ENABLED)', () => {
+  /** Telegram, который запоминает вызовы; editMessageWidgetData падает, если editFails. */
+  function widgetSetup(widgets: boolean, editFails = false) {
+    const calls: { method: string; payload: Record<string, unknown> }[] = [];
+    const callApi = jest.fn(
+      (method: string, payload: Record<string, unknown>) => {
+        calls.push({ method, payload });
+        if (method === 'editMessageWidgetData' && editFails)
+          throw new TelegramError({
+            error_code: 400,
+            description: 'Bad Request: message to edit not found',
+          });
+        return Promise.resolve(
+          method === 'sendWidget' ? { message_id: 500 } : {},
+        );
+      },
+    );
+    const bot = { telegram: { callApi } } as unknown as Telegraf<Context>;
+    const cfg = {
+      get: (key: string) =>
+        key === 'WEBAPP_URL'
+          ? 'https://app'
+          : key === 'WIDGETS_ENABLED'
+            ? String(widgets)
+            : '1',
+    } as unknown as ConfigService;
+    return { service: new NotificationsService(bot, prisma, cfg), calls };
+  }
+
+  async function submitted() {
+    const advertiser = await prisma.user.create({
+      data: { telegramId: 20n },
+    });
+    const creator = await prisma.user.create({
+      data: { telegramId: 21n, language: 'ru' },
+    });
+    const order = await openOrder(advertiser.id, 'Обзор наушников');
+    const sub = await prisma.submission.create({
+      data: {
+        orderId: order.id,
+        creatorId: creator.id,
+        status: 'SUBMITTED',
+        videoUrl: 'https://www.tiktok.com/@a/video/1',
+        views: 12400,
+        payoutMinor: 1000,
+        submittedAt: new Date(),
+      },
+    });
+    return { advertiser, creator, order, sub };
+  }
+
+  const chatData = (payload: Record<string, unknown>) =>
+    JSON.parse(payload.chat_data as string) as Record<string, string>;
+
+  it('сдача — карточка без пинга; одобрение — правка карточки и пинг ответом на неё', async () => {
+    const { service, calls } = widgetSetup(true);
+    const { advertiser, creator, order, sub } = await submitted();
+    service.videoSubmitted({ ...sub, order, creator });
+    await flushWrites();
+    await service.processBatch();
+
+    // модераторов в тесте нет — только карточка креатору
+    expect(calls.map((c) => c.method)).toEqual(['sendWidget']);
+    expect(calls[0].payload.chat_id).toBe('21');
+    expect(chatData(calls[0].payload)).toMatchObject({
+      s: 'review',
+      t: '«Обзор наушников»',
+      p: 'TikTok',
+    });
+    expect(
+      (await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } }))
+        .widgetMessageId,
+    ).toBe(500);
+
+    calls.length = 0;
+    const approved = await prisma.submission.update({
+      where: { id: sub.id },
+      data: {
+        status: 'MODERATOR_APPROVED',
+        payoutMinor: 2480,
+        decidedAt: new Date(),
+      },
+    });
+    service.videoApprovedByModerator({
+      ...approved,
+      order: { ...order, advertiser },
+      creator,
+    });
+    await flushWrites();
+    await service.processBatch();
+
+    const edit = calls.find((c) => c.method === 'editMessageWidgetData')!;
+    expect(edit.payload).toMatchObject({ chat_id: '21', message_id: 500 });
+    expect(chatData(edit.payload)).toMatchObject({ s: 'hold', a: '24,8 USDT' });
+    const ping = calls.find(
+      (c) => c.method === 'sendMessage' && c.payload.chat_id === '21',
+    )!;
+    expect(ping.payload.text).toBe('✅ Ролик одобрен — начислено 24,8 USDT');
+    expect(ping.payload.reply_parameters).toMatchObject({ message_id: 500 });
+    // заказчику — как раньше, текстом
+    expect(
+      calls.some(
+        (c) => c.method === 'sendMessage' && c.payload.chat_id === '20',
+      ),
+    ).toBe(true);
+    expect(await prisma.notification.count()).toBe(0);
+  });
+
+  it('карточку удалили из чата — полный текст, следующее событие пришлёт новую', async () => {
+    const { service, calls } = widgetSetup(true, true);
+    const { order, creator, sub } = await submitted();
+    const rejected = await prisma.submission.update({
+      where: { id: sub.id },
+      data: {
+        status: 'MODERATOR_REJECTED',
+        moderatorComment: 'Нет ссылки',
+        widgetMessageId: 77,
+      },
+    });
+    service.videoRejectedByModerator(
+      { ...rejected, order, creator },
+      'Нет ссылки',
+    );
+    await flushWrites();
+    await service.processBatch();
+
+    expect(calls.map((c) => c.method)).toEqual([
+      'editMessageWidgetData',
+      'sendMessage',
+    ]);
+    expect(calls[1].payload.text).toContain('Причина: Нет ссылки');
+    expect(
+      (await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } }))
+        .widgetMessageId,
+    ).toBeNull();
+  });
+
+  it('виджеты выключены — карточки нет, тексты как раньше', async () => {
+    const { service, calls } = widgetSetup(false);
+    const { order, creator, sub } = await submitted();
+    service.videoSubmitted({ ...sub, order, creator });
+    service.viewsFinalized({ ...sub, order, creator });
+    await flushWrites();
+    await service.processBatch();
+
+    expect(calls.map((c) => c.method)).toEqual(['sendMessage']);
+    expect(calls[0].payload.text).toContain('Холд по ролику');
+  });
+});
