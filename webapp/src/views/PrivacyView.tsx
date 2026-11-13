@@ -12,7 +12,7 @@ export default function PrivacyView() {
       <main className={s.page} lang="en">
         <h1>Privacy policy</h1>
         <p className={s.hint}>
-          Version of 10.11.2026. This is a translation for convenience; if it
+          Version of 13.11.2026. This is a translation for convenience; if it
           differs from the Russian version, the Russian version prevails.
         </p>
 
@@ -97,8 +97,9 @@ export default function PrivacyView() {
           </p>
           <p>
             On the website we set one cookie for sign-in (valid for 30 days). No
-            advertising or analytics cookies. [If error reporting (Sentry) is on
-            — name it here.]
+            advertising or analytics cookies. The mini app sends error reports
+            to Sentry (error text and the screen it happened on) — without your
+            data, cookies or request contents.
           </p>
         </section>
 
@@ -199,7 +200,7 @@ export default function PrivacyView() {
   return (
     <main className={s.page}>
       <h1>Политика конфиденциальности</h1>
-      <p className={s.hint}>Редакция от 10.11.2026</p>
+      <p className={s.hint}>Редакция от 13.11.2026</p>
 
       <section>
         <h2>1. Кто обрабатывает данные</h2>
@@ -281,8 +282,9 @@ export default function PrivacyView() {
         </p>
         <p>
           На сайте мы ставим одну cookie для входа (действует 30 дней).
-          Рекламных и аналитических cookie нет. [Если включён сбор ошибок
-          (Sentry) — указать.]
+          Рекламных и аналитических cookie нет. Мини-приложение отправляет
+          отчёты об ошибках в сервис Sentry (текст ошибки и экран, где она
+          случилась) — без ваших данных, cookie и содержимого запросов.
         </p>
       </section>
 

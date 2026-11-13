@@ -28,11 +28,14 @@ import {
   formatDeadline,
   formatMoney,
   html,
+  localMoney as money,
+  localNumber as num,
   orderCategoryLabel,
   titleVisibleToCreators,
 } from '../common/format';
 import { parseModeratorIds } from '../auth/moderator.util';
 import { type Lang, translator, userLang } from '../i18n/i18n';
+import { cardCaption, cardHtml, cardPing, cardState } from './submission-card';
 import type { TFunction } from 'i18next';
 
 type SubmissionWithParties = Submission & { order: Order; creator: User };
@@ -40,6 +43,7 @@ type SubmissionWithParties = Submission & { order: Order; creator: User };
 /** Строка очереди: кому, текст, экран для кнопки «Открыть» и язык её подписи. */
 type Outgoing = Pick<Notification, 'chatId' | 'text' | 'html' | 'path'> & {
   lang?: Lang;
+  submissionId?: number;
 };
 
 /** Получатель уведомления: кому писать и на каком языке (src/i18n, userLang). */
@@ -79,6 +83,8 @@ export class NotificationsService
   private readonly logger = new Logger(NotificationsService.name);
   private readonly moderatorIds: bigint[];
   private readonly webAppUrl: string;
+  /** Карточки роликов виджетами (Bot API 10.4); выключено — креатору обычные тексты, как раньше. */
+  private readonly widgets: boolean;
   private stopping = false;
   private worker?: Promise<void>;
 
@@ -92,6 +98,7 @@ export class NotificationsService
       (id) => BigInt(id),
     );
     this.webAppUrl = config.get<string>('WEBAPP_URL')!.replace(/\/$/, '');
+    this.widgets = config.get<string>('WIDGETS_ENABLED') === 'true';
   }
 
   /** Модераторам: новый заказ ждёт проверки. */
@@ -178,6 +185,8 @@ export class NotificationsService
       `Видео: ${escapeHtml(submission.videoUrl ?? '')}`,
     ].join('\n');
     this.toModerators(text, `/mod/videos/${submission.id}`);
+    // креатору — карточка ролика «На проверке»; без виджетов ему ничего не шлём, как и раньше
+    this.toCard(submission, null);
   }
 
   /** Модераторам: рекламодатель оставил отзыв с текстом — проверить до публикации. */
@@ -240,23 +249,19 @@ export class NotificationsService
     submission: SubmissionWithParties & { order: { advertiser: User } },
   ) {
     const views = submission.views ?? 0;
-    this.send(
-      submission.creator,
-      (t, lang) =>
-        // согласился при сдаче на остаток фонда — объясняем, почему начислено меньше просмотров
-        t(
-          submission.agreedPayoutMinor === null
-            ? 'notify.videoApproved'
-            : 'notify.videoApprovedCapped',
-          {
-            order: forCreator(submission.order, lang),
-            views: num(lang, views),
-            amount: money(lang, submission.payoutMinor),
-            days: HOLD_DAYS,
-          },
-        ),
-      '/submissions',
-      true,
+    this.toCard(submission, (t, lang) =>
+      // согласился при сдаче на остаток фонда — объясняем, почему начислено меньше просмотров
+      t(
+        submission.agreedPayoutMinor === null
+          ? 'notify.videoApproved'
+          : 'notify.videoApprovedCapped',
+        {
+          order: forCreator(submission.order, lang),
+          views: num(lang, views),
+          amount: money(lang, submission.payoutMinor),
+          days: HOLD_DAYS,
+        },
+      ),
     );
     this.send(
       submission.order.advertiser,
@@ -273,15 +278,11 @@ export class NotificationsService
 
   /** Креатору: холд по ролику закончился, деньги можно вывести. */
   viewsFinalized(submission: SubmissionWithParties) {
-    this.send(
-      submission.creator,
-      (t, lang) =>
-        t('notify.holdReleased', {
-          order: forCreator(submission.order, lang),
-          amount: money(lang, submission.payoutMinor),
-        }),
-      '/submissions',
-      true,
+    this.toCard(submission, (t, lang) =>
+      t('notify.holdReleased', {
+        order: forCreator(submission.order, lang),
+        amount: money(lang, submission.payoutMinor),
+      }),
     );
   }
 
@@ -290,14 +291,10 @@ export class NotificationsService
    * (решение — при итоге холда, «Публикация удалена»).
    */
   publicationGone(submission: SubmissionWithParties) {
-    this.send(
-      submission.creator,
-      (t, lang) =>
-        t('notify.publicationGone', {
-          order: forCreator(submission.order, lang),
-        }),
-      '/submissions',
-      true,
+    this.toCard(submission, (t, lang) =>
+      t('notify.publicationGone', {
+        order: forCreator(submission.order, lang),
+      }),
     );
     this.toModerators(
       [
@@ -315,28 +312,20 @@ export class NotificationsService
 
   /** Креатору: при итоге публикации (или ссылки в шапке профиля) не оказалось — начисление отменено. */
   publicationDeleted(submission: SubmissionWithParties, bioLink = false) {
-    this.send(
-      submission.creator,
-      (t, lang) =>
-        t(bioLink ? 'notify.bioLinkRemoved' : 'notify.publicationDeleted', {
-          order: forCreator(submission.order, lang),
-        }),
-      '/submissions',
-      true,
+    this.toCard(submission, (t, lang) =>
+      t(bioLink ? 'notify.bioLinkRemoved' : 'notify.publicationDeleted', {
+        order: forCreator(submission.order, lang),
+      }),
     );
   }
 
   /** Креатору: модератор отклонил видео. */
   videoRejectedByModerator(submission: SubmissionWithParties, comment: string) {
-    this.send(
-      submission.creator,
-      (t, lang) =>
-        t('notify.videoRejected', {
-          order: forCreator(submission.order, lang),
-          reason: escapeHtml(comment),
-        }),
-      '/submissions',
-      true,
+    this.toCard(submission, (t, lang) =>
+      t('notify.videoRejected', {
+        order: forCreator(submission.order, lang),
+        reason: escapeHtml(comment),
+      }),
     );
   }
 
@@ -670,6 +659,24 @@ export class NotificationsService
     this.enqueue([this.row(to, compose, path, asHtml)]);
   }
 
+  /**
+   * Креатору: обновить карточку ролика (виджет) и пингнуть коротким сообщением. compose — полный текст
+   * на случай, если виджет выключен или не удался; null — только карточка.
+   */
+  private toCard(submission: SubmissionWithParties, compose: Compose | null) {
+    const lang = userLang(submission.creator);
+    this.enqueue([
+      {
+        chatId: submission.creator.telegramId,
+        text: compose ? compose(translator(lang), lang) : '',
+        html: true,
+        path: '/submissions',
+        lang,
+        submissionId: submission.id,
+      },
+    ]);
+  }
+
   /** Строка очереди для пользователя — текст на его языке. */
   private row(
     to: Recipient,
@@ -774,16 +781,30 @@ export class NotificationsService
   ): Promise<{ inMs: number; counts: boolean } | null> {
     try {
       const kb = this.openButton(n.path, n.lang);
-      await this.bot.telegram.callApi(
-        'sendMessage',
-        {
-          chat_id: n.chatId.toString(),
-          text: n.text,
-          ...(n.html ? html(kb) : kb),
-        },
-        // telegraf типизирует сигнал своим полифилом; node-fetch принимает и встроенный
-        { signal: AbortSignal.timeout(SEND_TIMEOUT_MS) as never },
-      );
+      if (n.submissionId !== null && this.widgets) {
+        const card = await this.syncCard(n.submissionId, n.chatId);
+        if (card) {
+          // правка карточки приходит без звука — пингуем ответом на неё
+          if (card.ping)
+            await this.call('sendMessage', {
+              chat_id: n.chatId.toString(),
+              text: card.ping,
+              reply_parameters: {
+                message_id: card.messageId,
+                allow_sending_without_reply: true,
+              },
+              ...kb,
+            });
+          return null;
+        }
+      }
+      // только карточка (сдача ролика), а её не вышло — креатору и раньше ничего не слали
+      if (!n.text) return null;
+      await this.call('sendMessage', {
+        chat_id: n.chatId.toString(),
+        text: n.text,
+        ...(n.html ? html(kb) : kb),
+      });
       return null;
     } catch (err) {
       const code = err instanceof TelegramError ? err.code : null;
@@ -810,6 +831,80 @@ export class NotificationsService
     }
   }
 
+  /** Запрос к Bot API с таймаутом. Методы виджетов telegraf не знает — зовём по имени. */
+  private call(method: string, payload: object) {
+    const callApi = this.bot.telegram.callApi.bind(this.bot.telegram) as (
+      method: string,
+      payload: object,
+      extra: { signal: never },
+    ) => Promise<unknown>;
+    // telegraf типизирует сигнал своим полифилом; node-fetch принимает и встроенный
+    return callApi(method, payload, {
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS) as never,
+    });
+  }
+
+  /**
+   * Карточка ролика в чате креатора: нет — отправить, есть — обновить её данные. Состояние читаем из
+   * базы в момент отправки: строки очереди только говорят «обнови», поэтому порядок и повторы не важны.
+   * Ответ — id сообщения карточки и пинг (у только что отправленной пинга нет: она пришла со звуком);
+   * null — карточки не будет (ролик удалён, виджет отклонён), шлём обычный текст.
+   * Сеть, 5xx и 429 — исключение: повторит trySend.
+   * ponytail: два экземпляра бота могут разом отправить две карточки одному ролику — сейчас экземпляр
+   * один; станет больше — записывать widgetMessageId условно (WHERE "widgetMessageId" IS NULL).
+   */
+  private async syncCard(
+    submissionId: number,
+    chatId: bigint,
+  ): Promise<{ messageId: number; ping: string } | null> {
+    const sub = await this.prisma.submission.findUnique({
+      where: { id: submissionId },
+      include: { order: true, creator: true },
+    });
+    if (!sub) return null;
+    const lang = userLang(sub.creator);
+    const state = cardState(sub, lang);
+    const kb = this.openButton('/submissions', lang);
+    try {
+      if (sub.widgetMessageId === null) {
+        const sent = (await this.call('sendWidget', {
+          chat_id: chatId.toString(),
+          html: cardHtml(lang),
+          chat_data: JSON.stringify(state),
+          caption: cardCaption(state, lang),
+          ...kb,
+        })) as { message_id: number };
+        await this.prisma.submission.update({
+          where: { id: submissionId },
+          data: { widgetMessageId: sent.message_id },
+        });
+        return { messageId: sent.message_id, ping: '' };
+      }
+      await this.call('editMessageWidgetData', {
+        chat_id: chatId.toString(),
+        message_id: sub.widgetMessageId,
+        chat_data: JSON.stringify(state),
+      }).catch((err: unknown) => {
+        // повтор той же правки (строку взяли снова после сбоя) — не ошибка
+        if (!String(err).includes('message is not modified')) throw err;
+      });
+      return { messageId: sub.widgetMessageId, ping: cardPing(state, lang) };
+    } catch (err) {
+      const code = err instanceof TelegramError ? err.code : null;
+      if (code === null || code >= 500 || code === 429) throw err;
+      // 403 — бот заблокирован: текст тоже не дойдёт, его ответ обработает trySend
+      if (code === 403) throw err;
+      this.logger.warn(`Карточка ролика ${submissionId}: ${String(err)}`);
+      // карточку удалили из чата — следующее событие пришлёт новую
+      if (sub.widgetMessageId !== null)
+        await this.prisma.submission.update({
+          where: { id: submissionId },
+          data: { widgetMessageId: null },
+        });
+      return null;
+    }
+  }
+
   /** Кнопка web_app работает только в личных чатах — все уведомления как раз туда. */
   private openButton(path: string, lang: string) {
     return Markup.inlineKeyboard([
@@ -826,16 +921,6 @@ function forCreator(order: Order, lang: Lang) {
   if (!titleVisibleToCreators(order)) return `#${order.id}`;
   const title = escapeHtml(order.title);
   return lang === 'en' ? `“${title}”` : `«${title}»`;
-}
-
-/** Число с разделителями по языку: «12 500» / «12,500». */
-function num(lang: Lang, n: number) {
-  return n.toLocaleString(lang === 'en' ? 'en-US' : 'ru-RU');
-}
-
-/** Сумма из центов: «12,5 USDT» / «12.5 USDT». */
-function money(lang: Lang, minor: number) {
-  return `${fromMinor(minor).toLocaleString(lang === 'en' ? 'en-US' : 'ru-RU', { maximumFractionDigits: 2 })} USDT`;
 }
 
 type OrderWithCreators = Order & {

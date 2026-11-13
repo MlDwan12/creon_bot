@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import {
   type AdvertiserAccess,
@@ -42,6 +42,8 @@ export default function AdvertiserApplyView() {
 
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  // согласие на обработку данных — без него кнопка выключена (152-ФЗ)
+  const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -160,6 +162,20 @@ export default function AdvertiserApplyView() {
             {t('apply.phoneHint')}
           </small>
         </label>
+        <label className={s.consent}>
+          <input
+            type="checkbox"
+            checked={consent}
+            onChange={(e) => setConsent(e.target.checked)}
+            required
+          />
+          <span>
+            <Trans
+              i18nKey="apply.consent"
+              components={[<Link key="privacy" to="/privacy" />]}
+            />
+          </span>
+        </label>
         {error && (
           <p className={s.error} role="alert">
             {error}
@@ -169,7 +185,7 @@ export default function AdvertiserApplyView() {
           <button
             type="submit"
             className="main-button"
-            disabled={busy || !email.trim()}
+            disabled={busy || !email.trim() || !consent}
           >
             {busy ? t('common.sending') : t('apply.send')}
           </button>

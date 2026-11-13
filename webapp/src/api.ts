@@ -158,6 +158,7 @@ export const {
   resolveReports,
   banUser,
   unbanUser,
+  eraseUser,
   approveApplication,
   decideLink,
   rejectApplication,

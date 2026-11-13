@@ -113,6 +113,8 @@ export class ProfilesService {
             final: creator.banFinal,
           }
         : null,
+      /** Данные удалены по запросу — показывать только модераторам (см. ProfilesController). */
+      erasedAt: creator.erasedAt,
       /** Ссылки на соцсети — контакты: только самому креатору и модератору. */
       links: full ? creator.socialLinks : [],
       /** Кошелёк для выплат — только самому креатору и модератору. */

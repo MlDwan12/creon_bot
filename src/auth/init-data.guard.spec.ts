@@ -15,7 +15,9 @@ const TOKEN = '123456:TEST-token';
 describe('InitDataGuard: сессия сайта', () => {
   const user = { id: 7, bannedAt: null, language: 'ru' } as User;
   const guard = new InitDataGuard(
-    { get: () => TOKEN } as unknown as ConfigService,
+    {
+      get: (key: string) => (key === 'BOT_TOKEN' ? TOKEN : undefined),
+    } as unknown as ConfigService,
     {
       findById: (id: number) => Promise.resolve(id === 7 ? user : null),
     } as unknown as UsersService,

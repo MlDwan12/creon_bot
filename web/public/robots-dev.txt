@@ -1,0 +1,3 @@
+# Сайт скрыт от поиска: дев-стенд всегда, прод — пока площадку не открыли для всех (fixum-web.conf, map $fixum_web_robots).
+User-agent: *
+Disallow: /

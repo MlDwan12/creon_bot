@@ -6,6 +6,8 @@ import {
   type User,
 } from '@prisma/client';
 import { createHash } from 'node:crypto';
+import type { Lang } from '../i18n/i18n';
+import { fromMinor } from './money';
 
 /** Уведомления уходят с parse_mode HTML — пользовательский текст экранировать перед подстановкой. */
 export function escapeHtml(text: string): string {
@@ -76,6 +78,7 @@ export function publicName(user: Pick<User, 'id' | 'firstName'>): string {
 }
 
 export function creatorLabel(user: User): string {
+  if (user.erasedAt) return `данные удалены · #${user.id}`;
   return user.username
     ? `@${user.username}`
     : (user.firstName ?? `id${user.telegramId}`);
@@ -91,4 +94,14 @@ export function titleVisibleToCreators(order: Pick<Order, 'status'>): boolean {
     order.status !== OrderStatus.REJECTED &&
     order.status !== OrderStatus.EDIT_REJECTED
   );
+}
+
+/** Число с разделителями по языку: «12 500» / «12,500». */
+export function localNumber(lang: Lang, n: number) {
+  return n.toLocaleString(lang === 'en' ? 'en-US' : 'ru-RU');
+}
+
+/** Сумма из центов: «12,5 USDT» / «12.5 USDT». */
+export function localMoney(lang: Lang, minor: number) {
+  return `${fromMinor(minor).toLocaleString(lang === 'en' ? 'en-US' : 'ru-RU', { maximumFractionDigits: 2 })} USDT`;
 }

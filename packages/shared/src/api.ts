@@ -648,6 +648,8 @@ export interface CreatorProfile {
   /** Блокировка — приходит только модератору. */
   /** final — без права обжалования. */
   ban: { at: string; reason: string | null; final: boolean } | null;
+  /** Личные данные удалены по запросу — приходит только модератору. */
+  erasedAt: string | null;
   /** Кабинет заказчика — в своём профиле и модератору; другим null. */
   advertiser: AdvertiserAccess | null;
   /** Ссылки на соцсети, по порядку; на одной площадке может быть несколько. Чужим — пусто. */
@@ -777,6 +779,7 @@ export type ModeratorActionType =
   | 'PAYOUT_REJECT'
   | 'USER_BAN'
   | 'USER_UNBAN'
+  | 'USER_ERASE'
   | 'ADVERTISER_OPEN'
   | 'ADVERTISER_REJECT'
   | 'ADVERTISER_CLOSE'

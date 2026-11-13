@@ -421,7 +421,6 @@
       "The view count is what the post shows now"
     ],
     "submit": "Send for review",
-    "reserve": "We'll reserve {{amount}} right away",
     "reserveNote": "That's the pay for the {{views}}-view threshold. The final amount is counted from the views at the moment a moderator checks the video — growth after that is not paid extra.",
     "reserveEstimate": " Right now that's ≈ {{amount}}.",
     "checkCount": "{{done}} of {{total}}",
@@ -666,6 +665,7 @@
     "rejectedShort": "rejected {{count}}"
   },
   "bot": {
+    "devClosed": "This is a Fixum test stand — access is limited to the team.",
     "intro": "👋 Fixum is a marketplace for video ads.\n\nAdvertisers post tasks, creators take them on and get paid for views.\n\nOrders, applications and moderation are in the app 👇\nQuestions? Just send a message here — a Fixum manager will reply.",
     "openApp": "Open Fixum",
     "open": "Open",
@@ -725,6 +725,8 @@
     "advertiserClosed": "Your advertiser account has been closed. Active orders keep running and you can still view them, but you can’t create new ones. Questions — to support."
   },
   "errors": {
+    "consentRequired": "Consent to personal data processing is required",
+    "devClosed": "This is a Fixum test stand — access is limited to the team.",
     "tooManyRequests": "Too many requests — wait a minute and try again",
     "banned": "Your account is blocked",
     "supportOff": "Support is not set up",
@@ -1002,6 +1004,7 @@
     "legalAria": "Documents and support"
   },
   "apply": {
+    "consent": "I agree to the processing of my personal data under the <0>privacy policy</0>",
     "title": "Become an advertiser",
     "hint": "The Fixum team opens advertiser accounts after a short call.",
     "steps": [
@@ -1121,5 +1124,33 @@
     "empty": "No approved videos for this period. Pick a longer period or come back when the first videos are in.",
     "loadError": "Couldn't load statistics",
     "csv": "All videos for the period as CSV — to the bot chat"
+  },
+  "widget": {
+    "caption": "🎬 Video for order {{order}}",
+    "review": "Under review",
+    "hold": "On hold until {{date}}",
+    "gone": "Not found by link",
+    "ready": "Ready to withdraw",
+    "canceled": "Payout canceled",
+    "rejected": "Rejected",
+    "stepSent": "Sent",
+    "stepCheck": "Review",
+    "stepHold": "Hold",
+    "stepOut": "Withdraw",
+    "inPlatform": "Video on {{platform}}",
+    "claimed": "Claimed",
+    "views": "Views",
+    "accrued": "accrued",
+    "available": "available",
+    "toWithdraw": "Withdraw",
+    "onDate": "from {{date}}",
+    "reviewHint": "A moderator will check the video and record its views.",
+    "holdWarn": "Keep the post up until {{date}}, or the payout will be canceled.",
+    "goneWarn": "The platform can't find the video by its link. Restore the post, or the payout will be canceled.",
+    "pingApproved": "✅ Video approved — {{amount}} accrued",
+    "pingRejected": "❌ Video rejected",
+    "pingGone": "⚠️ Video not found by its link — please restore the post",
+    "pingReady": "💸 {{amount}} is ready to withdraw",
+    "pingCanceled": "❌ Payout for the video canceled"
   }
 }

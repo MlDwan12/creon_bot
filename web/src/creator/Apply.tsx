@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import {
   type AdvertiserAccess,
@@ -7,6 +7,7 @@ import {
   applyAdvertiser,
   errorText,
   fetchMyProfile,
+  fetchWebConfig,
 } from '../api';
 import { formatDate } from '../format';
 import { useSession } from '../session';
@@ -31,6 +32,16 @@ export function Apply() {
   const [loadError, setLoadError] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  // согласие на обработку данных — без него кнопка выключена (152-ФЗ)
+  const [consent, setConsent] = useState(false);
+  // политика — страница мини-аппа: у прода и дев-стенда адреса разные
+  const [privacyUrl, setPrivacyUrl] = useState<string | null>(null);
+  useEffect(() => {
+    fetchWebConfig().then(
+      (c) => setPrivacyUrl(c.privacyUrl),
+      () => {},
+    );
+  }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -130,6 +141,31 @@ export function Apply() {
                   {t('apply.phoneHint')}
                 </small>
               </label>
+              <label className={`${s.check} ${s.small}`}>
+                <input
+                  type="checkbox"
+                  checked={consent}
+                  onChange={(e) => setConsent(e.target.checked)}
+                  required
+                />
+                <span>
+                  <Trans
+                    i18nKey="apply.consent"
+                    components={[
+                      privacyUrl ? (
+                        <a
+                          key="privacy"
+                          href={privacyUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        />
+                      ) : (
+                        <span key="privacy" />
+                      ),
+                    ]}
+                  />
+                </span>
+              </label>
               {error && (
                 <p className={s.error} role="alert">
                   {error}
@@ -138,7 +174,7 @@ export function Apply() {
               <button
                 type="submit"
                 className={`${s.btn} ${s.primary}`}
-                disabled={busy || !email.trim()}
+                disabled={busy || !email.trim() || !consent}
               >
                 {busy ? t('common.sending') : t('apply.send')}
               </button>

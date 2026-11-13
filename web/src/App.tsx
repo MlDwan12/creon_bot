@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RouterProvider } from 'react-router/dom';
 import { codeLogin, fetchMe, logout, RELOGIN_EVENT } from './api';
-import { Login } from './Login';
+import { Login, takeReturnPath } from './Login';
 import { router } from './router';
 import { Session } from './session';
 import s from './App.module.css';
@@ -20,6 +20,17 @@ type State =
     }
   | { kind: 'in'; me: Me };
 
+/**
+ * Метка «вошёл» для nginx: на «/» вошедшим — кабинеты, гостям — лендинг (deploy/prod/nginx/fixum-web.conf).
+ * Её ставит и бэкенд при входе (WebAuthController, fx_in); здесь — чтобы она не расходилась с сессией:
+ * старые входы без метки получают её, истёкшие — теряют. Прав метка не даёт.
+ */
+function markSignedIn(on: boolean) {
+  document.cookie = on
+    ? `fx_in=1; path=/; max-age=${30 * 24 * 60 * 60}; secure; samesite=lax`
+    : 'fx_in=; path=/; max-age=0; secure; samesite=lax';
+}
+
 export function App() {
   const { t } = useTranslation();
   const [state, setState] = useState<State>({ kind: 'loading' });
@@ -34,6 +45,7 @@ export function App() {
   const signOut = () =>
     void logout().then(
       () => {
+        markSignedIn(false);
         setRelogin(false);
         setState({ kind: 'guest' });
       },
@@ -51,10 +63,18 @@ export function App() {
       ? codeLogin(link[1], link[2]).catch(() => {}) // устарела — обычный экран входа
       : Promise.resolve();
     signIn.then(fetchMe).then(
-      (me) => setState({ kind: 'in', me }),
+      (me) => {
+        markSignedIn(true);
+        setState({ kind: 'in', me });
+        // вернулись из Telegram на «/» — открываем страницу, с которой уходили входить
+        const back = takeReturnPath();
+        if (back) void router.navigate(back, { replace: true });
+      },
       (err: unknown) => {
-        if (err instanceof ApiError && err.status === 401)
+        if (err instanceof ApiError && err.status === 401) {
+          markSignedIn(false);
           return setState({ kind: 'guest' });
+        }
         if (err instanceof ApiError && err.data?.banned)
           return setState({
             kind: 'banned',

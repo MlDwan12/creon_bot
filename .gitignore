@@ -5,6 +5,7 @@
 /webapp/dist
 /webapp/node_modules
 /web/dist
+/web/dist-ssr
 /web/node_modules
 
 # Logs
