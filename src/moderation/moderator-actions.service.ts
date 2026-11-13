@@ -31,6 +31,7 @@ export const ACTION_LABELS: Record<ModeratorActionType, string> = {
   PAYOUT_REJECT: 'Выплата отклонена',
   USER_BAN: 'Блокировка',
   USER_UNBAN: 'Разблокировка',
+  USER_ERASE: 'Удаление данных',
   ADVERTISER_OPEN: 'Кабинет заказчика открыт',
   ADVERTISER_REJECT: 'Заявка в заказчики отклонена',
   ADVERTISER_CLOSE: 'Кабинет заказчика закрыт',

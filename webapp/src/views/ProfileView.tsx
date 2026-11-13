@@ -17,6 +17,7 @@ import {
   removeReview,
   type SocialAccount,
   unbanUser,
+  eraseUser,
   updateNotifications,
   updateProfileLinks,
   updateWallet,
@@ -268,6 +269,28 @@ export default function ProfileView() {
     }
   }
 
+  /** Удалить личные данные по запросу пользователя; только модератор. Окно модератора — по-русски. */
+  async function erase() {
+    if (
+      !(await confirmAction(
+        'Удалить личные данные пользователя? Отменить нельзя.',
+      ))
+    )
+      return;
+    setBusy(true);
+    setError('');
+    try {
+      await eraseUser(profile!.id);
+      await load();
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.userMessage : 'Не удалось удалить данные',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   /** Кабинет заказчика — открыть (без заявки или вернуть закрытый) или закрыть; только модератор. */
   async function toggleAdvertiser(open: boolean) {
     if (
@@ -411,6 +434,33 @@ export default function ProfileView() {
               ? 'Закрыть кабинет заказчика'
               : 'Открыть кабинет заказчика'}
           </button>
+        </section>
+      )}
+      {moderator && !own && (
+        <section className={s.block}>
+          <h2 className="section-title">Личные данные</h2>
+          {profile.erasedAt ? (
+            <p className={s.hint}>
+              Удалены по запросу {formatDate(profile.erasedAt)}
+            </p>
+          ) : (
+            <>
+              <p className={s.hint}>
+                По запросу пользователя: стереть имя, username, кошелёк,
+                соцсети, подключённые аккаунты и контакты из заявок. Заказы,
+                ролики и выплаты останутся без привязки к человеку. Отменить
+                нельзя.
+              </p>
+              <button
+                type="button"
+                className={s.remove}
+                disabled={busy}
+                onClick={() => void erase()}
+              >
+                Удалить данные пользователя
+              </button>
+            </>
+          )}
         </section>
       )}
       {moderator && (

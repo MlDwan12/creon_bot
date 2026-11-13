@@ -14,6 +14,7 @@ import {
   reportObject,
   safeUrl,
   unbanUser,
+  eraseUser,
 } from '../api';
 import { formatDate } from '../format';
 import s from '../ui.module.css';
@@ -340,6 +341,34 @@ export function UserPage() {
             <p className={s.error} role="alert">
               {error}
             </p>
+          )}
+          <h2>Личные данные</h2>
+          {profile.erasedAt ? (
+            <p className={s.hint}>
+              Удалены по запросу {formatDate(profile.erasedAt)}
+            </p>
+          ) : (
+            <>
+              <p className={s.hint}>
+                По запросу пользователя: стереть имя, username, кошелёк,
+                соцсети, подключённые аккаунты и контакты из заявок. Заказы,
+                ролики и выплаты останутся без привязки к человеку. Отменить
+                нельзя.
+              </p>
+              <button
+                type="button"
+                className={`${s.btn} ${s.reject}`}
+                disabled={busy}
+                onClick={() =>
+                  act(
+                    () => eraseUser(profile.id),
+                    'Удалить личные данные пользователя? Отменить нельзя.',
+                  )
+                }
+              >
+                Удалить данные пользователя
+              </button>
+            </>
           )}
         </aside>
       </div>

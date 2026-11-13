@@ -78,6 +78,7 @@ export function publicName(user: Pick<User, 'id' | 'firstName'>): string {
 }
 
 export function creatorLabel(user: User): string {
+  if (user.erasedAt) return `данные удалены · #${user.id}`;
   return user.username
     ? `@${user.username}`
     : (user.firstName ?? `id${user.telegramId}`);

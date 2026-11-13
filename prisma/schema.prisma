@@ -49,6 +49,9 @@ model User {
   /// Модератор закрыл кабинет: свои заказы видно, новых нет, повторной заявки нет — только через
   /// поддержку (src/advertisers/advertiser-access.ts).
   advertiserClosedAt DateTime?
+  /// Личные данные удалены по запросу (ErasureService): имя, username, кошелёк, соцсети, контакты из заявок;
+  /// telegramId заменён на -id — вернувшийся человек получит новый аккаунт. Заказы и выплаты остаются обезличенными.
+  erasedAt           DateTime?
 
   orders                 Order[]
   submissions            Submission[]
@@ -505,6 +508,8 @@ enum ModeratorActionType {
   LINK_VERIFY
   /// Кода в описании аккаунта нет. objectId — пользователь, comment — ссылка.
   LINK_NO_CODE
+  /// Личные данные пользователя удалены по его запросу. objectId — пользователь.
+  USER_ERASE
 }
 
 /// Журнал решений модераторов — кабинет модератора, таблица команды и выгрузка CSV

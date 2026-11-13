@@ -164,6 +164,10 @@ export function createModApi(request: Requester) {
         final,
       }),
 
+    /** Удалить личные данные по запросу пользователя; 409 — сначала незавершённые дела. */
+    eraseUser: (userId: number) =>
+      request<{ ok: true }>('POST', `/api/mod/users/${userId}/erase`),
+
     unbanUser: (userId: number) =>
       request<{ ok: true }>('POST', `/api/mod/users/${userId}/unban`),
 

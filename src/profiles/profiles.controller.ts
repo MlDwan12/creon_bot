@@ -58,7 +58,7 @@ export class ProfilesController {
       // код и статус подтверждения каждой ссылки — только самому креатору
       this.links.checks(req.user.id, req.user.socialLinks),
     ]);
-    return { ...profile, ban: null, advertiser, linkChecks };
+    return { ...profile, ban: null, erasedAt: null, advertiser, linkChecks };
   }
 
   /** Ссылки на соцсети в своём профиле. */
@@ -156,7 +156,8 @@ export class ProfilesController {
       moderator,
     );
     // причина блокировки и кабинет заказчика — внутреннее дело модерации
-    if (!moderator) return { ...profile, ban: null, advertiser: null };
+    if (!moderator)
+      return { ...profile, ban: null, erasedAt: null, advertiser: null };
     const user = await this.profiles.userOf(id);
     return {
       ...profile,

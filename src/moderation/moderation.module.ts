@@ -9,6 +9,7 @@ import { SubmissionsModule } from '../submissions/submissions.module';
 import { TelegramModule } from '../telegram/telegram.module';
 import { AnalyticsService } from './analytics.service';
 import { BansService } from './bans.service';
+import { ErasureService } from './erasure.service';
 import { ModerationController } from './moderation.controller';
 import { ModeratorActionsService } from './moderator-actions.service';
 import { ModUsersService } from './mod-users.service';
@@ -28,6 +29,7 @@ import { ModUsersService } from './mod-users.service';
   providers: [
     AnalyticsService,
     BansService,
+    ErasureService,
     ModeratorActionsService,
     ModUsersService,
   ],
