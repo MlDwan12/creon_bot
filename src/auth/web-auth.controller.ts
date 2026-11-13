@@ -93,9 +93,6 @@ export class WebAuthController {
         (name) => `https://t.me/${name}`,
         () => null,
       ),
-      // политика — страница мини-аппа, открывается и в обычном браузере (webapp/src/views/PrivacyView.tsx)
-      privacyUrl: legalUrl('privacy'),
-      termsUrl: legalUrl('terms'),
     };
   }
 
@@ -208,10 +205,4 @@ export class WebAuthController {
     res.clearCookie(SESSION_COOKIE, COOKIE);
     res.clearCookie(SIGNED_IN, { path: '/' });
   }
-}
-
-/** Юридическая страница мини-аппа (/privacy, /terms); без WEBAPP_URL — null. */
-function legalUrl(page: string) {
-  const app = process.env.WEBAPP_URL?.replace(/\/$/, '');
-  return app ? `${app}/${page}` : null;
 }

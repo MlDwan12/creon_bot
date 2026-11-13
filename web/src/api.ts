@@ -75,8 +75,6 @@ export function fetchWebConfig() {
   return request<{
     oidc: boolean;
     botUrl: string | null;
-    privacyUrl: string | null;
-    termsUrl: string | null;
   }>('GET', '/api/web/config');
 }
 

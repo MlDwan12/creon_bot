@@ -39,9 +39,9 @@ jobs:
           }
           api=false miniapp=false site=false
           # бот — всё, кроме фронтов и документов (словари i18n и сам CI — тоже его)
-          changed . ':!webapp' ':!web' ':!packages' ':!*.md' && api=true
-          changed webapp packages i18n .github/workflows/ci.yml && miniapp=true
-          changed web packages i18n .github/workflows/ci.yml && site=true
+          changed . ':!webapp' ':!web' ':!packages' ':!legal' ':!*.md' && api=true
+          changed webapp packages i18n legal .github/workflows/ci.yml && miniapp=true
+          changed web packages i18n legal .github/workflows/ci.yml && site=true
           echo "api=$api" >> "$GITHUB_OUTPUT"
           echo "miniapp=$miniapp" >> "$GITHUB_OUTPUT"
           echo "site=$site" >> "$GITHUB_OUTPUT"
