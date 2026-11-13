@@ -126,6 +126,8 @@ export class InitDataGuard implements CanActivate {
     req.authDate = session.authDate;
     req.web = true;
     const user = await this.usersService.findById(session.userId);
+    // данные удалены по запросу — прежняя сессия сайта не пускает
+    if (user?.erasedAt) return null;
     // сессия, выданная до того, как стенд закрыли
     if (user && !devAllowed(this.devList, user.telegramId))
       throw new ForbiddenException(

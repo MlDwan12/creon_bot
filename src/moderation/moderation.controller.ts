@@ -1,3 +1,4 @@
+import { ErasureService } from './erasure.service';
 import { isDbDate } from '../common/validation';
 import {
   BadRequestException,
@@ -164,6 +165,7 @@ export class ModerationController {
     private readonly analytics: AnalyticsService,
     private readonly reports: ReportsService,
     private readonly bans: BansService,
+    private readonly erasure: ErasureService,
     private readonly payouts: PayoutsService,
     private readonly viewCounter: ViewCounterService,
     private readonly actions: ModeratorActionsService,
@@ -639,6 +641,18 @@ export class ModerationController {
       type: ModeratorActionType.USER_BAN,
       objectId: id,
       comment: final ? `Без права обжалования: ${reason}` : reason,
+    });
+    return { ok: true };
+  }
+
+  /** Удалить личные данные пользователя по его запросу (политика конфиденциальности, п. 6). */
+  @Post('users/:id/erase')
+  async erase(@Param('id', ParseIdPipe) id: number, @Req() req: ApiRequest) {
+    await this.erasure.erase(id);
+    await this.actions.log({
+      moderatorId: req.user.telegramId,
+      type: ModeratorActionType.USER_ERASE,
+      objectId: id,
     });
     return { ok: true };
   }
