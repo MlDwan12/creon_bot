@@ -2,6 +2,7 @@ import type { ConfigService } from '@nestjs/config';
 import { ModeratorGuard } from '../auth/moderator.guard';
 import { PayoutsService } from '../payouts/payouts.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { AdvertisersService } from '../advertisers/advertisers.service';
 import { ErasureService } from './erasure.service';
 
 /** Удаление личных данных по запросу — на настоящем Postgres. Запуск — `yarn test:int`. */
@@ -20,6 +21,8 @@ const erasure = new ErasureService(
     get: (key: string) => (key === 'MODERATOR_IDS' ? '1' : undefined),
   } as unknown as ConfigService),
 );
+
+const advertisers = new AdvertisersService(prisma);
 
 beforeEach(() =>
   prisma.$executeRawUnsafe(
@@ -90,6 +93,10 @@ async function creatorWithData() {
 
 it('стирает личные данные, заказы и выплаты остаются без привязки к человеку', async () => {
   const user = await creatorWithData();
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { advertiserAt: new Date() },
+  });
   await erasure.erase(user.id);
 
   const after = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
@@ -101,6 +108,12 @@ it('стирает личные данные, заказы и выплаты о�
     payoutWallet: null,
   });
   expect(after.erasedAt).not.toBeNull();
+  // кабинет заказчика закрыт, и модератор его больше не откроет
+  expect(after.advertiserAt).toBeNull();
+  expect(after.advertiserClosedAt).not.toBeNull();
+  await expect(advertisers.open(user.id, 1n)).rejects.toThrow(
+    'данные пользователя удалены',
+  );
   expect(await prisma.socialAccount.count()).toBe(0);
   expect(await prisma.advertiserApplication.count()).toBe(0);
   expect(await prisma.notification.count()).toBe(0);

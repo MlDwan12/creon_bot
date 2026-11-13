@@ -41,6 +41,20 @@ const COOKIE = {
   path: '/api',
 } as const;
 
+/**
+ * Метка «вошёл» на весь сайт — для nginx: на «/» вошедшим кабинеты, остальным лендинг
+ * (deploy/prod/nginx/fixum-web.conf). Сама cookie сессии (path=/api) на «/» браузер не шлёт.
+ * Секрета в метке нет и прав она не даёт — вход проверяет только подписанная fx_session.
+ * Сайт держит её в порядке сам (web/src/App.tsx, markSignedIn): ставит после входа, снимает на экране входа.
+ */
+const SIGNED_IN = 'fx_in';
+const SIGNED_IN_COOKIE = {
+  secure: true,
+  sameSite: 'lax',
+  path: '/',
+  maxAge: SESSION_MAX_AGE_SECONDS * 1000,
+} as const;
+
 // state входа OIDC: lax — иначе браузер не пошлёт её при возврате с oauth.telegram.org
 const OIDC_STATE_COOKIE = {
   httpOnly: true,
@@ -139,6 +153,7 @@ export class WebAuthController {
       signSession(user.id, authDate, this.config.get<string>('BOT_TOKEN')!),
       { ...COOKIE, maxAge: SESSION_MAX_AGE_SECONDS * 1000 },
     );
+    res.cookie(SIGNED_IN, '1', SIGNED_IN_COOKIE);
     res.redirect(this.siteUrl(false));
   }
 
@@ -184,12 +199,14 @@ export class WebAuthController {
       signSession(userId, authDate, this.config.get<string>('BOT_TOKEN')!),
       { ...COOKIE, maxAge: SESSION_MAX_AGE_SECONDS * 1000 },
     );
+    res.cookie(SIGNED_IN, '1', SIGNED_IN_COOKIE);
   }
 
   @Post('logout')
   @HttpCode(204)
   logout(@Res({ passthrough: true }) res: Response) {
     res.clearCookie(SESSION_COOKIE, COOKIE);
+    res.clearCookie(SIGNED_IN, { path: '/' });
   }
 }
 

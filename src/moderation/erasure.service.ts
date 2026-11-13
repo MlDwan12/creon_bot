@@ -78,6 +78,11 @@ export class ErasureService {
           supportTopicId: null,
           supportChatId: null,
           erasedAt: new Date(),
+          // кабинет заказчика закрыт: заказы видно в отчётах, новых не будет
+          advertiserAt: null,
+          advertiserClosedAt: user.advertiserAt
+            ? new Date()
+            : user.advertiserClosedAt,
         },
       }),
       this.prisma.socialAccount.deleteMany({ where: { userId } }),

@@ -298,7 +298,7 @@ export function UserPage() {
               Заблокировать пользователя
             </button>
           )}
-          {profile.advertiser && (
+          {profile.advertiser && !profile.erasedAt && (
             <>
               <h2>Кабинет заказчика</h2>
               <p className={s.hint}>

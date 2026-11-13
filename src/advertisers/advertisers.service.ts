@@ -98,11 +98,15 @@ export class AdvertisersService {
   /** Открыть кабинет из карточки пользователя — без заявки или вернуть закрытый. Заявка на рассмотрении — одобряется. */
   open(userId: number, moderatorId: bigint) {
     return this.prisma.$transaction(async (tx) => {
+      // данные удалены по запросу (ErasureService) — аккаунт без владельца, кабинет не открываем
       const done = await tx.user.updateMany({
-        where: { id: userId, advertiserAt: null },
+        where: { id: userId, advertiserAt: null, erasedAt: null },
         data: { advertiserAt: new Date(), advertiserClosedAt: null },
       });
-      if (!done.count) throw new ConflictException('Кабинет уже открыт');
+      if (!done.count)
+        throw new ConflictException(
+          'Кабинет уже открыт или данные пользователя удалены',
+        );
       await tx.advertiserApplication.updateMany({
         where: { userId, status: PENDING },
         data: { status: APPROVED, moderatorId, decidedAt: new Date() },
