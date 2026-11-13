@@ -214,6 +214,11 @@ describe('карточка ролика виджетом (WIDGETS_ENABLED)', () 
     return { advertiser, creator, order, sub };
   }
 
+  /** Методы, вызванные для чата креатора (21). */
+  const toCreator = (
+    calls: { method: string; payload: Record<string, unknown> }[],
+  ) => calls.filter((c) => c.payload.chat_id === '21').map((c) => c.method);
+
   const chatData = (payload: Record<string, unknown>) =>
     JSON.parse(payload.chat_data as string) as Record<string, string>;
 
@@ -224,10 +229,10 @@ describe('карточка ролика виджетом (WIDGETS_ENABLED)', () 
     await flushWrites();
     await service.processBatch();
 
-    // модераторов в тесте нет — только карточка креатору
-    expect(calls.map((c) => c.method)).toEqual(['sendWidget']);
-    expect(calls[0].payload.chat_id).toBe('21');
-    expect(chatData(calls[0].payload)).toMatchObject({
+    // креатору — только карточка (модератору, чат 1 из MODERATOR_IDS, — его текст, как раньше)
+    expect(toCreator(calls)).toEqual(['sendWidget']);
+    const widget = calls.find((c) => c.method === 'sendWidget')!;
+    expect(chatData(widget.payload)).toMatchObject({
       s: 'review',
       t: '«Обзор наушников»',
       p: 'TikTok',
@@ -308,7 +313,9 @@ describe('карточка ролика виджетом (WIDGETS_ENABLED)', () 
     await flushWrites();
     await service.processBatch();
 
-    expect(calls.map((c) => c.method)).toEqual(['sendMessage']);
-    expect(calls[0].payload.text).toContain('Холд по ролику');
+    expect(toCreator(calls)).toEqual(['sendMessage']);
+    expect(
+      calls.find((c) => c.payload.chat_id === '21')!.payload.text,
+    ).toContain('Холд по ролику');
   });
 });
