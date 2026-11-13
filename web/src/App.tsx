@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RouterProvider } from 'react-router/dom';
 import { codeLogin, fetchMe, logout, RELOGIN_EVENT } from './api';
-import { Login } from './Login';
+import { Login, takeReturnPath } from './Login';
 import { router } from './router';
 import { Session } from './session';
 import s from './App.module.css';
@@ -51,7 +51,12 @@ export function App() {
       ? codeLogin(link[1], link[2]).catch(() => {}) // устарела — обычный экран входа
       : Promise.resolve();
     signIn.then(fetchMe).then(
-      (me) => setState({ kind: 'in', me }),
+      (me) => {
+        setState({ kind: 'in', me });
+        // вернулись из Telegram на «/» — открываем страницу, с которой уходили входить
+        const back = takeReturnPath();
+        if (back) void router.navigate(back, { replace: true });
+      },
       (err: unknown) => {
         if (err instanceof ApiError && err.status === 401)
           return setState({ kind: 'guest' });
