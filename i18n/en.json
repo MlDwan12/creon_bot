@@ -725,6 +725,7 @@
     "advertiserClosed": "Your advertiser account has been closed. Active orders keep running and you can still view them, but you can’t create new ones. Questions — to support."
   },
   "errors": {
+    "consentRequired": "Consent to personal data processing is required",
     "devClosed": "This is a Fixum test stand — access is limited to the team.",
     "tooManyRequests": "Too many requests — wait a minute and try again",
     "banned": "Your account is blocked",
@@ -1003,6 +1004,7 @@
     "legalAria": "Documents and support"
   },
   "apply": {
+    "consent": "I agree to the processing of my personal data under the <0>privacy policy</0>",
     "title": "Become an advertiser",
     "hint": "The Fixum team opens advertiser accounts after a short call.",
     "steps": [
