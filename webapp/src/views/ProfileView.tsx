@@ -414,7 +414,7 @@ export default function ProfileView() {
           )}
         </section>
       )}
-      {moderator && profile.advertiser && (
+      {moderator && profile.advertiser && !profile.erasedAt && (
         <section className={s.block}>
           <h2 className="section-title">Кабинет заказчика</h2>
           <p className={s.hint}>
