@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { orderEstimate } from '@fixum/shared';
+import {
+  clearOrderDraft,
+  loadOrderDraft,
+  orderDraftKey,
+  orderEstimate,
+  saveOrderDraft,
+} from '@fixum/shared';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import {
@@ -91,7 +97,7 @@ export function OrderForm() {
     void fetchRate().then(setRubPerUsdt);
   }, []);
 
-  const [form, setForm] = useState<Form>({
+  const emptyForm: Form = {
     title: '',
     description: '',
     exampleUrls: Array<string>(MIN_EXAMPLES).fill(''),
@@ -106,7 +112,8 @@ export function OrderForm() {
     deadlineDays: id === undefined ? DEFAULTS.deadlineDays : undefined,
     platforms: [],
     category: undefined,
-  });
+  };
+  const [form, setForm] = useState<Form>(emptyForm);
   const set = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
   const bind =
     (key: keyof Form) =>
@@ -119,17 +126,41 @@ export function OrderForm() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
-  /** Правка или «по образцу» — подставляем данные заказа в форму. */
-  useEffect(() => {
-    const fromId = Number(id ?? query.get('from'));
-    if (!fromId) return;
-    void fetchMyOrders()
-      .catch(() => [])
-      .then((list) => {
+  /**
+   * Правка или «по образцу» — подставляем данные заказа в форму. Черновик (несохранённые правки
+   * с прошлого раза) — поверх: `baseline` — форма до правок, с ней сравниваем, нужен ли черновик.
+   */
+  const fromId = Number(id ?? query.get('from')) || undefined;
+  const draftKey = orderDraftKey(
+    id ? Number(id) : undefined,
+    id ? undefined : fromId,
+  );
+  const [baseline, setBaseline] = useState<Form>();
+  const [restored, setRestored] = useState(false);
+  const [loadState, setLoadState] = useState<'loading' | 'error' | 'ok'>(
+    fromId ? 'loading' : 'ok',
+  );
+  function startForm(base: Form) {
+    setBaseline(base);
+    const draft = loadOrderDraft<Form>(draftKey);
+    setForm(draft ?? base);
+    setRestored(!!draft);
+    setLoadState('ok');
+  }
+  function loadSource() {
+    setLoadState('loading');
+    fetchMyOrders().then(
+      (list) => {
         const source = list.find((o) => o.id === fromId);
-        if (!source) return;
+        // правка чужого или удалённого заказа — ошибка, а не пустая форма; образца нет — пустая
+        if (!source) {
+          if (id) setLoadState('error');
+          else startForm(emptyForm);
+          return;
+        }
         if (id) setEditing(source);
-        set({
+        startForm({
+          ...emptyForm,
           title: source.title,
           description: source.description,
           // у старых заказов примеров нет — пустые поля до минимума
@@ -154,8 +185,22 @@ export function OrderForm() {
           platforms: [...source.platforms],
           category: source.category,
         });
-      });
+      },
+      () => setLoadState('error'),
+    );
+  }
+  useEffect(() => {
+    if (fromId) loadSource();
+    else startForm(emptyForm);
   }, []); // один раз при открытии
+  useEffect(() => {
+    if (baseline) saveOrderDraft(draftKey, form, baseline);
+  }, [form, baseline, draftKey]);
+  function resetDraft() {
+    clearOrderDraft(draftKey);
+    if (baseline) setForm(baseline);
+    setRestored(false);
+  }
 
   const examplesFilled = form.exampleUrls.filter((u) => u.trim()).length;
   // без ссылки на товар ставить в шапку нечего — галочка выключена (и не уйдёт на бэкенд)
@@ -284,6 +329,7 @@ export function OrderForm() {
           ...input,
           deadlineDays: form.deadlineDays ?? null,
         });
+      clearOrderDraft(draftKey);
       await navigate('/my-orders', { replace: true });
     } catch (err) {
       // тексты ошибок проверки пишет бэкенд
@@ -309,6 +355,25 @@ export function OrderForm() {
   // калькулятор «примерно получится» — пересчёт при каждом вводе бюджета и порога
   const estimate = orderEstimate(budget, pricePer1000, Number(form.minViews));
 
+  if (loadState !== 'ok')
+    return (
+      <div className={s.page}>
+        <h1>{id ? t('createOrder.titleEdit') : t('createOrder.titleNew')}</h1>
+        {loadState === 'loading' ? (
+          <p className={s.hint}>{t('common.loading')}</p>
+        ) : (
+          <div className={s.buttons}>
+            <p className={s.hint} role="alert">
+              {t('createOrder.loadError')}
+            </p>
+            <button type="button" className={s.btn} onClick={loadSource}>
+              {t('common.retry')}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+
   return (
     <div className={s.page}>
       <header>
@@ -325,6 +390,15 @@ export function OrderForm() {
             : !id && t('createOrder.defaultsNote')}
         </p>
       </header>
+
+      {restored && !previewing && (
+        <p className={s.hint} role="status">
+          {t('createOrder.draftRestored')}{' '}
+          <button type="button" className={s.linkButton} onClick={resetDraft}>
+            {t('createOrder.draftReset')}
+          </button>
+        </p>
+      )}
 
       <div className={s.review}>
         <div className={s.page}>

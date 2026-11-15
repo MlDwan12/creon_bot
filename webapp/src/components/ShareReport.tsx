@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, type OrderReport, shareReport, unshareReport } from '../api';
+import { confirmAction } from '../telegram';
 import s from './ShareReport.module.css';
 
 /**
@@ -63,7 +64,10 @@ export default function ShareReport({
               type="button"
               className={s.button}
               disabled={busy}
-              onClick={() => run(() => unshareReport(orderId).then(() => null))}
+              onClick={async () => {
+                if (await confirmAction(t('share.revokeConfirm')))
+                  void run(() => unshareReport(orderId).then(() => null));
+              }}
             >
               {t('share.revoke')}
             </button>

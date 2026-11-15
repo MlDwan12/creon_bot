@@ -104,7 +104,8 @@ export function VideoReview({
 
   /**
    * Насчитали меньше половины указанных креатором — одобрить нельзя (бэкенд не пропустит):
-   * это завышение, вместо «Одобрить» — отказ за завышенные просмотры, ролик больше не сдать.
+   * это завышение. «Одобрить» гаснет, а не подменяется: число пересчитывается на каждую цифру,
+   * и окончательный отказ не должен оказаться под курсором посреди ввода.
    */
   const inflated =
     video.status === 'SUBMITTED' &&
@@ -125,6 +126,14 @@ export function VideoReview({
         ),
       'videos',
     );
+  const markInflated = () => {
+    if (
+      window.confirm(
+        'Отказ за завышенные просмотры окончательный: сдать этот ролик снова будет нельзя. Отклонить?',
+      )
+    )
+      void decide('inflated');
+  };
   const finalize = () =>
     run(() => finalizeVideo(id, Number(views), likesOrNull()), 'holds');
   function deleted(bioLink: boolean) {
@@ -440,8 +449,8 @@ export function VideoReview({
           {inflated && (
             <p className={s.dangerNote} role="status">
               Меньше половины указанных креатором ({formatViews(video.views!)})
-              — это завышение. Ролик отклоняется, и сдать его снова будет
-              нельзя.
+              — одобрить нельзя. Проверьте число; если оно верное — это
+              завышение: ролик отклоняется, и сдать его снова будет нельзя.
             </p>
           )}
 
@@ -488,23 +497,22 @@ export function VideoReview({
                   </p>
                 )}
                 <div className={s.buttons}>
-                  {inflated ? (
+                  <button
+                    type="button"
+                    className={`${s.btn} ${s.approve}`}
+                    disabled={busy || !Number(views) || inflated}
+                    onClick={() => decide('approve')}
+                  >
+                    Одобрить{estimate && !inflated && ` · ${estimate}`}
+                  </button>
+                  {inflated && (
                     <button
                       type="button"
                       className={`${s.btn} ${s.rejectSolid}`}
                       disabled={busy}
-                      onClick={() => decide('inflated')}
+                      onClick={markInflated}
                     >
                       Завышены просмотры
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className={`${s.btn} ${s.approve}`}
-                      disabled={busy || !Number(views)}
-                      onClick={() => decide('approve')}
-                    >
-                      Одобрить{estimate && ` · ${estimate}`}
                     </button>
                   )}
                   <button

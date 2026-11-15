@@ -67,6 +67,14 @@ export function Balance() {
 
   async function withdraw(e: React.FormEvent) {
     e.preventDefault();
+    // адрес целиком: выше он сокращён, а перевод в TRC20 не вернуть
+    const ok = window.confirm(
+      t('balance.withdrawConfirm', {
+        amount: formatMoney(Number(amount)),
+        wallet: balance?.wallet ?? '',
+      }),
+    );
+    if (!ok) return;
     setBusy(true);
     setError('');
     try {

@@ -17,7 +17,8 @@ export function Payouts() {
   const [rejecting, setRejecting] = useState<number>();
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  /** Ошибка — у той заявки, на которой нажали. */
+  const [error, setError] = useState<{ id: number; text: string }>();
   /** Адрес, который только что скопировали, — подпись «Скопировано». */
   const [copied, setCopied] = useState('');
 
@@ -36,7 +37,7 @@ export function Payouts() {
     )
       return;
     setBusy(true);
-    setError('');
+    setError(undefined);
     try {
       await decidePayout(
         p.id,
@@ -47,7 +48,7 @@ export function Payouts() {
       setRejecting(undefined);
       setComment('');
     } catch (err) {
-      setError(errorText(err));
+      setError({ id: p.id, text: errorText(err) });
     } finally {
       setBusy(false);
     }
@@ -69,11 +70,6 @@ export function Payouts() {
         Переведите USDT в сети TRC20 на кошелёк из заявки и отметьте её —
         креатору придёт уведомление.
       </p>
-      {error && (
-        <p className={s.error} role="alert">
-          {error}
-        </p>
-      )}
 
       {loadError ? (
         <p className={s.hint}>{loadError}</p>
@@ -183,6 +179,11 @@ export function Payouts() {
                   Отклонить
                 </button>
               </div>
+            )}
+            {error?.id === p.id && (
+              <p className={s.error} role="alert">
+                {error.text}
+              </p>
             )}
           </article>
         ))}
