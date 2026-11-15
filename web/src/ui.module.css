@@ -557,7 +557,10 @@
 
 .startHide {
   margin-left: auto;
-  padding: 4px 0;
+  /* тап-цель — с запасом вокруг слова, а не только его высота */
+  min-height: 44px;
+  padding: 4px 8px;
+  margin-right: -8px;
   border: none;
   background: none;
   color: var(--hint);
@@ -827,6 +830,10 @@ details > summary {
   .split,
   .review {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* страница заказа: в одну колонку ставка и «Откликнуться» — над заданием, а не в самом низу */
+  .decisionFirst {
+    order: -1;
   }
   .pane,
   .decision {
@@ -1147,4 +1154,11 @@ details > summary {
 }
 .todo-row:last-child {
   border-bottom: none;
+}
+
+/* Сенсорный экран: кнопки-чипы — не меньше 44 px под палец. С мышью остаются компактными (38 px). */
+@media (pointer: coarse) {
+  .chips button {
+    min-height: 44px;
+  }
 }
