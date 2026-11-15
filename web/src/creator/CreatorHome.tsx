@@ -3,7 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { creatorHome, START_HIDDEN_KEY, type StartStep } from '@fixum/shared';
 import { fetchBalance, fetchMySubmissions, fetchSocialAccounts } from '../api';
-import { formatDate, formatDeadline, formatMoney } from '../format';
+import {
+  formatDate,
+  formatDeadline,
+  formatMoney,
+  reducedMotion,
+} from '../format';
 import s from '../ui.module.css';
 
 /** Куда ведёт пункт чек-листа «Старт»; «Взять первый заказ» — в раздел «Заказы» (каталог). */
@@ -112,7 +117,15 @@ export function CreatorHome() {
                   <span className={s.startMark} aria-hidden="true">
                     {done ? '✓' : ''}
                   </span>
-                  <span>{t(`home.step.${step}`)}</span>
+                  <span>
+                    {t(`home.step.${step}`)}
+                    {done && (
+                      <span className="visually-hidden">
+                        {' '}
+                        ({t('home.stepDone')})
+                      </span>
+                    )}
+                  </span>
                 </>
               );
               const chevron = (
@@ -134,7 +147,9 @@ export function CreatorHome() {
                       onClick={() =>
                         document
                           .getElementById('orders')
-                          ?.scrollIntoView({ behavior: 'smooth' })
+                          ?.scrollIntoView({
+                            behavior: reducedMotion() ? 'auto' : 'smooth',
+                          })
                       }
                     >
                       {body}

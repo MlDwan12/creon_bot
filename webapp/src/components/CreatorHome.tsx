@@ -104,6 +104,12 @@ export default function CreatorHome() {
                 <>
                   <span aria-hidden="true">{done ? '✓' : '○'}</span>{' '}
                   {t(`home.step.${step}`)}
+                  {done && (
+                    <span className="visually-hidden">
+                      {' '}
+                      ({t('home.stepDone')})
+                    </span>
+                  )}
                 </>
               );
               return (

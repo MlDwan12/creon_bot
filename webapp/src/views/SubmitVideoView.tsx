@@ -40,6 +40,13 @@ export default function SubmitVideoView() {
   const [sent, setSent] = useState(false);
   /** Просмотры вышли за рамки бюджета (409 OVER_BUDGET): сколько оплатим, если креатор согласится. */
   const [over, setOver] = useState<{ payout: number; paidViews: number }>();
+  // окно появляется у формы, а нажатая кнопка — в другом месте экрана: ведём к окну прокруткой и фокусом
+  const overTitle = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (!over) return;
+    overTitle.current?.scrollIntoView({ block: 'center' });
+    overTitle.current?.focus({ preventScroll: true });
+  }, [over]);
   const urlInput = useRef<HTMLInputElement>(null);
   /** «Изменить» сбросил ссылку — после перерисовки ставим курсор в поле. */
   const [focusUrl, setFocusUrl] = useState(false);
@@ -324,7 +331,7 @@ export default function SubmitVideoView() {
               role="alertdialog"
               aria-labelledby="over-title"
             >
-              <h2 id="over-title">
+              <h2 id="over-title" ref={overTitle} tabIndex={-1}>
                 {t('submit.overTitle', { views: formatViews(viewsNum) })}
               </h2>
               <p>

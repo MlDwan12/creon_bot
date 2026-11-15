@@ -175,7 +175,14 @@ export default function App() {
       )}
       {/* на главных экранах вкладок: «Креатор / Заказчик» (role.ts) */}
       {handle.tab && cabinet && <RoleSwitch key={`role:${lang}`} />}
-      <Outlet key={`${lang}:${pathname}`} />
+      {inModeration ? (
+        // окно модератора — по-русски при любом языке: пусть его читает русский голос
+        <div lang="ru" style={{ display: 'contents' }}>
+          <Outlet key={`${lang}:${pathname}`} />
+        </div>
+      ) : (
+        <Outlet key={`${lang}:${pathname}`} />
+      )}
       <TabBar key={`tabs:${lang}`} />
       {!inModeration && !legal && <OnboardingOverlay />}
       {/* модератору — своё введение: его окно и правила площадки */}

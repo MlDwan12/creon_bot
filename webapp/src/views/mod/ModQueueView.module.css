@@ -178,7 +178,8 @@ a.subject {
   vertical-align: -2px;
 }
 .stars {
-  color: var(--accent);
+  /* --link, а не --accent: в тёмной теме акцент на тёмном фоне — 2.8:1 */
+  color: var(--link);
   letter-spacing: 1px;
 }
 .list {

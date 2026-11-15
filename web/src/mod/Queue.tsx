@@ -77,8 +77,10 @@ function subjectLink(g: ModReportGroup): string | null {
 }
 
 const contactsFlag = (
+  // title не виден с клавиатуры и пальцем — для скринридера тот же текст скрытой подписью
   <span className={s.flag} title="Похоже на контакты в обход площадки">
-    ⚠{' '}
+    <span aria-hidden="true">⚠ </span>
+    <span className="visually-hidden">Похоже на контакты. </span>
   </span>
 );
 
@@ -605,7 +607,7 @@ export function Queue() {
           queue.reviews.map((r) => (
             <article key={r.submissionId} className={s.card}>
               <p className={s.hint}>
-                <span aria-label={`Оценка ${r.rating} из 5`}>
+                <span role="img" aria-label={`Оценка ${r.rating} из 5`}>
                   {'★'.repeat(r.rating)}
                   {'☆'.repeat(5 - r.rating)}
                 </span>{' '}

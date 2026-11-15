@@ -60,6 +60,11 @@ summary:focus-visible {
   border-radius: 8px;
 }
 
+/* на фиолетовом блоке фиолетовое кольцо сливается с фоном — белое */
+.cta a:focus-visible {
+  outline-color: #fff;
+}
+
 .wrap {
   max-width: 1200px;
   margin: 0 auto;

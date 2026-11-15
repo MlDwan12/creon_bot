@@ -116,6 +116,30 @@ export function Shell() {
         ? t('apply.title')
         : (currentItem(items, pathname)?.label ?? 'Fixum');
 
+  // Переход между страницами: название раздела во вкладке и фокус на заголовок новой страницы —
+  // так скринридер сообщает о смене страницы (в SPA сам браузер этого не делает).
+  const mainRef = useRef<HTMLElement>(null);
+  const firstRender = useRef(true);
+  useEffect(() => {
+    document.title = section === 'Fixum' ? 'Fixum' : `${section} · Fixum`;
+  }, [section]);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    // страница может догружаться (lazy) — ждём кадр; заголовка ещё нет — фокус на саму область
+    const id = requestAnimationFrame(() => {
+      const target =
+        mainRef.current?.querySelector<HTMLElement>('h1') ?? mainRef.current;
+      if (!target) return;
+      if (!target.hasAttribute('tabindex'))
+        target.setAttribute('tabindex', '-1');
+      target.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [pathname]);
+
   function pickCabinet(c: Cabinet) {
     setMe({ ...me, cabinet: c });
     // не сохранился — не беда: следующий вход откроет прошлый кабинет
@@ -283,7 +307,12 @@ export function Shell() {
           </div>
         </div>
       </aside>
-      <main className={s.main}>
+      {/* окна модератора — по-русски при любом языке сайта: пусть их читает русский голос */}
+      <main
+        ref={mainRef}
+        className={s.main}
+        lang={me.isModerator ? 'ru' : undefined}
+      >
         {/* страницы кабинетов грузятся при первом переходе (router.tsx) — доли секунды, без заглушки */}
         <Suspense fallback={null}>
           <Outlet />

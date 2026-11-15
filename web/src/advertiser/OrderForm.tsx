@@ -3,7 +3,10 @@ import {
   clearOrderDraft,
   loadOrderDraft,
   orderDraftKey,
+  fieldErrorText,
+  markFieldErrors,
   orderEstimate,
+  orderFieldErrorId,
   saveOrderDraft,
 } from '@fixum/shared';
 import { useTranslation } from 'react-i18next';
@@ -26,7 +29,7 @@ import {
 } from '../api';
 import { OrderCard } from '../components/OrderCard';
 import { PlatformIcon } from '../components/PlatformIcon';
-import { approxRub, formatMoney, formatViews } from '../format';
+import { approxRub, formatMoney, formatViews, reducedMotion } from '../format';
 import { locale } from '../i18n';
 import s from '../ui.module.css';
 
@@ -235,27 +238,35 @@ export function OrderForm() {
   };
 
   // Ошибки — под полем, а не всплывающей подсказкой браузера: noValidate у формы, правила те же
-  // (required, min, max, type="url"), текст — validationMessage браузера.
+  // (required, min, max, type="url"), текст — свой, на языке сайта (fieldErrorText).
   const formEl = useRef<HTMLFormElement>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [categoryError, setCategoryError] = useState('');
   function validate(): boolean {
-    const invalid = [...formEl.current!.elements]
-      .filter(
-        (el): el is HTMLInputElement =>
-          el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement,
-      )
-      .filter((el) => !el.checkValidity());
-    setFieldErrors(
-      Object.fromEntries(invalid.map((el) => [el.id, el.validationMessage])),
+    const fields = [...formEl.current!.elements].filter(
+      (el): el is HTMLInputElement | HTMLTextAreaElement =>
+        el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement,
     );
+    const invalid = fields.filter((el) => !el.checkValidity());
+    setFieldErrors(
+      Object.fromEntries(invalid.map((el) => [el.id, fieldErrorText(el, t)])),
+    );
+    markFieldErrors(fields, invalid, orderFieldErrorId);
     const catError =
       form.category === undefined ? t('errors.chooseCategory') : '';
     setCategoryError(catError);
     const first =
       invalid[0] ?? (catError ? document.getElementById('category') : null);
-    first?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    first?.scrollIntoView({
+      block: 'center',
+      behavior: reducedMotion() ? 'auto' : 'smooth',
+    });
+    // фокус — на первое поле с ошибкой (скринридер прочтёт и ошибку); только категория — на её первый вариант
     if (invalid[0]) invalid[0].focus({ preventScroll: true });
+    else if (catError)
+      document
+        .querySelector<HTMLElement>('#category button')
+        ?.focus({ preventScroll: true });
     return !invalid.length && !catError;
   }
 
@@ -347,7 +358,7 @@ export function OrderForm() {
   );
   const fieldError = (msg: string | undefined, elId?: string) =>
     msg && (
-      <p id={elId} className={s.error} role="alert">
+      <p id={elId} className={s.error}>
         {msg}
       </p>
     );
@@ -429,7 +440,7 @@ export function OrderForm() {
                   placeholder={t('createOrder.namePlaceholder')}
                 />
               </label>
-              {fieldError(fieldErrors.title)}
+              {fieldError(fieldErrors.title, 'title-error')}
 
               <label className={s.field}>
                 {t('createOrder.task')}
@@ -443,7 +454,7 @@ export function OrderForm() {
                   placeholder={t('createOrder.briefPlaceholder')}
                 />
               </label>
-              {fieldError(fieldErrors.description)}
+              {fieldError(fieldErrors.description, 'description-error')}
 
               <fieldset className={s.fieldset}>
                 <legend className={s.cardHead}>
@@ -503,6 +514,7 @@ export function OrderForm() {
                   form.exampleUrls
                     .map((_, i) => fieldErrors[`example-${i}`])
                     .find(Boolean),
+                  'examples-error',
                 )}
                 {form.exampleUrls.length < MAX_EXAMPLES && (
                   <button
@@ -586,7 +598,7 @@ export function OrderForm() {
                   placeholder={t('createOrder.referencePlaceholder')}
                 />
               </label>
-              {fieldError(fieldErrors.reference)}
+              {fieldError(fieldErrors.reference, 'reference-error')}
 
               <label className={s.field}>
                 <span>
@@ -602,7 +614,7 @@ export function OrderForm() {
                   placeholder={t('createOrder.targetPlaceholder')}
                 />
               </label>
-              {fieldError(fieldErrors.target)}
+              {fieldError(fieldErrors.target, 'target-error')}
               <span className={`${s.hint} ${s.small}`}>
                 {t('createOrder.targetHint')}
               </span>
@@ -682,7 +694,10 @@ export function OrderForm() {
                   />
                 </label>
               </div>
-              {fieldError(fieldErrors.minDuration || fieldErrors.maxDuration)}
+              {fieldError(
+                fieldErrors.minDuration || fieldErrors.maxDuration,
+                'duration-error',
+              )}
 
               <fieldset className={s.fieldset}>
                 <legend>
@@ -794,6 +809,7 @@ export function OrderForm() {
                 fieldErrors.budget ||
                   fieldErrors.minViews ||
                   fieldErrors.maxPayout,
+                'budget-error',
               )}
               <p className={`${s.hint} ${s.small}`}>
                 {t('createOrder.maxPayoutHint')}
