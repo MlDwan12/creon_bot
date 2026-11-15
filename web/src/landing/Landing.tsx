@@ -112,8 +112,14 @@ export function Header() {
           <a className="btn ghost small navlogin" href={LOGIN}>
             Войти
           </a>
-          <a className="btn violet small" href={LOGIN} data-bot="">
-            Открыть в Telegram
+          {/* на узком телефоне — короткая подпись «Telegram», имя для скринридера — полное */}
+          <a
+            className="btn violet small"
+            href={LOGIN}
+            data-bot=""
+            aria-label="Открыть в Telegram"
+          >
+            <span className="longlabel">Открыть в&nbsp;</span>Telegram
           </a>
         </div>
       </div>

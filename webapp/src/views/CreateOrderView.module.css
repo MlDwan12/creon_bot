@@ -247,6 +247,15 @@
   text-align: center;
   color: var(--hint);
 }
+/* Открыта клавиатура (фокус в текстовом поле) — пояснение над кнопкой прячем: на 320–360 px
+   полям и так остаётся мало места между шапкой и клавиатурой. */
+:global(body):has(
+    input:not([type='checkbox']):not([type='radio']):focus,
+    textarea:focus
+  )
+  .note {
+  display: none;
+}
 .hint {
   margin: -2px 0 0;
   padding: 0;
