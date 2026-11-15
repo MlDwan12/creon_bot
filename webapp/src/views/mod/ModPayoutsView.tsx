@@ -17,7 +17,8 @@ export default function ModPayoutsView() {
   const [rejecting, setRejecting] = useState<number>();
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  /** Ошибка — у той заявки, на которой нажали, а не внизу ленты. */
+  const [error, setError] = useState<{ id: number; text: string }>();
   /** Адрес, который только что скопировали, — подпись «Скопировано». */
   const [copied, setCopied] = useState('');
 
@@ -40,7 +41,7 @@ export default function ModPayoutsView() {
     )
       return;
     setBusy(true);
-    setError('');
+    setError(undefined);
     try {
       await decidePayout(
         p.id,
@@ -51,11 +52,13 @@ export default function ModPayoutsView() {
       setRejecting(undefined);
       setComment('');
     } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.userMessage
-          : 'Не получилось, попробуйте ещё раз',
-      );
+      setError({
+        id: p.id,
+        text:
+          err instanceof ApiError
+            ? err.userMessage
+            : 'Не получилось, попробуйте ещё раз',
+      });
     } finally {
       setBusy(false);
     }
@@ -196,13 +199,13 @@ export default function ModPayoutsView() {
               </button>
             </div>
           )}
+          {error?.id === p.id && (
+            <p className={s.error} role="alert">
+              {error.text}
+            </p>
+          )}
         </article>
       ))}
-      {error && (
-        <p className={s.error} role="alert">
-          {error}
-        </p>
-      )}
     </main>
   );
 }

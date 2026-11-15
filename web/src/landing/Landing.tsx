@@ -112,8 +112,14 @@ export function Header() {
           <a className="btn ghost small navlogin" href={LOGIN}>
             Войти
           </a>
-          <a className="btn violet small" href={LOGIN} data-bot="">
-            Открыть в Telegram
+          {/* на узком телефоне — короткая подпись «Telegram», имя для скринридера — полное */}
+          <a
+            className="btn violet small"
+            href={LOGIN}
+            data-bot=""
+            aria-label="Открыть в Telegram"
+          >
+            <span className="longlabel">Открыть в&nbsp;</span>Telegram
           </a>
         </div>
       </div>
@@ -174,12 +180,13 @@ export function Landing({ faq }: { faq: Faq }) {
               <span className="mark-lime">только за просмотры</span>
             </h1>
             <p className="lead">
-              Бренд задаёт бюджет, креаторы публикуют ролики в своих соцсетях.
-              Модератор проверяет каждый ролик и фиксирует просмотры — платите
-              только за них.
+              Бренд задаёт бюджет, креаторы публикуют ролики в своих соцсетях и
+              получают USDT за просмотры. Модератор проверяет каждый ролик —
+              бренд платит только за зафиксированные просмотры.
             </p>
             <div className="actions">
-              <a className="btn violet" href="#brands">
+              {/* сразу к заявке (через вход), а не прокрутка: подробности — в блоке «Брендам» и в меню */}
+              <a className="btn violet" href={APPLY}>
                 Заказать рекламу
               </a>
               <a className="btn ghost" href="#creators">
@@ -294,6 +301,9 @@ export function Landing({ faq }: { faq: Faq }) {
                 <a className="btn lime" href={LOGIN}>
                   Смотреть заказы
                 </a>
+                <p className="hint small loginnote">
+                  Вход через Telegram — в один тап, без регистрации.
+                </p>
               </div>
             </div>
           </div>

@@ -921,3 +921,9 @@ export interface PublicReport {
     | 'approvedAt'
   >[];
 }
+
+/**
+ * Формат адреса USDT TRC20 — быстрая проверка на клиенте до отправки.
+ * Контрольную сумму (опечатку в одном символе) проверяет бэкенд: `src/payouts/trc20.ts`.
+ */
+export const TRC20_FORMAT = /^T[1-9A-HJ-NP-Za-km-z]{33}$/;

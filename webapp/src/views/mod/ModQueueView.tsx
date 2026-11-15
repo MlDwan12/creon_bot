@@ -580,6 +580,7 @@ export default function ModQueueView() {
                   <div className={s.reportTop}>
                     <span
                       className={s.stars}
+                      role="img"
                       aria-label={`Оценка ${r.rating} из 5`}
                     >
                       {'★'.repeat(r.rating)}

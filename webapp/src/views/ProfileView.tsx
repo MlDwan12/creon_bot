@@ -16,6 +16,7 @@ import {
   openAdvertiser,
   removeReview,
   type SocialAccount,
+  TRC20_FORMAT,
   unbanUser,
   eraseUser,
   updateNotifications,
@@ -123,20 +124,29 @@ export default function ProfileView() {
   const [editingWallet, setEditingWallet] = useState(false);
   const [wallet, setWallet] = useState('');
   const [walletError, setWalletError] = useState('');
+  const [walletSaved, setWalletSaved] = useState(false);
 
   function startWallet() {
     setWallet(profile?.wallet ?? '');
     setWalletError('');
+    setWalletSaved(false);
     setEditingWallet(true);
   }
 
   async function saveWallet(e: React.FormEvent) {
     e.preventDefault();
+    const value = wallet.trim();
+    // опечатку в формате ловим сразу, контрольную сумму проверит бэкенд
+    if (value && !TRC20_FORMAT.test(value)) {
+      setWalletError(t('errors.badWallet'));
+      return;
+    }
     setBusy(true);
     setWalletError('');
     try {
-      await updateWallet(wallet.trim());
+      await updateWallet(value);
       setEditingWallet(false);
+      setWalletSaved(true);
       await load();
     } catch (err) {
       setWalletError(
@@ -223,7 +233,8 @@ export default function ProfileView() {
     }
   }
 
-  // Блокировка — только в окне модератора.
+  // Блокировка — только в окне модератора. Ошибки действий модератора — у их кнопок, а не в отзывах ниже.
+  const [modError, setModError] = useState('');
   const [banning, setBanning] = useState(false);
   const [banReason, setBanReason] = useState('');
   const [banFinal, setBanFinal] = useState(false);
@@ -237,7 +248,7 @@ export default function ProfileView() {
     )
       return;
     setBusy(true);
-    setError('');
+    setModError('');
     try {
       await banUser(
         profile!.id,
@@ -249,7 +260,7 @@ export default function ProfileView() {
       setBanFinal(false);
       await load();
     } catch (err) {
-      setError(
+      setModError(
         err instanceof ApiError ? err.userMessage : t('profile.banError'),
       );
     } finally {
@@ -259,31 +270,35 @@ export default function ProfileView() {
 
   async function unban() {
     if (!(await confirmAction(t('profile.unbanConfirm')))) return;
+    setBusy(true);
+    setModError('');
     try {
       await unbanUser(profile!.id);
       await load();
     } catch (err) {
-      setError(
+      setModError(
         err instanceof ApiError ? err.userMessage : t('profile.unbanError'),
       );
+    } finally {
+      setBusy(false);
     }
   }
 
-  /** Удалить личные данные по запросу пользователя; только модератор. Окно модератора — по-русски. */
+  /**
+   * Удалить личные данные по запросу пользователя; только модератор. Окно модератора — по-русски.
+   * Отменить нельзя, поэтому подтверждение — вводом ID пользователя, а не одним «ОК».
+   */
+  const [erasing, setErasing] = useState(false);
+  const [eraseId, setEraseId] = useState('');
   async function erase() {
-    if (
-      !(await confirmAction(
-        'Удалить личные данные пользователя? Отменить нельзя.',
-      ))
-    )
-      return;
     setBusy(true);
-    setError('');
+    setModError('');
     try {
       await eraseUser(profile!.id);
+      setErasing(false);
       await load();
     } catch (err) {
-      setError(
+      setModError(
         err instanceof ApiError ? err.userMessage : 'Не удалось удалить данные',
       );
     } finally {
@@ -302,12 +317,12 @@ export default function ProfileView() {
     )
       return;
     setBusy(true);
-    setError('');
+    setModError('');
     try {
       await (open ? openAdvertiser : closeAdvertiser)(profile!.id);
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.userMessage : 'Не получилось');
+      setModError(err instanceof ApiError ? err.userMessage : 'Не получилось');
     } finally {
       setBusy(false);
     }
@@ -357,7 +372,12 @@ export default function ProfileView() {
                   {t('profile.banFinal')}
                 </button>
               )}
-              <button type="button" className={s.edit} onClick={unban}>
+              <button
+                type="button"
+                className={s.edit}
+                disabled={busy}
+                onClick={unban}
+              >
                 {t('profile.unban')}
               </button>
             </>
@@ -451,17 +471,58 @@ export default function ProfileView() {
                 ролики и выплаты останутся без привязки к человеку. Отменить
                 нельзя.
               </p>
-              <button
-                type="button"
-                className={s.remove}
-                disabled={busy}
-                onClick={() => void erase()}
-              >
-                Удалить данные пользователя
-              </button>
+              {erasing ? (
+                <>
+                  <label className="field-label">
+                    <span>
+                      Для подтверждения введите ID пользователя: {profile.id}
+                    </span>
+                    <input
+                      value={eraseId}
+                      onChange={(e) => setEraseId(e.target.value)}
+                      inputMode="numeric"
+                      autoComplete="off"
+                    />
+                  </label>
+                  <div className={s.buttons}>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setErasing(false)}
+                    >
+                      {t('common.cancel')}
+                    </button>
+                    <button
+                      type="button"
+                      className={s.danger}
+                      disabled={busy || eraseId.trim() !== String(profile.id)}
+                      onClick={() => void erase()}
+                    >
+                      Удалить навсегда
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className={s.remove}
+                  disabled={busy}
+                  onClick={() => {
+                    setEraseId('');
+                    setErasing(true);
+                  }}
+                >
+                  Удалить данные пользователя
+                </button>
+              )}
             </>
           )}
         </section>
+      )}
+      {modError && (
+        <p className={s.error} role="alert">
+          {modError}
+        </p>
       )}
       {moderator && (
         <ModHistory
@@ -524,6 +585,7 @@ export default function ProfileView() {
                   <input
                     value={wallet}
                     onChange={(e) => setWallet(e.target.value)}
+                    aria-invalid={!!walletError}
                     autoComplete="off"
                     autoCapitalize="off"
                     spellCheck={false}
@@ -552,6 +614,11 @@ export default function ProfileView() {
               </form>
             ) : profile.wallet ? (
               <>
+                {walletSaved && (
+                  <p className={s.hint} role="status">
+                    ✓ {t('profile.walletSaved')}
+                  </p>
+                )}
                 <p className={s.wallet}>{profile.wallet}</p>
                 <button type="button" className={s.edit} onClick={startWallet}>
                   {t('profile.walletChange')}
@@ -762,6 +829,7 @@ export default function ProfileView() {
             <div className={s.reviewTop}>
               <span
                 className={s.stars}
+                role="img"
                 aria-label={t('profile.stars', { rating: r.rating })}
               >
                 {stars(r.rating)}

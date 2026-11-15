@@ -224,7 +224,7 @@ export function OrderPage() {
           )}
         </div>
 
-        <aside className={`${s.card} ${s.decision}`}>
+        <aside className={`${s.card} ${s.decision} ${s.decisionFirst}`}>
           {order.cpm !== null ? (
             <p>
               <strong className={s.amount}>{formatMoney(order.cpm)}</strong>{' '}

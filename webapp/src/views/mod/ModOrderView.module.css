@@ -120,7 +120,7 @@
 }
 .reject-confirm {
   background: var(--danger);
-  color: var(--accent-text);
+  color: var(--danger-text);
 }
 .contacts strong {
   display: flex;

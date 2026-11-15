@@ -8,10 +8,12 @@ import {
   errorText,
   fetchBalance,
   fetchCreator,
+  fetchWebConfig,
   fetchMyProfile,
   fetchSocialAccounts,
   safeUrl,
   type SocialAccount,
+  TRC20_FORMAT,
   updateNotifications,
   updateProfileLinks,
   updateWallet,
@@ -62,6 +64,15 @@ export function Profile() {
   }, [own]);
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
   const [accountsError, setAccountsError] = useState('');
+  // подключение — только в мини-аппе: ссылка на бота, чтобы не искать его самому
+  const [botUrl, setBotUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (own)
+      fetchWebConfig().then(
+        (c) => setBotUrl(c.botUrl),
+        () => {},
+      );
+  }, [own]);
   const loadAccounts = useCallback(
     () => fetchSocialAccounts().then(setAccounts, () => {}),
     [],
@@ -102,13 +113,21 @@ export function Profile() {
   const [editingWallet, setEditingWallet] = useState(false);
   const [wallet, setWallet] = useState('');
   const [walletError, setWalletError] = useState('');
+  const [walletSaved, setWalletSaved] = useState(false);
   async function saveWallet(e: React.FormEvent) {
     e.preventDefault();
+    const value = wallet.trim();
+    // опечатку в формате ловим сразу, контрольную сумму проверит бэкенд
+    if (value && !TRC20_FORMAT.test(value)) {
+      setWalletError(t('errors.badWallet'));
+      return;
+    }
     setBusy(true);
     setWalletError('');
     try {
-      await updateWallet(wallet.trim());
+      await updateWallet(value);
       setEditingWallet(false);
+      setWalletSaved(true);
       await load();
     } catch (err) {
       setWalletError(errorText(err, t('profile.saveError')));
@@ -349,7 +368,10 @@ export function Profile() {
             {profile.reviews.map((r) => (
               <article key={r.submissionId} className={s.fieldset}>
                 <span className={s.cardHead}>
-                  <span aria-label={t('profile.stars', { rating: r.rating })}>
+                  <span
+                    role="img"
+                    aria-label={t('profile.stars', { rating: r.rating })}
+                  >
                     {stars(r.rating)}
                   </span>
                   {r.decidedAt && (
@@ -408,6 +430,7 @@ export function Profile() {
                     <input
                       value={wallet}
                       onChange={(e) => setWallet(e.target.value)}
+                      aria-invalid={!!walletError}
                       autoComplete="off"
                       spellCheck={false}
                       maxLength={64}
@@ -442,6 +465,11 @@ export function Profile() {
                 </form>
               ) : (
                 <>
+                  {walletSaved && (
+                    <p className={`${s.hint} ${s.small}`} role="status">
+                      ✓ {t('profile.walletSaved')}
+                    </p>
+                  )}
                   {profile.wallet ? (
                     <p className={s.wallet}>{profile.wallet}</p>
                   ) : (
@@ -456,6 +484,7 @@ export function Profile() {
                     onClick={() => {
                       setWallet(profile.wallet ?? '');
                       setWalletError('');
+                      setWalletSaved(false);
                       setEditingWallet(true);
                     }}
                   >
@@ -489,6 +518,16 @@ export function Profile() {
                 <p className={`${s.hint} ${s.small}`}>
                   {t('web.connectInMiniApp')}
                 </p>
+                {botUrl && (
+                  <a
+                    className={s.btn}
+                    href={botUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {t('bot.openApp')}
+                  </a>
+                )}
                 {accountsError && (
                   <p className={s.error} role="alert">
                     {accountsError}

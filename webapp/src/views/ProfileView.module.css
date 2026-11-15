@@ -343,7 +343,8 @@
   gap: 8px;
 }
 .stars {
-  color: var(--accent);
+  /* --link, а не --accent: в тёмной теме акцент на тёмном фоне — 2.8:1 */
+  color: var(--link);
   font-size: 17px;
   letter-spacing: 1px;
 }
@@ -406,7 +407,7 @@
 }
 .buttons .danger {
   background: var(--danger);
-  color: var(--accent-text);
+  color: var(--danger-text);
   font-weight: 600;
 }
 .remove {

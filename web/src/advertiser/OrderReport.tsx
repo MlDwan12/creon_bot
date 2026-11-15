@@ -324,7 +324,10 @@ function VideoItem({
           <strong>{item.creator}</strong>
         </Link>
         {!!item.rating && (
-          <span aria-label={t('review.yourRating', { rating: item.rating })}>
+          <span
+            role="img"
+            aria-label={t('review.yourRating', { rating: item.rating })}
+          >
             {'★'.repeat(item.rating)}
             {'☆'.repeat(5 - item.rating)}
           </span>

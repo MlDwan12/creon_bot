@@ -19,3 +19,7 @@ export const {
   waitingFor,
   isWaitingLong,
 } = createFormat({ t: (key, options) => i18next.t(key, options), locale });
+
+/** В системе включено «уменьшить движение» — прокрутка без анимации. */
+export const reducedMotion = () =>
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;

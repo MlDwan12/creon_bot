@@ -49,6 +49,8 @@
   /* фиолетовый — главное действие и ставка */
   --accent: #5a2dff;
   --accent-text: #ffffff;
+  /* текст на заливке --danger: в тёмной теме заливка светлая (#ff8a80) — белый на ней не читается */
+  --danger-text: #ffffff;
   --accent-soft: #ece6ff;
   --link: #4a1fe6;
   /* лаймовый — деньги и активная вкладка; текст на нём всегда тёмный */
@@ -95,6 +97,7 @@
   --success-text: #7fd8a2;
   --danger: #ff8a80;
   --danger-soft: #3a1614;
+  --danger-text: #17141f;
   --separator: #2e2a38;
   color-scheme: dark;
 }
@@ -110,6 +113,13 @@ body {
 button {
   font: inherit;
   cursor: pointer;
+}
+
+/* Фокус с клавиатуры (внешняя клавиатура, Switch Control) — заметное кольцо. Только :focus-visible:
+   от касания кольца нет. Поля ввода показывают фокус своей рамкой. --link читается в обеих темах. */
+:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
 }
 
 /* Заголовки экранов — Unbounded. */

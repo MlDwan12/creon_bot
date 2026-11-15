@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { orderEstimate } from '@fixum/shared';
+import {
+  clearOrderDraft,
+  loadOrderDraft,
+  orderDraftKey,
+  fieldErrorText,
+  markFieldErrors,
+  orderEstimate,
+  orderFieldErrorId,
+  saveOrderDraft,
+} from '@fixum/shared';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import {
@@ -19,9 +28,11 @@ import {
   type VideoPlatform,
 } from '../api';
 import OrderCard from '../components/OrderCard';
+import LoadState from '../components/LoadState';
 import PlatformIcon from '../components/PlatformIcon';
 import { approxRub, formatMoney, formatViews } from '../format';
 import { i18next, locale } from '../i18n';
+import { setClosingConfirmation } from '../telegram';
 import s from './CreateOrderView.module.css';
 
 // Лимиты — те же, что проверяет бэкенд (src/common/validation.ts); здесь только подсказка браузеру.
@@ -91,7 +102,7 @@ export default function CreateOrderView() {
   const navigate = useNavigate();
   // С `id` (/my-orders/:id/edit) — правка своего заказа, без — новый.
   const { id } = useParams();
-  const [query] = useSearchParams();
+  const [query, setQuery] = useSearchParams();
 
   // курс — только подсказка «≈ … ₽», не загрузился — не показываем
   const [rubPerUsdt, setRubPerUsdt] = useState<number | null>(null);
@@ -99,7 +110,7 @@ export default function CreateOrderView() {
     void fetchRate().then(setRubPerUsdt);
   }, []);
 
-  const [form, setForm] = useState<Form>({
+  const emptyForm: Form = {
     title: '',
     description: '',
     exampleUrls: Array<string>(MIN_EXAMPLES).fill(''),
@@ -114,7 +125,8 @@ export default function CreateOrderView() {
     deadlineDays: id === undefined ? DEFAULTS.deadlineDays : undefined,
     platforms: [],
     category: undefined,
-  });
+  };
+  const [form, setForm] = useState<Form>(emptyForm);
   const set = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
   /** Обработчик поля ввода: имя поля формы → значение. */
   const bind =
@@ -130,18 +142,40 @@ export default function CreateOrderView() {
 
   /**
    * Правка (/my-orders/:id/edit) или «Исправить и отправить снова» (/my-orders/new?from=<id>) —
-   * подставляем данные заказа в форму.
+   * подставляем данные заказа в форму. Черновик (несохранённые правки: свернули мини-апп,
+   * ушли «Назад») — поверх: `baseline` — форма до правок, с ней сравниваем.
    */
-  useEffect(() => {
-    const fromId = Number(id ?? query.get('from'));
-    if (!fromId) return;
-    void fetchMyOrders()
-      .catch(() => [])
-      .then((list) => {
+  const fromId = Number(id ?? query.get('from')) || undefined;
+  const draftKey = orderDraftKey(
+    id ? Number(id) : undefined,
+    id ? undefined : fromId,
+  );
+  const [baseline, setBaseline] = useState<Form>();
+  const [restored, setRestored] = useState(false);
+  const [loadState, setLoadState] = useState<'loading' | 'error' | 'ok'>(
+    fromId ? 'loading' : 'ok',
+  );
+  function startForm(base: Form) {
+    setBaseline(base);
+    const draft = loadOrderDraft<Form>(draftKey);
+    setForm(draft ?? base);
+    setRestored(!!draft);
+    setLoadState('ok');
+  }
+  function loadSource() {
+    setLoadState('loading');
+    fetchMyOrders().then(
+      (list) => {
         const source = list.find((o) => o.id === fromId);
-        if (!source) return;
+        // правка чужого или удалённого заказа — ошибка, а не пустая форма; образца нет — пустая
+        if (!source) {
+          if (id) setLoadState('error');
+          else startForm(emptyForm);
+          return;
+        }
         if (id) setEditing(source);
-        set({
+        startForm({
+          ...emptyForm,
           title: source.title,
           description: source.description,
           // у старых заказов примеров нет — пустые поля до минимума
@@ -166,8 +200,37 @@ export default function CreateOrderView() {
           platforms: [...source.platforms],
           category: source.category,
         });
-      });
+      },
+      () => setLoadState('error'),
+    );
+  }
+  useEffect(() => {
+    if (fromId) loadSource();
+    else startForm(emptyForm);
+    // шаг проверки не переживает перезагрузку — начинаем с формы
+    if (query.get('step') === 'check')
+      setQuery(
+        (q) => {
+          const next = new URLSearchParams(q);
+          next.delete('step');
+          return next;
+        },
+        { replace: true },
+      );
   }, []); // один раз при открытии
+
+  // черновик и вопрос Telegram перед закрытием — пока форма отличается от исходной
+  useEffect(() => {
+    if (!baseline) return;
+    saveOrderDraft(draftKey, form, baseline);
+    setClosingConfirmation(JSON.stringify(form) !== JSON.stringify(baseline));
+  }, [form, baseline, draftKey]);
+  useEffect(() => () => setClosingConfirmation(false), []);
+  function resetDraft() {
+    clearOrderDraft(draftKey);
+    if (baseline) setForm(baseline);
+    setRestored(false);
+  }
 
   /** Пример ролика: правка поля, ещё одно поле, убрать поле (не меньше минимума). */
   function setExample(i: number, value: string) {
@@ -226,33 +289,47 @@ export default function CreateOrderView() {
   };
 
   // Ошибки — под полем, а не всплывающей подсказкой браузера: noValidate у формы, правила те же
-  // (required, min, max, type="url"), текст — validationMessage браузера на языке телефона.
+  // (required, min, max, type="url"), текст — свой, на языке приложения (fieldErrorText).
   const formEl = useRef<HTMLFormElement>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [categoryError, setCategoryError] = useState('');
   function validate(): boolean {
-    const invalid = [...formEl.current!.elements]
-      .filter(
-        (el): el is HTMLInputElement =>
-          el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement,
-      )
-      .filter((el) => !el.checkValidity());
-    setFieldErrors(
-      Object.fromEntries(invalid.map((el) => [el.id, el.validationMessage])),
+    const fields = [...formEl.current!.elements].filter(
+      (el): el is HTMLInputElement | HTMLTextAreaElement =>
+        el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement,
     );
+    const invalid = fields.filter((el) => !el.checkValidity());
+    setFieldErrors(
+      Object.fromEntries(invalid.map((el) => [el.id, fieldErrorText(el, t)])),
+    );
+    // строки ошибок без role="alert": скринридер читает ошибку вместе с полем (aria-describedby)
+    markFieldErrors(fields, invalid, orderFieldErrorId);
     const catError =
       form.category === undefined ? t('errors.chooseCategory') : '';
     setCategoryError(catError);
     const first =
       invalid[0] ?? (catError ? document.getElementById('category') : null);
     first?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    // фокус — на первое поле с ошибкой; ошибка только в категории — на её первый вариант
     if (invalid[0]) invalid[0].focus({ preventScroll: true });
+    else if (catError)
+      document
+        .querySelector<HTMLElement>('#category button')
+        ?.focus({ preventScroll: true });
     return !invalid.length && !catError;
   }
 
   // Проверка перед отправкой нового заказа: карточка, как её увидят креаторы, и бюджет.
   // Комиссию площадки пока не показываем — её размер не решён.
-  const [previewing, setPreviewing] = useState(false);
+  // Шаг проверки — в адресе (?step=check): «Назад» Telegram возвращает к правке, а не уводит с экрана.
+  const previewing = query.get('step') === 'check';
+  function startPreview() {
+    setQuery((q) => {
+      const next = new URLSearchParams(q);
+      next.set('step', 'check');
+      return next;
+    });
+  }
   const previewOrder: OrderSummary = {
     id: 0,
     title: form.title,
@@ -295,7 +372,7 @@ export default function CreateOrderView() {
     const category = form.category!;
     // новый заказ — сначала проверка; правку отправляем сразу
     if (!id && !previewing) {
-      setPreviewing(true);
+      startPreview();
       window.scrollTo({ top: 0 });
       return;
     }
@@ -322,6 +399,8 @@ export default function CreateOrderView() {
           ...input,
           deadlineDays: form.deadlineDays ?? null,
         });
+      clearOrderDraft(draftKey);
+      setClosingConfirmation(false);
       await navigate('/my-orders', { replace: true });
     } catch (err) {
       // Тексты ошибок проверки пишет бэкенд.
@@ -338,9 +417,20 @@ export default function CreateOrderView() {
   );
   const fieldError = (msg: string | undefined, elId?: string) =>
     msg && (
-      <p id={elId} className={s.fieldError} role="alert">
+      <p id={elId} className={s.fieldError}>
         {msg}
       </p>
+    );
+
+  if (loadState !== 'ok')
+    return (
+      <main className={s.page}>
+        <h1>{id ? t('createOrder.titleEdit') : t('createOrder.titleNew')}</h1>
+        <LoadState
+          error={loadState === 'error' ? t('createOrder.loadError') : undefined}
+          onRetry={loadSource}
+        />
+      </main>
     );
 
   return (
@@ -350,6 +440,14 @@ export default function CreateOrderView() {
       )}
       {!previewing && !id && (
         <p className={s.lead}>{t('createOrder.defaultsNote')}</p>
+      )}
+      {restored && !previewing && (
+        <p className={s.lead} role="status">
+          {t('createOrder.draftRestored')}{' '}
+          <button type="button" className="quiet-link" onClick={resetDraft}>
+            {t('createOrder.draftReset')}
+          </button>
+        </p>
       )}
 
       {/* В проверке перед отправкой форма скрыта, но её поля и правила на месте — отправляет она же. */}
@@ -379,7 +477,7 @@ export default function CreateOrderView() {
             required
             placeholder={t('createOrder.namePlaceholder')}
           />
-          {fieldError(fieldErrors.title)}
+          {fieldError(fieldErrors.title, 'title-error')}
         </div>
 
         <div className={s.field}>
@@ -395,7 +493,7 @@ export default function CreateOrderView() {
             required
             placeholder={t('createOrder.briefPlaceholder')}
           />
-          {fieldError(fieldErrors.description)}
+          {fieldError(fieldErrors.description, 'description-error')}
         </div>
 
         <fieldset className={s.field}>
@@ -442,6 +540,7 @@ export default function CreateOrderView() {
             form.exampleUrls
               .map((_, i) => fieldErrors[`example-${i}`])
               .find(Boolean),
+            'examples-error',
           )}
           {form.exampleUrls.length < MAX_EXAMPLES && (
             <button
@@ -508,7 +607,7 @@ export default function CreateOrderView() {
             maxLength={500}
             placeholder={t('createOrder.referencePlaceholder')}
           />
-          {fieldError(fieldErrors.reference)}
+          {fieldError(fieldErrors.reference, 'reference-error')}
         </div>
 
         <div className={s.field}>
@@ -525,7 +624,7 @@ export default function CreateOrderView() {
             maxLength={500}
             placeholder={t('createOrder.targetPlaceholder')}
           />
-          {fieldError(fieldErrors.target)}
+          {fieldError(fieldErrors.target, 'target-error')}
           <span className={s.hint}>{t('createOrder.targetHint')}</span>
           <label className={s.bioCheck}>
             <input
@@ -605,7 +704,10 @@ export default function CreateOrderView() {
               />
             </label>
           </div>
-          {fieldError(fieldErrors.minDuration || fieldErrors.maxDuration)}
+          {fieldError(
+            fieldErrors.minDuration || fieldErrors.maxDuration,
+            'duration-error',
+          )}
         </div>
 
         <fieldset className={s.field}>
@@ -737,6 +839,7 @@ export default function CreateOrderView() {
         </div>
         {fieldError(
           fieldErrors.budget || fieldErrors.minViews || fieldErrors.maxPayout,
+          'budget-error',
         )}
         <p className={s.hint}>{t('createOrder.maxPayoutHint')}</p>
 
@@ -842,7 +945,7 @@ export default function CreateOrderView() {
             <button
               type="button"
               className={s.secondaryButton}
-              onClick={() => setPreviewing(false)}
+              onClick={() => void navigate(-1)}
             >
               {t('createOrder.preview.edit')}
             </button>

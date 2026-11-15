@@ -15,6 +15,7 @@ import LoadState from '../components/LoadState';
 import SupportLink from '../components/SupportLink';
 import { approxRub, formatDate, formatMoney } from '../format';
 import { locale } from '../i18n';
+import { confirmAction } from '../telegram';
 import s from './BalanceView.module.css';
 
 /** Цвет метки заявки; текст — в словаре (balance.status). */
@@ -65,6 +66,14 @@ export default function BalanceView() {
 
   async function withdraw(e: React.FormEvent) {
     e.preventDefault();
+    // адрес целиком: выше он сокращён, а перевод в TRC20 не вернуть
+    const ok = await confirmAction(
+      t('balance.withdrawConfirm', {
+        amount: formatMoney(Number(amount)),
+        wallet: balance?.wallet ?? '',
+      }),
+    );
+    if (!ok) return;
     setBusy(true);
     setError('');
     try {

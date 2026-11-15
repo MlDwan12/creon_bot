@@ -50,7 +50,9 @@ export default function TabBar() {
           <>
             <NavLink to="/mod" end className={tabClass}>
               {!!modCounts?.queue && (
-                <span className={s.badge}>{modCounts.queue}</span>
+                <span className={s.badge} aria-hidden="true">
+                  {modCounts.queue}
+                </span>
               )}
               <svg
                 width="24"
@@ -66,10 +68,17 @@ export default function TabBar() {
                 <path d="M4 13h4.5l1 2.5h5l1-2.5H20" />
               </svg>
               {t('tabs.modQueue')}
+              {!!modCounts?.queue && (
+                <span className="visually-hidden">
+                  , ждут: {modCounts.queue}
+                </span>
+              )}
             </NavLink>
             <NavLink to="/mod/payouts" className={tabClass}>
               {!!modCounts?.payouts && (
-                <span className={s.badge}>{modCounts.payouts}</span>
+                <span className={s.badge} aria-hidden="true">
+                  {modCounts.payouts}
+                </span>
               )}
               <svg
                 width="24"
@@ -85,6 +94,11 @@ export default function TabBar() {
                 <path d="M3 10.5h18M7 15h3" />
               </svg>
               {t('tabs.modPayouts')}
+              {!!modCounts?.payouts && (
+                <span className="visually-hidden">
+                  , ждут: {modCounts.payouts}
+                </span>
+              )}
             </NavLink>
             <NavLink to="/mod/orders" end className={tabClass}>
               <svg

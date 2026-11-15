@@ -339,6 +339,7 @@
     "addWallet": "Add it in your profile",
     "amount": "Amount to withdraw, USDT",
     "walletHint": "A manager sends the USDT manually — you'll get a notification.",
+    "withdrawConfirm": "Withdraw {{amount}} to wallet\n{{wallet}}\n(TRC20 network)? Check the address: a transfer can't be reversed.",
     "withdraw": "Withdraw",
     "minPayout": "The minimum withdrawal is {{amount}}.",
     "history": "Payout history",
@@ -461,6 +462,7 @@
     "walletTitle": "Payout wallet",
     "walletLabel": "USDT address on the TRC20 network",
     "walletHint": "TRC20 (TRON) only: a transfer to an address on another network will be lost. Leave empty to remove the wallet.",
+    "walletSaved": "Wallet saved",
     "walletEmpty": "Not set — you can't withdraw money without it.",
     "walletChange": "Change wallet",
     "accountsTitle": "Connected accounts",
@@ -552,6 +554,9 @@
     "days": "{{count}} d",
     "sendError": "Couldn't send the order",
     "titleEdit": "Edit order",
+    "loadError": "Couldn't load the order. Check your connection and try again.",
+    "draftRestored": "We restored your unsaved changes from last time.",
+    "draftReset": "Start over",
     "titleNew": "New order",
     "name": "Title",
     "namePlaceholder": "For example: headphones unboxing",
@@ -723,6 +728,15 @@
     "advertiserOpened": "✅ Your advertiser account is open — you can create orders now. Switch to it at the top of the mini app.",
     "advertiserRejected": "Your advertiser request wasn’t approved for now. You can send a new one from {{date}}.",
     "advertiserClosed": "Your advertiser account has been closed. Active orders keep running and you can still view them, but you can’t create new ones. Questions — to support."
+  },
+  "fieldErrors": {
+    "required": "Fill in this field",
+    "number": "Enter a number",
+    "url": "Paste the full link, starting with https://",
+    "min": "At least {{min}}",
+    "max": "At most {{max}}",
+    "integer": "Use a whole number",
+    "invalid": "Check this value"
   },
   "errors": {
     "consentRequired": "Consent to personal data processing is required",
@@ -1054,6 +1068,7 @@
     "copy": "Copy",
     "copied": "Copied",
     "revoke": "Revoke",
+    "revokeConfirm": "Revoke the link? It stops working right away for everyone you sent it to.",
     "revokeHint": "Revoke — the link stops working right away. You can create a new one any time.",
     "error": "Something went wrong, please try again",
     "publicTitle": "Order report",
@@ -1063,6 +1078,7 @@
     "by": "Fixum — creator ads paid per view"
   },
   "home": {
+    "stepDone": "done",
     "title": "What matters now",
     "money": "Available {{available}}",
     "moneyHeld": " · {{held}} more on hold",

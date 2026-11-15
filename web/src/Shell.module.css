@@ -7,6 +7,8 @@
   position: sticky;
   top: 0;
   height: 100dvh;
+  /* на низком окне нижний блок (язык, «Выйти») не обрезается — меню прокручивается само */
+  overflow-y: auto;
   flex: none;
   width: 248px;
   display: flex;
@@ -25,6 +27,12 @@
 
 .logo-link:hover {
   opacity: 0.85;
+}
+
+/* в тёмном меню фиолетовое кольцо фокуса почти не видно (2.8:1) — лаймовое */
+.nav :focus-visible,
+.bar :focus-visible {
+  outline-color: var(--lime);
 }
 
 .head {
@@ -227,6 +235,11 @@
   min-width: 0;
   padding: 32px 40px 48px;
 }
+/* фокус на заголовок после перехода — программный, для скринридера; кольцо вокруг заголовка не нужно */
+.main h1:focus,
+.main:focus {
+  outline: none;
+}
 
 /* Полоса с кнопкой «Меню» — только на телефоне */
 .bar,
@@ -326,5 +339,13 @@
   }
   .main {
     padding: 20px 16px 32px;
+  }
+}
+
+/* Сенсорный экран: переключатель кабинета и «Выйти» — под палец, 44 px */
+@media (pointer: coarse) {
+  .switch button,
+  .logout {
+    min-height: 44px;
   }
 }

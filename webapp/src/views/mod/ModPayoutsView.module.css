@@ -100,7 +100,7 @@
 }
 .reject {
   background: var(--danger);
-  color: var(--accent-text);
+  color: var(--danger-text);
 }
 .error {
   margin: 0;
