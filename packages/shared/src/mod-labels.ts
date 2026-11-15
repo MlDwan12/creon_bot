@@ -75,3 +75,17 @@ export function signalTexts(
     ),
   ].filter((x): x is string => !!x);
 }
+
+/**
+ * Готовая причина отказа в тексте: нажали — дописывается к написанному через «; », нажали снова — убирается.
+ * Раньше выбор заменял весь текст, и написанное модератором терялось. 500 — предел поля.
+ */
+export function toggleReason(text: string, preset: string): string {
+  if (text.includes(preset))
+    return text
+      .replace(preset, '')
+      .replace(/(;\s*){2,}/g, '; ')
+      .replace(/^[;\s]+|[;\s]+$/g, '');
+  const base = text.trim();
+  return (base ? `${base}; ${preset}` : preset).slice(0, 500);
+}

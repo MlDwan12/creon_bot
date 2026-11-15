@@ -75,8 +75,9 @@ export function UserPage() {
   }, [id]);
   useEffect(() => void load(), [load]);
 
-  async function act(action: () => Promise<unknown>, question: string) {
-    if (!window.confirm(question)) return;
+  /** `question: null` — подтверждение уже получено (удаление данных — вводом ID). */
+  async function act(action: () => Promise<unknown>, question: string | null) {
+    if (question !== null && !window.confirm(question)) return;
     setBusy(true);
     setError('');
     try {
@@ -359,12 +360,16 @@ export function UserPage() {
                 type="button"
                 className={`${s.btn} ${s.reject}`}
                 disabled={busy}
-                onClick={() =>
-                  act(
-                    () => eraseUser(profile.id),
-                    'Удалить личные данные пользователя? Отменить нельзя.',
-                  )
-                }
+                onClick={() => {
+                  // отменить нельзя — подтверждение вводом ID, а не одним «ОК»
+                  const typed = window.prompt(
+                    `Удалить личные данные навсегда? Отменить нельзя.\nДля подтверждения введите ID пользователя: ${profile.id}`,
+                  );
+                  if (typed?.trim() === String(profile.id))
+                    void act(() => eraseUser(profile.id), null);
+                  else if (typed !== null)
+                    setError('ID не совпал — данные не удалены');
+                }}
               >
                 Удалить данные пользователя
               </button>

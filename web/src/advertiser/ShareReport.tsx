@@ -67,7 +67,10 @@ export function ShareReport({
               type="button"
               className={s.btn}
               disabled={busy}
-              onClick={() => run(() => unshareReport(orderId).then(() => null))}
+              onClick={() => {
+                if (window.confirm(t('share.revokeConfirm')))
+                  void run(() => unshareReport(orderId).then(() => null));
+              }}
             >
               {t('share.revoke')}
             </button>

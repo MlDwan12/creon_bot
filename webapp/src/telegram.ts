@@ -12,6 +12,9 @@ interface TelegramWebApp {
   ready(): void;
   expand(): void;
   showConfirm(message: string, callback: (ok: boolean) => void): void;
+  /** Спросить «Закрыть? Изменения будут потеряны» при закрытии мини-аппа. */
+  enableClosingConfirmation(): void;
+  disableClosingConfirmation(): void;
   openTelegramLink(url: string): void;
   /** Внешняя ссылка — в браузере телефона, мини-апп остаётся открытым. */
   openLink(url: string): void;
@@ -38,6 +41,13 @@ export const webApp = window.Telegram?.WebApp;
 
 /** SDK грузится и в обычном браузере, но initData есть только внутри Telegram. */
 export const inTelegram = Boolean(webApp?.initData);
+
+/** Несохранённая форма: Telegram переспросит перед закрытием мини-аппа (свайп вниз, «Закрыть»). */
+export function setClosingConfirmation(on: boolean) {
+  if (!inTelegram) return;
+  if (on) webApp!.enableClosingConfirmation();
+  else webApp!.disableClosingConfirmation();
+}
 
 export type ThemePref = 'auto' | 'light' | 'dark';
 const THEME_KEY = 'theme';

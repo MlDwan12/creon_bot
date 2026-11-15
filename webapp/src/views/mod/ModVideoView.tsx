@@ -150,6 +150,15 @@ export default function ModVideoView() {
         ),
       'videos',
     );
+  // отказ за завышение окончательный — только с подтверждением
+  async function markInflated() {
+    if (
+      await confirmAction(
+        'Отказ за завышенные просмотры окончательный: сдать этот ролик снова будет нельзя. Отклонить?',
+      )
+    )
+      void decide('inflated');
+  }
   const finalize = () =>
     run(() => finalizeVideo(id, Number(views), likesOrNull()), 'holds');
   async function deleted() {
@@ -504,7 +513,8 @@ export default function ModVideoView() {
       {inflated && (
         <p className={s.error} role="status">
           Меньше половины указанных креатором ({formatViews(video.views!)}) —
-          это завышение. Ролик отклоняется, и сдать его снова будет нельзя.
+          одобрить нельзя. Проверьте число; если оно верное — это завышение:
+          ролик отклоняется, и сдать его снова будет нельзя.
         </p>
       )}
 
@@ -548,34 +558,36 @@ export default function ModVideoView() {
               </button>
             </div>
           ) : (
+            // «Одобрить» не подменяется отказом посреди ввода числа: при завышении она гаснет,
+            // а окончательный отказ — слева, вместо обычного, и с подтверждением
             <div className={`bottom-bar ${s.two}`}>
-              <button
-                type="button"
-                className={s.reject}
-                disabled={busy}
-                onClick={() => setRejecting(true)}
-              >
-                Отклонить
-              </button>
               {inflated ? (
                 <button
                   type="button"
                   className={s.rejectConfirm}
                   disabled={busy}
-                  onClick={() => decide('inflated')}
+                  onClick={markInflated}
                 >
                   Завышены просмотры
                 </button>
               ) : (
                 <button
                   type="button"
-                  className={s.approve}
-                  disabled={busy || !Number(views)}
-                  onClick={() => decide('approve')}
+                  className={s.reject}
+                  disabled={busy}
+                  onClick={() => setRejecting(true)}
                 >
-                  Одобрить{estimate && ` · ${estimate}`}
+                  Отклонить
                 </button>
               )}
+              <button
+                type="button"
+                className={s.approve}
+                disabled={busy || !Number(views) || inflated}
+                onClick={() => decide('approve')}
+              >
+                Одобрить{estimate && !inflated && ` · ${estimate}`}
+              </button>
             </div>
           )}
         </>

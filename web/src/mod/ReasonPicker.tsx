@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toggleReason } from '@fixum/shared';
 import s from '../ui.module.css';
 
 /** Причина отказа: готовые варианты и свой текст. value/onChange — текст причины у родителя. */
@@ -15,10 +16,10 @@ export function ReasonPicker({
   const { t } = useTranslation();
   const textarea = useRef<HTMLTextAreaElement>(null);
 
-  /** Готовая причина подставляется в текст — его можно дописать. «Другое» — пишем сами. */
+  /** Готовая причина дописывается к тексту (повторное нажатие убирает её). «Другое» — пишем сами. */
   function pick(preset: string | null) {
-    onChange(preset ?? '');
-    if (!preset) textarea.current?.focus();
+    if (preset) onChange(toggleReason(value, preset));
+    else textarea.current?.focus();
   }
 
   return (
@@ -29,7 +30,7 @@ export function ReasonPicker({
           <button
             key={p}
             type="button"
-            aria-pressed={value === p}
+            aria-pressed={value.includes(p)}
             onClick={() => pick(p)}
           >
             {p}
