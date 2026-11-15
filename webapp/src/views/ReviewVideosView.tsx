@@ -356,6 +356,7 @@ export default function ReviewVideosView() {
           {!!item.rating && (
             <p
               className={s.rated}
+              role="img"
               aria-label={t('review.yourRating', { rating: item.rating })}
             >
               {'★'.repeat(item.rating)}

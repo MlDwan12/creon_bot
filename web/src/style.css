@@ -27,6 +27,8 @@
   --success-text: #145c33;
   --accent-soft: #ece6ff;
   --separator: #e6e2da;
+  /* рамка полей ввода: границы поля должны читаться (WCAG 1.4.11, ≥ 3:1 к белому и к фону) — --separator для этого слишком светлый */
+  --field-border: #858090;
   --fill: color-mix(in srgb, var(--text) 6%, transparent);
   --font-text:
     'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui,
@@ -73,6 +75,13 @@ p {
   outline-offset: 2px;
 }
 
+/* плавная прокрутка к ошибке и к блокам — без анимации, если в системе «уменьшить движение» */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Поля и кнопки — шрифт страницы, а не системный */
 button,
 input,
@@ -86,7 +95,7 @@ input,
 textarea {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid var(--separator);
+  border: 1px solid var(--field-border);
   border-radius: 12px;
   background: var(--surface);
 }

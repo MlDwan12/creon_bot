@@ -27,6 +27,12 @@
   opacity: 0.85;
 }
 
+/* в тёмном меню фиолетовое кольцо фокуса почти не видно (2.8:1) — лаймовое */
+.nav :focus-visible,
+.bar :focus-visible {
+  outline-color: var(--lime);
+}
+
 .head {
   display: flex;
   align-items: center;
@@ -226,6 +232,11 @@
   flex: 1;
   min-width: 0;
   padding: 32px 40px 48px;
+}
+/* фокус на заголовок после перехода — программный, для скринридера; кольцо вокруг заголовка не нужно */
+.main h1:focus,
+.main:focus {
+  outline: none;
 }
 
 /* Полоса с кнопкой «Меню» — только на телефоне */

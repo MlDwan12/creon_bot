@@ -158,7 +158,7 @@
 }
 .reject-confirm {
   background: var(--danger);
-  color: var(--accent-text);
+  color: var(--danger-text);
 }
 .author {
   display: flex;

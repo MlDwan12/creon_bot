@@ -829,6 +829,7 @@ export default function ProfileView() {
             <div className={s.reviewTop}>
               <span
                 className={s.stars}
+                role="img"
                 aria-label={t('profile.stars', { rating: r.rating })}
               >
                 {stars(r.rating)}

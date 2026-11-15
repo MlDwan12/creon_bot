@@ -368,7 +368,10 @@ export function Profile() {
             {profile.reviews.map((r) => (
               <article key={r.submissionId} className={s.fieldset}>
                 <span className={s.cardHead}>
-                  <span aria-label={t('profile.stars', { rating: r.rating })}>
+                  <span
+                    role="img"
+                    aria-label={t('profile.stars', { rating: r.rating })}
+                  >
                     {stars(r.rating)}
                   </span>
                   {r.decidedAt && (
