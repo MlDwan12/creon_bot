@@ -1,4 +1,4 @@
-import { publicName } from './format';
+import { escapeHtml, publicName } from './format';
 
 describe('publicName', () => {
   it('первая буква имени и код — без самого имени и контактов в нём', () => {
@@ -25,5 +25,13 @@ describe('publicName', () => {
     expect(
       name.startsWith(letter ? `Креатор ${letter}. · ` : 'Креатор · '),
     ).toBe(true);
+  });
+});
+
+describe('escapeHtml', () => {
+  it('экранирует разметку и кавычки — значение не выходит из атрибута', () => {
+    expect(escapeHtml(`a&b <i> "x" 'y'`)).toBe(
+      'a&amp;b &lt;i&gt; &quot;x&quot; &#39;y&#39;',
+    );
   });
 });
