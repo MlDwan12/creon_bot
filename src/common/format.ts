@@ -9,12 +9,18 @@ import { createHash } from 'node:crypto';
 import type { Lang } from '../i18n/i18n';
 import { fromMinor } from './money';
 
-/** Уведомления уходят с parse_mode HTML — пользовательский текст экранировать перед подстановкой. */
+/**
+ * Уведомления уходят с parse_mode HTML — пользовательский текст экранировать перед подстановкой.
+ * Кавычки — тоже: значение бывает внутри атрибута (`href="…"`, `value="…"`). Telegram понимает
+ * `&quot;` и числовые сущности.
+ */
 export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /** Merge HTML parse mode into a reply/edit extra options object (inline keyboard, etc). */
